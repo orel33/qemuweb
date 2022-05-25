@@ -1,13 +1,15 @@
 .drawflow .drawflow-node {
     border-radius: 8px;
-    background: #181818;
-    border: 2px solid #494949;
+    background: none;
+    border: none;
+    /*border: 2px solid #494949;*/
     color: white;
-    min-width: 250px;
+    width: 100px;
+    height: 100px;
 }
 
 .drawflow .drawflow-node.selected {
-    background: #181818;
+    background: none;
     border: 2px solid rgb(250, 0, 175);
 }
 
@@ -57,4 +59,20 @@
 
 .el-drawer__body {
     color: black;
+}
+
+img {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    user-drag: none;
+}
+
+.host-name {
+    background: none;
+    color: white;
+    border: none;
+    font-size: medium;
+    text-align: center;
 }

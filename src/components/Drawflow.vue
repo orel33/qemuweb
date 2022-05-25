@@ -6,10 +6,10 @@
         <el-button type="primary"   @click="exportEditor">Export</el-button>
     </el-header>
     <el-container class="container">
-      <el-aside width="250px" class="column">
+      <el-aside width="110px" class="column">
           <ul>
               <li v-for="n in listNodes" :key="n" draggable="true" :data-node="n.item" @dragstart="drag($event)" class="drag-drawflow" >
-                  <div class="node" :style="`background: ${n.color}`" >{{ n.name }}</div>
+                  <div class="node" :style="`background: ${n.color};text-align: center`" >{{ n.name }}</div>
               </li>
           </ul>
       </el-aside>
@@ -84,30 +84,30 @@ export default {
     this.start();
   },
   setup() {
-   const listNodes = readonly([
-        {
-            name: 'PC',
-            color: '#49494970',
-            item: 'Host',
-            input:1,
-            output:1
-        },
-        {
-            name: 'Switch',
-            color: 'blue',
-            item: 'Switch',
-            input:1,
-            output:1
-        }
+    const listNodes = readonly([
+      {
+        name: 'PC',
+        color: '#49494970',
+        item: 'Host',
+        input:1,
+        output:1
+      },
+      {
+        name: 'SWITCH',
+        color: 'blue',
+        item: 'Switch',
+        input:1,
+        output:1
+      }
     ])
-   
-   const editor = shallowRef({})
-   const dialogVisible = ref(false)
-   const dialogData = ref({})
-   const Vue = { version: 3, h, render };
-   const internalInstance = getCurrentInstance()
-   internalInstance.appContext.app._context.config.globalProperties.$df = editor;
-   
+    
+    const editor = shallowRef({})
+    const dialogVisible = ref(false)
+    const dialogData = ref({})
+    const Vue = { version: 3, h, render };
+    const internalInstance = getCurrentInstance()
+    internalInstance.appContext.app._context.config.globalProperties.$df = editor;
+    
     function exportEditor() {
       dialogData.value = editor.value.export();
       dialogVisible.value = true;
@@ -117,7 +117,7 @@ export default {
       if (ev.type === "touchstart") {
         mobile_item_selec = ev.target.closest(".drag-drawflow").getAttribute('data-node');
       } else {
-      ev.dataTransfer.setData("node", ev.target.getAttribute('data-node'));
+        ev.dataTransfer.setData("node", ev.target.getAttribute('data-node'));
       }
     }
     const drop = (ev) => {
@@ -137,11 +137,11 @@ export default {
       ev.preventDefault();
     }
 
-   let mobile_item_selec = '';
-   let mobile_last_move = null;
-   function positionMobile(ev) {
-     mobile_last_move = ev;
-   }
+    let mobile_item_selec = '';
+    let mobile_last_move = null;
+    function positionMobile(ev) {
+      mobile_last_move = ev;
+    }
 
     function addNodeToDrawFlow(name, pos_x, pos_y) {
       pos_x = pos_x * ( editor.value.precanvas.clientWidth / (editor.value.precanvas.clientWidth * editor.value.zoom)) - (editor.value.precanvas.getBoundingClientRect().x * ( editor.value.precanvas.clientWidth / (editor.value.precanvas.clientWidth * editor.value.zoom)));
@@ -152,7 +152,7 @@ export default {
     }
 
 
-   onMounted(() => {
+    onMounted(() => {
 
       var elements = document.getElementsByClassName('drag-drawflow');
       for (var i = 0; i < elements.length; i++) {
@@ -161,14 +161,14 @@ export default {
         elements[i].addEventListener('touchstart', drag, false );
       }
         
-       const id = document.getElementById("drawflow");
-       editor.value = new drawflow(id, Vue, internalInstance.appContext.app._context);
-       editor.value.start();
-       
-       editor.value.registerNode('Host', Host, {}, {});
-       editor.value.registerNode('Switch', Switch, {}, {});
+        const id = document.getElementById("drawflow");
+        editor.value = new drawflow(id, Vue, internalInstance.appContext.app._context);
+        editor.value.start();
+        
+        editor.value.registerNode('Host', Host, {}, {});
+        editor.value.registerNode('Switch', Switch, {}, {});
 
-       //editor.value.import({"drawflow":{"Home":{"data":{"5":{"id":5,"name":"Switch","data":{"script":"(req,res) => {\n console.log(req);\n}"},"class":"Switch","html":"Switch","typenode":"vue","inputs":{"input_1":{"connections":[{"node":"6","input_1":"output_1"}]}},"outputs":{"output_1":{"connections":[]},"output_1":{"connections":[]}},"pos_x":1000,"pos_y":117},"6":{"id":6,"name":"Host","data":{"url":"localhost/add", "method": "post"},"class":"Host","html":"Host","typenode":"vue","inputs":{},"outputs":{"output_1":{"connections":[{"node":"5","output":"input_1"}]}},"pos_x":137,"pos_y":89}}}}})
+        //editor.value.import({"drawflow":{"Home":{"data":{"5":{"id":5,"name":"Switch","data":{"script":"(req,res) => {\n console.log(req);\n}"},"class":"Switch","html":"Switch","typenode":"vue","inputs":{"input_1":{"connections":[{"node":"6","input_1":"output_1"}]}},"outputs":{"output_1":{"connections":[]},"output_1":{"connections":[]}},"pos_x":1000,"pos_y":117},"6":{"id":6,"name":"Host","data":{"url":"localhost/add", "method": "post"},"class":"Host","html":"Host","typenode":"vue","inputs":{},"outputs":{"output_1":{"connections":[{"node":"5","output":"input_1"}]}},"pos_x":137,"pos_y":89}}}}})
     })
 
     return {

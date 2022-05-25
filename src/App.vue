@@ -1,6 +1,6 @@
 <template>
   <body>
-    <div id="terminal-container"></div>
+    <!--  <div id="terminal-container"></div> -->
     <Drawflow/>
   </body>
 </template>

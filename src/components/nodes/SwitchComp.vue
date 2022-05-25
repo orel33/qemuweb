@@ -1,17 +1,20 @@
 <template>
     <div>
-        <NodeHeader  title="SWITCH"/>
+        <img src="../../assets/switch.png" alt="Un switch" />
     </div>
 </template>
 
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
-import NodeHeader from './NodeHeader.vue'
 
 export default defineComponent({
-    components: {
-        NodeHeader
-    }
     
 })
 </script>
+
+<style scoped>
+img {
+    width:65px;
+    height:65px;
+}
+</style>
