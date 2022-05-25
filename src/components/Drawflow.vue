@@ -38,12 +38,13 @@
 <script>
 
 import drawflow from 'drawflow'
+import styleDrawflow from 'drawflow/dist/drawflow.min.css'
+import style from '../assets/style.css' 
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue'
 import Host from './nodes/HostComp.vue'
 import Switch from './nodes/SwitchComp.vue'
 import { TerminalUI } from "../TerminalUI"; 
 import io from "socket.io-client";
-
 
 
 export default {
@@ -70,6 +71,10 @@ export default {
     start() {
       const container = document.getElementById("terminal-container");
 
+      if (container == null) {
+        console.log("Pas de container pour le terminal trouvé");
+        return;
+      }
       this.connectToSocket(this.serverAddress).then(socket => {
         this.startTerminal(container, socket);
       });
@@ -127,7 +132,6 @@ export default {
         var data = ev.dataTransfer.getData("node");
         addNodeToDrawFlow(data, ev.clientX, ev.clientY);
       }
-
     }
     const allowDrop = (ev) => {
       ev.preventDefault();

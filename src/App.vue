@@ -6,7 +6,6 @@
 </template>
 
 <script>
-//import { Terminal } from 'xterm'
 import { TerminalUI } from "./TerminalUI";
 import io from "socket.io-client";
 import Drawflow from './components/Drawflow.vue'
