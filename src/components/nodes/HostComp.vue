@@ -1,7 +1,7 @@
 <template>
     <div>
         <img src="../../assets/computer.png" />
-        <input class="host-name" type="text" value="bob">
+        <input class="host-name" type="text" v-model="name">
     </div>
 </template>
 
@@ -9,7 +9,11 @@
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
 
 export default defineComponent({
-
+    data() {
+        return {
+            name: "bob"
+        }
+    }
 })
 </script>
 
