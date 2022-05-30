@@ -8,7 +8,14 @@
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
 
 export default defineComponent({
-    
+    props: {
+        number: {
+            type: Number
+        }
+    },
+    mounted() {
+        console.log("I'm switch number " + this.number)
+    }
 })
 </script>
 

@@ -1,6 +1,6 @@
 <template>
   <body>
-    <!--  <div id="terminal-container"></div> -->
+    <div class="terminal-container" data-port="33695"></div>
     <Drawflow/>
   </body>
 </template>

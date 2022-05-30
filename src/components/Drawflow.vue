@@ -12,6 +12,7 @@
                   <div class="node" :style="`background: ${n.color};text-align: center`" >{{ n.name }}</div>
               </li>
           </ul>
+          <div class="terminal-container" data-port="35407"></div>
       </el-aside>
       <el-main>
           <div id="drawflow" @drop="drop($event)" @dragover="allowDrop($event)"></div>
@@ -51,14 +52,13 @@ export default {
   name: 'DrawFlow',
   data() {
     return {
-      serverAddress: "127.0.0.1:8080"
+      serverAddress: "127.0.0.1"
     }
   },
   methods: {
     connectToSocket(serverAddr) {
       return new Promise(res => {
         const socket = io(serverAddr);
-        console.log("Promise " + serverAddr + " " + socket.connected)
         res(socket);
       });
     },
@@ -69,15 +69,21 @@ export default {
       terminal.startListening();
     },
     start() {
-      const container = document.getElementById("terminal-container");
+      const containers = document.getElementsByClassName("terminal-container");
 
-      if (container == null) {
+      if (containers.length < 1) {
         console.log("Pas de container pour le terminal trouvé");
         return;
       }
-      this.connectToSocket(this.serverAddress).then(socket => {
-        this.startTerminal(container, socket);
-      });
+      for (let container of containers) {
+        console.log("connect on " + this.serverAddress + ":" + container.getAttribute("data-port"))
+        this.connectToSocket(this.serverAddress + ":" + container.getAttribute("data-port")).then(socket => {
+          this.startTerminal(container, socket);
+        });
+      }
+    },
+    switchCount() {
+      return this.$children.filter(child => child.constructor.options.name === 'Switch').length;
     }
   },
   mounted() {
