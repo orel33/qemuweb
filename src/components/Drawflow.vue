@@ -12,7 +12,7 @@
                   <div class="node" :style="`background: ${n.color};text-align: center`" >{{ n.name }}</div>
               </li>
           </ul>
-          <div class="terminal-container" data-port="35407"></div>
+          <!--<div class="terminal-container" data-port="43373"></div>-->
       </el-aside>
       <el-main>
           <div id="drawflow" @drop="drop($event)" @dragover="allowDrop($event)"></div>
@@ -69,9 +69,9 @@ export default {
       terminal.startListening();
     },
     start() {
-      const containers = document.getElementsByClassName("terminal-container");
+      var containers = document.getElementsByClassName("terminal-container");
 
-      if (containers.length < 1) {
+      if (containers == undefined || containers.length < 1) {
         console.log("Pas de container pour le terminal trouvé");
         return;
       }
@@ -81,9 +81,6 @@ export default {
           this.startTerminal(container, socket);
         });
       }
-    },
-    switchCount() {
-      return this.$children.filter(child => child.constructor.options.name === 'Switch').length;
     }
   },
   mounted() {
@@ -168,7 +165,9 @@ export default {
       }
         
         const id = document.getElementById("drawflow");
+
         editor.value = new drawflow(id, Vue, internalInstance.appContext.app._context);
+        editor.value.force_first_input = true;
         editor.value.start();
         
         editor.value.registerNode('Host', Host, {}, {});

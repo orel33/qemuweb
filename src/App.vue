@@ -1,13 +1,11 @@
 <template>
   <body>
-    <div class="terminal-container" data-port="33695"></div>
+    <!--<div class="terminal-container" data-port="38221"></div>-->
     <Drawflow/>
   </body>
 </template>
 
 <script>
-import { TerminalUI } from "./TerminalUI";
-import io from "socket.io-client";
 import Drawflow from './components/Drawflow.vue'
 
 export default {

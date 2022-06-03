@@ -1,5 +1,5 @@
 <template>
-    <div>
+    <div class="switch-component">
         <img src="../../assets/switch.png" alt="Un switch" />
     </div>
 </template>
@@ -8,13 +8,10 @@
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
 
 export default defineComponent({
-    props: {
-        number: {
-            type: Number
+    data() {
+        return {
+            number : -1
         }
-    },
-    mounted() {
-        console.log("I'm switch number " + this.number)
     }
 })
 </script>
