@@ -48,10 +48,6 @@
     stroke: rgb(250, 0, 175);
 }
 
-.parent-node .drawflow-delete {
-    /*display: none !important;*/
-}
-
 .drawflow .drawflow-node.selected .drawflow_content_node .header {
     background:rgb(250, 0, 175);
 }
@@ -70,13 +66,4 @@ img {
     -khtml-user-drag: none;
     -moz-user-drag: none;
     -o-user-drag: none;
-    user-drag: none;
-}
-
-.host-name {
-    background: none;
-    color: white;
-    border: none;
-    font-size: medium;
-    text-align: center;
 }

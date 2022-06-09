@@ -19,19 +19,13 @@
       </el-main>
     </el-container>
   </el-container>
-  <el-dialog
-    v-model="dialogVisible"
-    title="Export"
-    width="50%"
-  >
+  <el-dialog v-model="dialogVisible" title="Export" width="50%" >
     <span>Data:</span>
     <pre><code>{{dialogData}}</code></pre>
     <template #footer>
       <span class="dialog-footer">
-        <el-button @click="dialogVisible = false">Cancel</el-button>
-        <el-button type="primary" @click="dialogVisible = false"
-          >Confirm</el-button
-        >
+        <el-button @click="dialogVisible = false"> Cancel </el-button>
+        <el-button type="primary" @click="dialogVisible = false"> Confirm </el-button>
       </span>
     </template>
   </el-dialog>
