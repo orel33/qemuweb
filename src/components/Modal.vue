@@ -35,23 +35,38 @@ export default {
     }
   },
   methods: {
-    neighboorsChanged() {
-      console.log("neighboors changed");
+    loadNeighboors() {
+      var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
+      var interfacesSelects = neighboorsDiv.querySelectorAll(".interfaces");
+      var hostsSelects = neighboorsDiv.querySelectorAll(".hosts");
+      for (let i = 0; i < this.neighboors.length; i++) {
+        interfacesSelects[i].value = 'eth' + i;
+        hostsSelects[i].value = this.neighboors[i];
+      }
+    },
+    storeNeighboors() {
+      var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
+      var interfacesSelects = neighboorsDiv.querySelectorAll(".interfaces");
+      var hostsSelects = neighboorsDiv.querySelectorAll(".hosts");
+      for (let i = 0; i < this.neighboors.length; i++) {
+        var pos = parseInt(interfacesSelects[i].value.slice(-1)); // get last char, 'eth1' -> '1'
+        this.localNeighboors[pos] = hostsSelects[i].value;
+      }
+    },
+    hostsChanged() {
+      console.log("hosts changed");
+      this.storeNeighboors();
+      console.log(this.localNeighboors);
     },
     interfacesChanged() {
-
+      console.log("interfaces changed");
+      this.storeNeighboors();
+      console.log(this.localNeighboors);
     }
   },
   updated() {
     // Triggered when modal pop up
-    var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
-    var interfacesSelects = neighboorsDiv.querySelectorAll(".interfaces");
-    var hostsSelects = neighboorsDiv.querySelectorAll(".hosts");
-    for (let i = 0; i < this.neighboors.length; i++) {
-      console.log(i);
-      interfacesSelects[i].value = 'eth' + i;
-      hostsSelects[i].value = this.neighboors[i];
-    }
+    this.loadNeighboors();
   }
 }
 </script>
