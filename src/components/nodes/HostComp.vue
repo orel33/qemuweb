@@ -6,7 +6,7 @@
 
         <Teleport to="body">
             <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @close="showParamModal = false" 
-                    :show="showParamModal" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib">
+                    :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors">
             <template #header>
                 <h3>Host settings</h3>
             </template>
@@ -27,6 +27,8 @@ export default defineComponent({
         return {
             id: null,
             name: "bob",
+            selectedDistrib: "",
+            neighboors: [], // Array(neighboorNodeId)
             distributions: [
                 {
                     value: 'debian10',
@@ -61,9 +63,7 @@ export default defineComponent({
                     label: 'Windows XP'
                 }
             ],
-            showParamModal: false,
-            selectedDistrib: "",
-            neighboors: [] // Array(neighboorNodeId)
+            showParamModal: false
         }
     },
     methods: {
@@ -75,7 +75,8 @@ export default defineComponent({
             this.name = value;
         }
     },
-    mounted() {
+    beforeMount() {
+        // beforeMount to avoid to load Modal component (which need this.id) before execute this code 
         const internalInstance = getCurrentInstance();
         var editor = internalInstance.appContext.app._context.config.globalProperties.$df;
         const neighboors = this.neighboors;

@@ -2,9 +2,11 @@
 export default {
   props: {
     show: Boolean,
+    hostId: Number,
     name: String,
     distributions: Array,
-    selectedDistrib: String
+    selectedDistrib: String,
+    neighboors : Array
   },
   computed: {
     localSelectedDistrib: {
@@ -22,6 +24,33 @@ export default {
       set(value) {
         this.$emit('updateHostName', value)
       }
+    },
+    localNeighboors: {
+      get() {
+        return this.neighboors;
+      },
+      set(value) {
+        this.$emit('updateNeighboors', value)
+      }
+    }
+  },
+  methods: {
+    neighboorsChanged() {
+      console.log("neighboors changed");
+    },
+    interfacesChanged() {
+
+    }
+  },
+  updated() {
+    // Triggered when modal pop up
+    var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
+    var interfacesSelects = neighboorsDiv.querySelectorAll(".interfaces");
+    var hostsSelects = neighboorsDiv.querySelectorAll(".hosts");
+    for (let i = 0; i < this.neighboors.length; i++) {
+      console.log(i);
+      interfacesSelects[i].value = 'eth' + i;
+      hostsSelects[i].value = this.neighboors[i];
     }
   }
 }
@@ -36,12 +65,20 @@ export default {
             <slot name="header">default header</slot>
           </div>
 
-          <div class="modal-body">
+          <div :id="'modal-body-div-' + hostId" class="modal-body">
             <select v-model="localSelectedDistrib">
               <option v-for="item in distributions" :key="item.value" :label="item.label" :value="item.value"></option>
             </select>
+            <input class="host-name-in-modal" type="text" v-model="localName">
+            <div v-for="neigh in neighboors" :key="neigh">
+              <select class="interfaces" @change="interfacesChanged">
+                <option v-for="item in neighboors" :key="item" :label="'eth'+neighboors.indexOf(item)" :value="'eth'+neighboors.indexOf(item)"></option>
+              </select>
+              <select class="hosts" @change="hostsChanged">
+                <option v-for="item in neighboors" :key="item" :label="'PC n°' + item" :value="item"></option>
+              </select>
+            </div>
           </div>
-          <input class="host-name-in-modal" type="text" v-model="localName">
 
           <div class="modal-footer">
             <slot name="footer">
@@ -93,6 +130,10 @@ export default {
 
 .modal-default-button {
   float: right;
+}
+
+.modal-footer {
+  padding-bottom: 15px;
 }
 
 /*
