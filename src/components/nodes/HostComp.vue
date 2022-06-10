@@ -25,6 +25,7 @@ export default defineComponent({
     },
     data() {
         return {
+            id: null,
             name: "bob",
             distributions: [
                 {
@@ -61,7 +62,8 @@ export default defineComponent({
                 }
             ],
             showParamModal: false,
-            selectedDistrib: ""
+            selectedDistrib: "",
+            neighboors: [] // Array(neighboorNodeId)
         }
     },
     methods: {
@@ -72,6 +74,48 @@ export default defineComponent({
         updateName(value) {
             this.name = value;
         }
+    },
+    mounted() {
+        const internalInstance = getCurrentInstance();
+        var editor = internalInstance.appContext.app._context.config.globalProperties.$df;
+        const neighboors = this.neighboors;
+        this.id = editor.nodeId;
+        const id = this.id;
+
+        editor.on("connectionCreated", function(info) {
+            const inputNode = editor.getNodeFromId(info.input_id);
+            const outputNode = editor.getNodeFromId(info.output_id);
+            const last = outputNode.outputs[info.output_class].connections.length - 1;
+            const connection = outputNode.outputs[info.output_class].connections[last];
+            if (inputNode.class == "Host" && outputNode.class == "Host") {
+                //Do nothing
+            } else if (info.output_id == id) {
+                neighboors.push(info.input_id);
+                console.log("Host " + id + " added neighboor : ", neighboors);
+            } else if (info.input_id == id) {
+                neighboors.push(info.output_id);
+                console.log("Host " + id + " added neighboor : ", neighboors);
+            }
+        });
+
+        editor.on("connectionRemoved", function(info) {
+            const inputNode = editor.getNodeFromId(info.input_id);
+            const outputNode = editor.getNodeFromId(info.output_id);
+            const last = outputNode.outputs[info.output_class].connections.length - 1;
+            const connection = outputNode.outputs[info.output_class].connections[last];
+
+            if (inputNode.class == "Host" && outputNode.class == "Host") {
+                //Do nothing
+            } else if (info.output_id == id) {
+                const pos = neighboors.indexOf(info.input_id);
+                neighboors.splice(pos, 1);
+                console.log("Host " + id + " removed neighboor : ", neighboors);
+            } else if (info.input_id == id) {
+                const pos = neighboors.indexOf(info.output_id);
+                neighboors.splice(pos, 1);
+                console.log("Host " + id + " removed neighboor : ", neighboors);
+            }
+        });
     }
 })
 </script>

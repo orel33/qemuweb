@@ -102,8 +102,7 @@ export default {
     const dialogVisible = ref(false)
     const dialogData = ref({})
     const Vue = { version: 3, h, render };
-    const internalInstance = getCurrentInstance()
-    internalInstance.appContext.app._context.config.globalProperties.$df = editor;
+    const internalInstance = getCurrentInstance();
     
     function exportEditor() {
       dialogData.value = editor.export();
@@ -145,7 +144,7 @@ export default {
       pos_y = pos_y * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)) - (editor.precanvas.getBoundingClientRect().y * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)));
     
       const nodeSelected = listNodes.find(ele => ele.item == name);
-      editor.addNode(name, nodeSelected.input,  nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
+      editor.addNode(name, nodeSelected.input,  nodeSelected.output, pos_x, pos_y, name, {nodeId: editor.nodeId}, name, 'vue');
     }
 
     function twoNodesHaveReverseConnection(inputNodeInfo, outputNodeInfo) {
@@ -186,6 +185,7 @@ export default {
         editor.registerNode('Switch', Switch, {}, {});
 
         //editor.import({"drawflow":{"Home":{"data":{"5":{"id":5,"name":"Switch","data":{"script":"(req,res) => {\n console.log(req);\n}"},"class":"Switch","html":"Switch","typenode":"vue","inputs":{"input_1":{"connections":[{"node":"6","input_1":"output_1"}]}},"outputs":{"output_1":{"connections":[]},"output_1":{"connections":[]}},"pos_x":1000,"pos_y":117},"6":{"id":6,"name":"Host","data":{"url":"localhost/add", "method": "post"},"class":"Host","html":"Host","typenode":"vue","inputs":{},"outputs":{"output_1":{"connections":[{"node":"5","output":"input_1"}]}},"pos_x":137,"pos_y":89}}}}})
+        internalInstance.appContext.app._context.config.globalProperties.$df = editor;
     })
 
     return {
