@@ -6,7 +6,7 @@ export default {
     name: String,
     distributions: Array,
     selectedDistrib: String,
-    neighboors : Array
+    neighboors : Map
   },
   computed: {
     localSelectedDistrib: {
@@ -36,32 +36,31 @@ export default {
   },
   methods: {
     loadNeighboors() {
+      // Load the values of neighboors in selscts
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
-      var interfacesSelects = neighboorsDiv.querySelectorAll(".interfaces");
-      var hostsSelects = neighboorsDiv.querySelectorAll(".hosts");
-      for (let i = 0; i < this.neighboors.length; i++) {
-        interfacesSelects[i].value = 'eth' + i;
-        hostsSelects[i].value = this.neighboors[i];
+      var switchsSelects = neighboorsDiv.querySelectorAll(".switchs");
+      for (let i = 0; i < this.neighboors.size; i++) {
+        switchsSelects[i].value = this.neighboors.get(i);
       }
     },
-    storeNeighboors() {
+    switchSwitches(info) {
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
-      var interfacesSelects = neighboorsDiv.querySelectorAll(".interfaces");
-      var hostsSelects = neighboorsDiv.querySelectorAll(".hosts");
-      for (let i = 0; i < this.neighboors.length; i++) {
-        var pos = parseInt(interfacesSelects[i].value.slice(-1)); // get last char, 'eth1' -> '1'
-        this.localNeighboors[pos] = hostsSelects[i].value;
-      }
+      var switchsSelects = neighboorsDiv.querySelectorAll(".switchs");
+
+      // Exemple start state : One host connected to three switches -> {0 => '2', 1 => '3', 2 => '4'}
+      // Exemple action : for eth2, we select switch n°2 instead of switch n°4
+      // Exemple result : eth2 get switch n°2 and eth0 have to get switch n°4
+      var changedInterfaceNum = info[0]; // = 2, key
+      var oldSwitchNum = this.neighboors.get(changedInterfaceNum); // = 4, value
+      var newSwitchNum = switchsSelects[changedInterfaceNum].value; // = 2, value
+      var impactedInterfaceNum = this.neighboors.indexOf(newSwitchNum); // = 0, key
+
+      this.localNeighboors.set(impactedInterfaceNum, oldSwitchNum);
+      this.localNeighboors.set(changedInterfaceNum, newSwitchNum);
     },
-    hostsChanged() {
-      console.log("hosts changed");
-      this.storeNeighboors();
-      console.log(this.localNeighboors);
-    },
-    interfacesChanged() {
-      console.log("interfaces changed");
-      this.storeNeighboors();
-      console.log(this.localNeighboors);
+    switchesChanged(info) {
+      this.switchSwitches(info);
+      this.loadNeighboors();
     }
   },
   updated() {
@@ -85,12 +84,10 @@ export default {
               <option v-for="item in distributions" :key="item.value" :label="item.label" :value="item.value"></option>
             </select>
             <input class="host-name-in-modal" type="text" v-model="localName">
-            <div v-for="neigh in neighboors" :key="neigh">
-              <select class="interfaces" @change="interfacesChanged">
-                <option v-for="item in neighboors" :key="item" :label="'eth'+neighboors.indexOf(item)" :value="'eth'+neighboors.indexOf(item)"></option>
-              </select>
-              <select class="hosts" @change="hostsChanged">
-                <option v-for="item in neighboors" :key="item" :label="'PC n°' + item" :value="item"></option>
+            <div v-for="neigh in neighboors" :key="neigh.key">
+              <span class="interfaces"> eth{{neigh[0]}} -- </span>
+              <select class="switchs" @change="switchesChanged(neigh)">
+                <option v-for="item in neighboors" :key="item[1]" :label="'Switch n°' + item[1]" :value="item[1]"></option>
               </select>
             </div>
           </div>
@@ -107,6 +104,10 @@ export default {
 </template>
 
 <style>
+span.interfaces {
+  color: black;
+}
+
 .modal-mask {
   position: fixed;
   z-index: 9998;

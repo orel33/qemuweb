@@ -5,7 +5,7 @@
         <input class="host-name" type="text" v-model="name">
 
         <Teleport to="body">
-            <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @close="showParamModal = false" 
+            <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @close="showParamModal = false" 
                     :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors">
             <template #header>
                 <h3>Host settings</h3>
@@ -74,6 +74,9 @@ export default defineComponent({
         },
         updateName(value) {
             this.name = value;
+        },
+        updateNeighboors(value) {
+            this.neighboors = value;
         }
     },
     beforeMount() {
