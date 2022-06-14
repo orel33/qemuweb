@@ -16,8 +16,9 @@
 </template>
 
 <script>
-import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
-import Modal from '../Modal.vue'
+import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
+import Modal from '../Modal.vue';
+import { MyMap } from "../../MyMap"; 
 
 export default defineComponent({
     components: {
@@ -28,7 +29,7 @@ export default defineComponent({
             id: null,
             name: "bob",
             selectedDistrib: "",
-            neighboors: [], // Array(neighboorNodeId)
+            neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>
             distributions: [
                 {
                     value: 'debian10',
@@ -76,7 +77,7 @@ export default defineComponent({
         }
     },
     beforeMount() {
-        // beforeMount to avoid to load Modal component (which need this.id) before execute this code 
+        // beforeMount to avoid to load Modal component (which need this.id) before this code is executed
         const internalInstance = getCurrentInstance();
         var editor = internalInstance.appContext.app._context.config.globalProperties.$df;
         const neighboors = this.neighboors;
@@ -91,10 +92,10 @@ export default defineComponent({
             if (inputNode.class == "Host" && outputNode.class == "Host") {
                 //Do nothing
             } else if (info.output_id == id) {
-                neighboors.push(info.input_id);
+                neighboors.set(neighboors.size, info.input_id);
                 console.log("Host " + id + " added neighboor : ", neighboors);
             } else if (info.input_id == id) {
-                neighboors.push(info.output_id);
+                neighboors.set(neighboors.size, info.output_id);
                 console.log("Host " + id + " added neighboor : ", neighboors);
             }
         });
@@ -109,11 +110,11 @@ export default defineComponent({
                 //Do nothing
             } else if (info.output_id == id) {
                 const pos = neighboors.indexOf(info.input_id);
-                neighboors.splice(pos, 1);
+                neighboors.delete(pos)
                 console.log("Host " + id + " removed neighboor : ", neighboors);
             } else if (info.input_id == id) {
                 const pos = neighboors.indexOf(info.output_id);
-                neighboors.splice(pos, 1);
+                neighboors.delete(pos)
                 console.log("Host " + id + " removed neighboor : ", neighboors);
             }
         });
