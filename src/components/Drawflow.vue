@@ -144,7 +144,22 @@ export default {
       pos_y = pos_y * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)) - (editor.precanvas.getBoundingClientRect().y * ( editor.precanvas.clientHeight / (editor.precanvas.clientHeight * editor.zoom)));
     
       const nodeSelected = listNodes.find(ele => ele.item == name);
-      editor.addNode(name, nodeSelected.input,  nodeSelected.output, pos_x, pos_y, name, {nodeId: editor.nodeId}, name, 'vue');
+
+      if (name == 'Host') {
+        var result = prompt("Combien d'interfaces doit posséder le PC ? [1-6] ", 1);
+        if (result == null) {
+          // Do nothing  
+        } else {
+          result = Number(result);
+          if ([1,2,3,4,5,6].includes(result)) {
+            editor.addNode(name, nodeSelected.input, result, pos_x, pos_y, name, {}, name, 'vue');
+          } else {
+            alert(result + " n'est pas une valeur acceptée...\nLa valeur doit être comprise dans l'intervalle [1-6].");
+          }
+        }
+      } else {
+        editor.addNode(name, nodeSelected.input, nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
+      }
     }
 
     function twoNodesHaveReverseConnection(inputNodeInfo, outputNodeInfo) {
@@ -196,6 +211,7 @@ export default {
 }
 
 </script>
+
 <style scoped>
 .header {
     display: flex;
@@ -212,7 +228,6 @@ export default {
 .column ul {
     padding-inline-start: 0px;
     padding: 10px 10px;
- 
 }
 .column li {
     background: transparent;
@@ -227,7 +242,6 @@ export default {
     padding: 10px;
     margin: 10px 0px;
     cursor: move;
-
 }
 #drawflow {
   width: 100%;
@@ -235,7 +249,6 @@ export default {
   text-align: initial;
   background: #2b2c30;
   background-size: 20px 20px;
-  background-image: radial-gradient(#494949 1px, transparent 1px);
-  
+  background-image: radial-gradient(#494949 1px, transparent 1px); 
 }
 </style>

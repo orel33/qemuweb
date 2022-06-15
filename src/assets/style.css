@@ -67,3 +67,45 @@ img {
     -moz-user-drag: none;
     -o-user-drag: none;
 }
+
+.drawflow-node.Host .outputs .output:nth-child(1):before {
+    display: block;
+    content: "eth0";
+    position: relative;
+    right: 32px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(2):before {
+    display: block;
+    content: "eth1";
+    position: relative;
+    right: 32px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(3):before {
+    display: block;
+    content: "eth2";
+    position: relative;
+    right: 32px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(4):before {
+    display: block;
+    content: "eth3";
+    position: relative;
+    right: 32px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(5):before {
+    display: block;
+    content: "eth4";
+    position: relative;
+    right: 32px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(6):before {
+    display: block;
+    content: "eth5";
+    position: relative;
+    right: 32px;
+}

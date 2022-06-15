@@ -8,7 +8,7 @@
             <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @close="showParamModal = false" 
                     :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors">
             <template #header>
-                <h2>Host settings</h2>
+                <h2>Paramètre du PC</h2>
             </template>
             </modal>
         </Teleport>
@@ -81,8 +81,7 @@ export default defineComponent({
     },
     beforeMount() {
         // beforeMount to avoid to load Modal component (which need this.id) before this code is executed
-        const internalInstance = getCurrentInstance();
-        var editor = internalInstance.appContext.app._context.config.globalProperties.$df;
+        var editor = getCurrentInstance().appContext.app._context.config.globalProperties.$df;
         const neighboors = this.neighboors;
         this.id = editor.nodeId;
         const id = this.id;
@@ -121,6 +120,10 @@ export default defineComponent({
                 console.log("Host " + id + " removed neighboor : ", neighboors);
             }
         });
+    },
+    mounted() {
+        var editor = getCurrentInstance().appContext.app._context.config.globalProperties.$df;
+        //console.log(editor.getNodeFromId(this.id));
     }
 })
 </script>
