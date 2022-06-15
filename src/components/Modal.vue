@@ -43,34 +43,47 @@ export default {
       set(value) {
         this.$emit('updateInterfaces', value)
       }
+    },
+    editor: {
+      get() {
+        return getCurrentInstance().appContext.app._context.config.globalProperties.$df;
+      }
     }
   },
   methods: {
     loadNeighboors() {
       // Load the values of neighboors in selscts
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
-      var switchsSelects = neighboorsDiv.querySelectorAll(".switchs");
+      var switchesSelects = neighboorsDiv.querySelectorAll(".switches");
       for (let i = 0; i < this.neighboors.size; i++) {
-        switchsSelects[i].value = this.neighboors.get(i);
+        switchesSelects[i].value = this.neighboors.get(i);
       }
     },
     switchSwitches(info) {
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
-      var switchsSelects = neighboorsDiv.querySelectorAll(".switchs");
+      var switchesSelects = neighboorsDiv.querySelectorAll(".switches");
 
       // Exemple start state : One host connected to three switches -> {0 => '2', 1 => '3', 2 => '4'}
       // Exemple action : for eth2, we select switch n°2 instead of switch n°4
       // Exemple result : eth2 get switch n°2 and eth0 have to get switch n°4
       var changedInterfaceNum = info[0]; // = 2, key
       var oldSwitchNum = this.neighboors.get(changedInterfaceNum); // = 4, value
-      var newSwitchNum = switchsSelects[changedInterfaceNum].value; // = 2, value
+      var newSwitchNum = switchesSelects[changedInterfaceNum].value; // = 2, value
       var impactedInterfaceNum = this.neighboors.indexOf(newSwitchNum); // = 0, key
 
       this.localNeighboors.set(impactedInterfaceNum, oldSwitchNum);
       this.localNeighboors.set(changedInterfaceNum, newSwitchNum);
     },
-    switchesChanged(info) {
-      //
+    switchesChanged(index) {
+      var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
+      var switchesId = this.editor.getNodesFromName('Switch');
+      var outputId = index;
+      var selectValue = neighboorsDiv.querySelectorAll(".switches")[index-1].value;
+
+      for (let connection of this.editor.getNodeFromId(this.hostId).outputs['output_'+index].connections) {
+        this.editor.removeSingleConnection(outputId, connection.node, 'output_'+index, connection.output)
+      }
+      this.editor.addConnection(this.hostId, switchesId[selectValue-1], 'output_' + index, 'input_1');
     },
     removeInterface() {
       if (this.interfacesCount > 1) {
@@ -81,16 +94,13 @@ export default {
       this.localInterfacesCount++;
     },
     switchesCount() {
-      var editor = getCurrentInstance().appContext.app._context.config.globalProperties.$df;
-      console.log(editor.getNodesFromName('Switch'));
-      return editor.getNodesFromName('Switch').length;
+      return this.editor.getNodesFromName('Switch').length;
     }
   },
   updated() {
     /// Triggered when modal pop up
 
     //this.loadNeighboors();
-    console.log(this.switchesCount());
   }
 }
 </script>
