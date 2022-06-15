@@ -80,15 +80,24 @@ export default {
           </div>
 
           <div :id="'modal-body-div-' + hostId" class="modal-body">
-            <select v-model="localSelectedDistrib">
-              <option v-for="item in distributions" :key="item.value" :label="item.label" :value="item.value"></option>
-            </select>
-            <input class="host-name-in-modal" type="text" v-model="localName">
-            <div v-for="neigh in neighboors" :key="neigh.key">
-              <span class="interfaces"> eth{{neigh[0]}} -- </span>
-              <select class="switchs" @change="switchesChanged(neigh)">
-                <option v-for="item in neighboors" :key="item[1]" :label="'Switch n°' + item[1]" :value="item[1]"></option>
+            <div class="modal-section">
+              <span class="modal-span"> Distribution : </span>
+              <select v-model="localSelectedDistrib">
+                <option v-for="item in distributions" :key="item.value" :label="item.label" :value="item.value"></option>
               </select>
+            </div>
+            <div class="modal-section">
+              <span class="modal-span"> Nom : </span>
+              <input class="host-name-in-modal" type="text" v-model="localName">
+            </div>
+            <div class="interfaces-div modal-section" v-if="neighboors.size > 0">
+              <span class="modal-span"> Changer les interfaces : </span>
+              <div class="interfaces-for" v-for="neigh in neighboors" :key="neigh.key">
+                <span class="modal-span"> eth{{neigh[0]}} -- </span>
+                <select class="switchs" @change="switchesChanged(neigh)">
+                  <option v-for="item in neighboors" :key="item[1]" :label="'Switch n°' + item[1]" :value="item[1]"></option>
+                </select>
+              </div>
             </div>
           </div>
 
@@ -104,8 +113,13 @@ export default {
 </template>
 
 <style>
-span.interfaces {
+.modal-section {
+  margin-top: 30px;
   color: black;
+}
+
+.interfaces-for {
+  margin-top: 10px;
 }
 
 .modal-mask {
@@ -126,7 +140,7 @@ span.interfaces {
 }
 
 .modal-container {
-  width: 300px;
+  width: 400px;
   margin: 0px auto;
   padding: 20px 30px;
   background-color: #fff;
@@ -135,7 +149,7 @@ span.interfaces {
   transition: all 0.3s ease;
 }
 
-.modal-header h3 {
+.modal-header h2 {
   margin-top: 0;
   color: #42b983;
 }

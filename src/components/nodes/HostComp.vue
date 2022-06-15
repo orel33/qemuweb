@@ -8,7 +8,7 @@
             <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @close="showParamModal = false" 
                     :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors">
             <template #header>
-                <h3>Host settings</h3>
+                <h2>Host settings</h2>
             </template>
             </modal>
         </Teleport>
@@ -28,7 +28,7 @@ export default defineComponent({
         return {
             id: null,
             name: "bob",
-            selectedDistrib: "",
+            selectedDistrib: "debian10",
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>
             distributions: [
                 {

@@ -1,5 +1,4 @@
 <template>
-
   <el-container>
     <el-header class="header">
         <h3>QemuWeb</h3>
@@ -30,14 +29,15 @@
     </template>
   </el-dialog>
 </template>
-<script>
 
-import drawflow from 'drawflow'
-import styleDrawflow from 'drawflow/dist/drawflow.min.css'
-import style from '../assets/style.css' 
-import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue'
-import Host from './nodes/HostComp.vue'
-import Switch from './nodes/SwitchComp.vue'
+
+<script>
+import drawflow from 'drawflow';
+import styleDrawflow from 'drawflow/dist/drawflow.min.css';
+import style from '../assets/style.css';
+import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
+import Host from './nodes/HostComp.vue';
+import Switch from './nodes/SwitchComp.vue';
 import { TerminalUI } from "../TerminalUI"; 
 import io from "socket.io-client";
 
@@ -59,7 +59,7 @@ export default {
     startTerminal(container, socket) {
       const terminal = new TerminalUI(socket);
       terminal.attachTo(container);
-      console.log("startTerminal")
+      console.log("startTerminal");
       terminal.startListening();
     },
     start() {
@@ -99,8 +99,8 @@ export default {
     ])
     
     var editor;// = shallowRef({})
-    const dialogVisible = ref(false)
-    const dialogData = ref({})
+    const dialogVisible = ref(false);
+    const dialogData = ref({});
     const Vue = { version: 3, h, render };
     const internalInstance = getCurrentInstance();
     
