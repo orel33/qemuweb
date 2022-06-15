@@ -1,4 +1,6 @@
 <script>
+import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
+
 export default {
   props: {
     show: Boolean,
@@ -6,7 +8,8 @@ export default {
     name: String,
     distributions: Array,
     selectedDistrib: String,
-    neighboors : Map
+    neighboors: Map,
+    interfacesCount: Number
   },
   computed: {
     localSelectedDistrib: {
@@ -31,6 +34,14 @@ export default {
       },
       set(value) {
         this.$emit('updateNeighboors', value)
+      }
+    },
+    localInterfacesCount: {
+      get() {
+        return this.interfacesCount;
+      },
+      set(value) {
+        this.$emit('updateInterfaces', value)
       }
     }
   },
@@ -59,13 +70,27 @@ export default {
       this.localNeighboors.set(changedInterfaceNum, newSwitchNum);
     },
     switchesChanged(info) {
-      this.switchSwitches(info);
-      this.loadNeighboors();
+      //
+    },
+    removeInterface() {
+      if (this.interfacesCount > 1) {
+        this.localInterfacesCount--;
+      }
+    },
+    addInterface() {
+      this.localInterfacesCount++;
+    },
+    switchesCount() {
+      var editor = getCurrentInstance().appContext.app._context.config.globalProperties.$df;
+      console.log(editor.getNodesFromName('Switch'));
+      return editor.getNodesFromName('Switch').length;
     }
   },
   updated() {
-    // Triggered when modal pop up
-    this.loadNeighboors();
+    /// Triggered when modal pop up
+
+    //this.loadNeighboors();
+    console.log(this.switchesCount());
   }
 }
 </script>
@@ -90,12 +115,17 @@ export default {
               <span class="modal-span"> Nom : </span>
               <input class="host-name-in-modal" type="text" v-model="localName">
             </div>
-            <div class="interfaces-div modal-section" v-if="neighboors.size > 0">
-              <span class="modal-span"> Changer les interfaces : </span>
-              <div class="interfaces-for" v-for="neigh in neighboors" :key="neigh.key">
-                <span class="modal-span"> eth{{neigh[0]}} -- </span>
-                <select class="switchs" @change="switchesChanged(neigh)">
-                  <option v-for="item in neighboors" :key="item[1]" :label="'Switch n°' + item[1]" :value="item[1]"></option>
+            <div class="interfaces-div modal-section">
+              <span class="modal-span"> Gestion des interfaces : </span>
+              <div class="interfaces-buttons">
+                <button class="interfaces-btn-minus" @click="removeInterface"> - </button>
+                <button class="interfaces-btn-plus" @click="addInterface"> + </button>
+              </div>
+              <div class="interfaces-for" v-for="index in interfacesCount" :key="index">
+                <span class="modal-span"> eth{{index-1}} -- </span>
+                <select class="switches" @change="switchesChanged(index)">
+                  <option label=" -- " value="-1"></option>
+                  <option v-for="indexS in switchesCount()" :key="indexS" :label="'Switch n°' + indexS" :value="indexS"></option>
                 </select>
               </div>
             </div>

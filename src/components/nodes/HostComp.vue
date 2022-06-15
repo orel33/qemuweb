@@ -5,10 +5,12 @@
         <input class="host-name" type="text" v-model="name">
 
         <Teleport to="body">
-            <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @close="showParamModal = false" 
-                    :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors">
+            <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
+                    @close="showParamModal = false" 
+                    :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors"
+                    :interfacesCount="interfacesCount">
             <template #header>
-                <h2>Paramètre du PC</h2>
+                <h2>Paramètres du PC</h2>
             </template>
             </modal>
         </Teleport>
@@ -29,7 +31,8 @@ export default defineComponent({
             id: null,
             name: "bob",
             selectedDistrib: "debian10",
-            neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>
+            neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>,
+            interfacesCount: 1,
             distributions: [
                 {
                     value: 'debian10',
@@ -77,6 +80,9 @@ export default defineComponent({
         },
         updateNeighboors(value) {
             this.neighboors = value;
+        },
+        updateInterfaces(value) {
+            this.interfacesCount = value;
         }
     },
     beforeMount() {
@@ -120,10 +126,6 @@ export default defineComponent({
                 console.log("Host " + id + " removed neighboor : ", neighboors);
             }
         });
-    },
-    mounted() {
-        var editor = getCurrentInstance().appContext.app._context.config.globalProperties.$df;
-        //console.log(editor.getNodeFromId(this.id));
     }
 })
 </script>
