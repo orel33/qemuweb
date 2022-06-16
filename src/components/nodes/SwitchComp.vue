@@ -44,6 +44,7 @@ export default defineComponent({
         },
         updateName(value) {
             this.name = value;
+            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
         }
     },
     beforeMount() {
@@ -53,6 +54,7 @@ export default defineComponent({
         this.$nextTick(() => {
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
+            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
         });
     }
 })

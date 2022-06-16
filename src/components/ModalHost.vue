@@ -124,7 +124,8 @@ export default {
                 <span class="modal-span"> eth{{index-1}} -- </span>
                 <select class="switches" @change="switchesChanged(index)">
                   <option label=" -- " value="-1"></option>
-                  <option v-for="indexS in switchesCount()" :key="indexS" :label="'Switch n°' + indexS" :value="indexS"></option>
+                  <option v-for="indexS in switchesCount()" :key="indexS" 
+                          :label="editor.getNodeFromId(editor.getNodesFromName('Switch')[indexS-1]).data.name" :value="indexS"></option>
                 </select>
               </div>
             </div>

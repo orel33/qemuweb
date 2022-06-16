@@ -24,8 +24,6 @@ export default {
   },
   updated() {
     /// Triggered when modal pop up
-
-    //this.loadInterfaces();
   }
 }
 </script>
