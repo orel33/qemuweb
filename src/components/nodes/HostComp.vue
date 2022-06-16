@@ -10,7 +10,7 @@
                     :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors"
                     :interfacesCount="interfacesCount">
             <template #header>
-                <h2>Paramètres du PC</h2>
+                <h2>Host settings</h2>
             </template>
             </modal>
         </Teleport>

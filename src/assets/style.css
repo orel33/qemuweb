@@ -16,8 +16,8 @@
 .drawflow .drawflow-node .input, .drawflow .drawflow-node .output {
     background: #181818;
     border: 3px solid #494949;
-    width: 20px;
-    height: 20px;
+    width: 15px;
+    height: 15px;
     margin-top: 14px;
     margin-bottom: 14px;
 }
@@ -31,7 +31,7 @@
 }
 
 .drawflow .drawflow-node .output {
-    right: -27px;
+    right: 4px;
 }
 
 .drawflow .drawflow-node .output:hover, .drawflow .drawflow-node .input:hover {
@@ -72,40 +72,78 @@ img {
     display: block;
     content: "eth0";
     position: relative;
-    right: 32px;
+    right: -15px;
+    bottom: 4px;
 }
 
 .drawflow-node.Host .outputs .output:nth-child(2):before {
     display: block;
     content: "eth1";
     position: relative;
-    right: 32px;
+    right: -15px;
+    bottom: 4px;
 }
 
 .drawflow-node.Host .outputs .output:nth-child(3):before {
     display: block;
     content: "eth2";
     position: relative;
-    right: 32px;
+    right: -15px;
+    bottom: 4px;
 }
 
 .drawflow-node.Host .outputs .output:nth-child(4):before {
     display: block;
     content: "eth3";
     position: relative;
-    right: 32px;
+    right: -15px;
+    bottom: 4px;
 }
 
 .drawflow-node.Host .outputs .output:nth-child(5):before {
     display: block;
     content: "eth4";
     position: relative;
-    right: 32px;
+    right: -15px;
+    bottom: 4px;
 }
 
 .drawflow-node.Host .outputs .output:nth-child(6):before {
     display: block;
     content: "eth5";
     position: relative;
-    right: 32px;
+    right: -15px;
+    bottom: 4px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(7):before {
+    display: block;
+    content: "eth6";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(8):before {
+    display: block;
+    content: "eth7";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(9):before {
+    display: block;
+    content: "eth8";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(10):before {
+    display: block;
+    content: "eth9";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
 }

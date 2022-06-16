@@ -120,17 +120,17 @@ export default {
 
           <div :id="'modal-body-div-' + hostId" class="modal-body">
             <div class="modal-section">
-              <span class="modal-span"> Distribution : </span>
+              <span class="modal-span title"> System : </span>
               <select v-model="localSelectedDistrib">
                 <option v-for="item in distributions" :key="item.value" :label="item.label" :value="item.value"></option>
               </select>
             </div>
             <div class="modal-section">
-              <span class="modal-span"> Nom : </span>
+              <span class="modal-span title"> Name : </span>
               <input class="host-name-in-modal" type="text" v-model="localName">
             </div>
             <div class="interfaces-div modal-section">
-              <span class="modal-span"> Gestion des interfaces : </span>
+              <span class="modal-span title"> Network interface management : </span>
               <div class="interfaces-buttons">
                 <button class="interfaces-btn-minus" @click="removeInterface"> - </button>
                 <button class="interfaces-btn-plus" @click="addInterface"> + </button>
