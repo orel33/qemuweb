@@ -1,5 +1,5 @@
 <template>
-    <div @click="displaySel">
+    <div>
         <img class="cog" src="../../assets/cog.png" @click="showParamModal = true"/>
         <img class="computer" src="../../assets/computer.png" />
         <input class="host-name" type="text" v-model="name">
@@ -19,7 +19,7 @@
 
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
-import Modal from '../Modal.vue';
+import Modal from '../ModalHost.vue';
 import { MyMap } from "../../MyMap"; 
 
 export default defineComponent({
@@ -141,10 +141,6 @@ img.cog {
     position: relative;
     right: 12px;
     top: 3px;
-}
-img.cog:hover {
-    border: 1px;
-    cursor: pointer;
 }
 select {
     position: relative;

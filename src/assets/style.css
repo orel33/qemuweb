@@ -68,6 +68,11 @@ img {
     -o-user-drag: none;
 }
 
+img.cog:hover {
+    border: 1px;
+    cursor: pointer;
+}
+
 .drawflow-node.Host .outputs .output:nth-child(1):before {
     display: block;
     content: "eth0";

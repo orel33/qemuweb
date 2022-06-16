@@ -62,21 +62,6 @@ export default {
         }
       }
     },
-    switchSwitches(info) {
-      var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
-      var switchesSelects = neighboorsDiv.querySelectorAll(".switches");
-
-      // Exemple start state : One host connected to three switches -> {0 => '2', 1 => '3', 2 => '4'}
-      // Exemple action : for eth2, we select switch n°2 instead of switch n°4
-      // Exemple result : eth2 get switch n°2 and eth0 have to get switch n°4
-      var changedInterfaceNum = info[0]; // = 2, key
-      var oldSwitchNum = this.neighboors.get(changedInterfaceNum); // = 4, value
-      var newSwitchNum = switchesSelects[changedInterfaceNum].value; // = 2, value
-      var impactedInterfaceNum = this.neighboors.indexOf(newSwitchNum); // = 0, key
-
-      this.localNeighboors.set(impactedInterfaceNum, oldSwitchNum);
-      this.localNeighboors.set(changedInterfaceNum, newSwitchNum);
-    },
     switchesChanged(index) {
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
       var switchesId = this.editor.getNodesFromName('Switch');
