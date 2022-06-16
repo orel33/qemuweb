@@ -68,6 +68,16 @@ img {
     -o-user-drag: none;
 }
 
+img.switch {
+    width:65px;
+    height:65px;
+}
+
+img.computer {
+    width:65px;
+    height:65px;
+}
+
 img.cog:hover {
     border: 1px;
     cursor: pointer;

@@ -131,10 +131,6 @@ export default defineComponent({
 </script>
 
 <style scoped>
-img.computer {
-    width:65px;
-    height:65px;
-}
 img.cog {
     width:25px;
     height:25px;

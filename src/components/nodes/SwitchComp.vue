@@ -61,10 +61,6 @@ export default defineComponent({
 </script>
 
 <style scoped>
-img.switch {
-    width:65px;
-    height:65px;
-}
 img.cog {
     width:25px;
     height:25px;

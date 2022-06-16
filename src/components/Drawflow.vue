@@ -8,7 +8,9 @@
       <el-aside width="110px" class="column">
           <ul>
               <li v-for="n in listNodes" :key="n" draggable="true" :data-node="n.item" @dragstart="drag($event)" class="drag-drawflow" >
-                  <div class="node" :style="`background: ${n.color};text-align: center`" >{{ n.name }}</div>
+                  <div class="node" :style="`background: ${n.color};text-align: center`" >
+                    <img :class="n.img_class" :src="n.img"/>
+                  </div>
               </li>
           </ul>
           <!--<div class="terminal-container" data-port="43373"></div>-->
@@ -83,18 +85,22 @@ export default {
   setup() {
     const listNodes = readonly([
       {
-        name: 'PC',
+        name: 'HOST',
         color: '#49494970',
         item: 'Host',
-        input:0,
-        output:1
+        input: 0,
+        output: 1,
+        img: require('@/assets/computer.png'),
+        img_class: 'computer'
       },
       {
         name: 'SWITCH',
         color: 'blue',
         item: 'Switch',
-        input:1,
-        output:0
+        input: 1,
+        output: 0,
+        img: require('@/assets/switch.png'),
+        img_class: 'switch'
       }
     ])
     
@@ -150,16 +156,6 @@ export default {
         editor.addNode(name, nodeSelected.input, nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
       }
     }
-
-    function twoNodesHaveReverseConnection(inputNodeInfo, outputNodeInfo) {
-      for (let co of inputNodeInfo.outputs.output_1.connections) {
-        if (co.node == outputNodeInfo.id) {
-          return true;
-        }
-      }
-      return false;
-    }
-
 
     onMounted(() => {
 
@@ -226,7 +222,7 @@ export default {
     border-radius: 8px;
     border: 2px solid #494949;
     display: block;
-    height:60px;
+    height:88px;
     line-height:40px;
     padding: 10px;
     margin: 10px 0px;
