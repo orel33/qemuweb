@@ -51,12 +51,15 @@ export default {
     }
   },
   methods: {
-    loadNeighboors() {
-      // Load the values of neighboors in selscts
+    loadInterfaces() {
+      // Load the connections interfaces/switches in selects
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
       var switchesSelects = neighboorsDiv.querySelectorAll(".switches");
-      for (let i = 0; i < this.neighboors.size; i++) {
-        switchesSelects[i].value = this.neighboors.get(i);
+      for (let i = 0; i < this.interfacesCount; i++) {
+        if (this.editor.getNodeFromId(this.hostId).outputs['output_'+(i+1)].connections.length > 0) {
+          switchesSelects[i].value = this.editor.getNodesFromName('Switch')
+                                      .indexOf(Number(this.editor.getNodeFromId(this.hostId).outputs['output_'+(i+1)].connections[0].node))+1;
+        }
       }
     },
     switchSwitches(info) {
@@ -79,18 +82,19 @@ export default {
       var switchesId = this.editor.getNodesFromName('Switch');
       var outputId = index;
       var selectValue = neighboorsDiv.querySelectorAll(".switches")[index-1].value;
-
       for (let connection of this.editor.getNodeFromId(this.hostId).outputs['output_'+index].connections) {
-        this.editor.removeSingleConnection(outputId, connection.node, 'output_'+index, connection.output)
+        this.editor.removeSingleConnection(this.hostId, connection.node, 'output_'+index, connection.output)
       }
       this.editor.addConnection(this.hostId, switchesId[selectValue-1], 'output_' + index, 'input_1');
     },
     removeInterface() {
       if (this.interfacesCount > 1) {
+        this.editor.removeNodeOutput(this.hostId, 'output_' + this.interfacesCount);
         this.localInterfacesCount--;
       }
     },
     addInterface() {
+      this.editor.addNodeOutput(this.hostId);
       this.localInterfacesCount++;
     },
     switchesCount() {
@@ -100,7 +104,7 @@ export default {
   updated() {
     /// Triggered when modal pop up
 
-    //this.loadNeighboors();
+    this.loadInterfaces();
   }
 }
 </script>
