@@ -86,7 +86,7 @@ export default {
         name: 'PC',
         color: '#49494970',
         item: 'Host',
-        input:1,
+        input:0,
         output:1
       },
       {
@@ -94,7 +94,7 @@ export default {
         color: 'blue',
         item: 'Switch',
         input:1,
-        output:1
+        output:0
       }
     ])
     
@@ -146,8 +146,6 @@ export default {
       const nodeSelected = listNodes.find(ele => ele.item == name);
       if (name == "Switch") {
         editor.addNode(name, nodeSelected.input, 0, pos_x, pos_y, name, {number: editor.getNodesFromName('Switch').length}, name, 'vue');
-      } else if (name == "Host") {
-        editor.addNode(name, 0, nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
       } else {
         editor.addNode(name, nodeSelected.input, nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
       }
