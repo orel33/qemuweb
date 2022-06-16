@@ -145,7 +145,9 @@ export default {
     
       const nodeSelected = listNodes.find(ele => ele.item == name);
       if (name == "Switch") {
-        editor.addNode(name, nodeSelected.input, nodeSelected.output, pos_x, pos_y, name, {number: editor.getNodesFromName('Switch').length}, name, 'vue');
+        editor.addNode(name, nodeSelected.input, 0, pos_x, pos_y, name, {number: editor.getNodesFromName('Switch').length}, name, 'vue');
+      } else if (name == "Host") {
+        editor.addNode(name, 0, nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
       } else {
         editor.addNode(name, nodeSelected.input, nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
       }
@@ -177,7 +179,7 @@ export default {
         editor.on("connectionCreated", function(info) {
           const inputNodeInfo = editor.getNodeFromId(info.input_id);
           const outputNodeInfo = editor.getNodeFromId(info.output_id);
-          if((inputNodeInfo.class == "Host" && outputNodeInfo.class == "Host") || twoNodesHaveReverseConnection(inputNodeInfo, outputNodeInfo)) {
+          if((inputNodeInfo.class == "Host" && outputNodeInfo.class == "Host")) {
             const last = outputNodeInfo.outputs[info.output_class].connections.length - 1;
             const removeConnectionInfo = outputNodeInfo.outputs[info.output_class].connections[last];
             editor.removeSingleConnection(info.output_id, removeConnectionInfo.node, info.output_class, removeConnectionInfo.output);
