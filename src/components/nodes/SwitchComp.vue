@@ -6,7 +6,7 @@
 
         <Teleport to="body">
             <modal @updateHostName="updateName" @updatePortsCount="updatePorts" @close="showParamModal = false" 
-                    :show="showParamModal" :hostId="id" :name="name" :portsCount="portsCount">
+                    :show="showParamModal" :switchId="id" :name="name" :portsCount="portsCount">
             <template #header>
                 <h2>Switch settings</h2>
             </template>
@@ -45,10 +45,14 @@ export default defineComponent({
         },
         updateName(value) {
             this.name = value;
-            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
+            this.updateNodeData();
         },
         updatePorts(value) {
             this.portsCount = value;
+            this.updateNodeData();
+        },
+        updateNodeData() {
+            this.editor.updateNodeDataFromId(this.id, {"name": this.name, "portsCount": this.portsCount});
         }
     },
     beforeMount() {
@@ -58,7 +62,7 @@ export default defineComponent({
         this.$nextTick(() => {
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
-            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
+            this.updateNodeData();
         });
     }
 })

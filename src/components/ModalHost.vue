@@ -57,20 +57,22 @@ export default {
       var switchesSelects = neighboorsDiv.querySelectorAll(".switches");
       for (let i = 0; i < this.interfacesCount; i++) {
         if (this.editor.getNodeFromId(this.hostId).outputs['output_'+(i+1)].connections.length > 0) {
-          switchesSelects[i].value = this.editor.getNodesFromName('Switch')
-                                      .indexOf(Number(this.editor.getNodeFromId(this.hostId).outputs['output_'+(i+1)].connections[0].node))+1;
+          var switchId = this.editor.getNodesFromName('Switch').indexOf(Number(this.editor.getNodeFromId(this.hostId).outputs['output_'+(i+1)].connections[0].node));
+          var port = this.editor.getNodeFromId(this.hostId).outputs['output_'+(i+1)].connections[0].output.split('_')[1];
+          switchesSelects[i].value = (switchId+1) + ':' + port;
         }
       }
     },
     switchesChanged(index) {
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
-      var switchesId = this.editor.getNodesFromName('Switch');
-      var outputId = index;
+      var switches = this.editor.getNodesFromName('Switch');
       var selectValue = neighboorsDiv.querySelectorAll(".switches")[index-1].value;
+      var switchValue = selectValue.split(':')[0];
+      var portValue = selectValue.split(':')[1];
       for (let connection of this.editor.getNodeFromId(this.hostId).outputs['output_'+index].connections) {
         this.editor.removeSingleConnection(this.hostId, connection.node, 'output_'+index, connection.output)
       }
-      this.editor.addConnection(this.hostId, switchesId[selectValue-1], 'output_' + index, 'input_1');
+      this.editor.addConnection(this.hostId, switches[switchValue-1], 'output_' + index, 'input_' + portValue);
     },
     removeInterface() {
       if (this.interfacesCount > 1) {
@@ -117,16 +119,21 @@ export default {
             </div>
             <div class="interfaces-div modal-section">
               <span class="modal-span title"> Network interface management : </span>
+
               <div class="interfaces-buttons">
                 <button class="interfaces-btn-minus" @click="removeInterface"> - </button>
                 <button class="interfaces-btn-plus" @click="addInterface"> + </button>
               </div>
+
               <div class="interfaces-for" v-for="index in interfacesCount" :key="index">
                 <span class="modal-span"> eth{{index-1}} -- </span>
                 <select class="switches" @change="switchesChanged(index)">
                   <option label=" -- " value="-1"></option>
-                  <option v-for="indexS in switchesCount()" :key="indexS" 
-                          :label="editor.getNodeFromId(editor.getNodesFromName('Switch')[indexS-1]).data.name" :value="indexS"></option>
+                  <optgroup v-for="indexS in switchesCount()" :key="indexS" :label="editor.getNodeFromId(editor.getNodesFromName('Switch')[indexS-1]).data.name">
+                    <option v-for="indexP in editor.getNodeFromId(editor.getNodesFromName('Switch')[indexS-1]).data.portsCount" :key="indexP" 
+                            :label="editor.getNodeFromId(editor.getNodesFromName('Switch')[indexS-1]).data.name + '/ #' + (indexP-1)" :value="indexS + ':' + indexP">
+                    </option>
+                  </optgroup>
                 </select>
               </div>
             </div>

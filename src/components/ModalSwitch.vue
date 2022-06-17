@@ -4,7 +4,7 @@ import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick
 export default {
   props: {
     show: Boolean,
-    hostId: Number,
+    switchId: Number,
     name: String,
     portsCount: Number
   },
@@ -35,30 +35,45 @@ export default {
     hostsCount() {
       return this.editor.getNodesFromName('Host').length;
     },
+    loadPorts() {
+      // Load the connections ports/hosts in selects
+      var neighboorsDiv = document.getElementById("modal-body-div-" + this.switchId);
+      var portsSelects = neighboorsDiv.querySelectorAll(".ports");
+      for (let i = 0; i < this.portsCount; i++) {
+        if (this.editor.getNodeFromId(this.switchId).inputs['input_'+(i+1)].connections.length > 0) {
+          var host = this.editor.getNodesFromName('Host').indexOf(Number(this.editor.getNodeFromId(this.switchId).inputs['input_'+(i+1)].connections[0].node));
+          var selectedInterface = this.editor.getNodeFromId(this.switchId).inputs['input_'+(i+1)].connections[0].input.split('_')[1];
+          portsSelects[i].value = (host+1) + ':' + selectedInterface;
+        }
+      }
+    },
     portsChanged(index) {
-      var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
+      var neighboorsDiv = document.getElementById("modal-body-div-" + this.switchId);
       var hosts = this.editor.getNodesFromName('Host');
       var selectValue = neighboorsDiv.querySelectorAll(".ports")[index-1].value;
       var hostValue = selectValue.split(':')[0];
       var interfaceValue = selectValue.split(':')[1];
-      for (let connection of this.editor.getNodeFromId(this.hostId).inputs['input_'+index].connections) {
-        this.editor.removeSingleConnection(connection.node, this.hostId, connection.input, 'input_'+index)
+      for (let connection of this.editor.getNodeFromId(this.switchId).inputs['input_'+index].connections) {
+        this.editor.removeSingleConnection(connection.node, this.switchId, connection.input, 'input_'+index)
       }
-      this.editor.addConnection(hosts[hostValue-1], this.hostId, 'output_' + interfaceValue, 'input_' + index);
+      this.editor.addConnection(hosts[hostValue-1], this.switchId, 'output_' + interfaceValue, 'input_' + index);
     },
     removePort() {
       if (this.portsCount > 1) {
-        this.editor.removeNodeInput(this.hostId, 'input_' + this.portsCount);
+        this.editor.removeNodeInput(this.switchId, 'input_' + this.portsCount);
         this.localPortsCount--;
       }
     },
     addPort() {
-      this.editor.addNodeInput(this.hostId);
+      this.editor.addNodeInput(this.switchId);
       this.localPortsCount++;
     }
   },
   updated() {
     /// Triggered when modal pop up
+    if (this.show) {
+      this.loadPorts();
+    }
   }
 }
 </script>
@@ -72,17 +87,19 @@ export default {
             <slot name="header">default header</slot>
           </div>
 
-          <div :id="'modal-body-div-' + hostId" class="modal-body">
+          <div :id="'modal-body-div-' + switchId" class="modal-body">
             <div class="modal-section">
               <span class="modal-span title"> Name : </span>
               <input class="host-name-in-modal" type="text" v-model="localName">
             </div>
             <div class="ports-div modal-section">
               <span class="modal-span title"> Port management : </span>
+
               <div class="ports-buttons">
                 <button class="ports-btn-minus" @click="removePort"> - </button>
                 <button class="ports-btn-plus" @click="addPort"> + </button>
               </div>
+
               <div class="ports-for" v-for="index in portsCount" :key="index">
                 <span class="modal-span"> #{{index-1}} -- </span>
                 <select class="ports" @change="portsChanged(index)">
@@ -94,6 +111,7 @@ export default {
                   </optgroup>
                 </select>
               </div>
+              
             </div>
           </div>
 
@@ -109,6 +127,10 @@ export default {
 </template>
 
 <style>
+.ports-for {
+  margin-top: 10px;
+}
+
 .modal-section {
   margin-top: 30px;
   color: black;
