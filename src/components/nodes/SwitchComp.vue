@@ -5,7 +5,8 @@
         <span class="switch-name">{{name}}</span>
 
         <Teleport to="body">
-            <modal @updateHostName="updateName" @close="showParamModal = false" :show="showParamModal" :hostId="id" :name="name">
+            <modal @updateHostName="updateName" @updatePortsCount="updatePorts" @close="showParamModal = false" 
+                    :show="showParamModal" :hostId="id" :name="name" :portsCount="portsCount">
             <template #header>
                 <h2>Switch settings</h2>
             </template>
@@ -27,8 +28,8 @@ export default defineComponent({
             id : null,
             number: -1,
             name: "s",
-            showParamModal: false,
-            nameRequested: false
+            portsCount: 1,
+            showParamModal: false
         }
     },
     computed: {
@@ -45,6 +46,9 @@ export default defineComponent({
         updateName(value) {
             this.name = value;
             this.editor.updateNodeDataFromId(this.id, {"name": this.name});
+        },
+        updatePorts(value) {
+            this.portsCount = value;
         }
     },
     beforeMount() {
@@ -65,7 +69,6 @@ img.cog {
     width:25px;
     height:25px;
     position: relative;
-    right: 12px;
     top: 3px;
 }
 span.switch-name {

@@ -5,7 +5,8 @@ export default {
   props: {
     show: Boolean,
     hostId: Number,
-    name: String
+    name: String,
+    portsCount: Number
   },
   computed: {
     editor: {
@@ -18,8 +19,41 @@ export default {
         return this.name;
       },
       set(value) {
-        this.$emit('updateHostName', value)
+        this.$emit('updateHostName', value);
       }
+    },
+    localPortsCount: {
+      get() {
+        return this.portsCount;
+      },
+      set(value) {
+        this.$emit('updatePortsCount', value);
+      }
+    }
+  },
+  methods: {
+    hostsCount() {
+      return this.editor.getNodesFromName('Host').length;
+    },
+    portsChanged(index) {
+      var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
+      var hosts = this.editor.getNodesFromName('Host');
+      var inputId = index;
+      var selectValue = neighboorsDiv.querySelectorAll(".ports")[index-1].value;
+      for (let connection of this.editor.getNodeFromId(this.hostId).inputs['input_'+index].connections) {
+        this.editor.removeSingleConnection(connection.node, this.hostId, connection.input, 'input_'+index)
+      }
+      this.editor.addConnection(hosts[selectValue-1], this.hostId, 'output_1', 'input_' + index);
+    },
+    removePort() {
+      if (this.portsCount > 1) {
+        this.editor.removeNodeInput(this.hostId, 'input_' + this.portsCount);
+        this.localPortsCount--;
+      }
+    },
+    addPort() {
+      this.editor.addNodeInput(this.hostId);
+      this.localPortsCount++;
     }
   },
   updated() {
@@ -42,6 +76,21 @@ export default {
               <span class="modal-span title"> Name : </span>
               <input class="host-name-in-modal" type="text" v-model="localName">
             </div>
+            <div class="ports-div modal-section">
+              <span class="modal-span title"> Port management : </span>
+              <div class="ports-buttons">
+                <button class="ports-btn-minus" @click="removePort"> - </button>
+                <button class="ports-btn-plus" @click="addPort"> + </button>
+              </div>
+              <div class="ports-for" v-for="index in portsCount" :key="index">
+                <span class="modal-span"> #{{index-1}} -- </span>
+                <select class="ports" @change="portsChanged(index)">
+                  <option label=" -- " value="-1"></option>
+                  <option v-for="indexS in hostsCount()" :key="indexS" 
+                          :label="editor.getNodeFromId(editor.getNodesFromName('Host')[indexS-1]).data.name" :value="indexS"></option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <div class="modal-footer">
@@ -59,10 +108,6 @@ export default {
 .modal-section {
   margin-top: 30px;
   color: black;
-}
-
-.interfaces-for {
-  margin-top: 10px;
 }
 
 .modal-mask {

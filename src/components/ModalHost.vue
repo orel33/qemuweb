@@ -88,8 +88,9 @@ export default {
   },
   updated() {
     /// Triggered when modal pop up
-
-    this.loadInterfaces();
+    if (this.show) {
+      this.loadInterfaces();
+    }
   }
 }
 </script>
@@ -143,11 +144,6 @@ export default {
 </template>
 
 <style>
-.modal-section {
-  margin-top: 30px;
-  color: black;
-}
-
 .interfaces-for {
   margin-top: 10px;
 }

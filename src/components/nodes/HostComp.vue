@@ -2,7 +2,7 @@
     <div>
         <img class="cog" src="../../assets/cog.png" @click="showParamModal = true"/>
         <img class="computer" src="../../assets/computer.png" />
-        <input class="host-name" type="text" v-model="name">
+        <span class="host-name">{{name}}</span>
 
         <Teleport to="body">
             <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
@@ -36,38 +36,53 @@ export default defineComponent({
             distributions: [
                 {
                     value: 'debian10',
-                    label: 'Debian 10'
+                    label: 'Debian 10',
+                    img: require("../../assets/debian.png")
                 },
                 {
                     value: 'debian10x',
-                    label: 'Debian 10 X11'
+                    label: 'Debian 10 X11',
+                    img: require("../../assets/debian.png")
                 },
                 {
                     value: 'debian9',
-                    label: 'Debian 9'
+                    label: 'Debian 9',
+                    img: require("../../assets/debian.png")
                 },
                 {
                     value: 'tinycore',
-                    label: 'Tinycore'
+                    label: 'Tinycore',
+                    img: require("../../assets/tinycore.png")
                 },
                 {
                     value: 'alpine',
-                    label: 'Alpine'
+                    label: 'Alpine',
+                    img: require("../../assets/alpine.png")
                 },
                 {
                     value: 'alpinex',
-                    label: 'Alpine X11'
+                    label: 'Alpine X11',
+                    img: require("../../assets/alpine.png")
                 },
                 {
                     value: 'kali',
-                    label: 'Kali'
+                    label: 'Kali',
+                    img: require("../../assets/kali.jpg")
                 },
                 {
                     value: 'windowsxp',
-                    label: 'Windows XP'
+                    label: 'Windows XP',
+                    img: require("../../assets/windows.png")
                 }
             ],
             showParamModal: false
+        }
+    },
+    computed: {
+        editor: {
+            get() {
+                return getCurrentInstance().appContext.app._context.config.globalProperties.$df;
+            }
         }
     },
     methods: {
@@ -77,6 +92,7 @@ export default defineComponent({
         },
         updateName(value) {
             this.name = value;
+            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
         },
         updateNeighboors(value) {
             this.neighboors = value;
@@ -87,9 +103,9 @@ export default defineComponent({
     },
     beforeMount() {
         // beforeMount to avoid to load Modal component (which need this.id) before this code is executed
-        var editor = getCurrentInstance().appContext.app._context.config.globalProperties.$df;
         const neighboors = this.neighboors;
-        this.id = editor.nodeId;
+        const editor = this.editor;
+        this.id = this.editor.nodeId;
         const id = this.id;
 
         editor.on("connectionCreated", function(info) {
@@ -118,13 +134,20 @@ export default defineComponent({
                 //Do nothing
             } else if (info.output_id == id) {
                 const pos = neighboors.indexOf(info.input_id);
-                neighboors.delete(pos)
+                neighboors.delete(pos);
                 console.log("Host " + id + " removed neighboor : ", neighboors);
             } else if (info.input_id == id) {
                 const pos = neighboors.indexOf(info.output_id);
-                neighboors.delete(pos)
+                neighboors.delete(pos);
                 console.log("Host " + id + " removed neighboor : ", neighboors);
             }
+        });
+    },
+    mounted() {
+        this.$nextTick(() => {
+            //this.number = this.getNumber()+1;
+            //this.name = this.name + this.number;
+            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
         });
     }
 })
@@ -144,10 +167,8 @@ select {
     opacity: 0.9;
     border-radius: 35px;
 }
-.host-name {
-    background: none;
-    color: white;
-    border: none;
+span.host-name {
+    display: block;
     font-size: medium;
     text-align: center;
 }
