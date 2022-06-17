@@ -84,7 +84,15 @@ img.cog:hover {
 .modal-section {
     margin-top: 30px;
     color: black;
-  }
+}
+
+.sides {
+    margin-left: 10px;
+}
+
+.modal-span.at {
+    margin-left: 50px;
+}
 
 .drawflow-node.Host .outputs .output:nth-child(1):before {
     display: block;
@@ -92,6 +100,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(2):before {
     display: block;
@@ -99,6 +109,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(3):before {
     display: block;
@@ -106,6 +118,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(4):before {
     display: block;
@@ -113,6 +127,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(5):before {
     display: block;
@@ -120,6 +136,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(6):before {
     display: block;
@@ -127,6 +145,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(7):before {
     display: block;
@@ -134,6 +154,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(8):before {
     display: block;
@@ -141,6 +163,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(9):before {
     display: block;
@@ -148,6 +172,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 .drawflow-node.Host .outputs .output:nth-child(10):before {
     display: block;
@@ -155,6 +181,8 @@ img.cog:hover {
     position: relative;
     right: -15px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }
 
 
@@ -165,112 +193,150 @@ img.cog:hover {
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(2):before {
     display: block;
     content: "#1";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(3):before {
     display: block;
     content: "#2";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(4):before {
     display: block;
     content: "#3";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(5):before {
     display: block;
     content: "#4";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(6):before {
     display: block;
     content: "#5";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(7):before {
     display: block;
     content: "#6";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(8):before {
     display: block;
     content: "#7";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(9):before {
     display: block;
     content: "#8";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(10):before {
     display: block;
     content: "#9";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(11):before {
     display: block;
     content: "#10";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(12):before {
     display: block;
     content: "#11";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(13):before {
     display: block;
     content: "#12";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(14):before {
     display: block;
     content: "#13";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(15):before {
     display: block;
     content: "#14";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(16):before {
     display: block;
     content: "#15";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(17):before {
     display: block;
     content: "#16";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(18):before {
     display: block;
     content: "#17";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }.drawflow-node.Switch .inputs .input:nth-child(19):before {
     display: block;
     content: "#18";
     position: relative;
     right: 33px;
     bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
 }

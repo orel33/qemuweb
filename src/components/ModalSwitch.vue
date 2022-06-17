@@ -67,6 +67,39 @@ export default {
     addPort() {
       this.editor.addNodeInput(this.switchId);
       this.localPortsCount++;
+    },
+    sidesChanged(index) {
+      var sidesSelect = document.querySelectorAll(".sides")[index-1];
+      var side = sidesSelect.value;
+      var node = document.querySelector(".drawflow-node.Switch.selected");
+      var input = node.querySelector(".inputs .input:nth-child(" + index + ")");
+      switch (side) {
+        case 'left':
+          input.style.left = "-21px";
+          input.style.top = "0px";
+          input.style.setProperty('--varleft', 'auto');
+          input.style.setProperty('--vartop', 'auto');
+          break;
+        case 'right':
+          input.style.left = "75px";
+          input.style.top = "none";
+          input.style.setProperty('--varleft', '23px');
+          input.style.setProperty('--vartop', 'auto');
+          break;
+        case 'up':
+          input.style.left = "26px";
+          input.style.top = "-63px";
+          input.style.setProperty('--varleft', '-6px');
+          input.style.setProperty('--vartop', '-24px');
+          break;
+        case 'down':
+          input.style.left = "26px";
+          input.style.top = "74px";
+          input.style.setProperty('--varleft', '-6px');
+          input.style.setProperty('--vartop', '17px');
+          break;
+      }
+      this.editor.updateConnectionNodes("node-" + this.switchId);
     }
   },
   updated() {
@@ -109,6 +142,14 @@ export default {
                             :label="editor.getNodeFromId(editor.getNodesFromName('Host')[indexS-1]).data.name + '/eth' + (indexI-1)" :value="indexS + ':' + indexI">
                     </option>
                   </optgroup>
+                </select>
+
+                <span class="modal-span at"> at </span>
+                <select class="sides" @change="sidesChanged(index)">
+                  <option label="left" value="left" selected></option>
+                  <option label="right" value="right" ></option>
+                  <option label="up" value="up" ></option>
+                  <option label="down" value="down" ></option>
                 </select>
               </div>
               
