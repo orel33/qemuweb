@@ -96,13 +96,17 @@ export default defineComponent({
         },
         updateName(value) {
             this.name = value;
-            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
+            this.updateNodeData();
         },
         updateNeighboors(value) {
             this.neighboors = value;
         },
         updateInterfaces(value) {
             this.interfacesCount = value;
+            this.updateNodeData();
+        },
+        updateNodeData() {
+            this.editor.updateNodeDataFromId(this.id, {"name": this.name, "interfacesCount": this.interfacesCount});
         }
     },
     beforeMount() {
@@ -151,7 +155,7 @@ export default defineComponent({
         this.$nextTick(() => {
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
-            this.editor.updateNodeDataFromId(this.id, {"name": this.name});
+            this.updateNodeData();
         });
     }
 })

@@ -38,12 +38,13 @@ export default {
     portsChanged(index) {
       var neighboorsDiv = document.getElementById("modal-body-div-" + this.hostId);
       var hosts = this.editor.getNodesFromName('Host');
-      var inputId = index;
       var selectValue = neighboorsDiv.querySelectorAll(".ports")[index-1].value;
+      var hostValue = selectValue.split(':')[0];
+      var interfaceValue = selectValue.split(':')[1];
       for (let connection of this.editor.getNodeFromId(this.hostId).inputs['input_'+index].connections) {
         this.editor.removeSingleConnection(connection.node, this.hostId, connection.input, 'input_'+index)
       }
-      this.editor.addConnection(hosts[selectValue-1], this.hostId, 'output_1', 'input_' + index);
+      this.editor.addConnection(hosts[hostValue-1], this.hostId, 'output_' + interfaceValue, 'input_' + index);
     },
     removePort() {
       if (this.portsCount > 1) {
@@ -86,8 +87,11 @@ export default {
                 <span class="modal-span"> #{{index-1}} -- </span>
                 <select class="ports" @change="portsChanged(index)">
                   <option label=" -- " value="-1"></option>
-                  <option v-for="indexS in hostsCount()" :key="indexS" 
-                          :label="editor.getNodeFromId(editor.getNodesFromName('Host')[indexS-1]).data.name" :value="indexS"></option>
+                  <optgroup v-for="indexS in hostsCount()" :key="indexS" :label="editor.getNodeFromId(editor.getNodesFromName('Host')[indexS-1]).data.name">
+                    <option v-for="indexI in editor.getNodeFromId(editor.getNodesFromName('Host')[indexS-1]).data.interfacesCount" :key="indexI" 
+                            :label="editor.getNodeFromId(editor.getNodesFromName('Host')[indexS-1]).data.name + '/eth' + (indexI-1)" :value="indexS + ':' + indexI">
+                    </option>
+                  </optgroup>
                 </select>
               </div>
             </div>
