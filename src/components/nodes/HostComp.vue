@@ -29,7 +29,8 @@ export default defineComponent({
     data() {
         return {
             id: null,
-            name: "bob",
+            name: "host",
+            number: -1,
             selectedDistrib: "debian10",
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>,
             interfacesCount: 1,
@@ -86,6 +87,9 @@ export default defineComponent({
         }
     },
     methods: {
+        getNumber() {
+            return this.editor.getNodesFromName('Host').indexOf(this.id);
+        },
         updateSelected(value) {
             this.selectedDistrib = value;
             console.log(this.selectedDistrib);
@@ -145,8 +149,8 @@ export default defineComponent({
     },
     mounted() {
         this.$nextTick(() => {
-            //this.number = this.getNumber()+1;
-            //this.name = this.name + this.number;
+            this.number = this.getNumber()+1;
+            this.name = this.name + this.number;
             this.editor.updateNodeDataFromId(this.id, {"name": this.name});
         });
     }
