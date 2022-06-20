@@ -291,7 +291,7 @@ export default {
 }
 #drawflow {
   width: 100%;
-  height: 100%;
+  height: 97%;
   text-align: initial;
   background: #2b2c30;
   background-size: 20px 20px;
