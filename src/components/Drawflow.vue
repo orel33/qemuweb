@@ -240,6 +240,32 @@ export default {
             editor.removeSingleConnection(info.output_id, removeConnectionInfo.node, info.output_class, removeConnectionInfo.output);
           }
         });
+
+        // Make lines straight
+        editor.curvature = 0
+        editor.reroute_curvature_start_end = 0
+        editor.reroute_curvature = 0
+        editor.createCurvature = function(start_pos_x, start_pos_y, end_pos_x, end_pos_y) {
+            var center_y = (end_pos_y - start_pos_y) / 2 + start_pos_y;
+            return (
+                ' M ' +
+                start_pos_x +
+                ' ' +
+                start_pos_y +
+                ' L ' +
+                start_pos_x +
+                ' ' +
+                center_y +
+                ' L ' +
+                end_pos_x +
+                ' ' +
+                center_y +
+                ' L ' +
+                end_pos_x +
+                ' ' +
+                end_pos_y
+              )
+        }
         editor.start();
         
         editor.registerNode('Host', Host, {}, {});
