@@ -86,6 +86,27 @@ export default {
     },
     switchesCount() {
       return this.editor.getNodesFromName('Switch').length;
+    },
+    sidesChanged(index) {
+      var sidesSelect = document.querySelectorAll(".sides")[index-1];
+      var side = sidesSelect.value;
+      var node = document.querySelector(".drawflow-node.Host.selected");
+      var output = node.querySelector(".outputs .output:nth-child(" + index + ")");
+      switch (side) {
+        case 'left':
+          output.style.left = "-89px";
+          output.style.top = "0px";
+          output.style.setProperty('--varleft', '-43px');
+          output.style.setProperty('--vartop', 'auto');
+          break;
+        case 'right':
+          output.style.left = "0px";
+          output.style.top = "0px";
+          output.style.setProperty('--varleft', 'auto');
+          output.style.setProperty('--vartop', 'auto');
+          break;
+      }
+      this.editor.updateConnectionNodes("node-" + this.switchId);
     }
   },
   updated() {
@@ -134,6 +155,12 @@ export default {
                             :label="editor.getNodeFromId(editor.getNodesFromName('Switch')[indexS-1]).data.name + '/ #' + (indexP-1)" :value="indexS + ':' + indexP">
                     </option>
                   </optgroup>
+                </select>
+
+                <span class="modal-span at"> at </span>
+                <select class="sides" @change="sidesChanged(index)">
+                  <option label="left" value="left"></option>
+                  <option label="right" value="right" selected></option>
                 </select>
               </div>
             </div>

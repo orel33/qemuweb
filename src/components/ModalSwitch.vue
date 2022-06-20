@@ -82,11 +82,11 @@ export default {
           break;
         case 'right':
           input.style.left = "75px";
-          input.style.top = "none";
+          input.style.top = "0px";
           input.style.setProperty('--varleft', '23px');
           input.style.setProperty('--vartop', 'auto');
           break;
-        case 'up':
+        /*case 'up':
           input.style.left = "26px";
           input.style.top = "-63px";
           input.style.setProperty('--varleft', '-6px');
@@ -97,7 +97,7 @@ export default {
           input.style.top = "74px";
           input.style.setProperty('--varleft', '-6px');
           input.style.setProperty('--vartop', '17px');
-          break;
+          break;*/
       }
       this.editor.updateConnectionNodes("node-" + this.switchId);
     }
@@ -148,8 +148,6 @@ export default {
                 <select class="sides" @change="sidesChanged(index)">
                   <option label="left" value="left" selected></option>
                   <option label="right" value="right" ></option>
-                  <option label="up" value="up" ></option>
-                  <option label="down" value="down" ></option>
                 </select>
               </div>
               
