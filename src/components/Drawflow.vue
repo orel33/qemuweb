@@ -2,7 +2,19 @@
   <el-container>
     <el-header class="header">
         <h3>QemuWeb</h3>
-        <el-button type="primary"   @click="exportEditor">Export</el-button>
+        <div class="dropdown">
+          <button @click="toggleDropDown" class="dropbtn">
+            <span class="burger-slice"></span>
+            <span class="burger-slice"></span>
+            <span class="burger-slice"></span>
+          </button>
+          <div id="dropdownmenu" class="dropdown-content">
+            <a href="#" @click="exportEditor">Export</a>
+            <a href="#" @click="displayImport">Import</a>
+            <a href="#" @click="displaySettings">Settings</a>
+            <a href="#" @click="displayAbout">About</a>
+          </div>
+        </div>
     </el-header>
     <el-container class="container">
       <el-aside width="110px" class="column">
@@ -20,16 +32,29 @@
       </el-main>
     </el-container>
   </el-container>
-  <el-dialog v-model="dialogVisible" title="Export" width="50%" >
+  <el-dialog v-model="dialogExport" title="Export" width="50%">
     <span>Data:</span>
     <pre><code>{{dialogData}}</code></pre>
     <template #footer>
       <span class="dialog-footer">
-        <el-button @click="dialogVisible = false"> Cancel </el-button>
-        <el-button type="primary" @click="dialogVisible = false"> Confirm </el-button>
+        <el-button @click="dialogExport = false"> Cancel </el-button>
+        <el-button type="primary" @click="dialogExport = false"> Confirm </el-button>
       </span>
     </template>
   </el-dialog>
+  <el-dialog v-model="dialogSettings" title="Settings" width="50%">
+    <div class="modal-section">
+      <span>Display interfaces name : </span>
+      <input id="interfaces-name-check" type="checkbox" checked @change="displayInterfacesName">
+    </div>
+    <div class="modal-section">
+      <span>Display ports name : </span>
+      <input id="ports-name-check" type="checkbox" checked @change="changeDisplayPortsName">
+    </div>
+  </el-dialog>
+  <el-dialog v-model="dialogAbout" title="About" width="50%">
+  </el-dialog>
+  <div id="settings" style="width:0px;width:0px" data-display-ports-name="true" data-display-interfaces-name="true"></div>
 </template>
 
 
@@ -37,6 +62,9 @@
 import drawflow from 'drawflow';
 import styleDrawflow from 'drawflow/dist/drawflow.min.css';
 import style from '../assets/style.css';
+import styleJquery from '../jquery-ui/jquery-ui.min.css';
+import jquery from '../jquery-ui/external/jquery/jquery.js';
+import jquery_ui from '../jquery-ui/external/jquery/jquery.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
 import Host from './nodes/HostComp.vue';
 import Switch from './nodes/SwitchComp.vue';
@@ -48,7 +76,9 @@ export default {
   name: 'DrawFlow',
   data() {
     return {
-      serverAddress: "127.0.0.1"
+      serverAddress: "127.0.0.1",
+      dialogSettings: false,
+      dialogAbout: false
     }
   },
   methods: {
@@ -77,9 +107,44 @@ export default {
           this.startTerminal(container, socket);
         });
       }
+    },
+    toggleDropDown() {
+      document.getElementById("dropdownmenu").classList.toggle("show");
+    },
+    displaySettings() {
+      this.dialogSettings = true;
+    },
+    displayAbout() {
+      this.dialogAbout = true;
+    },
+    displayInterfacesName() {
+      document.getElementById("ports-name-check")
+    },
+    changeDisplayPortsName() {
+      var checked = document.getElementById("ports-name-check").checked;
+      var display = checked ? "block" : "none";
+      document.getElementById("settings").setAttribute("data-display-ports-name", checked);
+      var ports = document.querySelectorAll(".drawflow-node.Switch .inputs .input");
+      for (const el of ports) {
+        el.style.setProperty('--vardisplay', display);
+      }
     }
   },
   mounted() {
+    // Close the dropdown menu if the user clicks outside of it
+    window.addEventListener('click', function(event) {
+      if (!event.target.matches('.dropbtn') && !event.target.matches('.burger-slice')) {
+        var dropdowns = document.getElementsByClassName("dropdown-content");
+        var i;
+        for (i = 0; i < dropdowns.length; i++) {
+          var openDropdown = dropdowns[i];
+          if (openDropdown.classList.contains('show')) {
+            openDropdown.classList.remove('show');
+          }
+        }
+      }
+    });
+
     this.start();
   },
   setup() {
@@ -105,14 +170,14 @@ export default {
     ])
     
     var editor;// = shallowRef({})
-    const dialogVisible = ref(false);
+    const dialogExport = ref(false);
     const dialogData = ref({});
     const Vue = { version: 3, h, render };
     const internalInstance = getCurrentInstance();
     
     function exportEditor() {
       dialogData.value = editor.export();
-      dialogVisible.value = true;
+      dialogExport.value = true;
     }
 
     const drag = (ev) => {
@@ -185,7 +250,7 @@ export default {
     })
 
     return {
-      exportEditor, listNodes, drag, drop, allowDrop, dialogVisible, dialogData
+      exportEditor, listNodes, drag, drop, allowDrop, dialogExport, dialogData
     }
 
   }

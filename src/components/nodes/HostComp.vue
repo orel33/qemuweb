@@ -19,7 +19,7 @@
 
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
-import Modal from '../ModalHost.vue';
+import Modal from '../HostModal.vue';
 import { MyMap } from "../../MyMap"; 
 
 export default defineComponent({

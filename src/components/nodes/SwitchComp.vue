@@ -6,7 +6,7 @@
 
         <Teleport to="body">
             <modal @updateHostName="updateName" @updatePortsCount="updatePorts" @close="showParamModal = false" 
-                    :show="showParamModal" :switchId="id" :name="name" :portsCount="portsCount">
+                    :show="showParamModal" :switchId="id" :name="name" :portsCount="portsCount" :refreshPortsName="refreshPortsName">
             <template #header>
                 <h2>Switch settings</h2>
             </template>
@@ -17,7 +17,7 @@
 
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
-import Modal from '../ModalSwitch.vue';
+import Modal from '../SwitchModal.vue';
 
 export default defineComponent({
     components: {
@@ -37,6 +37,11 @@ export default defineComponent({
             get() {
                 return getCurrentInstance().appContext.app._context.config.globalProperties.$df;
             }
+        },
+        displayPorts: {
+            get() {
+                return document.getElementById("settings").getAttribute("data-display-ports-name");
+            }
         }
     },
     methods: {
@@ -53,6 +58,14 @@ export default defineComponent({
         },
         updateNodeData() {
             this.editor.updateNodeDataFromId(this.id, {"name": this.name, "portsCount": this.portsCount});
+        },
+        refreshPortsName() {
+            var checked = document.getElementById("settings").getAttribute("data-display-ports-name") == "true";
+            var display = checked ? "block" : "none";
+            var inputs = document.querySelectorAll(".drawflow-node.Switch .inputs .input");
+            for (let input of inputs) {
+                input.style.setProperty('--vardisplay', display);
+            }
         }
     },
     beforeMount() {
@@ -63,6 +76,7 @@ export default defineComponent({
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
+            this.refreshPortsName();
         });
     }
 })
