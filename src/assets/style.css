@@ -1,8 +1,7 @@
 .drawflow .drawflow-node {
     border-radius: 8px;
     background: none;
-    border: none;
-    /*border: 2px solid #494949;*/
+    border: 2px solid transparent;
     color: white;
     width: 100px;
     height: 100px;
