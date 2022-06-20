@@ -1,7 +1,7 @@
 <template>
     <div>
         <img class="cog" src="../../assets/cog.png" @click="showParamModal = true"/>
-        <img class="computer" src="../../assets/computer.png" />
+        <img class="computer" src="../../assets/computer.png" @dblclick="showParamModal = true"/>
         <span class="host-name">{{name}}</span>
 
         <Teleport to="body">

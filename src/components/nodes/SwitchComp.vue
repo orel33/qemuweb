@@ -1,7 +1,7 @@
 <template>
     <div class="switch-component">
         <img class="cog" src="../../assets/cog.png" @click="showParamModal = true"/>
-        <img class="switch" src="../../assets/switch.png" alt="Un switch" />
+        <img class="switch" src="../../assets/switch.png" alt="Un switch" @dblclick="showParamModal = true"/>
         <span class="switch-name">{{name}}</span>
 
         <Teleport to="body">
