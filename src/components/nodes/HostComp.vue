@@ -8,7 +8,8 @@
             <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
                     @close="showParamModal = false" 
                     :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" 
-                    :neighboors="neighboors" :interfacesCount="interfacesCount" :interfacesSide="interfacesSide">
+                    :neighboors="neighboors" :interfacesCount="interfacesCount" :interfacesSide="interfacesSide"
+                    :refreshInterfacesName="refreshInterfacesName">
             <template #header>
                 <h2>Host settings</h2>
             </template>
@@ -108,6 +109,14 @@ export default defineComponent({
         },
         updateNodeData() {
             this.editor.updateNodeDataFromId(this.id, {"name": this.name, "interfacesCount": this.interfacesCount});
+        },
+        refreshInterfacesName() {
+            var checked = document.getElementById("settings").getAttribute("data-display-interfaces-name") == "true";
+            var display = checked ? "block" : "none";
+            var outputs = document.querySelectorAll(".drawflow-node.Host .outputs .output");
+            for (let output of outputs) {
+                output.style.setProperty('--vardisplay', display);
+            }
         }
     },
     beforeMount() {
@@ -157,6 +166,7 @@ export default defineComponent({
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
+            this.refreshInterfacesName();
 
             this.interfacesSide.set(1, 'right');
         });

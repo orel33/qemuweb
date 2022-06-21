@@ -10,7 +10,8 @@ export default {
     selectedDistrib: String,
     neighboors: Map,
     interfacesCount: Number,
-    interfacesSide: Object
+    interfacesSide: Object,
+    refreshInterfacesName: Function
   },
   computed: {
     localSelectedDistrib: {
@@ -85,6 +86,7 @@ export default {
     addInterface() {
       this.editor.addNodeOutput(this.hostId);
       this.localInterfacesCount++;
+      this.refreshInterfacesName();
       this.interfacesSide.set(this.interfacesCount+1, 'right');
     },
     switchesCount() {

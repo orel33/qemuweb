@@ -40,11 +40,6 @@ export default defineComponent({
             get() {
                 return getCurrentInstance().appContext.app._context.config.globalProperties.$df;
             }
-        },
-        displayPorts: {
-            get() {
-                return document.getElementById("settings").getAttribute("data-display-ports-name");
-            }
         }
     },
     methods: {

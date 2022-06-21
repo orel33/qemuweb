@@ -45,7 +45,7 @@
   <el-dialog v-model="dialogSettings" title="Settings" width="50%">
     <div class="modal-section">
       <span>Display interfaces name : </span>
-      <input id="interfaces-name-check" type="checkbox" checked disabled @change="displayInterfacesName">
+      <input id="interfaces-name-check" type="checkbox" checked @change="changeDisplayInterfacesName">
     </div>
     <div class="modal-section">
       <span>Display ports name : </span>
@@ -117,8 +117,14 @@ export default {
     displayAbout() {
       this.dialogAbout = true;
     },
-    displayInterfacesName() {
-      document.getElementById("ports-name-check")
+    changeDisplayInterfacesName() {
+      var checked = document.getElementById("interfaces-name-check").checked;
+      var display = checked ? "block" : "none";
+      document.getElementById("settings").setAttribute("data-display-interfaces-name", checked);
+      var interfaces = document.querySelectorAll(".drawflow-node.Host .outputs .output");
+      for (const el of interfaces) {
+        el.style.setProperty('--vardisplay', display);
+      }
     },
     changeDisplayPortsName() {
       var checked = document.getElementById("ports-name-check").checked;
