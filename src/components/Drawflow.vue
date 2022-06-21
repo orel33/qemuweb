@@ -54,7 +54,7 @@
   </el-dialog>
   <el-dialog v-model="dialogAbout" title="About" width="50%">
   </el-dialog>
-  <div id="settings" style="width:0px;width:0px" data-display-ports-name="true" data-display-interfaces-name="true"></div>
+  <div id="settings" style="width:0px;width:0px"></div>
 </template>
 
 
@@ -66,9 +66,10 @@ import styleJquery from '../jquery-ui/jquery-ui.min.css';
 import jquery from '../jquery-ui/external/jquery/jquery.js';
 import jquery_ui from '../jquery-ui/external/jquery/jquery.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
+import { TerminalUI } from "@/TerminalUI";
+import { Settings } from '@/Settings';
 import Host from './nodes/HostComp.vue';
 import Switch from './nodes/SwitchComp.vue';
-import { TerminalUI } from "../TerminalUI"; 
 import io from "socket.io-client";
 
 
@@ -78,7 +79,8 @@ export default {
     return {
       serverAddress: "127.0.0.1",
       dialogSettings: false,
-      dialogAbout: false
+      dialogAbout: false,
+      settings: null
     }
   },
   methods: {
@@ -120,7 +122,7 @@ export default {
     changeDisplayInterfacesName() {
       var checked = document.getElementById("interfaces-name-check").checked;
       var display = checked ? "block" : "none";
-      document.getElementById("settings").setAttribute("data-display-interfaces-name", checked);
+      this.settings.setOption("display-interfaces-name", checked);
       var interfaces = document.querySelectorAll(".drawflow-node.Host .outputs .output");
       for (const el of interfaces) {
         el.style.setProperty('--vardisplay', display);
@@ -129,7 +131,7 @@ export default {
     changeDisplayPortsName() {
       var checked = document.getElementById("ports-name-check").checked;
       var display = checked ? "block" : "none";
-      document.getElementById("settings").setAttribute("data-display-ports-name", checked);
+      this.settings.setOption("display-ports-name", checked);
       var ports = document.querySelectorAll(".drawflow-node.Switch .inputs .input");
       for (const el of ports) {
         el.style.setProperty('--vardisplay', display);
@@ -150,6 +152,11 @@ export default {
         }
       }
     });
+
+    this.settings = new Settings();
+    this.settings.setOption('display-ports-name', true);
+    this.settings.setOption('display-interfaces-name', true);
+    this.settings.setOption('connections-curved', true);
 
     this.start();
   },
@@ -321,6 +328,7 @@ export default {
     margin: 10px 0px;
     cursor: move;
 }
+
 #drawflow {
   width: 100%;
   height: 97%;

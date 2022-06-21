@@ -18,6 +18,7 @@
 
 <script>
 import { MyMap } from '@/MyMap';
+import { Settings } from '@/Settings';
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
 import Modal from '../SwitchModal.vue';
 
@@ -32,7 +33,8 @@ export default defineComponent({
             name: "s",
             portsCount: 1,
             portsSide: new MyMap(),
-            showParamModal: false
+            showParamModal: false,
+            settings: null
         }
     },
     computed: {
@@ -59,7 +61,7 @@ export default defineComponent({
         },
         refreshPortsName() {
             // Display or not ports name according to the general setting
-            var checked = document.getElementById("settings").getAttribute("data-display-ports-name") == "true";
+            var checked = this.settings.getOption("display-ports-name") == "true";
             var display = checked ? "block" : "none";
             var inputs = document.querySelectorAll(".drawflow-node.Switch .inputs .input");
             for (let input of inputs) {
@@ -71,6 +73,7 @@ export default defineComponent({
         this.id = this.editor.nodeId;
     },
     mounted() {
+        this.settings = new Settings();
         this.$nextTick(() => {
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;

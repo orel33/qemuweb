@@ -22,6 +22,7 @@
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
 import Modal from '../HostModal.vue';
 import { MyMap } from "../../MyMap"; 
+import { Settings } from '@/Settings';
 
 export default defineComponent({
     components: {
@@ -36,6 +37,7 @@ export default defineComponent({
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>,
             interfacesCount: 1,
             interfacesSide: new MyMap(),
+            settings: null,
             distributions: [
                 {
                     value: 'debian10',
@@ -111,7 +113,7 @@ export default defineComponent({
             this.editor.updateNodeDataFromId(this.id, {"name": this.name, "interfacesCount": this.interfacesCount});
         },
         refreshInterfacesName() {
-            var checked = document.getElementById("settings").getAttribute("data-display-interfaces-name") == "true";
+            var checked = this.settings.getOption("display-interfaces-name") == "true";
             var display = checked ? "block" : "none";
             var outputs = document.querySelectorAll(".drawflow-node.Host .outputs .output");
             for (let output of outputs) {
@@ -162,6 +164,7 @@ export default defineComponent({
         });
     },
     mounted() {
+        this.settings = new Settings();
         this.$nextTick(() => {
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
