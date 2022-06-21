@@ -9,7 +9,7 @@
             <span class="burger-slice"></span>
           </button>
           <div id="dropdownmenu" class="dropdown-content">
-            <a href="#" @click="exportEditor(); myDialogExport(dialogData)">Export</a>
+            <a href="#" @click="exportEditor(); exportJSON(dialogData)">Export</a>
             <a href="#" @click="displayImport">Import</a>
             <a href="#" @click="displaySettings">Settings</a>
             <a href="#" @click="displayAbout">About</a>
@@ -115,7 +115,7 @@ export default {
     displayAbout() {
       this.dialogAbout = true;
     },
-    myDialogExport(data) {
+    exportJSON(data) {
       this.systemIO.saveFile(JSON.stringify(data), "export.json", "json");
     }
   },
@@ -165,7 +165,6 @@ export default {
     ])
     
     var editor;// = shallowRef({})
-    const dialogExport = ref(false);
     const dialogData = ref({});
     const Vue = { version: 3, h, render };
     const internalInstance = getCurrentInstance();
@@ -236,7 +235,7 @@ export default {
     })
 
     return {
-      exportEditor, listNodes, drag, drop, allowDrop, dialogExport, dialogData
+      exportEditor, listNodes, drag, drop, allowDrop, dialogData
     }
 
   }
