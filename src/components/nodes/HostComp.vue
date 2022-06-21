@@ -7,8 +7,8 @@
         <Teleport to="body">
             <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
                     @close="showParamModal = false" 
-                    :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" :neighboors="neighboors"
-                    :interfacesCount="interfacesCount">
+                    :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" 
+                    :neighboors="neighboors" :interfacesCount="interfacesCount" :interfacesSide="interfacesSide">
             <template #header>
                 <h2>Host settings</h2>
             </template>
@@ -34,6 +34,7 @@ export default defineComponent({
             selectedDistrib: "debian10",
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>,
             interfacesCount: 1,
+            interfacesSide: new MyMap(),
             distributions: [
                 {
                     value: 'debian10',
@@ -156,6 +157,8 @@ export default defineComponent({
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
+
+            this.interfacesSide.set(1, 'right');
         });
     }
 })

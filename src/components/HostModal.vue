@@ -9,7 +9,8 @@ export default {
     distributions: Array,
     selectedDistrib: String,
     neighboors: Map,
-    interfacesCount: Number
+    interfacesCount: Number,
+    interfacesSide: Object
   },
   computed: {
     localSelectedDistrib: {
@@ -78,40 +79,55 @@ export default {
       if (this.interfacesCount > 1) {
         this.editor.removeNodeOutput(this.hostId, 'output_' + this.interfacesCount);
         this.localInterfacesCount--;
+        this.interfacesSide.delete(this.interfacesCount);
       }
     },
     addInterface() {
       this.editor.addNodeOutput(this.hostId);
       this.localInterfacesCount++;
+      this.interfacesSide.set(this.interfacesCount+1, 'right');
     },
     switchesCount() {
       return this.editor.getNodesFromName('Switch').length;
     },
-    sidesChanged(index) {
-      var side = document.querySelectorAll(".sides")[index-1].value;
-      var node = document.querySelector(".drawflow-node.Host.selected");
-      var output = node.querySelector(".outputs .output:nth-child(" + index + ")");
-      switch (side) {
-        case 'left':
-          output.style.left = "-89px";
-          output.style.top = "0px";
-          output.style.setProperty('--varleft', '-43px');
-          output.style.setProperty('--vartop', 'auto');
-          break;
-        case 'right':
-          output.style.left = "0px";
-          output.style.top = "0px";
-          output.style.setProperty('--varleft', 'auto');
-          output.style.setProperty('--vartop', 'auto');
-          break;
-      }
+    sidesChanged() {
+      this.refreshInterfacesSide();
       this.editor.updateConnectionNodes("node-" + this.switchId);
+    },
+    refreshInterfacesSide() {
+      for (let i = 1; i <= this.interfacesSide.size; i++) {
+        var side = document.querySelectorAll(".sides")[i-1].value;
+        var node = document.querySelector(".drawflow-node.Host.selected");
+        var output = node.querySelector(".outputs .output:nth-child(" + i + ")");
+        switch (side) {
+          case 'left':
+            output.style.left = "-89px";
+            output.style.top = "0px";
+            output.style.setProperty('--varleft', '-43px');
+            output.style.setProperty('--vartop', 'auto');
+            break;
+          case 'right':
+            output.style.left = "0px";
+            output.style.top = "0px";
+            output.style.setProperty('--varleft', 'auto');
+            output.style.setProperty('--vartop', 'auto');
+            break;
+        }
+        this.interfacesSide.set(i, side);
+      }
+    },
+    loadPortsSides() {
+      for (let i = 0; i < document.querySelectorAll(".sides").length; i++) {
+        document.querySelectorAll(".sides")[i].value = this.interfacesSide.get(i+1);
+      }
+      this.refreshInterfacesSide();
     }
   },
   updated() {
     /// Triggered when modal pop up
     if (this.show) {
       this.loadInterfaces();
+      this.loadPortsSides();
     }
   }
 }
@@ -157,7 +173,7 @@ export default {
                 </select>
 
                 <span class="modal-span at"> at </span>
-                <select class="sides" @change="sidesChanged(index)">
+                <select class="sides" @change="sidesChanged()">
                   <option label="left" value="left"></option>
                   <option label="right" value="right" selected></option>
                 </select>
