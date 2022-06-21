@@ -9,7 +9,7 @@
             <span class="burger-slice"></span>
           </button>
           <div id="dropdownmenu" class="dropdown-content">
-            <a href="#" @click="exportEditor">Export</a>
+            <a href="#" @click="exportEditor(); myDialogExport(dialogData)">Export</a>
             <a href="#" @click="displayImport">Import</a>
             <a href="#" @click="displaySettings">Settings</a>
             <a href="#" @click="displayAbout">About</a>
@@ -32,16 +32,6 @@
       </el-main>
     </el-container>
   </el-container>
-  <el-dialog v-model="dialogExport" title="Export" width="50%">
-    <span>Data:</span>
-    <pre><code>{{dialogData}}</code></pre>
-    <template #footer>
-      <span class="dialog-footer">
-        <el-button @click="dialogExport = false"> Cancel </el-button>
-        <el-button type="primary" @click="dialogExport = false"> Confirm </el-button>
-      </span>
-    </template>
-  </el-dialog>
   <el-dialog v-model="dialogSettings" title="Settings" width="50%">
     <div class="modal-section">
       <span>Display interfaces name : </span>
@@ -72,6 +62,7 @@ import jquery_ui from '../jquery-ui/external/jquery/jquery.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
 import { TerminalUI } from "@/TerminalUI";
 import { Settings } from '@/Settings';
+import { SystemIO } from '@/SystemIO';
 import Host from './nodes/HostComp.vue';
 import Switch from './nodes/SwitchComp.vue';
 import io from "socket.io-client";
@@ -84,7 +75,8 @@ export default {
       serverAddress: "127.0.0.1",
       dialogSettings: false,
       dialogAbout: false,
-      settings: null
+      settings: null,
+      systemIO: null
     }
   },
   methods: {
@@ -122,6 +114,9 @@ export default {
     },
     displayAbout() {
       this.dialogAbout = true;
+    },
+    myDialogExport(data) {
+      this.systemIO.saveFile(JSON.stringify(data), "export.json", "json");
     }
   },
   mounted() {
@@ -139,6 +134,7 @@ export default {
       }
     });
 
+    this.systemIO = new SystemIO();
     this.settings = new Settings();
     this.settings.setOption('display-ports-name', true);
     this.settings.setOption('display-interfaces-name', true);
@@ -176,7 +172,6 @@ export default {
     
     function exportEditor() {
       dialogData.value = editor.export();
-      dialogExport.value = true;
     }
 
     const drag = (ev) => {
