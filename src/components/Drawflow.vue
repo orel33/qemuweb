@@ -45,7 +45,7 @@
   <el-dialog v-model="dialogSettings" title="Settings" width="50%">
     <div class="modal-section">
       <span>Display interfaces name : </span>
-      <input id="interfaces-name-check" type="checkbox" checked @change="displayInterfacesName">
+      <input id="interfaces-name-check" type="checkbox" checked disabled @change="displayInterfacesName">
     </div>
     <div class="modal-section">
       <span>Display ports name : </span>
@@ -299,7 +299,7 @@ export default {
 }
 .column ul {
     padding-inline-start: 0px;
-    padding: 10px 10px;
+    padding: 10px 8px;
 }
 .column li {
     background: transparent;

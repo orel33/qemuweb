@@ -88,8 +88,7 @@ export default {
       return this.editor.getNodesFromName('Switch').length;
     },
     sidesChanged(index) {
-      var sidesSelect = document.querySelectorAll(".sides")[index-1];
-      var side = sidesSelect.value;
+      var side = document.querySelectorAll(".sides")[index-1].value;
       var node = document.querySelector(".drawflow-node.Host.selected");
       var output = node.querySelector(".outputs .output:nth-child(" + index + ")");
       switch (side) {

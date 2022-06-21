@@ -6,7 +6,8 @@
 
         <Teleport to="body">
             <modal @updateHostName="updateName" @updatePortsCount="updatePorts" @close="showParamModal = false" 
-                    :show="showParamModal" :switchId="id" :name="name" :portsCount="portsCount" :refreshPortsName="refreshPortsName">
+                    :show="showParamModal" :switchId="id" :name="name" :portsCount="portsCount"
+                    :portsSide="portsSide" :refreshPortsName="refreshPortsName">
             <template #header>
                 <h2>Switch settings</h2>
             </template>
@@ -16,6 +17,7 @@
 </template>
 
 <script>
+import { MyMap } from '@/MyMap';
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
 import Modal from '../SwitchModal.vue';
 
@@ -29,6 +31,7 @@ export default defineComponent({
             number: -1,
             name: "s",
             portsCount: 1,
+            portsSide: new MyMap(),
             showParamModal: false
         }
     },
@@ -60,6 +63,7 @@ export default defineComponent({
             this.editor.updateNodeDataFromId(this.id, {"name": this.name, "portsCount": this.portsCount});
         },
         refreshPortsName() {
+            // Display or not ports name according to the general setting
             var checked = document.getElementById("settings").getAttribute("data-display-ports-name") == "true";
             var display = checked ? "block" : "none";
             var inputs = document.querySelectorAll(".drawflow-node.Switch .inputs .input");
@@ -77,6 +81,8 @@ export default defineComponent({
             this.name = this.name + this.number;
             this.updateNodeData();
             this.refreshPortsName();
+
+            this.portsSide.set(1, 'left');
         });
     }
 })

@@ -7,6 +7,7 @@ export default {
     switchId: Number,
     name: String,
     portsCount: Number,
+    portsSide: Object,
     refreshPortsName: Function
   },
   computed: {
@@ -63,51 +64,65 @@ export default {
       if (this.portsCount > 1) {
         this.editor.removeNodeInput(this.switchId, 'input_' + this.portsCount);
         this.localPortsCount--;
+        this.portsSide.delete(this.portsCount);
       }
     },
     addPort() {
       this.editor.addNodeInput(this.switchId);
       this.localPortsCount++;
+      this.portsSide.set(this.portsCount+1, 'left');
       this.refreshPortsName();
     },
-    sidesChanged(index) {
-      var sidesSelect = document.querySelectorAll(".sides")[index-1];
-      var side = sidesSelect.value;
-      var node = document.querySelector(".drawflow-node.Switch.selected");
-      var input = node.querySelector(".inputs .input:nth-child(" + index + ")");
-      switch (side) {
-        case 'left':
-          input.style.left = "-21px";
-          input.style.top = "0px";
-          input.style.setProperty('--varleft', 'auto');
-          input.style.setProperty('--vartop', 'auto');
-          break;
-        case 'right':
-          input.style.left = "75px";
-          input.style.top = "0px";
-          input.style.setProperty('--varleft', '23px');
-          input.style.setProperty('--vartop', 'auto');
-          break;
-        /*case 'up':
-          input.style.left = "26px";
-          input.style.top = "-63px";
-          input.style.setProperty('--varleft', '-6px');
-          input.style.setProperty('--vartop', '-24px');
-          break;
-        case 'down':
-          input.style.left = "26px";
-          input.style.top = "74px";
-          input.style.setProperty('--varleft', '-6px');
-          input.style.setProperty('--vartop', '17px');
-          break;*/
-      }
+    sidesChanged() {
+      this.refreshPortsSide();
       this.editor.updateConnectionNodes("node-" + this.switchId);
+    },
+    refreshPortsSide() {
+      for (let i = 1; i <= this.portsSide.size; i++) {
+        var side = document.querySelectorAll(".sides")[i-1].value;
+        var node = document.querySelector(".drawflow-node.Switch.selected");
+        var input = node.querySelector(".inputs .input:nth-child(" + i + ")");
+        switch (side) {
+          case 'left':
+            input.style.left = "-21px";
+            input.style.top = "0px";
+            input.style.setProperty('--varleft', 'auto');
+            input.style.setProperty('--vartop', 'auto');
+            break;
+          case 'right':
+            input.style.left = "75px";
+            input.style.top = "0px";
+            input.style.setProperty('--varleft', '23px');
+            input.style.setProperty('--vartop', 'auto');
+            break;
+          /*case 'up':
+            input.style.left = "26px";
+            input.style.top = "-63px";
+            input.style.setProperty('--varleft', '-6px');
+            input.style.setProperty('--vartop', '-24px');
+            break;
+          case 'down':
+            input.style.left = "26px";
+            input.style.top = "74px";
+            input.style.setProperty('--varleft', '-6px');
+            input.style.setProperty('--vartop', '17px');
+            break;*/
+        }
+        this.portsSide.set(i, side);
+      }
+    },
+    loadPortsSides() {
+      for (let i = 0; i < document.querySelectorAll(".sides").length; i++) {
+        document.querySelectorAll(".sides")[i].value = this.portsSide.get(i+1);
+      }
+      this.refreshPortsSide();
     }
   },
   updated() {
     /// Triggered when modal pop up
     if (this.show) {
       this.loadPorts();
+      this.loadPortsSides();
     }
   }
 }
@@ -147,7 +162,7 @@ export default {
                 </select>
 
                 <span class="modal-span at"> at </span>
-                <select class="sides" @change="sidesChanged(index)">
+                <select class="sides" @change="sidesChanged()">
                   <option label="left" value="left" selected></option>
                   <option label="right" value="right" ></option>
                 </select>
