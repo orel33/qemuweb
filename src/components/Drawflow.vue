@@ -45,11 +45,15 @@
   <el-dialog v-model="dialogSettings" title="Settings" width="50%">
     <div class="modal-section">
       <span>Display interfaces name : </span>
-      <input id="interfaces-name-check" type="checkbox" checked @change="changeDisplayInterfacesName">
+      <input id="interfaces-name-check" type="checkbox" checked @change="settings.changeDisplayInterfacesName">
     </div>
     <div class="modal-section">
       <span>Display ports name : </span>
-      <input id="ports-name-check" type="checkbox" checked @change="changeDisplayPortsName">
+      <input id="ports-name-check" type="checkbox" checked @change="settings.changeDisplayPortsName">
+    </div>
+    <div class="modal-section">
+      <span>Curved connections : </span>
+      <input id="curved-check" type="checkbox" checked @change="settings.changeCurvedConnections">
     </div>
   </el-dialog>
   <el-dialog v-model="dialogAbout" title="About" width="50%">
@@ -118,24 +122,6 @@ export default {
     },
     displayAbout() {
       this.dialogAbout = true;
-    },
-    changeDisplayInterfacesName() {
-      var checked = document.getElementById("interfaces-name-check").checked;
-      var display = checked ? "block" : "none";
-      this.settings.setOption("display-interfaces-name", checked);
-      var interfaces = document.querySelectorAll(".drawflow-node.Host .outputs .output");
-      for (const el of interfaces) {
-        el.style.setProperty('--vardisplay', display);
-      }
-    },
-    changeDisplayPortsName() {
-      var checked = document.getElementById("ports-name-check").checked;
-      var display = checked ? "block" : "none";
-      this.settings.setOption("display-ports-name", checked);
-      var ports = document.querySelectorAll(".drawflow-node.Switch .inputs .input");
-      for (const el of ports) {
-        el.style.setProperty('--vardisplay', display);
-      }
     }
   },
   mounted() {
@@ -156,7 +142,7 @@ export default {
     this.settings = new Settings();
     this.settings.setOption('display-ports-name', true);
     this.settings.setOption('display-interfaces-name', true);
-    this.settings.setOption('connections-curved', true);
+    this.settings.setOption('curved-connections', true);
 
     this.start();
   },
@@ -244,41 +230,7 @@ export default {
 
         editor = new drawflow(id, Vue, internalInstance.appContext.app._context);
         editor.force_first_input = true;
-        editor.on("connectionCreated", function(info) {
-          const inputNodeInfo = editor.getNodeFromId(info.input_id);
-          const outputNodeInfo = editor.getNodeFromId(info.output_id);
-          if((inputNodeInfo.class == "Host" && outputNodeInfo.class == "Host")) {
-            const last = outputNodeInfo.outputs[info.output_class].connections.length - 1;
-            const removeConnectionInfo = outputNodeInfo.outputs[info.output_class].connections[last];
-            editor.removeSingleConnection(info.output_id, removeConnectionInfo.node, info.output_class, removeConnectionInfo.output);
-          }
-        });
 
-        // Make lines straight
-        editor.curvature = 0
-        editor.reroute_curvature_start_end = 0
-        editor.reroute_curvature = 0
-        editor.createCurvature = function(start_pos_x, start_pos_y, end_pos_x, end_pos_y) {
-            var center_y = (end_pos_y - start_pos_y) / 2 + start_pos_y;
-            return (
-                ' M ' +
-                start_pos_x +
-                ' ' +
-                start_pos_y +
-                ' L ' +
-                start_pos_x +
-                ' ' +
-                center_y +
-                ' L ' +
-                end_pos_x +
-                ' ' +
-                center_y +
-                ' L ' +
-                end_pos_x +
-                ' ' +
-                end_pos_y
-              )
-        }
         editor.start();
         
         editor.registerNode('Host', Host, {}, {});
