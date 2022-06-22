@@ -5,9 +5,9 @@
         <span class="host-name">{{name}}</span>
 
         <Teleport to="body">
-            <modal @updateSelectedDistrib="updateSelected" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
+            <modal @updateSystem="updateSystem" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
                     @close="showParamModal = false" 
-                    :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :selectedDistrib="selectedDistrib" 
+                    :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :system="system" 
                     :neighboors="neighboors" :interfacesCount="interfacesCount" :interfacesSide="interfacesSide"
                     :refreshInterfacesName="refreshInterfacesName">
             <template #header>
@@ -33,8 +33,8 @@ export default defineComponent({
             id: null,
             name: "host",
             number: -1,
-            selectedDistrib: "debian10",
-            neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId>,
+            system: "debian10",
+            neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId:portNumber>,
             interfacesCount: 1,
             interfacesSide: new MyMap(),
             settings: null,
@@ -94,9 +94,9 @@ export default defineComponent({
         getNumber() {
             return this.editor.getNodesFromName('Host').indexOf(this.id);
         },
-        updateSelected(value) {
-            this.selectedDistrib = value;
-            console.log(this.selectedDistrib);
+        updateSystem(value) {
+            this.system = value;
+            this.updateNodeData();
         },
         updateName(value) {
             this.name = value;
@@ -104,13 +104,17 @@ export default defineComponent({
         },
         updateNeighboors(value) {
             this.neighboors = value;
+            this.updateNodeData();
         },
         updateInterfaces(value) {
             this.interfacesCount = value;
             this.updateNodeData();
         },
         updateNodeData() {
-            this.editor.updateNodeDataFromId(this.id, {"name": this.name, "interfacesCount": this.interfacesCount});
+            this.editor.updateNodeDataFromId(this.id, {"name": this.name, 
+                                                        "interfacesCount": this.interfacesCount,
+                                                        "system": this.system,
+                                                        "neighboors": Object.fromEntries(this.neighboors)});
         },
         refreshInterfacesName() {
             var checked = this.settings.getOption("display-interfaces-name") == "true";
@@ -123,43 +127,23 @@ export default defineComponent({
     },
     beforeMount() {
         // beforeMount to avoid to load Modal component (which need this.id) before this code is executed
-        const neighboors = this.neighboors;
-        const editor = this.editor;
+        const comp = this;
         this.id = this.editor.nodeId;
         const id = this.id;
 
-        editor.on("connectionCreated", function(info) {
-            const inputNode = editor.getNodeFromId(info.input_id);
-            const outputNode = editor.getNodeFromId(info.output_id);
-            const last = outputNode.outputs[info.output_class].connections.length - 1;
-            const connection = outputNode.outputs[info.output_class].connections[last];
-            if (inputNode.class == "Host" && outputNode.class == "Host") {
-                //Do nothing
-            } else if (info.output_id == id) {
-                neighboors.set(neighboors.size, info.input_id);
-                console.log("Host " + id + " added neighboor : ", neighboors);
-            } else if (info.input_id == id) {
-                neighboors.set(neighboors.size, info.output_id);
-                console.log("Host " + id + " added neighboor : ", neighboors);
+        this.editor.on("connectionCreated", function(info) {
+            if (info.output_id == id) {
+                comp.neighboors.set(Number(info.output_class.slice(-1)), info.input_id + ":" + info.input_class.slice(-1));
+                comp.updateNodeData();
+                console.log("Host " + id + " added neighboor : ", comp.neighboors);
             }
         });
 
-        editor.on("connectionRemoved", function(info) {
-            const inputNode = editor.getNodeFromId(info.input_id);
-            const outputNode = editor.getNodeFromId(info.output_id);
-            const last = outputNode.outputs[info.output_class].connections.length - 1;
-            const connection = outputNode.outputs[info.output_class].connections[last];
-
-            if (inputNode.class == "Host" && outputNode.class == "Host") {
-                //Do nothing
-            } else if (info.output_id == id) {
-                const pos = neighboors.indexOf(info.input_id);
-                neighboors.delete(pos);
-                console.log("Host " + id + " removed neighboor : ", neighboors);
-            } else if (info.input_id == id) {
-                const pos = neighboors.indexOf(info.output_id);
-                neighboors.delete(pos);
-                console.log("Host " + id + " removed neighboor : ", neighboors);
+        this.editor.on("connectionRemoved", function(info) {
+            if (info.output_id == id) {
+                comp.neighboors.delete(Number(info.output_class.slice(-1)));
+                comp.updateNodeData();
+                console.log("Host " + id + " removed neighboor : ", comp.neighboors);
             }
         });
     },

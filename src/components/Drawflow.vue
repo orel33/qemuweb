@@ -9,9 +9,14 @@
             <span class="burger-slice"></span>
           </button>
           <div id="dropdownmenu" class="dropdown-content">
-            <a href="#" @click="exportEditor(); exportJSON(dialogData)">Export</a>
+            <a href="#" @click="exportEditor(); exportJSON(dialogData)">Export JSON</a>
             <a href="#" @click="uploadJSON">
-              Import
+              Import JSON
+              <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON" style="width:0px;width:0px">
+            </a>
+            <a href="#" @click="exportEditorTopo(); exportTopo(topoData)">Export topo</a>
+            <a href="#" @click="uploadJSON">
+              Import topo
               <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON" style="width:0px;width:0px">
             </a>
             <a href="#" @click="displaySettings">Settings</a>
@@ -137,6 +142,10 @@ export default {
         importEditor(JSON.parse(content));
         input.value = null;
       })
+    },
+    exportTopo(data) {
+      console.log("Exporting data = ", data);
+      this.systemIO.saveFile(data, "export.topo", "topo");
     }
   },
   mounted() {
@@ -186,6 +195,7 @@ export default {
     
     var editor;// = shallowRef({})
     const dialogData = ref({});
+    const topoData = ref({});
     const Vue = { version: 3, h, render };
     const internalInstance = getCurrentInstance();
     
@@ -204,6 +214,29 @@ export default {
       } else {
         dialogData.value = editor.import(data);
       }
+    }
+
+    function exportEditorTopo() {
+      var jsonData = editor.export().drawflow.Home.data;
+      var result = "";
+      for (var key of Object.keys(jsonData)) {
+        var node = jsonData[key];
+        if (node.class == "Host") {
+          result += "HOST " + node.data.system + " " + node.data.name;
+          for (var i of Object.keys(jsonData[key].data.neighboors)) {
+            var eth = jsonData[key].data.neighboors[i];
+            result +=  " " + editor.getNodeFromId(Number(eth.split(':')[0])).data.name + ":" + (Number(eth.split(':')[1])-1);
+          }
+        } else if (node.class == "Switch") {
+          result += "SWITCH " + node.data.name;
+        }
+        result += "\n";
+      }
+      topoData.value = result;
+    }
+
+    function importTopo() {
+      
     }
 
     const drag = (ev) => {
@@ -268,7 +301,7 @@ export default {
     })
 
     return {
-      exportEditor, listNodes, drag, drop, allowDrop, dialogData, importEditor
+      exportEditor, listNodes, drag, drop, allowDrop, dialogData, importEditor, exportEditorTopo, topoData
     }
 
   }

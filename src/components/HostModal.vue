@@ -7,19 +7,19 @@ export default {
     hostId: Number,
     name: String,
     distributions: Array,
-    selectedDistrib: String,
+    system: String,
     neighboors: Map,
     interfacesCount: Number,
     interfacesSide: Object,
     refreshInterfacesName: Function
   },
   computed: {
-    localSelectedDistrib: {
+    localSystem: {
       get() {
-        return this.selectedDistrib;
+        return this.system;
       },
       set(value) {
-        this.$emit('updateSelectedDistrib', value)
+        this.$emit('updateSystem', value)
       }
     },
     localName: {
@@ -147,7 +147,7 @@ export default {
           <div :id="'modal-body-div-' + hostId" class="modal-body">
             <div class="modal-section">
               <span class="modal-span title"> System : </span>
-              <select v-model="localSelectedDistrib">
+              <select v-model="localSystem">
                 <option v-for="item in distributions" :key="item.value" :label="item.label" :value="item.value"></option>
               </select>
             </div>
