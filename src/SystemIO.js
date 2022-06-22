@@ -11,4 +11,14 @@ export class SystemIO {
             window.URL.revokeObjectURL(url);  
         }, 0); 
     }
+
+    readFile(file, callback) {
+        var reader = new FileReader();
+        var content = "nothing";
+        reader.onload = function(event) {
+            content = event.target.result;
+            callback(content);
+        };
+        reader.readAsText(file);
+    }
   }

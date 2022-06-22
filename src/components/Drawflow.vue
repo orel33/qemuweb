@@ -10,7 +10,10 @@
           </button>
           <div id="dropdownmenu" class="dropdown-content">
             <a href="#" @click="exportEditor(); exportJSON(dialogData)">Export</a>
-            <a href="#" @click="displayImport">Import</a>
+            <a href="#" @click="uploadJSON">
+              Import
+              <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON">
+            </a>
             <a href="#" @click="displaySettings">Settings</a>
             <a href="#" @click="displayAbout">About</a>
           </div>
@@ -117,6 +120,23 @@ export default {
     },
     exportJSON(data) {
       this.systemIO.saveFile(JSON.stringify(data), "export.json", "json");
+    },
+    uploadJSON() {
+      var input = document.getElementById("import-input");
+      input.click();
+    },
+    importJSON() {
+      var input = document.getElementById("import-input");
+      var importEditor = this.importEditor;
+
+      if (input.files.length == 0) {
+        return;
+      }
+
+      this.systemIO.readFile(input.files[0], function(content) {
+        console.log(JSON.parse(content));
+        importEditor(JSON.parse(content));
+      })
     }
   },
   mounted() {
@@ -171,6 +191,10 @@ export default {
     
     function exportEditor() {
       dialogData.value = editor.export();
+    }
+
+    function importEditor(data) {
+      dialogData.value = editor.import(data);
     }
 
     const drag = (ev) => {
@@ -235,7 +259,7 @@ export default {
     })
 
     return {
-      exportEditor, listNodes, drag, drop, allowDrop, dialogData
+      exportEditor, listNodes, drag, drop, allowDrop, dialogData, importEditor
     }
 
   }
