@@ -12,7 +12,7 @@
             <a href="#" @click="exportEditor(); exportJSON(dialogData)">Export</a>
             <a href="#" @click="uploadJSON">
               Import
-              <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON">
+              <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON" style="width:0px;width:0px">
             </a>
             <a href="#" @click="displaySettings">Settings</a>
             <a href="#" @click="displayAbout">About</a>
@@ -134,8 +134,8 @@ export default {
       }
 
       this.systemIO.readFile(input.files[0], function(content) {
-        console.log(JSON.parse(content));
         importEditor(JSON.parse(content));
+        input.value = null;
       })
     }
   },
@@ -194,7 +194,16 @@ export default {
     }
 
     function importEditor(data) {
-      dialogData.value = editor.import(data);
+      if (Object.keys(editor.export().drawflow.Home.data).length > 0) {
+        var confirm =  window.confirm("En important vous allez effacer la composition actuelle. Êtes-vous sûr ?");
+        if (confirm) {
+          editor.clear();
+          editor.nodeId = 1; // reset nodeId because clear() doesn't do it
+          dialogData.value = editor.import(data);
+        }
+      } else {
+        dialogData.value = editor.import(data);
+      }
     }
 
     const drag = (ev) => {
