@@ -1,8 +1,11 @@
 <template>
     <div class="switch-component">
         <img class="cog" src="../../assets/cog.png" @click="showParamModal = true"/>
+        <img class="run-prompt" src="../../assets/run-icon.jpg" @click="showPrompt"/>
         <img class="switch" src="../../assets/switch.png" alt="Un switch" @dblclick="showParamModal = true"/>
         <span class="switch-name">{{name}}</span>
+
+        <div class="terminal-container" style="display:none"></div>
 
         <Teleport to="body">
             <modal @updateHostName="updateName" @updatePortsCount="updatePorts" @close="showParamModal = false" 
@@ -17,10 +20,14 @@
 </template>
 
 <script>
-import { MyMap } from '@/MyMap';
-import { Settings } from '@/Settings';
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
 import Modal from '../SwitchModal.vue';
+import { MyMap } from '@/MyMap';
+import { Settings } from '@/Settings';
+import { TerminalSetup } from '@/TerminalSetup';
+//
+import { TerminalUI } from '@/TerminalUI';
+//
 
 export default defineComponent({
     components: {
@@ -34,7 +41,8 @@ export default defineComponent({
             portsCount: 4,
             portsSide: new MyMap(),
             showParamModal: false,
-            settings: null
+            settings: null,
+            terminalSetup: null
         }
     },
     computed: {
@@ -67,6 +75,10 @@ export default defineComponent({
             for (let input of inputs) {
                 input.style.setProperty('--vardisplay', display);
             }
+        },
+        showPrompt() {
+            var term = document.getElementById("term-" + this.id);
+            term.style.display = term.style.display == 'none' ? 'initial' : 'none';
         }
     },
     beforeMount() {
@@ -75,6 +87,16 @@ export default defineComponent({
     mounted() {
         this.settings = new Settings();
         this.$nextTick(() => {
+            //this.terminalSetup = new TerminalSetup();
+            //
+            var containers = document.getElementsByClassName("terminal-container");
+            var container = containers[containers.length-1];
+            container.setAttribute("id", "term-" + this.id);
+            var term = new TerminalUI(null);
+            term.attachTo(container);
+            //
+            //this.terminalSetup.start();
+
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();

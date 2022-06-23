@@ -2,6 +2,7 @@
   <el-container>
     <el-header class="header">
         <h3>QemuWeb</h3>
+        <div id="play-stop" class="play-button" @click="toggleEditorMode(); toggleMode()"></div>
         <div class="dropdown">
           <button @click="toggleDropDown" class="dropbtn">
             <span class="burger-slice"></span>
@@ -65,57 +66,45 @@ import drawflow from 'drawflow';
 import styleDrawflow from 'drawflow/dist/drawflow.min.css';
 import style from '../assets/style.css';
 import styleJquery from '../jquery-ui/jquery-ui.min.css';
-import jquery from '../jquery-ui/external/jquery/jquery.js';
-import jquery_ui from '../jquery-ui/external/jquery/jquery.js';
+//import $ from 'jquery';
+//import jquery_ui from '../jquery-ui/jquery-ui.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
-import { TerminalUI } from "@/TerminalUI";
 import { Settings } from '@/Settings';
 import { SystemIO } from '@/SystemIO';
 import Host from './nodes/HostComp.vue';
 import Switch from './nodes/SwitchComp.vue';
-import io from "socket.io-client";
 
 
 export default {
   name: 'DrawFlow',
   data() {
     return {
-      serverAddress: "127.0.0.1",
+      serverAddress: "127.0.0.1:443",
       dialogSettings: false,
       dialogAbout: false,
+      terminalSetup: null,
       settings: null,
       systemIO: null
     }
   },
   methods: {
-    connectToSocket(serverAddr) {
-      return new Promise(res => {
-        const socket = io(serverAddr);
-        res(socket);
-      });
-    },
-    startTerminal(container, socket) {
-      const terminal = new TerminalUI(socket);
-      terminal.attachTo(container);
-      console.log("startTerminal");
-      terminal.startListening();
-    },
-    start() {
-      var containers = document.getElementsByClassName("terminal-container");
-
-      if (containers == undefined || containers.length < 1) {
-        console.log("Pas de container pour le terminal trouvé");
-        return;
-      }
-      for (let container of containers) {
-        console.log("connect on " + this.serverAddress + ":" + container.getAttribute("data-port"))
-        this.connectToSocket(this.serverAddress + ":" + container.getAttribute("data-port")).then(socket => {
-          this.startTerminal(container, socket);
-        });
-      }
-    },
     toggleDropDown() {
       document.getElementById("dropdownmenu").classList.toggle("show");
+    },
+    toggleMode() {
+      var aside = document.querySelector("aside");
+      var cogs = document.querySelectorAll(".cog");
+      var runPrompts = document.querySelectorAll(".run-prompt");
+      var prompts = document.querySelectorAll(".terminal-container");
+
+      document.getElementById("play-stop").classList.toggle("play-button");
+      document.getElementById("play-stop").classList.toggle("stop-button");
+      aside.style.display = aside.style.display == 'none' ? 'initial' : "none";
+      for (let i = 0; i < document.querySelectorAll(".cog").length; i++) {
+        cogs[i].style.display = cogs[i].style.display == 'none' ? 'initial' : 'none';
+        runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
+        prompts[i].style.display = 'none';
+      }
     },
     displaySettings() {
       this.dialogSettings = true;
@@ -168,8 +157,6 @@ export default {
     this.settings.setOption('display-ports-name', true);
     this.settings.setOption('display-interfaces-name', true);
     this.settings.setOption('curved-connections', true);
-
-    this.start();
   },
   setup() {
     const listNodes = readonly([
@@ -277,6 +264,10 @@ export default {
       editor.addNode(name, nodeSelected.input, nodeSelected.output, pos_x, pos_y, name, {}, name, 'vue');
     }
 
+    function toggleEditorMode() {
+      editor.editor_mode = editor.editor_mode == 'edit' ? 'view' : 'edit';
+    }
+
     onMounted(() => {
 
       var elements = document.getElementsByClassName('drag-drawflow');
@@ -301,7 +292,7 @@ export default {
     })
 
     return {
-      exportEditor, listNodes, drag, drop, allowDrop, dialogData, importEditor, exportEditorTopo, topoData
+      exportEditor, listNodes, drag, drop, allowDrop, dialogData, importEditor, exportEditorTopo, topoData, toggleEditorMode
     }
 
   }

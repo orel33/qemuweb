@@ -1,8 +1,11 @@
 <template>
     <div>
         <img class="cog" src="../../assets/cog.png" @click="showParamModal = true"/>
+        <img class="run-prompt" src="../../assets/run-icon.jpg" @click="showPrompt"/>
         <img class="computer" src="../../assets/computer.png" @dblclick="showParamModal = true"/>
         <span class="host-name">{{name}}</span>
+
+        <div class="terminal-container draggable ui-widget-content" style="display:none"></div>
 
         <Teleport to="body">
             <modal @updateSystem="updateSystem" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
@@ -23,6 +26,10 @@ import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick
 import Modal from '../HostModal.vue';
 import { MyMap } from "@/MyMap"; 
 import { Settings } from '@/Settings';
+import { TerminalSetup } from '@/TerminalSetup';
+//
+import { TerminalUI } from '@/TerminalUI';
+//
 
 export default defineComponent({
     components: {
@@ -37,7 +44,8 @@ export default defineComponent({
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId:portNumber>,
             interfacesCount: 1,
             interfacesSide: new MyMap(), // Map<interfaceNumber, side>
-            settings: null,
+            settings: new Settings(),
+            terminalSetup: null,
             distributions: [
                 {
                     value: 'debian10',
@@ -123,6 +131,10 @@ export default defineComponent({
             for (let output of outputs) {
                 output.style.setProperty('--vardisplay', display);
             }
+        },
+        showPrompt() {
+            var term = document.getElementById("term-" + this.id);
+            term.style.display = term.style.display == 'none' ? 'block' : 'none';
         }
     },
     beforeMount() {
@@ -154,8 +166,16 @@ export default defineComponent({
         });
     },
     mounted() {
-        this.settings = new Settings();
         this.$nextTick(() => {
+            //this.terminalSetup = new TerminalSetup();
+            //
+            var containers = document.getElementsByClassName("terminal-container");
+            var container = containers[containers.length-1];
+            container.setAttribute("id", "term-" + this.id);
+            var term = new TerminalUI(null);
+            term.attachTo(container);
+            //
+            //this.terminalSetup.start();
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();

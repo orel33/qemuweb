@@ -68,14 +68,26 @@ img.switch, img.computer {
     pointer-events: none;
 }
 
-img.switch {
+img.switch, img.computer {
     width:65px;
     height:65px;
 }
 
-img.computer {
-    width:65px;
-    height:65px;
+img.run-prompt {
+    width: 24px;
+    height: 24px;
+    position: relative;
+    right: 10px;
+    display: none;
+    cursor: pointer;
+}
+
+.Switch img.run-prompt {
+    right: 0px;
+}
+.terminal-container {
+    width: 500px;
+    height: 200px;
 }
 
 img.cog:hover {
@@ -90,6 +102,22 @@ img.cog:hover {
 
 .sides {
     margin-left: 10px;
+}
+
+div.play-button {
+    width: 0;
+    height: 0;
+    border-top: 15px solid transparent;
+    border-left: 20px solid green;
+    border-bottom: 15px solid transparent; 
+    cursor: pointer;
+}
+
+div.stop-button {
+    width: 20px;
+    height: 20px;
+    background-color: red;
+    cursor: pointer;
 }
 
 .el-dialog__close {
