@@ -31,7 +31,7 @@ export default defineComponent({
             id : null,
             number: -1,
             name: "s",
-            portsCount: 1,
+            portsCount: 4,
             portsSide: new MyMap(),
             showParamModal: false,
             settings: null
@@ -81,6 +81,9 @@ export default defineComponent({
             this.refreshPortsName();
 
             this.portsSide.set(1, 'left');
+            this.portsSide.set(2, 'left');
+            this.portsSide.set(3, 'left');
+            this.portsSide.set(4, 'left');
         });
     }
 })
