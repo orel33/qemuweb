@@ -186,7 +186,7 @@ export default {
         name: 'SWITCH',
         color: 'blue',
         item: 'Switch',
-        input: 1,
+        input: 4,
         output: 0,
         img: require('@/assets/switch.png'),
         img_class: 'switch'
