@@ -9,16 +9,16 @@
             <span class="burger-slice"></span>
           </button>
           <div id="dropdownmenu" class="dropdown-content">
-            <a href="#" @click="exportEditor(); exportJSON(dialogData)">Export JSON</a>
             <a href="#" @click="uploadJSON">
-              Import JSON
+              Load
               <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON" style="width:0px;width:0px">
             </a>
-            <a href="#" @click="exportEditorTopo(); exportTopo(topoData)">Export topo</a>
+            <a href="#" @click="exportEditor(); exportJSON(dialogData)">Save</a>
             <a href="#" @click="uploadJSON">
-              Import topo
+              Import
               <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON" style="width:0px;width:0px">
             </a>
+            <a href="#" @click="exportEditorTopo(); exportTopo(topoData)">Export</a>
             <a href="#" @click="displaySettings">Settings</a>
             <a href="#" @click="displayAbout">About</a>
           </div>
@@ -144,7 +144,7 @@ export default {
       })
     },
     exportTopo(data) {
-      console.log("Exporting data = ", data);
+      console.log("Exporting data = \n", data);
       this.systemIO.saveFile(data, "export.topo", "topo");
     }
   },

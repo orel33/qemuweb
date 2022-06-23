@@ -21,7 +21,7 @@
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
 import Modal from '../HostModal.vue';
-import { MyMap } from "../../MyMap"; 
+import { MyMap } from "@/MyMap"; 
 import { Settings } from '@/Settings';
 
 export default defineComponent({
@@ -36,7 +36,7 @@ export default defineComponent({
             system: "debian10",
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId:portNumber>,
             interfacesCount: 1,
-            interfacesSide: new MyMap(),
+            interfacesSide: new MyMap(), // Map<interfaceNumber, side>
             settings: null,
             distributions: [
                 {
@@ -133,7 +133,13 @@ export default defineComponent({
 
         this.editor.on("connectionCreated", function(info) {
             if (info.output_id == id) {
-                comp.neighboors.set(Number(info.output_class.slice(-1)), info.input_id + ":" + info.input_class.slice(-1));
+                var inter = Number(info.output_class.slice(-1));
+                const nodeInfo = comp.editor.getNodeFromId(info.output_id);
+                if (nodeInfo.outputs[info.output_class].connections.length > 1) {
+                    const removeConnectionInfo = nodeInfo.outputs[info.output_class].connections[0];
+                    comp.editor.removeSingleConnection(info.output_id, removeConnectionInfo.node, info.output_class, removeConnectionInfo.output);
+                }
+                comp.neighboors.set(inter, info.input_id + ":" + info.input_class.slice(-1));
                 comp.updateNodeData();
                 console.log("Host " + id + " added neighboor : ", comp.neighboors);
             }
