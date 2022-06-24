@@ -89,27 +89,29 @@ img.run-prompt {
 .terminal-frame {
     width: 700px;
     border-style: solid;
-    border-width: 10px 5px 5px 5px;
+    border-width: 4px 2px 2px 2px;
     overflow: hidden;
     cursor: move;
+    background-color: whitesmoke;
 }
 
-.terminal-frame button {
-    height: 30px;
-    width: 30px;
+.terminal-container {
+    position: relative;
+    top: 22px;
 }
 
 .xterm .xterm-viewport {
     overflow-y: hidden !important;
 }
 
-.term-close:before, .term-close:after {
-    position: absolute;
-    left: 15px;
-    content: ' ';
-    height: 33px;
-    width: 2px;
-    background-color: #333;
+.term-close {
+    display: block;
+    float: right;
+    color: red;
+    background-image: url("@/assets/close.png");
+    background-size: cover;
+    width: 20px;
+    height: 20px;
 }
 
 img.cog:hover {
@@ -146,24 +148,24 @@ div.stop-button {
     width: 32px;
     height: 32px;
     opacity: 0.3;
-  }
-  .el-dialog__close:hover {
+}
+.el-dialog__close:hover {
     opacity: 1;
-  }
-  .el-dialog__close:before, .el-dialog__close:after {
+}
+.el-dialog__close:before, .el-dialog__close:after {
     position: absolute;
     left: 15px;
     content: ' ';
     height: 33px;
     width: 2px;
     background-color: #333;
-  }
-  .el-dialog__close:before {
+}
+.el-dialog__close:before {
     transform: rotate(45deg);
-  }
-  .el-dialog__close:after {
+}
+.el-dialog__close:after {
     transform: rotate(-45deg);
-  }
+}
 
 .el-dialog__title {
     font-size: x-large;

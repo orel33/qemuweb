@@ -34,7 +34,6 @@
                   </div>
               </li>
           </ul>
-          <!--<div class="terminal-container" data-port="43373"></div>-->
       </el-aside>
       <el-main>
           <div id="drawflow" @drop="drop($event)" @dragover="allowDrop($event)"></div>

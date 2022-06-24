@@ -18,13 +18,10 @@ var termSetup = {
     createTerminal(nodeId) {
         var frame = document.createElement("div");
         var container = document.createElement("div");
-        var closeIcon = document.createElement("i");
-        var closeButton = document.createElement("button");
+        var closeIcon = document.createElement("div");
         frame.classList.add("terminal-frame");
         container.classList.add("terminal-container");
-        closeIcon.classList.add("el-dialog__close");
         closeIcon.classList.add("term-close");
-        closeButton.appendChild(closeIcon);
         frame.appendChild(closeIcon);
         frame.appendChild(container);
         document.getElementById("node-" + nodeId).after(frame);
