@@ -133,6 +133,7 @@ export default defineComponent({
             }
         },
         showPrompt() {
+            console.log("showing prompt");
             var term = document.getElementById("term-" + this.id);
             term.style.display = term.style.display == 'none' ? 'block' : 'none';
         }

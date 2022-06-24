@@ -25,8 +25,8 @@ var termSetup = {
         frame.appendChild(closeIcon);
         frame.appendChild(container);
         document.getElementById("node-" + nodeId).after(frame);
-        container.setAttribute("id", "term-" + nodeId);
-        console.log("terminal created");
+        frame.setAttribute("id", "term-" + nodeId);
+        console.log("terminal" + " term-" + nodeId + " created");
 
         $(frame).draggable({ cursor: "move"});
         $(frame).resizable();
@@ -41,6 +41,7 @@ var termSetup = {
             this.startTerminal(container, socket);
         });*/
         this.startTerminal(container, null);
+        frame.style.display = 'none';
     }
 }
 

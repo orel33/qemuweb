@@ -94,7 +94,7 @@ export default {
       var aside = document.querySelector("aside");
       var cogs = document.querySelectorAll(".cog");
       var runPrompts = document.querySelectorAll(".run-prompt");
-      var prompts = document.querySelectorAll(".terminal-container");
+      var prompts = document.querySelectorAll(".terminal-frame");
 
       document.getElementById("play-stop").classList.toggle("play-button");
       document.getElementById("play-stop").classList.toggle("stop-button");
@@ -102,7 +102,7 @@ export default {
       for (let i = 0; i < document.querySelectorAll(".cog").length; i++) {
         cogs[i].style.display = cogs[i].style.display == 'none' ? 'initial' : 'none';
         runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
-        prompts[i].style.display = 'none';
+        //prompts[i].style.display = 'none';
       }
     },
     displaySettings() {
@@ -264,7 +264,7 @@ export default {
     }
 
     function toggleEditorMode() {
-      editor.editor_mode = editor.editor_mode == 'edit' ? 'view' : 'edit';
+      editor.editor_mode = editor.editor_mode == 'edit' ? 'fixed' : 'edit';
     }
 
     onMounted(() => {
