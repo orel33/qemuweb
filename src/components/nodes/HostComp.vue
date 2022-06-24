@@ -178,6 +178,7 @@ export default defineComponent({
             term.attachTo(container);
             console.log("terminal created");
             $(container.parentNode).draggable({ cursor: "move"});
+            $(container.parentNode).resizable();
             //
             //this.terminalSetup.start();
             this.number = this.getNumber()+1;

@@ -87,6 +87,7 @@ img.run-prompt {
 }
 
 .terminal-frame {
+    width: 700px;
     border: 10px solid;
     overflow: hidden;
     cursor: move;
