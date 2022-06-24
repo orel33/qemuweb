@@ -26,10 +26,15 @@ var termSetup = {
         frame.appendChild(container);
         document.getElementById("node-" + nodeId).after(frame);
         container.setAttribute("id", "term-" + nodeId);
-
         console.log("terminal created");
+
         $(frame).draggable({ cursor: "move"});
         $(frame).resizable();
+
+        closeIcon.addEventListener("click", function () {
+            frame.style.display = 'none';
+        });
+
         const ADDRESS = "127.0.0.1:443"
         console.log("connect on " + ADDRESS)
         /*this.connectToSocket(ADDRESS).then(socket => {

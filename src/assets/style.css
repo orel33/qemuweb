@@ -113,6 +113,7 @@ img.run-prompt {
     background-size: cover;
     width: 20px;
     height: 20px;
+    cursor: pointer;
 }
 
 img.cog:hover {
