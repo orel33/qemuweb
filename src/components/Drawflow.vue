@@ -205,18 +205,23 @@ export default {
     function exportEditorTopo() {
       var jsonData = editor.export().drawflow.Home.data;
       var result = "";
-      for (var key of Object.keys(jsonData)) {
-        var node = jsonData[key];
+      var key, node;
+      for (key of Object.keys(jsonData)) {
+        node = jsonData[key];
+        if (node.class == "Switch") {
+          result += "SWITCH " + node.data.name + "\n";
+        }
+      }
+      for (key of Object.keys(jsonData)) {
+        node = jsonData[key];
         if (node.class == "Host") {
           result += "HOST " + node.data.system + " " + node.data.name;
           for (var i of Object.keys(jsonData[key].data.neighboors)) {
             var eth = jsonData[key].data.neighboors[i];
             result +=  " " + editor.getNodeFromId(Number(eth.split(':')[0])).data.name + ":" + (Number(eth.split(':')[1])-1);
           }
-        } else if (node.class == "Switch") {
-          result += "SWITCH " + node.data.name;
+          result += "\n";
         }
-        result += "\n";
       }
       topoData.value = result;
     }
