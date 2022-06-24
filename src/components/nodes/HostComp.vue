@@ -5,8 +5,6 @@
         <img class="computer" src="../../assets/computer.png" @dblclick="showParamModal = true"/>
         <span class="host-name">{{name}}</span>
 
-        <div class="terminal-container draggable ui-widget-content" style="display:none"></div>
-
         <Teleport to="body">
             <modal @updateSystem="updateSystem" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
                     @close="showParamModal = false" 
@@ -26,9 +24,9 @@ import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick
 import Modal from '../HostModal.vue';
 import $ from 'jquery';
 import jquery_ui from '@/jquery-ui/jquery-ui.js';
+import termSetup from '@/TerminalSetup';
 import { MyMap } from "@/MyMap"; 
 import { Settings } from '@/Settings';
-import { TerminalSetup } from '@/TerminalSetup';
 //
 import { TerminalUI } from '@/TerminalUI';
 //
@@ -169,18 +167,7 @@ export default defineComponent({
     },
     mounted() {
         this.$nextTick(() => {
-            //this.terminalSetup = new TerminalSetup();
-            //
-            var containers = document.getElementsByClassName("terminal-container");
-            var container = containers[containers.length-1];
-            container.setAttribute("id", "term-" + this.id);
-            var term = new TerminalUI(null);
-            term.attachTo(container);
-            console.log("terminal created");
-            $(container.parentNode).draggable({ cursor: "move"});
-            $(container.parentNode).resizable();
-            //
-            //this.terminalSetup.start();
+            termSetup.createTerminal(this.id);
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();

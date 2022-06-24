@@ -38,11 +38,6 @@
       </el-aside>
       <el-main>
           <div id="drawflow" @drop="drop($event)" @dragover="allowDrop($event)"></div>
-          <div id="terminals-storage">
-            <div class="terminal-frame draggable">
-              <div class="terminal-container"></div>
-            </div>
-          </div>
       </el-main>
     </el-container>
   </el-container>

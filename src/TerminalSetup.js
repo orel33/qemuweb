@@ -1,33 +1,45 @@
 import { TerminalUI } from "@/TerminalUI";
 import io from "socket.io-client";
+import $ from 'jquery';
+import jquery_ui from '@/jquery-ui/jquery-ui.js';
 
-export class TerminalSetup {
+var termSetup = { 
     connectToSocket(serverAddr) {
         return new Promise(res => {
             const socket = io(serverAddr);
             res(socket);
         });
-    }
-
+    },
     startTerminal(container, socket) {
         const terminal = new TerminalUI(socket);
         terminal.attachTo(container);
-        console.log("startTerminal");
-        terminal.startListening();
-    }
+        //terminal.startListening();
+    },
+    createTerminal(nodeId) {
+        var frame = document.createElement("div");
+        var container = document.createElement("div");
+        var closeIcon = document.createElement("i");
+        var closeButton = document.createElement("button");
+        frame.classList.add("terminal-frame");
+        container.classList.add("terminal-container");
+        closeIcon.classList.add("el-dialog__close");
+        closeIcon.classList.add("term-close");
+        closeButton.appendChild(closeIcon);
+        frame.appendChild(closeIcon);
+        frame.appendChild(container);
+        document.getElementById("node-" + nodeId).after(frame);
+        container.setAttribute("id", "term-" + nodeId);
 
-    start() {
-        var containers = document.getElementsByClassName("terminal-container");
-
-        if (containers == undefined || containers.length < 1) {
-            console.log("Pas de container pour le terminal trouvé");
-            return;
-        }
-        for (let container of containers) {
-            console.log("connect on " + this.serverAddress)
-            this.connectToSocket(this.serverAddress).then(socket => {
-                this.startTerminal(container, socket);
-            });
-        }
+        console.log("terminal created");
+        $(frame).draggable({ cursor: "move"});
+        $(frame).resizable();
+        const ADDRESS = "127.0.0.1:443"
+        console.log("connect on " + ADDRESS)
+        /*this.connectToSocket(ADDRESS).then(socket => {
+            this.startTerminal(container, socket);
+        });*/
+        this.startTerminal(container, null);
     }
 }
+
+export default termSetup
