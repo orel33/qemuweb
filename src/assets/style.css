@@ -93,6 +93,7 @@ img.run-prompt {
     overflow: hidden;
     cursor: move;
     background-color: whitesmoke;
+    z-index: 4;
 }
 
 .terminal-container {
