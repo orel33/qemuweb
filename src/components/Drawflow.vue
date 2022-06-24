@@ -102,7 +102,7 @@ export default {
       for (let i = 0; i < document.querySelectorAll(".cog").length; i++) {
         cogs[i].style.display = cogs[i].style.display == 'none' ? 'initial' : 'none';
         runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
-        //prompts[i].style.display = 'none';
+        prompts[i].style.display = 'none';
       }
     },
     displaySettings() {

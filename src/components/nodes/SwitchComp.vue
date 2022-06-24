@@ -5,8 +5,6 @@
         <img class="switch" src="../../assets/switch.png" alt="Un switch" @dblclick="showParamModal = true"/>
         <span class="switch-name">{{name}}</span>
 
-        <div class="terminal-container" style="display:none"></div>
-
         <Teleport to="body">
             <modal @updateHostName="updateName" @updatePortsCount="updatePorts" @close="showParamModal = false" 
                     :show="showParamModal" :switchId="id" :name="name" :portsCount="portsCount"
@@ -24,10 +22,7 @@ import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick
 import Modal from '../SwitchModal.vue';
 import { MyMap } from '@/MyMap';
 import { Settings } from '@/Settings';
-import { TerminalSetup } from '@/TerminalSetup';
-//
-import { TerminalUI } from '@/TerminalUI';
-//
+import termSetup from '@/TerminalSetup';
 
 export default defineComponent({
     components: {
@@ -77,8 +72,9 @@ export default defineComponent({
             }
         },
         showPrompt() {
+            console.log("showing prompt");
             var term = document.getElementById("term-" + this.id);
-            term.style.display = term.style.display == 'none' ? 'initial' : 'none';
+            term.style.display = term.style.display == 'none' ? 'block' : 'none';
         }
     },
     beforeMount() {
@@ -87,16 +83,7 @@ export default defineComponent({
     mounted() {
         this.settings = new Settings();
         this.$nextTick(() => {
-            //this.terminalSetup = new TerminalSetup();
-            //
-            var containers = document.getElementsByClassName("terminal-container");
-            var container = containers[containers.length-1];
-            container.setAttribute("id", "term-" + this.id);
-            var term = new TerminalUI(null);
-            term.attachTo(container);
-            //
-            //this.terminalSetup.start();
-
+            termSetup.createTerminal(this.id);
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
