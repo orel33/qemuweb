@@ -83,11 +83,12 @@ export default defineComponent({
     mounted() {
         this.settings = new Settings();
         this.$nextTick(() => {
-            termSetup.createTerminal(this.id);
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
             this.refreshPortsName();
+
+            termSetup.createTerminal(this.id, this.name);
 
             this.portsSide.set(1, 'left');
             this.portsSide.set(2, 'left');

@@ -168,11 +168,12 @@ export default defineComponent({
     },
     mounted() {
         this.$nextTick(() => {
-            termSetup.createTerminal(this.id);
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
             this.refreshInterfacesName();
+
+            termSetup.createTerminal(this.id, this.name);
 
             this.interfacesSide.set(1, 'right');
         });

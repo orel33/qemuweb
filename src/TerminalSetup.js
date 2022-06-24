@@ -15,17 +15,21 @@ var termSetup = {
         terminal.attachTo(container);
         //terminal.startListening();
     },
-    createTerminal(nodeId) {
+    createTerminal(nodeId, name) {
         var frame = document.createElement("div");
         var container = document.createElement("div");
         var closeIcon = document.createElement("div");
+        var nameSpan = document.createElement("span");
         frame.classList.add("terminal-frame");
         container.classList.add("terminal-container");
         closeIcon.classList.add("term-close");
+        nameSpan.classList.add("term-name");
+        frame.appendChild(nameSpan);
         frame.appendChild(closeIcon);
         frame.appendChild(container);
         document.getElementById("node-" + nodeId).after(frame);
         frame.setAttribute("id", "term-" + nodeId);
+        nameSpan.innerHTML = name;
         console.log("terminal" + " term-" + nodeId + " created");
 
         $(frame).draggable({ cursor: "move"});

@@ -102,7 +102,7 @@ img.run-prompt {
 
 .terminal-container {
     position: relative;
-    top: 22px;
+    top: 5px;
 }
 
 .xterm .xterm-viewport {
@@ -118,6 +118,12 @@ img.run-prompt {
     width: 20px;
     height: 20px;
     cursor: pointer;
+}
+
+.term-name {
+    color: black;
+    margin-left: 10px;
+    font-size: large;
 }
 
 img.cog:hover {
