@@ -29,7 +29,10 @@ var termSetup = {
         console.log("terminal" + " term-" + nodeId + " created");
 
         $(frame).draggable({ cursor: "move"});
-        $(frame).resizable();
+        $(frame).resizable({ resize: function(ev) {
+            var evt = new Event("resize");
+            ev.target.dispatchEvent(evt);
+        }});
 
         closeIcon.addEventListener("click", function () {
             frame.style.display = 'none';
