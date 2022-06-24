@@ -60,6 +60,10 @@
     color: black;
 }
 
+.drawflow .parent-node {
+    height: 0;
+}
+
 img.switch, img.computer {
     -webkit-user-drag: none;
     -khtml-user-drag: none;
