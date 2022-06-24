@@ -24,6 +24,8 @@
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
 import Modal from '../HostModal.vue';
+import $ from 'jquery';
+import jquery_ui from '@/jquery-ui/jquery-ui.js';
 import { MyMap } from "@/MyMap"; 
 import { Settings } from '@/Settings';
 import { TerminalSetup } from '@/TerminalSetup';
@@ -174,6 +176,8 @@ export default defineComponent({
             container.setAttribute("id", "term-" + this.id);
             var term = new TerminalUI(null);
             term.attachTo(container);
+            console.log("terminal created");
+            $(container.parentNode).draggable({ cursor: "move"});
             //
             //this.terminalSetup.start();
             this.number = this.getNumber()+1;

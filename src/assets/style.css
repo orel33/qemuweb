@@ -85,9 +85,15 @@ img.run-prompt {
 .Switch img.run-prompt {
     right: 0px;
 }
-.terminal-container {
-    width: 500px;
-    height: 200px;
+
+.terminal-frame {
+    border: 10px solid;
+    overflow: hidden;
+    cursor: move;
+}
+
+.xterm .xterm-viewport {
+    overflow-y: hidden !important;
 }
 
 img.cog:hover {

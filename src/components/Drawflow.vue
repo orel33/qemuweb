@@ -38,6 +38,11 @@
       </el-aside>
       <el-main>
           <div id="drawflow" @drop="drop($event)" @dragover="allowDrop($event)"></div>
+          <div id="terminals-storage">
+            <div class="terminal-frame draggable">
+              <div class="terminal-container"></div>
+            </div>
+          </div>
       </el-main>
     </el-container>
   </el-container>
@@ -57,7 +62,7 @@
   </el-dialog>
   <el-dialog v-model="dialogAbout" title="About" width="50%">
   </el-dialog>
-  <div id="settings" style="width:0px;width:0px"></div>
+  <div id="settings" style="width:0;height:0"></div>
 </template>
 
 
@@ -66,8 +71,8 @@ import drawflow from 'drawflow';
 import styleDrawflow from 'drawflow/dist/drawflow.min.css';
 import style from '../assets/style.css';
 import styleJquery from '../jquery-ui/jquery-ui.min.css';
-//import $ from 'jquery';
-//import jquery_ui from '../jquery-ui/jquery-ui.js';
+import $ from 'jquery';
+import jquery_ui from '../jquery-ui/jquery-ui.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
 import { Settings } from '@/Settings';
 import { SystemIO } from '@/SystemIO';
@@ -286,6 +291,8 @@ export default {
         
         editor.registerNode('Host', Host, {}, {});
         editor.registerNode('Switch', Switch, {}, {});
+
+        console.log(editor);
 
         //editor.import({"drawflow":{"Home":{"data":{"5":{"id":5,"name":"Switch","data":{"script":"(req,res) => {\n console.log(req);\n}"},"class":"Switch","html":"Switch","typenode":"vue","inputs":{"input_1":{"connections":[{"node":"6","input_1":"output_1"}]}},"outputs":{"output_1":{"connections":[]},"output_1":{"connections":[]}},"pos_x":1000,"pos_y":117},"6":{"id":6,"name":"Host","data":{"url":"localhost/add", "method": "post"},"class":"Host","html":"Host","typenode":"vue","inputs":{},"outputs":{"output_1":{"connections":[{"node":"5","output":"input_1"}]}},"pos_x":137,"pos_y":89}}}}})
         internalInstance.appContext.app._context.config.globalProperties.$df = editor;
