@@ -216,9 +216,9 @@ export default {
         node = jsonData[key];
         if (node.class == "Host") {
           result += "HOST " + node.data.system + " " + node.data.name;
-          for (var i of Object.keys(jsonData[key].data.neighboors)) {
-            var eth = jsonData[key].data.neighboors[i];
-            result +=  " " + editor.getNodeFromId(Number(eth.split(':')[0])).data.name + ":" + (Number(eth.split(':')[1])-1);
+          for (var i of Object.keys(jsonData[key].outputs)) {
+            var eth = jsonData[key].outputs[i].connections[0];
+            result +=  " " + editor.getNodeFromId(Number(eth.node)).data.name + ":" + (Number(eth.output.split('_')[1])-1);
           }
           result += "\n";
         }
