@@ -77,12 +77,11 @@ export default defineComponent({
             term.style.display = term.style.display == 'none' ? 'block' : 'none';
         }
     },
-    beforeMount() {
-        this.id = this.editor.nodeId;
-    },
     mounted() {
+        this.editor; // Need to load editor before call it in $nextTick, don't ask
         this.settings = new Settings();
         this.$nextTick(() => {
+            this.id = Number(this.$el.parentElement.parentElement.id.split('-')[1]);
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();

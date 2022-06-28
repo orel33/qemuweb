@@ -139,36 +139,32 @@ export default defineComponent({
             term.style.display = term.style.display == 'none' ? 'block' : 'none';
         }
     },
-    beforeMount() {
-        // beforeMount to avoid to load Modal component (which need this.id) before this code is executed
-        const comp = this;
-        this.id = this.editor.nodeId;
-        const id = this.id;
-
-        this.editor.on("connectionCreated", function(info) {
-            if (info.output_id == id) {
-                var inter = Number(info.output_class.slice(-1));
-                const nodeInfo = comp.editor.getNodeFromId(info.output_id);
-                if (nodeInfo.outputs[info.output_class].connections.length > 1) {
-                    const removeConnectionInfo = nodeInfo.outputs[info.output_class].connections[0];
-                    comp.editor.removeSingleConnection(info.output_id, removeConnectionInfo.node, info.output_class, removeConnectionInfo.output);
-                }
-                comp.neighboors.set(inter, info.input_id + ":" + info.input_class.slice(-1));
-                comp.updateNodeData();
-                console.log("Host " + id + " added neighboor : ", comp.neighboors);
-            }
-        });
-
-        this.editor.on("connectionRemoved", function(info) {
-            if (info.output_id == id) {
-                comp.neighboors.delete(Number(info.output_class.slice(-1)));
-                comp.updateNodeData();
-                console.log("Host " + id + " removed neighboor : ", comp.neighboors);
-            }
-        });
-    },
     mounted() {
+        this.editor; // Need to load editor before call it in $nextTick, don't ask
         this.$nextTick(() => {
+            this.id = Number(this.$el.parentElement.parentElement.id.split('-')[1]);
+            const comp = this;
+            this.editor.on("connectionCreated", function(info) {
+                if (info.output_id == comp.id) {
+                    var inter = Number(info.output_class.slice(-1));
+                    const nodeInfo = comp.editor.getNodeFromId(info.output_id);
+                    if (nodeInfo.outputs[info.output_class].connections.length > 1) {
+                        const removeConnectionInfo = nodeInfo.outputs[info.output_class].connections[0];
+                        comp.editor.removeSingleConnection(info.output_id, removeConnectionInfo.node, info.output_class, removeConnectionInfo.output);
+                    }
+                    comp.neighboors.set(inter, info.input_id + ":" + info.input_class.slice(-1));
+                    comp.updateNodeData();
+                    console.log("Host " + comp.id + " added neighboor : ", comp.neighboors);
+                }
+            });
+
+            this.editor.on("connectionRemoved", function(info) {
+                if (info.output_id == comp.id) {
+                    comp.neighboors.delete(Number(info.output_class.slice(-1)));
+                    comp.updateNodeData();
+                    console.log("Host " + comp.id + " removed neighboor : ", comp.neighboors);
+                }
+            });
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
