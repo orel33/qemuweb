@@ -21,4 +21,12 @@ export class SystemIO {
         };
         reader.readAsText(file);
     }
+
+    topoToJSON() {
+        console.log("TODO");
+    }
+
+    getRandomInt(max) {
+        return Math.floor(Math.random() * max);
+    }
   }

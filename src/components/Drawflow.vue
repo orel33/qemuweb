@@ -12,12 +12,12 @@
           <div id="dropdownmenu" class="dropdown-content">
             <a href="#" @click="uploadJSON">
               Load
-              <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON" style="width:0px;width:0px">
+              <input type="file" id="import-json-input" accept="application/json" @change="importJSON" style="width:0px;width:0px">
             </a>
             <a href="#" @click="exportEditor(); exportJSON(dialogData)">Save</a>
-            <a href="#" @click="uploadJSON">
+            <a href="#" @click="uploadTopo()">
               Import
-              <input type="file" id="import-input" name="import" accept="application/json" @change="importJSON" style="width:0px;width:0px">
+              <input type="file" id="import-topo-input" @change="importTopo" style="width:0px;width:0px">
             </a>
             <a href="#" @click="exportEditorTopo(); exportTopo(topoData)">Export</a>
             <a href="#" @click="displaySettings">Settings</a>
@@ -115,11 +115,11 @@ export default {
       this.systemIO.saveFile(JSON.stringify(data), "export.json", "json");
     },
     uploadJSON() {
-      var input = document.getElementById("import-input");
+      var input = document.getElementById("import-json-input");
       input.click();
     },
     importJSON() {
-      var input = document.getElementById("import-input");
+      var input = document.getElementById("import-json-input");
       var importEditor = this.importEditor;
 
       if (input.files.length == 0) {
@@ -134,6 +134,82 @@ export default {
     exportTopo(data) {
       console.log("Exporting data = \n", data);
       this.systemIO.saveFile(data, "export.topo", "topo");
+    },
+    uploadTopo() {
+      var input = document.getElementById("import-topo-input");
+      input.click();
+    },
+    getRandomInt(max) {
+      return Math.floor(Math.random() * max);
+    },
+    importTopo() {
+      var input = document.getElementById("import-topo-input");
+      var importEditor = this.importEditor;
+
+      if (input.files.length == 0) {
+        return;
+      }
+      const comp = this;
+      this.systemIO.readFile(input.files[0], function(content) {
+        var lines = content.split('\n');
+        var data = { "drawflow": { "Home": { "data": {}}}};
+        var currId = 1;
+        for (const line of lines) {
+          var firstChar = line[line.search(/\S/)];
+          if (firstChar == '#') {
+            continue;
+          }
+          var words = line.split(' ');
+          if (words[0] == "SWITCH") {
+            console.log("Switch !")
+            data[currId] = {"id": currId, 
+                            "name": "Switch", 
+                            "data": {"name": words[1], "portsCount": 1},
+                            "class": "Switch",
+                            "html": "Switch",
+                            "typenode": "vue",
+                            "inputs": {"input_1": {"connections": []}},
+                            "outputs": {},
+                            "pos_x": comp.getRandomInt(1500),
+                            "pos_y": comp.getRandomInt(1500)}
+            currId++;
+          }
+          if (words[0] == "HOST") {
+            console.log("Host !")
+            data[currId] = {"id": currId, 
+                            "name": "Host", 
+                            "data": {"name": words[2], "interfacesCount": words.length - 3, "system": words[1]},
+                            "class": "Host",
+                            "html": "Host",
+                            "typenode": "vue",
+                            "inputs": {},
+                            "outputs": {},
+                            "pos_x": comp.getRandomInt(1500),
+                            "pos_y": comp.getRandomInt(1500)}
+            for (let i = 3; i < words.length; i++) {
+              var switchName = words[i].split(':')[0];
+              var portNumber = Number(words[i].split(':')[1]) + 1;
+              var coSwitch = null;
+              for (let key of Object.keys(data)) {
+                var node = data[key];
+                if (node.class == "Switch") {
+                  if (switchName == node.data.name) {
+                    coSwitch = node;
+                    break;
+                  }
+                }
+              }
+              data[currId]["outputs"]["output_" + (i-2)] = {"connections": {0: {"node": coSwitch.id, "output": "input_" + portNumber}}};
+              data[coSwitch.id]["inputs"]["input_" + data[coSwitch.id].data.portsCount] = {"connections": {0: {"node": currId, "input": "output_" + (i-2)}}};
+              data[coSwitch.id].data.portsCount++;
+            }
+            currId++;
+          }
+        }
+        console.log(data);
+        importEditor(data);
+        input.value = null;
+      });
     }
   },
   mounted() {
@@ -224,10 +300,6 @@ export default {
         }
       }
       topoData.value = result;
-    }
-
-    function importTopo() {
-      
     }
 
     const drag = (ev) => {
