@@ -135,6 +135,7 @@ export default defineComponent({
         showPrompt() {
             console.log("showing prompt");
             var term = document.getElementById("term-" + this.id);
+            term.querySelector("span.term-name").innerHTML = this.name;
             term.style.display = term.style.display == 'none' ? 'block' : 'none';
         }
     },
