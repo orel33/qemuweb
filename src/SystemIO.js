@@ -36,7 +36,6 @@ export class SystemIO {
 
             // SWITCHES
             if (words[0] == "SWITCH") {
-                console.log("Switch !")
                 data[currId] = {"id": currId, 
                                 "name": "Switch", 
                                 "data": {"name": words[1], "portsCount": 1},
@@ -52,7 +51,6 @@ export class SystemIO {
 
             // HOSTS
             if (words[0] == "HOST") {
-                console.log("Host !")
                 data[currId] = {"id": currId, 
                                 "name": "Host", 
                                 "data": {"name": words[2], "interfacesCount": words.length - 3, "system": words[1]},
@@ -85,7 +83,6 @@ export class SystemIO {
                 currId++;
             }
         }
-        this.saveFile(JSON.stringify(fullData), "test.json", "json");
         return fullData;
     }
 
