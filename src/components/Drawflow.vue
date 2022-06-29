@@ -150,64 +150,9 @@ export default {
         return;
       }
       const comp = this;
+      const io = this.systemIO;
       this.systemIO.readFile(input.files[0], function(content) {
-        var lines = content.split('\n');
-        var fullData = { "drawflow": { "Home": { "data": {}}}};
-        var data = fullData.drawflow.Home.data;
-        var currId = 1;
-        for (const line of lines) {
-          var firstChar = line[line.search(/\S/)];
-          if (firstChar == '#') {
-            continue;
-          }
-          var words = line.split(' ');
-          if (words[0] == "SWITCH") {
-            console.log("Switch !")
-            data[currId] = {"id": currId, 
-                            "name": "Switch", 
-                            "data": {"name": words[1], "portsCount": 1},
-                            "class": "Switch",
-                            "html": "Switch",
-                            "typenode": "vue",
-                            "inputs": {"input_1": {"connections": []}},
-                            "outputs": {},
-                            "pos_x": comp.getRandomInt(900),
-                            "pos_y": comp.getRandomInt(600)}
-            currId++;
-          }
-          if (words[0] == "HOST") {
-            console.log("Host !")
-            data[currId] = {"id": currId, 
-                            "name": "Host", 
-                            "data": {"name": words[2], "interfacesCount": words.length - 3, "system": words[1]},
-                            "class": "Host",
-                            "html": "Host",
-                            "typenode": "vue",
-                            "inputs": {},
-                            "outputs": {},
-                            "pos_x": comp.getRandomInt(900),
-                            "pos_y": comp.getRandomInt(600)}
-            for (let i = 3; i < words.length; i++) {
-              var switchName = words[i].split(':')[0];
-              var portNumber = Number(words[i].split(':')[1]) + 1;
-              var coSwitch = null;
-              for (let key of Object.keys(data)) {
-                var node = data[key];
-                if (node.class == "Switch") {
-                  if (switchName == node.data.name) {
-                    coSwitch = node;
-                    break;
-                  }
-                }
-              }
-              data[currId]["outputs"]["output_" + (i-2)] = {"connections": {0: {"node": coSwitch.id, "output": "input_" + portNumber}}};
-              data[coSwitch.id]["inputs"]["input_" + data[coSwitch.id].data.portsCount] = {"connections": {0: {"node": currId, "input": "output_" + (i-2)}}};
-              data[coSwitch.id].data.portsCount++;
-            }
-            currId++;
-          }
-        }
-        console.log(fullData);
+        var fullData = io.topoToJSON(content);
         importEditor(fullData);
         input.value = null;
       });
