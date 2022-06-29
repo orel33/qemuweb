@@ -61,9 +61,14 @@ export class SystemIO {
                                 "outputs": {},
                                 "pos_x": this.getRandomInt(900),
                                 "pos_y": this.getRandomInt(600)}
+
+                // CONNECTIONS
+                var portNumber;
+                
                 for (let i = 3; i < words.length; i++) {
                     var switchName = words[i].split(':')[0];
-                    var portNumber = Number(words[i].split(':')[1]) + 1;
+                    portNumber = Number(words[i].split(':')[1]) + 1;
+                    portNumber = Number.isNaN(portNumber) ? data[coSwitch.id].data.portsCount : portNumber;
                     var coSwitch = null;
                     for (let key of Object.keys(data)) {
                         var node = data[key];
@@ -74,10 +79,14 @@ export class SystemIO {
                             }
                         }
                     }
+                    for (let j = 1; j < portNumber; j++) {
+                        if ( !(("input_" + j) in data[coSwitch.id]["inputs"]) ) {
+                            data[coSwitch.id]["inputs"]["input_" + j] = {"connections": []};
+                        }
+                    }
 
-                    // CONNECTIONS
-                    data[currId]["outputs"]["output_" + (i-2)] = {"connections": [{"node": coSwitch.id, "output": "input_" + data[coSwitch.id].data.portsCount}]};
-                    data[coSwitch.id]["inputs"]["input_" + data[coSwitch.id].data.portsCount] = {"connections": [{"node": currId, "input": "output_" + (i-2)}]};
+                    data[currId]["outputs"]["output_" + (i-2)] = {"connections": [{"node": coSwitch.id, "output": "input_" + portNumber}]};
+                    data[coSwitch.id]["inputs"]["input_" + portNumber] = {"connections": [{"node": currId, "input": "output_" + (i-2)}]};
                     data[coSwitch.id].data.portsCount++;
                 }
                 currId++;
