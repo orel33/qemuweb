@@ -152,7 +152,8 @@ export default {
       const comp = this;
       this.systemIO.readFile(input.files[0], function(content) {
         var lines = content.split('\n');
-        var data = { "drawflow": { "Home": { "data": {}}}};
+        var fullData = { "drawflow": { "Home": { "data": {}}}};
+        var data = fullData.drawflow.Home.data;
         var currId = 1;
         for (const line of lines) {
           var firstChar = line[line.search(/\S/)];
@@ -170,8 +171,8 @@ export default {
                             "typenode": "vue",
                             "inputs": {"input_1": {"connections": []}},
                             "outputs": {},
-                            "pos_x": comp.getRandomInt(1500),
-                            "pos_y": comp.getRandomInt(1500)}
+                            "pos_x": comp.getRandomInt(900),
+                            "pos_y": comp.getRandomInt(600)}
             currId++;
           }
           if (words[0] == "HOST") {
@@ -184,8 +185,8 @@ export default {
                             "typenode": "vue",
                             "inputs": {},
                             "outputs": {},
-                            "pos_x": comp.getRandomInt(1500),
-                            "pos_y": comp.getRandomInt(1500)}
+                            "pos_x": comp.getRandomInt(900),
+                            "pos_y": comp.getRandomInt(600)}
             for (let i = 3; i < words.length; i++) {
               var switchName = words[i].split(':')[0];
               var portNumber = Number(words[i].split(':')[1]) + 1;
@@ -206,8 +207,8 @@ export default {
             currId++;
           }
         }
-        console.log(data);
-        importEditor(data);
+        console.log(fullData);
+        importEditor(fullData);
         input.value = null;
       });
     }
