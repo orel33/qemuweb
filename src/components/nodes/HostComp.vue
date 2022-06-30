@@ -169,7 +169,8 @@ export default defineComponent({
                 }
             });
             this.number = this.getNumber()+1;
-            this.name = this.name + this.number;
+            const dataName = this.editor.getNodeFromId(this.id).data.name;
+            this.name = dataName == undefined ? this.name + this.number : dataName;
             this.updateNodeData();
             this.refreshInterfacesName();
 
