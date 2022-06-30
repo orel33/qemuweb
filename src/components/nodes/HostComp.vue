@@ -10,7 +10,7 @@
                     @close="showParamModal = false" 
                     :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :system="system" 
                     :neighboors="neighboors" :interfacesCount="interfacesCount" :interfacesSide="interfacesSide"
-                    :refreshInterfacesName="refreshInterfacesName">
+                    :refreshInterfacesDisplay="refreshInterfacesDisplay">
             <template #header>
                 <h2>Host settings</h2>
             </template>
@@ -44,7 +44,7 @@ export default defineComponent({
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId:portNumber>,
             interfacesCount: 1,
             interfacesSide: new MyMap(), // Map<interfaceNumber, side>
-            settings: new Settings(),
+            settings: null,
             terminalSetup: null,
             distributions: [
                 {
@@ -127,13 +127,14 @@ export default defineComponent({
         loadNodeData() {
             //
         },
-        refreshInterfacesName() {
+        refreshInterfacesDisplay() {
             var checked = this.settings.getOption("display-interfaces-name") == "true";
             var display = checked ? "block" : "none";
             var outputs = document.querySelectorAll(".drawflow-node.Host .outputs .output");
             for (let output of outputs) {
                 output.style.setProperty('--vardisplay', display);
             }
+            this.settings.changeReducedMode();
         },
         showPrompt() {
             console.log("showing prompt");
@@ -144,6 +145,7 @@ export default defineComponent({
     },
     mounted() {
         this.editor; // Need to load editor before call it in $nextTick, don't ask
+        this.settings = new Settings();
         this.$nextTick(() => {
             this.id = Number(this.$el.parentElement.parentElement.id.split('-')[1]);
             const comp = this;
@@ -168,11 +170,11 @@ export default defineComponent({
                     console.log("Host " + comp.id + " removed neighboor : ", comp.neighboors);
                 }
             });
-            this.number = this.getNumber()+1;
+            this.number = this.getNumber() + 1;
             const dataName = this.editor.getNodeFromId(this.id).data.name;
             this.name = dataName == undefined ? this.name + this.number : dataName;
             this.updateNodeData();
-            this.refreshInterfacesName();
+            this.refreshInterfacesDisplay();
 
             termSetup.createTerminal(this.id, this.name);
 

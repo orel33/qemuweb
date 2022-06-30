@@ -8,7 +8,7 @@ export default {
     name: String,
     portsCount: Number,
     portsSide: Object,
-    refreshPortsName: Function
+    refreshPortsDisplay: Function
   },
   computed: {
     editor: {
@@ -71,7 +71,7 @@ export default {
       this.editor.addNodeInput(this.switchId);
       this.localPortsCount++;
       this.portsSide.set(this.portsCount+1, 'left');
-      this.refreshPortsName();
+      this.refreshPortsDisplay();
     },
     sidesChanged() {
       this.refreshPortsSide();

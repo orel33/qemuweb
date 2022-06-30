@@ -20,7 +20,7 @@
               <input type="file" id="import-topo-input" @change="importTopo" style="width:0px;width:0px">
             </a>
             <a href="#" @click="exportEditorTopo(); exportTopo(topoData)">Export</a>
-            <a href="#" @click="displaySettings">Settings</a>
+            <a id="open-settings" href="#" @click="displaySettings">Settings</a>
             <a href="#" @click="displayAbout">About</a>
           </div>
         </div>
@@ -42,16 +42,21 @@
   </el-container>
   <el-dialog v-model="dialogSettings" title="Settings" width="50%">
     <div class="modal-section">
-      <span>Display interfaces name : </span>
+      <span> Display interfaces name : </span>
       <input id="interfaces-name-check" type="checkbox" checked @change="settings.changeDisplayInterfacesName">
     </div>
     <div class="modal-section">
-      <span>Display ports name : </span>
+      <span> Display ports name : </span>
       <input id="ports-name-check" type="checkbox" checked @change="settings.changeDisplayPortsName">
     </div>
     <div class="modal-section">
-      <span>Curved connections : </span>
+      <span> Curved connections : </span>
       <input id="curved-check" type="checkbox" checked @change="settings.changeCurvedConnections">
+    </div>
+    <div class="modal-section">
+      <span> Reduced mode : </span>
+      <input id="reduced-check" type="checkbox" @change="settings.changeReducedMode">
+      <img class="info-img" src="@/assets/info.png" title="Hide outputs/inputs circle">
     </div>
   </el-dialog>
   <el-dialog v-model="dialogAbout" title="About" width="50%">
@@ -185,9 +190,11 @@ export default {
 
     this.systemIO = new SystemIO();
     this.settings = new Settings();
+    this.settings.mountInDOM();
     this.settings.setOption('display-ports-name', true);
     this.settings.setOption('display-interfaces-name', true);
     this.settings.setOption('curved-connections', true);
+    this.settings.setOption('reduced-mode', true);
   },
   setup() {
     const listNodes = readonly([

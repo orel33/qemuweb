@@ -7,6 +7,13 @@ export class Settings {
         this.editor = getCurrentInstance().appContext.app._context.config.globalProperties.$df;
     }
 
+    mountInDOM() {
+        document.getElementsByClassName("el-overlay")[0].style.visibility = "hidden";
+        document.getElementById("open-settings").click();
+        setTimeout(() => {  document.getElementsByClassName("el-dialog__headerbtn")[0].click(); }, 50);
+        setTimeout(() => {  document.getElementsByClassName("el-overlay")[0].style.visibility = ""; }, 300);
+    }
+
     setOption(name, value) {
         this.container.setAttribute("data-" + name, value);
     }
@@ -32,6 +39,13 @@ export class Settings {
         var ports = document.querySelectorAll(".drawflow-node.Switch .inputs .input");
         for (const el of ports) {
             el.style.setProperty('--vardisplay', display);
+        }
+    }
+
+    updateNodeDisplay() {
+        var allNodes = this.editor.getNodesFromName('Host').concat(this.editor.getNodesFromName('Switch'));
+        for (const id in allNodes) {
+            this.editor.updateConnectionNodes("node-" + id);
         }
     }
 
@@ -91,35 +105,72 @@ export class Settings {
                 }
             }
         } else {
-            // Make lines straight
-            this.editor.curvature = 0
-            this.editor.reroute_curvature_start_end = 0
-            this.editor.reroute_curvature = 0
-            this.editor.createCurvature = function(start_pos_x, start_pos_y, end_pos_x, end_pos_y) {
-                var center_y = (end_pos_y - start_pos_y) / 2 + start_pos_y;
-                return (
-                    ' M ' +
-                    start_pos_x +
-                    ' ' +
-                    start_pos_y +
-                    ' L ' +
-                    start_pos_x +
-                    ' ' +
-                    center_y +
-                    ' L ' +
-                    end_pos_x +
-                    ' ' +
-                    center_y +
-                    ' L ' +
-                    end_pos_x +
-                    ' ' +
-                    end_pos_y
-                )
-            }
+          // Make lines straight
+          this.editor.curvature = 0
+          this.editor.reroute_curvature_start_end = 0
+          this.editor.reroute_curvature = 0
+          this.editor.createCurvature = function(start_pos_x, start_pos_y, end_pos_x, end_pos_y) {
+              var center_y = (end_pos_y - start_pos_y) / 2 + start_pos_y;
+              return (
+                  ' M ' +
+                  start_pos_x +
+                  ' ' +
+                  start_pos_y +
+                  ' L ' +
+                  start_pos_x +
+                  ' ' +
+                  center_y +
+                  ' L ' +
+                  end_pos_x +
+                  ' ' +
+                  center_y +
+                  ' L ' +
+                  end_pos_x +
+                  ' ' +
+                  end_pos_y
+              )
+          }
+      }
+      this.updateNodeDisplay();
+    }
+
+    changeReducedMode() {
+      var checked = document.getElementById("reduced-check").checked;
+      this.setOption("curved-connections", checked);
+
+      var outputs = document.querySelectorAll(".output");
+      var inputs = document.querySelectorAll(".input");
+      if (checked) {
+        for (let i = 0; i < outputs.length; i++) {
+          const output = outputs[i];
+          output.style.position = "absolute";
+          output.style.right = "40px";
+          output.style.top = "20px";
+          output.style.visibility = "hidden";
         }
-        var allNodes = this.editor.getNodesFromName('Host').concat(this.editor.getNodesFromName('Switch'));
-        for (const id in allNodes) {
-            this.editor.updateConnectionNodes("node-" + id);
+        for (let i = 0; i < inputs.length; i++) {
+          const input = inputs[i];
+          input.style.position = "absolute";
+          input.style.left = "53px";
+          input.style.top = "28px";
+          input.style.visibility = "hidden";
         }
+      } else {
+        for (let i = 0; i < outputs.length; i++) {
+          const output = outputs[i];
+          output.style.position = "";
+          output.style.right = "";
+          output.style.top = "";
+          output.style.visibility = "";
+        }
+        for (let i = 0; i < inputs.length; i++) {
+          const input = inputs[i];
+          input.style.position = "";
+          input.style.left = "";
+          input.style.top = "";
+          input.style.visibility = "";
+        }
+      }
+      this.updateNodeDisplay();
     }
 }

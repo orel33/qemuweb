@@ -8,7 +8,7 @@
         <Teleport to="body">
             <modal @updateHostName="updateName" @updatePortsCount="updatePorts" @close="showParamModal = false" 
                     :show="showParamModal" :switchId="id" :name="name" :portsCount="portsCount"
-                    :portsSide="portsSide" :refreshPortsName="refreshPortsName">
+                    :portsSide="portsSide" :refreshPortsDisplay="refreshPortsDisplay">
             <template #header>
                 <h2>Switch settings</h2>
             </template>
@@ -62,7 +62,7 @@ export default defineComponent({
         updateNodeData() {
             this.editor.updateNodeDataFromId(this.id, {"name": this.name, "portsCount": this.portsCount});
         },
-        refreshPortsName() {
+        refreshPortsDisplay() {
             // Display or not ports name according to the general setting
             var checked = this.settings.getOption("display-ports-name") == "true";
             var display = checked ? "block" : "none";
@@ -70,6 +70,7 @@ export default defineComponent({
             for (let input of inputs) {
                 input.style.setProperty('--vardisplay', display);
             }
+            this.settings.changeReducedMode();
         },
         showPrompt() {
             console.log("showing prompt");
@@ -85,7 +86,7 @@ export default defineComponent({
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();
-            this.refreshPortsName();
+            this.refreshPortsDisplay();
 
             termSetup.createTerminal(this.id, this.name);
 

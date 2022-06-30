@@ -11,7 +11,7 @@ export default {
     neighboors: Map,
     interfacesCount: Number,
     interfacesSide: Object,
-    refreshInterfacesName: Function
+    refreshInterfacesDisplay: Function
   },
   computed: {
     localSystem: {
@@ -86,7 +86,7 @@ export default {
     addInterface() {
       this.editor.addNodeOutput(this.hostId);
       this.localInterfacesCount++;
-      this.refreshInterfacesName();
+      this.refreshInterfacesDisplay();
       this.interfacesSide.set(this.interfacesCount+1, 'right');
     },
     switchesCount() {
