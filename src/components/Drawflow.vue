@@ -55,6 +55,16 @@
     </div>
   </el-dialog>
   <el-dialog v-model="dialogAbout" title="About" width="50%">
+   <div class="modal-section">
+      <div class="about-line">
+        <img src="@/assets/gitlab.png">
+        <a class="about-link" href="https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb">Source Code</a>
+      </div>
+      <div id="ub-link">
+        <img src="@/assets/UB.png">
+        <a class="about-link" href="https://www.u-bordeaux.fr/">University of Bordeaux</a>
+      </div>
+    </div>
   </el-dialog>
   <div id="settings" style="width:0;height:0"></div>
 </template>

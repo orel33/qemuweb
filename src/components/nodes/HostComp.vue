@@ -1,8 +1,8 @@
 <template>
     <div>
-        <img class="cog" src="../../assets/cog.png" @click="showParamModal = true"/>
-        <img class="run-prompt" src="../../assets/run-icon.jpg" @click="showPrompt"/>
-        <img class="computer" src="../../assets/computer.png" @dblclick="showParamModal = true"/>
+        <img class="cog" src="@/assets/cog.png" @click="showParamModal = true"/>
+        <img class="run-prompt" src="@/assets/run-icon.jpg" @click="showPrompt"/>
+        <img class="computer" src="@/assets/computer.png" @dblclick="showParamModal = true"/>
         <span class="host-name">{{name}}</span>
 
         <Teleport to="body">
@@ -50,42 +50,42 @@ export default defineComponent({
                 {
                     value: 'debian10',
                     label: 'Debian 10',
-                    img: require("../../assets/debian.png")
+                    img: require("@/assets/debian.png")
                 },
                 {
                     value: 'debian10x',
                     label: 'Debian 10 X11',
-                    img: require("../../assets/debian.png")
+                    img: require("@/assets/debian.png")
                 },
                 {
                     value: 'debian9',
                     label: 'Debian 9',
-                    img: require("../../assets/debian.png")
+                    img: require("@/assets/debian.png")
                 },
                 {
                     value: 'tinycore',
                     label: 'Tinycore',
-                    img: require("../../assets/tinycore.png")
+                    img: require("@/assets/tinycore.png")
                 },
                 {
                     value: 'alpine',
                     label: 'Alpine',
-                    img: require("../../assets/alpine.png")
+                    img: require("@/assets/alpine.png")
                 },
                 {
                     value: 'alpinex',
                     label: 'Alpine X11',
-                    img: require("../../assets/alpine.png")
+                    img: require("@/assets/alpine.png")
                 },
                 {
                     value: 'kali',
                     label: 'Kali',
-                    img: require("../../assets/kali.jpg")
+                    img: require("@/assets/kali.jpg")
                 },
                 {
                     value: 'windowsxp',
                     label: 'Windows XP',
-                    img: require("../../assets/windows.png")
+                    img: require("@/assets/windows.png")
                 }
             ],
             showParamModal: false

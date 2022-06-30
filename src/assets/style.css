@@ -157,6 +157,16 @@ div.stop-button {
     cursor: pointer;
 }
 
+.about-link {
+    font-weight: bold;
+    font-size: 19px;
+    margin-left: 20px;
+}
+
+.about-line { 
+    margin-bottom: 20px;
+}
+
 .el-dialog__close {
     width: 32px;
     height: 32px;
