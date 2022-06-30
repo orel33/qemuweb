@@ -239,8 +239,10 @@ export default {
         if (node.class == "Host") {
           result += "HOST " + node.data.system + " " + node.data.name;
           for (var i of Object.keys(jsonData[key].outputs)) {
-            var eth = jsonData[key].outputs[i].connections[0];
-            result +=  " " + editor.getNodeFromId(Number(eth.node)).data.name + ":" + (Number(eth.output.split('_')[1])-1);
+            if (jsonData[key].outputs[i].connections.length > 0) {
+              var eth = jsonData[key].outputs[i].connections[0];
+              result +=  " " + editor.getNodeFromId(Number(eth.node)).data.name + ":" + (Number(eth.output.split('_')[1])-1);
+            }
           }
           result += "\n";
         }

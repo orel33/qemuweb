@@ -124,6 +124,9 @@ export default defineComponent({
                                                         "system": this.system,
                                                         "neighboors": Object.fromEntries(this.neighboors)});
         },
+        loadNodeData() {
+            //
+        },
         refreshInterfacesName() {
             var checked = this.settings.getOption("display-interfaces-name") == "true";
             var display = checked ? "block" : "none";
