@@ -1,19 +1,19 @@
 # QemuWeb
 
-## Pré-requis
-- Node v14.17.6
-- npm v8.10.0 
+This project is an attempt to redesign, as a web application, the [QemuNet](https://github.com/orel33/qemunet) pedagogical virtual network emulator.
 
-## Installation
 
-```
-cd qemuweb
-npm install
-```
+## Credits
 
-## Pour lancer
+### The original Master 1 development team
 
-```
-npm run serve
-```
-Puis ouvrez le lien indiqué dans la console (par défaut http://localhost:8080) dans un navigateur.
+- Guillaume BIENFAIT
+
+Supervised by:
+
+- Aurelien ESNARD
+- Abdou GUERMOUCHE
+
+With technical support of :
+
+- Christophe DELMON
