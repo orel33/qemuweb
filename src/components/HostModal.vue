@@ -109,7 +109,7 @@ export default {
             output.style.setProperty('--vartop', 'auto');
             break;
           case 'right':
-            output.style.left = "0px";
+            output.style.left = "8px";
             output.style.top = "0px";
             output.style.setProperty('--varleft', 'auto');
             output.style.setProperty('--vartop', 'auto');

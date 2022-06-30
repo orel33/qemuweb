@@ -29,7 +29,7 @@
 }
 
 .drawflow .drawflow-node .output {
-    right: 4px;
+    right: -8px;
     --vardisplay: block;
 }
 
