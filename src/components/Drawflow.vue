@@ -2,7 +2,7 @@
   <el-container>
     <el-header class="header">
         <h3>QemuWeb</h3>
-        <div id="play-stop" class="play-button" @click="toggleEditorMode(); toggleMode()"></div>
+        <div id="play-stop" class="play-button" @click="toggleEditorMode(); toggleExecution()"></div>
         <div class="dropdown">
           <button @click="toggleDropDown" class="dropbtn">
             <span class="burger-slice"></span>
@@ -96,7 +96,6 @@ export default {
       serverAddress: "127.0.0.1:443",
       dialogSettings: false,
       dialogAbout: false,
-      terminalSetup: null,
       settings: null,
       systemIO: null
     }
@@ -105,7 +104,7 @@ export default {
     toggleDropDown() {
       document.getElementById("dropdownmenu").classList.toggle("show");
     },
-    toggleMode() {
+    toggleExecution() {
       var aside = document.querySelector("aside");
       var cogs = document.querySelectorAll(".cog");
       var runPrompts = document.querySelectorAll(".run-prompt");

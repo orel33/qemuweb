@@ -3,18 +3,32 @@ import io from "socket.io-client";
 import $ from 'jquery';
 import jquery_ui from '@/jquery-ui/jquery-ui.js';
 
-var termSetup = { 
+export class Terminal {
+    constructor() {
+        this.terminalUI = new TerminalUI();
+        this.address = "127.0.0.1:443";
+        this.connected = false;
+    }
+
     connectToSocket(serverAddr) {
         return new Promise(res => {
             const socket = io(serverAddr);
             res(socket);
         });
-    },
-    startTerminal(container, socket) {
-        const terminal = new TerminalUI(socket);
-        terminal.attachTo(container);
-        //terminal.startListening();
-    },
+    }
+
+    startTerminal(socket) {
+        this.terminalUI.startListening(socket);
+    }
+
+    startConnection() {
+        console.log("connect on " + this.address)
+        this.connectToSocket(this.address).then(socket => {
+            this.startTerminal(socket);
+            this.connected = true;
+        });
+    }
+
     createTerminal(nodeId, name) {
         var frame = document.createElement("div");
         var container = document.createElement("div");
@@ -42,14 +56,10 @@ var termSetup = {
             frame.style.display = 'none';
         });
 
-        const ADDRESS = "127.0.0.1:443"
-        console.log("connect on " + ADDRESS)
-        /*this.connectToSocket(ADDRESS).then(socket => {
-            this.startTerminal(container, socket);
-        });*/
-        this.startTerminal(container, null);
+        this.terminalUI.attachTo(container);
+
         frame.style.display = 'none';
     }
 }
 
-export default termSetup
+export default Terminal

@@ -26,7 +26,7 @@ import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick
 import Modal from '../HostModal.vue';
 import $ from 'jquery';
 import jquery_ui from '@/jquery-ui/jquery-ui.js';
-import termSetup from '@/js/TerminalSetup';
+import { Terminal } from '@/js/Terminal';
 import { MyMap } from "@/js/MyMap"; 
 import { Settings } from '@/js/Settings';
 
@@ -44,7 +44,7 @@ export default defineComponent({
             interfacesCount: 1,
             interfacesSide: new MyMap(), // Map<interfaceNumber, side>
             settings: new Settings(),
-            terminalSetup: null,
+            terminal: new Terminal(),
             distributions: [
                 {
                     value: 'debian10',
@@ -141,6 +141,10 @@ export default defineComponent({
             var term = document.getElementById("term-" + this.id);
             term.querySelector("span.term-name").innerHTML = this.name;
             term.style.display = term.style.display == 'none' ? 'block' : 'none';
+
+            if (!this.terminal.connected) {
+                this.terminal.startConnection();
+            }
         }
     },
     mounted() {
@@ -176,7 +180,7 @@ export default defineComponent({
             this.updateNodeData();
             this.refreshInterfacesDisplay();
 
-            termSetup.createTerminal(this.id, this.name);
+            this.terminal.createTerminal(this.id, this.name);
 
             this.interfacesSide.set(1, 'right');
         });

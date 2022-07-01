@@ -22,7 +22,7 @@ import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick
 import Modal from '../SwitchModal.vue';
 import { MyMap } from '@/js/MyMap';
 import { Settings } from '@/js/Settings';
-import termSetup from '@/js/TerminalSetup';
+import { Terminal } from '@/js/Terminal';
 
 export default defineComponent({
     components: {
@@ -37,7 +37,7 @@ export default defineComponent({
             portsSide: new MyMap(),
             showParamModal: false,
             settings: null,
-            terminalSetup: null
+            terminal: new Terminal(),
         }
     },
     computed: {
@@ -73,7 +73,6 @@ export default defineComponent({
             this.settings.changeReducedMode();
         },
         showPrompt() {
-            console.log("showing prompt");
             var term = document.getElementById("term-" + this.id);
             term.style.display = term.style.display == 'none' ? 'block' : 'none';
         }
@@ -88,7 +87,7 @@ export default defineComponent({
             this.updateNodeData();
             this.refreshPortsDisplay();
 
-            termSetup.createTerminal(this.id, this.name);
+            this.terminal.createTerminal(this.id, this.name);
 
             this.portsSide.set(1, 'left');
             this.portsSide.set(2, 'left');
