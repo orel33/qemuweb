@@ -144,6 +144,7 @@ export class Settings {
 
       var outputs = document.querySelectorAll(".output");
       var inputs = document.querySelectorAll(".input");
+      var cables = document.querySelectorAll(".cable");
       if (checked) {
         for (let i = 0; i < outputs.length; i++) {
           const output = outputs[i];
@@ -161,6 +162,9 @@ export class Settings {
           input.style.top = "28px";
           input.style.visibility = "hidden";
         }
+        for (let i = 0; i < cables.length; i++) {
+          cables[i].style.display = "";
+        }
       } else {
         for (let i = 0; i < outputs.length; i++) {
           const output = outputs[i];
@@ -175,6 +179,9 @@ export class Settings {
           input.style.left = "";
           input.style.top = "";
           input.style.visibility = "";
+        }
+        for (let i = 0; i < cables.length; i++) {
+          cables[i].style.display = "none";
         }
       }
       this.updateNodeDisplay();

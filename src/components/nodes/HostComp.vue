@@ -2,6 +2,7 @@
     <div>
         <img class="cog" src="@/assets/cog.png" @click="showParamModal = true"/>
         <img class="run-prompt" src="@/assets/run-icon.jpg" @click="showPrompt"/>
+        <img class="cable" src="@/assets/cable.png" @click="pullCable" style="display:none"/>
         <img class="computer" src="@/assets/computer.png" @dblclick="showParamModal = true"/>
         <span class="host-name">{{name}}</span>
 
@@ -41,7 +42,7 @@ export default defineComponent({
             neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId:portNumber>,
             interfacesCount: 1,
             interfacesSide: new MyMap(), // Map<interfaceNumber, side>
-            settings: null,
+            settings: new Settings(),
             terminalSetup: null,
             distributions: [
                 {
@@ -92,6 +93,11 @@ export default defineComponent({
         editor: {
             get() {
                 return getCurrentInstance().appContext.app._context.config.globalProperties.$df;
+            }
+        },
+        isReducedMode: {
+            get() {
+                return this.settings.getOptionBool('reduced-mode');
             }
         }
     },

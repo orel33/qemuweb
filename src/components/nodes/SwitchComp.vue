@@ -2,6 +2,7 @@
     <div class="switch-component">
         <img class="cog" src="@/assets/cog.png" @click="showParamModal = true"/>
         <img class="run-prompt" src="@/assets/run-icon.jpg" @click="showPrompt"/>
+        <img class="cable" src="@/assets/cable.png" @click="pullCable" style="display:none"/>
         <img class="switch" src="@/assets/switch.png" alt="Un switch" @dblclick="showParamModal = true"/>
         <span class="switch-name">{{name}}</span>
 
@@ -44,6 +45,11 @@ export default defineComponent({
         editor: {
             get() {
                 return getCurrentInstance().appContext.app._context.config.globalProperties.$df;
+            }
+        },
+        isReducedMode: {
+            get() {
+                return this.settings.getOptionBool('reduced-mode');
             }
         }
     },
