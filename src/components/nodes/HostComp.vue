@@ -2,7 +2,8 @@
     <div>
         <img class="cog" src="@/assets/cog.png" @click="showParamModal = true"/>
         <img class="run-prompt" src="@/assets/run-icon.jpg" @click="showPrompt"/>
-        <img class="cable" src="@/assets/cable.png" @click="pullCable" style="display:none"/>
+        <!--<img class="cable" src="@/assets/cable.png" @click="pullCable" style="display:none"/>-->
+
         <img class="computer" src="@/assets/computer.png" @dblclick="showParamModal = true"/>
         <span class="host-name">{{name}}</span>
 
@@ -122,13 +123,10 @@ export default defineComponent({
             this.updateNodeData();
         },
         updateNodeData() {
-            this.editor.updateNodeDataFromId(this.id, {"name": this.name, 
+            this.editor.updateNodeDataFromId(this.id, { "name": this.name, 
                                                         "interfacesCount": this.interfacesCount,
                                                         "system": this.system,
                                                         "neighboors": Object.fromEntries(this.neighboors)});
-        },
-        loadNodeData() {
-            //
         },
         refreshInterfacesDisplay() {
             var checked = this.settings.getOption("display-interfaces-name") == "true";
@@ -140,7 +138,6 @@ export default defineComponent({
             this.settings.changeReducedMode();
         },
         showPrompt() {
-            console.log("showing prompt");
             var term = document.getElementById("term-" + this.id);
             term.querySelector("span.term-name").innerHTML = this.name;
             term.style.display = term.style.display == 'none' ? 'block' : 'none';

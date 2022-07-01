@@ -140,7 +140,7 @@ export class Settings {
 
     changeReducedMode() {
       var checked = document.getElementById("reduced-check").checked;
-      this.setOption("curved-connections", checked);
+      this.setOption("reduced-mode", checked);
 
       var outputs = document.querySelectorAll(".output");
       var inputs = document.querySelectorAll(".input");
