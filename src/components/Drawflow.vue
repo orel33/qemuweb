@@ -83,8 +83,8 @@ import styleJquery from '../jquery-ui/jquery-ui.min.css';
 import $ from 'jquery';
 import jquery_ui from '../jquery-ui/jquery-ui.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
-import { Settings } from '@/Settings';
-import { SystemIO } from '@/SystemIO';
+import { Settings } from '@/js/Settings';
+import { SystemIO } from '@/js/SystemIO';
 import Host from './nodes/HostComp.vue';
 import Switch from './nodes/SwitchComp.vue';
 

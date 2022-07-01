@@ -1,6 +1,6 @@
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
-import { Settings } from '@/Settings';
+import { Settings } from '@/js/Settings';
 
 export default {
   data() {

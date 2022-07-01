@@ -26,9 +26,9 @@ import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick
 import Modal from '../HostModal.vue';
 import $ from 'jquery';
 import jquery_ui from '@/jquery-ui/jquery-ui.js';
-import termSetup from '@/TerminalSetup';
-import { MyMap } from "@/MyMap"; 
-import { Settings } from '@/Settings';
+import termSetup from '@/js/TerminalSetup';
+import { MyMap } from "@/js/MyMap"; 
+import { Settings } from '@/js/Settings';
 
 export default defineComponent({
     components: {

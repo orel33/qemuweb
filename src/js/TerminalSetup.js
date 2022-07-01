@@ -1,4 +1,4 @@
-import { TerminalUI } from "@/TerminalUI";
+import { TerminalUI } from "@/js/TerminalUI";
 import io from "socket.io-client";
 import $ from 'jquery';
 import jquery_ui from '@/jquery-ui/jquery-ui.js';

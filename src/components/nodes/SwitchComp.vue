@@ -20,9 +20,9 @@
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue'
 import Modal from '../SwitchModal.vue';
-import { MyMap } from '@/MyMap';
-import { Settings } from '@/Settings';
-import termSetup from '@/TerminalSetup';
+import { MyMap } from '@/js/MyMap';
+import { Settings } from '@/js/Settings';
+import termSetup from '@/js/TerminalSetup';
 
 export default defineComponent({
     components: {
