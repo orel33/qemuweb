@@ -27,9 +27,6 @@ import jquery_ui from '@/jquery-ui/jquery-ui.js';
 import termSetup from '@/TerminalSetup';
 import { MyMap } from "@/MyMap"; 
 import { Settings } from '@/Settings';
-//
-import { TerminalUI } from '@/TerminalUI';
-//
 
 export default defineComponent({
     components: {

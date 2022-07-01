@@ -22,6 +22,10 @@ export class Settings {
         return this.container.getAttribute("data-" + name);
     }
 
+    getOptionBool(name) {
+        return this.container.getAttribute("data-" + name) == "true";
+    }
+
     changeDisplayInterfacesName() {
         var checked = document.getElementById("interfaces-name-check").checked;
         var display = checked ? "block" : "none";
@@ -145,6 +149,7 @@ export class Settings {
           const output = outputs[i];
           output.style.position = "absolute";
           output.style.right = "40px";
+          output.style.left = "";
           output.style.top = "20px";
           output.style.visibility = "hidden";
         }
@@ -152,6 +157,7 @@ export class Settings {
           const input = inputs[i];
           input.style.position = "absolute";
           input.style.left = "53px";
+          input.style.right = "";
           input.style.top = "28px";
           input.style.visibility = "hidden";
         }

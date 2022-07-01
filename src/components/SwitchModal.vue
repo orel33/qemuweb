@@ -1,7 +1,13 @@
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
+import { Settings } from '@/Settings';
 
 export default {
+  data() {
+    return {
+      settings: new Settings()
+    }
+  },
   props: {
     show: Boolean,
     switchId: Number,
@@ -30,6 +36,11 @@ export default {
       },
       set(value) {
         this.$emit('updatePortsCount', value);
+      }
+    },
+    isReducedMode: {
+      get() {
+        return this.settings.getOptionBool('reduced-mode');
       }
     }
   },
@@ -78,6 +89,9 @@ export default {
       this.editor.updateConnectionNodes("node-" + this.switchId);
     },
     refreshPortsSide() {
+      if (this.isReducedMode) {
+        return;
+      }
       for (let i = 1; i <= this.portsSide.size; i++) {
         var side = document.querySelectorAll(".sides")[i-1].value;
         var node = document.querySelector(".drawflow-node.Switch.selected");
@@ -85,28 +99,18 @@ export default {
         switch (side) {
           case 'left':
             input.style.left = "-21px";
+            input.style.right = "";
             input.style.top = "0px";
             input.style.setProperty('--varleft', 'auto');
             input.style.setProperty('--vartop', 'auto');
             break;
           case 'right':
             input.style.left = "75px";
+            input.style.right = "";
             input.style.top = "0px";
             input.style.setProperty('--varleft', '23px');
             input.style.setProperty('--vartop', 'auto');
             break;
-          /*case 'up':
-            input.style.left = "26px";
-            input.style.top = "-63px";
-            input.style.setProperty('--varleft', '-6px');
-            input.style.setProperty('--vartop', '-24px');
-            break;
-          case 'down':
-            input.style.left = "26px";
-            input.style.top = "74px";
-            input.style.setProperty('--varleft', '-6px');
-            input.style.setProperty('--vartop', '17px');
-            break;*/
         }
         this.portsSide.set(i, side);
       }

@@ -1,7 +1,13 @@
 <script>
 import { defineComponent, onMounted, getCurrentInstance, readonly, ref, nextTick } from 'vue';
+import { Settings } from '@/Settings';
 
 export default {
+  data() {
+    return {
+      settings: new Settings()
+    }
+  },
   props: {
     show: Boolean,
     hostId: Number,
@@ -50,6 +56,11 @@ export default {
       get() {
         return getCurrentInstance().appContext.app._context.config.globalProperties.$df;
       }
+    },
+    isReducedMode: {
+      get() {
+        return this.settings.getOptionBool('reduced-mode');
+      }
     }
   },
   methods: {
@@ -94,9 +105,12 @@ export default {
     },
     sidesChanged() {
       this.refreshInterfacesSide();
-      this.editor.updateConnectionNodes("node-" + this.switchId);
+      this.editor.updateConnectionNodes("node-" + this.hostId);
     },
     refreshInterfacesSide() {
+      if (this.isReducedMode) {
+        return;
+      }
       for (let i = 1; i <= this.interfacesSide.size; i++) {
         var side = document.querySelectorAll(".sides")[i-1].value;
         var node = document.querySelector(".drawflow-node.Host.selected");
@@ -104,18 +118,21 @@ export default {
         switch (side) {
           case 'left':
             output.style.left = "-89px";
+            output.style.right = "";
             output.style.top = "0px";
             output.style.setProperty('--varleft', '-43px');
             output.style.setProperty('--vartop', 'auto');
             break;
           case 'right':
             output.style.left = "8px";
+            output.style.right = "";
             output.style.top = "0px";
             output.style.setProperty('--varleft', 'auto');
             output.style.setProperty('--vartop', 'auto');
             break;
         }
         this.interfacesSide.set(i, side);
+        this.editor.updateConnectionNodes('node-' + this.id);
       }
     },
     loadPortsSides() {

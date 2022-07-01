@@ -194,7 +194,7 @@ export default {
     this.settings.setOption('display-ports-name', true);
     this.settings.setOption('display-interfaces-name', true);
     this.settings.setOption('curved-connections', true);
-    this.settings.setOption('reduced-mode', true);
+    this.settings.setOption('reduced-mode', false);
   },
   setup() {
     const listNodes = readonly([
