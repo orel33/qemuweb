@@ -59,7 +59,7 @@ export class TerminalUI {
     const self = this;
     container.parentElement.addEventListener('resize', function () {
       self.fitAddon.fit();
-      //self.socket.emit('resize', { col: self.terminal.cols, row: self.terminal.rows } );
+      self.socket.emit('resize', { col: self.xterm.cols, row: self.xterm.rows } );
       console.log("terminal " + this.id + " fitted");
     });
 

@@ -93,7 +93,6 @@ export default {
   name: 'DrawFlow',
   data() {
     return {
-      serverAddress: "127.0.0.1:443",
       dialogSettings: false,
       dialogAbout: false,
       settings: null,

@@ -6,7 +6,7 @@ import jquery_ui from '@/jquery-ui/jquery-ui.js';
 export class Terminal {
     constructor() {
         this.terminalUI = new TerminalUI();
-        this.address = "127.0.0.1:443";
+        this.address = (location.protocol == "https:" ? "wss://" : "ws://") + location.host;
         this.connected = false;
     }
 
@@ -17,14 +17,14 @@ export class Terminal {
         });
     }
 
-    startTerminal(socket) {
+    startListening(socket) {
         this.terminalUI.startListening(socket);
     }
 
     startConnection() {
         console.log("connect on " + this.address)
         this.connectToSocket(this.address).then(socket => {
-            this.startTerminal(socket);
+            this.startListening(socket);
             this.connected = true;
         });
     }
