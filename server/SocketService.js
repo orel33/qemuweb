@@ -3,10 +3,9 @@ const socketIO = require("socket.io");
 const Client = require("./Client");
 
 class SocketService {
-  constructor() {
-    //this.sockets = {};
+  constructor(openIdEnabled) {
     this.clients = {}; // Map<UserID, Client>
-    //this.ptys = {};
+    this.openid = openIdEnabled;
   }
 
   attachServer(server, session) {
@@ -21,7 +20,13 @@ class SocketService {
     // "connection" event happens when any client connects to this io instance.
     io.on("connection", socket => {
       // Get cookies from the session
-      var userid = socket.request.session.passport.user.id;
+      console.log(socket.request.session);
+      var userid;
+      if (this.openid) {
+        userid = socket.request.session.passport.user.id;
+      } else {
+        userid = socket.request.session.userid;
+      }
 
       console.log("Client with id " + userid + " connect to socket ", socket.id);
 
