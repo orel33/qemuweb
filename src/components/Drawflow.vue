@@ -97,7 +97,8 @@ export default {
       dialogSettings: false,
       dialogAbout: false,
       settings: null,
-      systemIO: null
+      systemIO: null,
+      execMode: false
     }
   },
   methods: {
@@ -117,6 +118,10 @@ export default {
         cogs[i].style.display = cogs[i].style.display == 'none' ? 'initial' : 'none';
         runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
         prompts[i].style.display = 'none';
+      }
+      this.execMode = !this.execMode;
+      if (this.execMode) {
+        this.sendTopoToServer();
       }
     },
     displaySettings() {
@@ -184,6 +189,20 @@ export default {
       })
       .catch(function(error) {
         console.log('There was a problem retrieving the list of available systems: ' + error.message);
+      });
+    },
+    sendTopoToServer() {
+      this.exportEditorTopo();
+      fetch("/index/runtopo", { method: "POST", body: this.topoData, headers: { 'Content-Type': 'text/plain' } })
+      .then(function(response) {
+        if (response.ok) {
+          console.log("Topology successfully sent to server")
+        } else {
+          alert('Bad response of the server sending the topology');
+        }
+      })
+      .catch(function(error) {
+        alert('There was a problem sendind the topology: ' + error.message);
       });
     }
   },

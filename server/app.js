@@ -12,10 +12,12 @@ const { program } = require('commander');
 const { Option } = require('commander');
 
 var expressSession = require('express-session');
+var bodyParser = require('body-parser')
 var passport = require('passport')
 var OneLoginStrategy = require('passport-openidconnect').Strategy
 
 const baseUri = `${ process.env.OIDC_BASE_URI }`
+var socketService;
 
 program
   .addOption(new Option('-s, --secure', 'enable secure mode for http'))
@@ -46,7 +48,8 @@ const session = expressSession({
 app.use(session);
 
 app.use(function (req, res, next) {
-  console.log((new Date().getTime()) + " -- " + req.method + " " + req.url);
+  socketService.registerClient(req.session);
+  console.log((new Date()) + " -- " + req.method + " " + req.url);
   next(); // let's continue with next middleware...
 });
 
@@ -64,12 +67,11 @@ if (options.openid) {
     passReqToCallback: true
   },
   function(req, issuer, userId, profile, accessToken, refreshToken, params, cb) {
-
-    console.log('issuer:', issuer);
+    /*console.log('issuer:', issuer);
     console.log('userId:', userId);
     console.log('accessToken:', accessToken);
     console.log('refreshToken:', refreshToken);
-    console.log('params:', params);
+    console.log('params:', params);*/
 
     req.session.accessToken = accessToken;
     req.session.idToken = params['id_token'];
@@ -122,6 +124,14 @@ app.use('/index/images', function (req, res, next) {
   res.send(fs.readFileSync(path.resolve('./images.json'), 'utf8'));
 });
 
+var textParser = bodyParser.text();
+
+app.post('/index/runtopo', textParser, function (req, res, next) {
+  console.log("POST with body = ", req.body);
+  res.sendStatus(200);
+  socketService.handlePost(req);
+});
+
 app.use('/index', express.static(path.join(__dirname, 'dist')));
 
 app.use('/', function (req, res, next) {
@@ -158,6 +168,6 @@ if (options.secure) {
 
 httpserv.listen(options.port, function () {
   console.log("Server listening : " + options.port + (options.secure ? "     (Secure mode enabled)" : "") );
-  const socketService = new SocketService(options.openid);
+  socketService = new SocketService(options.openid);
   socketService.attachServer(httpserv, session);
 });

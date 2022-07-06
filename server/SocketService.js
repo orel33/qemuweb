@@ -8,6 +8,20 @@ class SocketService {
     this.openid = openIdEnabled;
   }
 
+  registerClient(session) {
+    var userid;
+    if (this.openid) {
+      userid = session.passport.user.id;
+    } else {
+      userid = session.cookie.userid;
+    }
+
+    if (this.clients[userid] == undefined) {
+      console.log(session);
+      this.clients[userid] = new Client(userid);
+    }
+  }
+
   attachServer(server, session) {
     if (!server) {
       throw new Error("Server not found...");
@@ -30,11 +44,9 @@ class SocketService {
 
       console.log("Client with id " + userid + " connect to socket ", socket.id);
 
-      if (this.clients[userid] == undefined || this.clients[userid] == null) {
-        // Client unknown
-        this.clients[userid] = new Client(socket, userid);
+      if (this.clients[userid].activeSessions < 1) {
+        this.clients[userid].initSession(socket);
       } else {
-        // Client known
         this.clients[userid].requestNewSession(socket);
       }
 
@@ -57,6 +69,10 @@ class SocketService {
         currClient.ptys[socket.id].write(input); 
       });
     });
+  }
+
+  handlePost(request) {
+    console.log(this.clients);
   }
 }
 

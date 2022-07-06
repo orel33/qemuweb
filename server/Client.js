@@ -2,18 +2,17 @@ const PTY = require("./PTYService");
 const { exec } = require('child_process');
 
 class Client {
-    constructor(firstSocket, userid) {
+    constructor(userid) {
         this.userid = userid;
         this.ptys = {}; // Map<socketID, PTYService>
         this.activeSessions = 0;
         this.attachedSessions = 0;
-        this.initSession(firstSocket);
     }
 
-    initSession(firstSocket) {
-        this.ptys[firstSocket.id] = new PTY(firstSocket);
+    initSession(socket) {
+        this.ptys[socket.id] = new PTY(socket);
         console.log("first session for client, create on " + this.userid + "_" + 0);
-        this.ptys[firstSocket.id].createSession(this.userid, 0);
+        this.ptys[socket.id].createSession(this.userid, 0);
         this.activeSessions++;
         this.attachedSessions++;
         var timeBeforeKillSessions = 1; // Minutes
