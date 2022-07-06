@@ -72,6 +72,7 @@
     </div>
   </el-dialog>
   <div id="settings" style="width:0;height:0"></div>
+  <div id="distributions-storage" style="width:0;height:0"></div>
 </template>
 
 
@@ -169,6 +170,21 @@ export default {
         importEditor(fullData);
         input.value = null;
       });
+    },
+    getDistribFromServer() {
+      fetch('images')
+      .then(function(response) {
+        if(response.ok) {
+          response.json().then(function(json) {
+            document.getElementById("distributions-storage").innerHTML = JSON.stringify(json);
+          });
+        } else {
+          console.log('fetch: Bad response response of network');
+        }
+      })
+      .catch(function(error) {
+        console.log('There was a problem retrieving the list of available systems: ' + error.message);
+      });
     }
   },
   mounted() {
@@ -185,6 +201,8 @@ export default {
         }
       }
     });
+
+    this.getDistribFromServer();
 
     this.systemIO = new SystemIO();
     this.settings = new Settings();

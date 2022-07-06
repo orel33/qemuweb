@@ -45,48 +45,6 @@ export default defineComponent({
             interfacesSide: new MyMap(), // Map<interfaceNumber, side>
             settings: new Settings(),
             terminal: new Terminal(),
-            distributions: [
-                {
-                    value: 'debian10',
-                    label: 'Debian 10',
-                    img: require("@/assets/debian.png")
-                },
-                {
-                    value: 'debian10x',
-                    label: 'Debian 10 X11',
-                    img: require("@/assets/debian.png")
-                },
-                {
-                    value: 'debian9',
-                    label: 'Debian 9',
-                    img: require("@/assets/debian.png")
-                },
-                {
-                    value: 'tinycore',
-                    label: 'Tinycore',
-                    img: require("@/assets/tinycore.png")
-                },
-                {
-                    value: 'alpine',
-                    label: 'Alpine',
-                    img: require("@/assets/alpine.png")
-                },
-                {
-                    value: 'alpinex',
-                    label: 'Alpine X11',
-                    img: require("@/assets/alpine.png")
-                },
-                {
-                    value: 'kali',
-                    label: 'Kali',
-                    img: require("@/assets/kali.jpg")
-                },
-                {
-                    value: 'windowsxp',
-                    label: 'Windows XP',
-                    img: require("@/assets/windows.png")
-                }
-            ],
             showParamModal: false
         }
     },
@@ -99,6 +57,16 @@ export default defineComponent({
         isReducedMode: {
             get() {
                 return this.settings.getOptionBool('reduced-mode');
+            }
+        },
+        distributions: {
+            get() {
+                return JSON.parse(document.getElementById("distributions-storage").innerHTML).images;
+            }
+        },
+        imageDir: {
+            get() {
+                return JSON.parse(document.getElementById("distributions-storage").innerHTML).imagesdir;
             }
         }
     },

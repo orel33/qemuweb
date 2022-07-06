@@ -118,6 +118,10 @@ function checkAuthentication(req,res,next){
   }
 }
 
+app.use('/index/images', function (req, res, next) {
+  res.send(fs.readFileSync(path.resolve('./images.json'), 'utf8'));
+});
+
 app.use('/index', express.static(path.join(__dirname, 'dist')));
 
 app.use('/', function (req, res, next) {

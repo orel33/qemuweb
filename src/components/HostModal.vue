@@ -165,7 +165,7 @@ export default {
             <div class="modal-section">
               <span class="modal-span title"> System : </span>
               <select v-model="localSystem">
-                <option v-for="item in distributions" :key="item.value" :label="item.label" :value="item.value"></option>
+                <option v-for="item in Object.keys(distributions)" :key="item" :label="item" :value="item"></option>
               </select>
             </div>
             <div class="modal-section">
