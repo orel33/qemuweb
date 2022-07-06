@@ -34,12 +34,11 @@ class SocketService {
     // "connection" event happens when any client connects to this io instance.
     io.on("connection", socket => {
       // Get cookies from the session
-      console.log(socket.request.session);
       var userid;
       if (this.openid) {
         userid = socket.request.session.passport.user.id;
       } else {
-        userid = socket.request.session.userid;
+        userid = socket.request.session.cookie.userid;
       }
 
       console.log("Client with id " + userid + " connect to socket ", socket.id);
