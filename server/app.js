@@ -45,13 +45,12 @@ const session = expressSession({
   cookie: { userid: uuidv4(), maxAge: (24 * 60 * 60 * 1000)}
 });
 
-app.use(session);
-
 app.use(function (req, res, next) {
-  socketService.registerClient(req.session);
   console.log((new Date()) + " -- " + req.method + " " + req.url);
   next(); // let's continue with next middleware...
 });
+
+app.use(session);
 
 if (options.openid) {
   // Configure the OpenId Connect Strategy
@@ -110,6 +109,11 @@ if (options.openid) {
   }));
 }
 
+app.use('/index', function (req, res, next) {
+  socketService.registerClient(req.session);
+  next(); // let's continue with next middleware...
+});
+
 // Middleware for checking if a user has been authenticated
 // via Passport and OneLogin OpenId Connect
 function checkAuthentication(req,res,next){
@@ -127,7 +131,6 @@ app.use('/index/images', function (req, res, next) {
 var textParser = bodyParser.text();
 
 app.post('/index/runtopo', textParser, function (req, res, next) {
-  console.log("POST with body = ", req.body);
   res.sendStatus(200);
   socketService.handlePost(req);
 });

@@ -17,7 +17,7 @@ class SocketService {
     }
 
     if (this.clients[userid] == undefined) {
-      console.log(session);
+      console.log("New client registered: " + userid);
       this.clients[userid] = new Client(userid);
     }
   }
@@ -72,7 +72,13 @@ class SocketService {
   }
 
   handlePost(request) {
-    console.log(this.clients);
+    var userid;
+    if (this.openid) {
+      userid = request.session.passport.user.id;
+    } else {
+      userid = request.session.cookie.userid;
+    }
+    console.log("Run topology \n" + request.body + "for client ", this.clients[userid]);
   }
 }
 
