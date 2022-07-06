@@ -2,6 +2,7 @@
 
 This project is an attempt to redesign, as a web application, the [QemuNet](https://github.com/orel33/qemunet) pedagogical virtual network emulator.
 
+See installation in [INSTALL.md](INSTALL.md).
 
 ## Credits
 
