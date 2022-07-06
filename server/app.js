@@ -41,7 +41,7 @@ app.use(cookieParser());
 const session = expressSession({
   secret: 'secret squirrel',
   resave: false,
-  saveUninitialized: true,
+  saveUninitialized: false,
   cookie: { userid: uuidv4(), maxAge: (24 * 60 * 60 * 1000)}
 });
 
