@@ -1,19 +1,48 @@
 # QemuWeb
 
-## Pré-requis
-- Node v14.17.6
-- npm v8.10.0 
+## Requires
+- Node : version 10.13.0 or newer
 
-## Installation
+Install with ```sudo apt install node```
+
+- npm : version 6.14.17 or newer
+
+Install with ```sudo apt install npm```
+
+## Install
 
 ```
 cd qemuweb
 npm install
+npm run build
+
+cd qemuweb/server
+npm install
 ```
 
-## Pour lancer
+## Run
 
 ```
-npm run serve
+cd qemuweb/server
+node app.js
 ```
-Puis ouvrez le lien indiqué dans la console (par défaut http://localhost:8080) dans un navigateur.
+Then open http://localhost:3000 on a browser.
+
+## Options
+
+You can change the parameters of the server with options.
+
+Usage: ```node app.js [options]```
+
+Options:
+```
+    -s, --secure         enable secure mode for http
+    --sslkey <file>      path to SSL key (default: "./cert/key.pem")
+    --sslcert <file>     path to SSL certificate (default: "./cert/server.crt")
+    -p, --port <number>  listen port (default: 3000)
+    -o, --openid         enable openid authentication
+    -h, --help           display help for command
+```
+
+
+
