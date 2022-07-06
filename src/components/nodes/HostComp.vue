@@ -61,6 +61,9 @@ export default defineComponent({
         },
         distributions: {
             get() {
+                if (document.getElementById("distributions-storage").innerHTML.length == 0) {
+                    return {"systemsListLoadFailed": ""}
+                }
                 return JSON.parse(document.getElementById("distributions-storage").innerHTML).images;
             }
         },
@@ -145,6 +148,8 @@ export default defineComponent({
             this.number = this.getNumber() + 1;
             const dataName = this.editor.getNodeFromId(this.id).data.name;
             this.name = dataName == undefined ? this.name + this.number : dataName;
+            const dataSystem = this.editor.getNodeFromId(this.id).data.system;
+            this.system = dataSystem == undefined ? this.system : dataSystem;
             this.updateNodeData();
             this.refreshInterfacesDisplay();
 
