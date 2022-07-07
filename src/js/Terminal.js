@@ -56,6 +56,11 @@ export class Terminal {
             frame.style.display = 'none';
         });
 
+        // fix conflict between xtermjs and draggable
+        container.addEventListener("mousedown", function(ev) {
+            ev.stopPropagation();
+        });
+
         this.terminalUI.attachTo(container);
 
         frame.style.display = 'none';

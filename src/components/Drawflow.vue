@@ -117,7 +117,7 @@ export default {
       for (let i = 0; i < document.querySelectorAll(".cog").length; i++) {
         cogs[i].style.display = cogs[i].style.display == 'none' ? 'initial' : 'none';
         runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
-        //prompts[i].style.display = 'none';
+        prompts[i].style.display = 'none';
       }
       this.execMode = !this.execMode;
       if (this.execMode) {
@@ -363,7 +363,7 @@ export default {
         editor.registerNode('Host', Host, {}, {});
         editor.registerNode('Switch', Switch, {}, {});
 
-        console.log(editor);
+        //console.log(editor);
 
         //editor.import({"drawflow":{"Home":{"data":{"5":{"id":5,"name":"Switch","data":{"script":"(req,res) => {\n console.log(req);\n}"},"class":"Switch","html":"Switch","typenode":"vue","inputs":{"input_1":{"connections":[{"node":"6","input_1":"output_1"}]}},"outputs":{"output_1":{"connections":[]},"output_1":{"connections":[]}},"pos_x":1000,"pos_y":117},"6":{"id":6,"name":"Host","data":{"url":"localhost/add", "method": "post"},"class":"Host","html":"Host","typenode":"vue","inputs":{},"outputs":{"output_1":{"connections":[{"node":"5","output":"input_1"}]}},"pos_x":137,"pos_y":89}}}}})
         internalInstance.appContext.app._context.config.globalProperties.$df = editor;
