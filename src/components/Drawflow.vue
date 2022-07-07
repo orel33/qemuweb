@@ -79,10 +79,10 @@
 <script>
 import drawflow from 'drawflow';
 import styleDrawflow from 'drawflow/dist/drawflow.min.css';
-import style from '../assets/style.css';
-import styleJquery from '../jquery-ui/jquery-ui.min.css';
+import style from '@/style.css';
+import styleJquery from '@/jquery-ui/jquery-ui.min.css';
 import $ from 'jquery';
-import jquery_ui from '../jquery-ui/jquery-ui.js';
+import jquery_ui from '@/jquery-ui/jquery-ui.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
 import { Settings } from '@/js/Settings';
 import { SystemIO } from '@/js/SystemIO';
@@ -117,7 +117,7 @@ export default {
       for (let i = 0; i < document.querySelectorAll(".cog").length; i++) {
         cogs[i].style.display = cogs[i].style.display == 'none' ? 'initial' : 'none';
         runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
-        prompts[i].style.display = 'none';
+        //prompts[i].style.display = 'none';
       }
       this.execMode = !this.execMode;
       if (this.execMode) {
