@@ -78,6 +78,7 @@ class SocketService {
       userid = request.session.cookie.userid;
     }
     console.log("Run topology \n" + request.body + "for client ", this.clients[userid]);
+    this.clients[userid].initSession(request.body);
   }
 }
 

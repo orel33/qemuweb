@@ -1,15 +1,17 @@
 const PTY = require("./PTYService");
 const { exec } = require('child_process');
+const Topology = require("./Topology");
 
 class Client {
     constructor(userid) {
         this.userid = userid;
         this.ptys = {}; // Map<socketID, PTYService>
-        this.activeSessions = 0;
-        this.attachedSessions = 0;
+        this.topology = new Topology();
+        //this.activeSessions = 0;
+        //this.attachedSessions = 0;
     }
 
-    initSession(socket) {
+    /*initSession(socket) {
         this.ptys[socket.id] = new PTY(socket);
         console.log("first session for client, create on " + this.userid + "_" + 0);
         this.ptys[socket.id].createSession(this.userid, 0);
@@ -42,6 +44,22 @@ class Client {
             console.log("All sessions with userid " + userid + " were killed");
             this.activeSessions = 0;
             this.attachedSessions = 0;
+        });
+    }*/
+
+    initSession(topologyText) {
+        exec("./scripts/session-start.sh " + this.userid, (err, stdout, stderr) => {
+            console.log("Session started for " + this.userid);
+        });
+        exec("./scripts/session-run-cmd.sh ./scripts/qemunet-start.sh " + this.userid, (err, stdout, stderr) => {
+            console.log("Qemunet started for " + this.userid);
+        });
+        this.topology.parse(topologyText);
+    }
+
+    createSwitches() {
+        exec("./scripts/session-run-cmd.sh ./scripts/qemunet-start.sh " + this.userid, (err, stdout, stderr) => {
+            console.log("Qemunet started for " + this.userid);
         });
     }
 }
