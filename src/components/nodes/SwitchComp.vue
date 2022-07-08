@@ -74,7 +74,12 @@ export default defineComponent({
         },
         showPrompt() {
             var term = document.getElementById("term-" + this.id);
+            term.querySelector("span.term-name").innerHTML = this.name;
             term.style.display = term.style.display == 'none' ? 'block' : 'none';
+
+            if (!this.terminal.connected) {
+                this.terminal.startConnection();
+            }
         }
     },
     mounted() {

@@ -64,7 +64,7 @@ class SocketService {
 
   receiveTopo(request) {
     var userid = this.openid ? request.session.passport.user.id : request.session.cookie.userid;
-    console.log("Run topology \n" + request.body + "for client ", this.clients[userid]);
+    console.log("Run topology \n" + request.body + "for client ", userid);
     this.clients[userid].initSession(request.body);
   }
 }

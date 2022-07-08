@@ -69,7 +69,8 @@ class Client {
     }
 
     createSwitches() {
-        for (const switchName in this.topology.switches) {
+        for (var i in this.topology.switches) {
+            const switchName = this.topology.switches[i];
             this.ptysSwitch[switchName] = new PTY("switch");
             this.ptysSwitch[switchName].sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-switch.sh " + this.userid + " " + switchName);
             console.log("Started switch " + switchName + " for user " + this.userid);
