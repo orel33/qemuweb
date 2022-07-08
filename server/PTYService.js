@@ -2,10 +2,9 @@ const os = require("os");
 const pty = require("node-pty");
 
 class PTY {
-  constructor(socket) {
+  constructor() {
     this.shell = os.platform() === "win32" ? "cmd.exe" : "bash";
     this.ptyProcess = null;
-    this.socket = socket;
 
     // Initialize PTY process.
     this.startPtyProcess();
@@ -20,15 +19,9 @@ class PTY {
       cwd: process.env.HOME, // Which path should terminal start
       env: process.env // Pass environment variables
     });
-
-    // Add a "data" event listener.
-    this.ptyProcess.on("data", data => {
-      // Whenever terminal generates any data, send that output to socket.io client to display on UI
-      this.sendToClient(data);
-    });
   }
 
-  createSession(userid, sessionCount) {
+  /*createSession(userid, sessionCount) {
     const sessionId = userid + "_" + sessionCount;
     this.sendCommand("tmux ls | grep " + userid + " && tmux attach -t " + sessionId + " || tmux new -s " + sessionId);
   }
@@ -36,6 +29,14 @@ class PTY {
   attachSession(userid, sessionCount) {
     const sessionId = userid + "_" + sessionCount;
     this.sendCommand("tmux attach -t " + sessionId);
+  }*/
+
+  bindTerminal(socket) {
+    // Add a "data" event listener.
+    this.ptyProcess.on("data", data => {
+      // Whenever terminal generates any data, send that output to socket.io client to display on UI
+      this.sendToClient(socket, data);
+    });
   }
 
   /**
@@ -46,9 +47,9 @@ class PTY {
     this.ptyProcess.write(data);
   }
 
-  sendToClient(data) {
+  sendToClient(socket, data) {
     // Emit data to socket.io client in an event "output"
-    this.socket.emit("output", data);
+    socket.emit("output", data);
   }
 
   sendCommand(command) {

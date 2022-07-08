@@ -6,7 +6,9 @@ class Client {
     constructor(userid) {
         this.userid = userid;
         this.ptys = {}; // Map<socketID, PTYService>
+        this.ptyControl = new PTY();
         this.topology = new Topology();
+        this.scriptsPath = "/srv/qemuweb/server/scripts/";
         //this.activeSessions = 0;
         //this.attachedSessions = 0;
     }
@@ -48,19 +50,40 @@ class Client {
     }*/
 
     initSession(topologyText) {
-        exec("./scripts/session-start.sh " + this.userid, (err, stdout, stderr) => {
-            console.log("Session started for " + this.userid);
-        });
-        exec("./scripts/session-run-cmd.sh ./scripts/qemunet-start.sh " + this.userid, (err, stdout, stderr) => {
-            console.log("Qemunet started for " + this.userid);
-        });
+        this.ptyControl.sendCommand(this.scriptsPath + "session-start.sh " + this.userid);
+        this.ptyControl.sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-start.sh " + this.userid);
         this.topology.parse(topologyText);
+        this.createSwitches();
+        this.createHosts();
+        console.log("Session initiated for user " + this.userid);
     }
 
     createSwitches() {
-        exec("./scripts/session-run-cmd.sh ./scripts/qemunet-start.sh " + this.userid, (err, stdout, stderr) => {
-            console.log("Qemunet started for " + this.userid);
-        });
+        for (const switchName in this.topology.switches) {
+            this.ptys[switchName] = new PTY();
+            this.ptys[switchName].sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-switch.sh " + this.userid + " " + switchName);
+            console.log("Started switch " + switchName + " for user " + this.userid);
+        }
+    }
+
+    createHosts() {
+        for (var i in this.topology.hosts) {
+            const host = this.topology.hosts[i];
+            this.ptys[host.name] = new PTY();
+            this.ptys[switchName].sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-host.sh " + this.userid 
+                                        + " " + host.system + " " + host.name + " " + host.neighboors);
+            console.log("Started host " + host.name + " for user " + this.userid);
+        }
+    }
+
+    killQemunetSession() {
+        this.ptyControl.sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-exit.sh " + this.userid);
+        console.log("Qemunet session exited for " + this.userid);
+    }
+
+    killSession() {
+        this.ptyControl.sendCommand(this.scriptsPath + "session-killall.sh " + this.userid);
+        console.log("Session killed for " + this.userid);
     }
 }
   

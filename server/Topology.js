@@ -2,7 +2,6 @@ class Topology {
     constructor() {
         this.switches = [];
         this.hosts = [];
-
     }
 
     parse(textContent) {
@@ -24,12 +23,10 @@ class Topology {
                 var host = {};
                 host["system"] = words[1];
                 host["name"] = words[2];
-                var neighboors = [];
+                var neighboors = "";
                 // CONNECTIONS
                 for (let i = 3; i < words.length; i++) {
-                    var switchName = words[i].split(':')[0];
-                    var portNumber = Number(words[i].split(':')[1]);
-                    neighboors.push({"switchName": switchName, "portNumber": portNumber});
+                    neighboors += words[i] + " "
                 }
                 host["neighboors"] = neighboors;
                 this.hosts.push(host);
