@@ -86,6 +86,7 @@ import jquery_ui from '@/jquery-ui/jquery-ui.js';
 import { onMounted, shallowRef, h, getCurrentInstance, render, readonly, ref } from 'vue';
 import { Settings } from '@/js/Settings';
 import { SystemIO } from '@/js/SystemIO';
+import { ServerExchanges } from '@/js/ServerExchanges';
 import Host from './nodes/HostComp.vue';
 import Switch from './nodes/SwitchComp.vue';
 
@@ -98,6 +99,7 @@ export default {
       dialogAbout: false,
       settings: null,
       systemIO: null,
+      serverExchanges: null,
       execMode: false
     }
   },
@@ -111,6 +113,12 @@ export default {
       var runPrompts = document.querySelectorAll(".run-prompt");
       var prompts = document.querySelectorAll(".terminal-frame");
 
+      if (this.execMode) {
+        var conf = window.confirm("You will stop the virtual network execution and kill all the machines, do you confirm?")
+        if (!conf) { return; }
+        if (!this.serverExchanges.stopExecutionAtServer()) { return; }
+      }
+
       document.getElementById("play-stop").classList.toggle("play-button");
       document.getElementById("play-stop").classList.toggle("stop-button");
       aside.style.display = aside.style.display == 'none' ? 'initial' : "none";
@@ -119,9 +127,12 @@ export default {
         runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
         prompts[i].style.display = 'none';
       }
+
       this.execMode = !this.execMode;
+      
       if (this.execMode) {
-        this.sendTopoToServer();
+        this.exportEditorTopo();
+        this.serverExchanges.sendTopoToServer(this.topoData);
       }
     },
     displaySettings() {
@@ -175,35 +186,6 @@ export default {
         importEditor(fullData);
         input.value = null;
       });
-    },
-    getDistribFromServer() {
-      fetch('images')
-      .then(function(response) {
-        if(response.ok) {
-          response.json().then(function(json) {
-            document.getElementById("distributions-storage").innerHTML = JSON.stringify(json);
-          });
-        } else {
-          console.log('fetch: Bad response response of network');
-        }
-      })
-      .catch(function(error) {
-        console.log('There was a problem retrieving the list of available systems: ' + error.message);
-      });
-    },
-    sendTopoToServer() {
-      this.exportEditorTopo();
-      fetch("/index/runtopo", { method: "POST", body: this.topoData, headers: { 'Content-Type': 'text/plain' } })
-      .then(function(response) {
-        if (response.ok) {
-          console.log("Topology successfully sent to server")
-        } else {
-          alert('Bad response of the server sending the topology');
-        }
-      })
-      .catch(function(error) {
-        alert('There was a problem sendind the topology: ' + error.message);
-      });
     }
   },
   mounted() {
@@ -221,15 +203,16 @@ export default {
       }
     });
 
-    this.getDistribFromServer();
-
     this.systemIO = new SystemIO();
     this.settings = new Settings();
+    this.serverExchanges = new ServerExchanges();
     this.settings.mountInDOM();
     this.settings.setOption('display-ports-name', true);
     this.settings.setOption('display-interfaces-name', true);
     this.settings.setOption('curved-connections', true);
     this.settings.setOption('reduced-mode', false);
+
+    this.serverExchanges.getDistribFromServer();
   },
   setup() {
     const listNodes = readonly([

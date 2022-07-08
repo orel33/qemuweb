@@ -14,8 +14,6 @@ export class Terminal {
 
     connectToSocket(serverAddr) {
         return new Promise(res => {
-            console.log("this.id: " + this.id)
-            console.log(document.getElementById("term-" + this.id))
             var name = document.getElementById("term-" + this.id).querySelector(".term-name").innerHTML;
             const socket = io(serverAddr, { query: {name: name, type: this.type} });
             res(socket);

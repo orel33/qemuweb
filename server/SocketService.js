@@ -35,11 +35,6 @@ class SocketService {
 
       console.log("Client with id " + userid + " connect to the machine '" + socket.handshake.query.name + "' via socket ", socket.id);
       client.requestTerm(name, type, socket);
-      /*if (client.activeSessions < 1) {
-        client.initSession(socket);
-      } else {
-        client.requestNewSession(socket);
-      }*/
 
       socket.on("disconnect", () => {
         console.log("Client with id " + userid + " disconnected from socket ", socket.id);
@@ -52,8 +47,7 @@ class SocketService {
         pty.ptyProcess.resize(data.col, data.row);
       });
 
-      // Attach any event listeners which runs if any event is triggered from socket.io client
-      // For now, we are only adding "input" event, where client sends the strings you type on terminal UI.
+      // Adding "input" event, where client sends the strings you type on terminal UI.
       socket.on("input", (input) => {
         //Runs this event function socket receives "input" events from socket.io client
         var pty = type == "host" ? client.ptysHost[name] : client.ptysSwitch[name];
@@ -66,6 +60,12 @@ class SocketService {
     var userid = this.openid ? request.session.passport.user.id : request.session.cookie.userid;
     console.log("Run topology \n" + request.body + "for client ", userid);
     this.clients[userid].initSession(request.body);
+  }
+
+  stopTopo(request) {
+    var userid = this.openid ? request.session.passport.user.id : request.session.cookie.userid;
+    console.log("Stop topology for client ", userid);
+    this.clients[userid].killQemunetSession();
   }
 }
 

@@ -135,6 +135,11 @@ app.post('/index/runtopo', textParser, function (req, res, next) {
   socketService.receiveTopo(req);
 });
 
+app.get('/index/stoptopo', function (req, res, next) {
+  res.sendStatus(200);
+  socketService.stopTopo(req);
+});
+
 app.use('/index', express.static(path.join(__dirname, 'dist')));
 
 app.use('/', function (req, res, next) {

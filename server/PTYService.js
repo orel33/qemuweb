@@ -22,6 +22,10 @@ class PTY {
     });
   }
 
+  killPtyProcess() {
+    this.ptyProcess.kill();
+  }
+
   /*createSession(userid, sessionCount) {
     const sessionId = userid + "_" + sessionCount;
     this.sendCommand("tmux ls | grep " + userid + " && tmux attach -t " + sessionId + " || tmux new -s " + sessionId);
