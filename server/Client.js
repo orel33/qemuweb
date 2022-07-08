@@ -5,7 +5,8 @@ const Topology = require("./Topology");
 class Client {
     constructor(userid) {
         this.userid = userid;
-        this.ptys = {}; // Map<socketID, PTYService>
+        this.ptysSwitch = {}; // Map<switchName, PTY>
+        this.ptysHost = {}; // Map<hostName, PTY>
         this.ptyControl = new PTY();
         this.topology = new Topology();
         this.scriptsPath = "/srv/qemuweb/server/scripts/";
@@ -49,6 +50,15 @@ class Client {
         });
     }*/
 
+    requestTerm(name, type, socket) {
+        var currPty = type == "host" ? this.ptysHost[name] : this.ptysSwitch[name];
+        if (currPty.connected) {
+            console.log("ALREADY CONNECTED")
+        } else {
+            currPty.bindTerminal(socket);
+        }
+    }
+
     initSession(topologyText) {
         this.ptyControl.sendCommand(this.scriptsPath + "session-start.sh " + this.userid);
         this.ptyControl.sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-start.sh " + this.userid);
@@ -60,8 +70,8 @@ class Client {
 
     createSwitches() {
         for (const switchName in this.topology.switches) {
-            this.ptys[switchName] = new PTY();
-            this.ptys[switchName].sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-switch.sh " + this.userid + " " + switchName);
+            this.ptysSwitch[switchName] = new PTY("switch");
+            this.ptysSwitch[switchName].sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-switch.sh " + this.userid + " " + switchName);
             console.log("Started switch " + switchName + " for user " + this.userid);
         }
     }
@@ -69,8 +79,8 @@ class Client {
     createHosts() {
         for (var i in this.topology.hosts) {
             const host = this.topology.hosts[i];
-            this.ptys[host.name] = new PTY();
-            this.ptys[switchName].sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-host.sh " + this.userid 
+            this.ptysHost[host.name] = new PTY("host");
+            this.ptysHost[host.name].sendCommand(this.scriptsPath + "session-run-cmd.sh " + this.scriptsPath + "qemunet-host.sh " + this.userid 
                                         + " " + host.system + " " + host.name + " " + host.neighboors);
             console.log("Started host " + host.name + " for user " + this.userid);
         }

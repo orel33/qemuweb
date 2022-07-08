@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "Creating Firejail[Tmux] session for user " + $1
+echo "SCRIPTS Creating Firejail[Tmux] session for user " + $1

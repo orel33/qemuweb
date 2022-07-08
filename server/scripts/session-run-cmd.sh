@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "Running command " + $1 + " for user " + $2
+echo "SCRIPTS Running command " + $1 + " for user " + $2

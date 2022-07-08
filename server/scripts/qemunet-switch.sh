@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "Creating switch " + $2 + " for user " + $1
+echo "SCRIPTS Creating switch " + $2 + " for user " + $1

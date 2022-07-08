@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "Creating qemunet session for user " + $1
+echo "SCRIPTS Creating qemunet session for user " + $1

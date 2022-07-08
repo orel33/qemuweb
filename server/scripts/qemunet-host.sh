@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "Creating host " + $3 + " for user " + $1
+echo "SCRIPTS Creating host " + $3 + " for user " + $1

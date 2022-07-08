@@ -2,10 +2,11 @@ const os = require("os");
 const pty = require("node-pty");
 
 class PTY {
-  constructor() {
+  constructor(type) {
     this.shell = os.platform() === "win32" ? "cmd.exe" : "bash";
     this.ptyProcess = null;
-
+    this.type = type;
+    this.connected = false;
     // Initialize PTY process.
     this.startPtyProcess();
   }

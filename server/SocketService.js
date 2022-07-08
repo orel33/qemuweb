@@ -9,12 +9,7 @@ class SocketService {
   }
 
   registerClient(session) {
-    var userid;
-    if (this.openid) {
-      userid = session.passport.user.id;
-    } else {
-      userid = session.cookie.userid;
-    }
+    var userid = this.openid ? session.passport.user.id : session.cookie.userid;
 
     if (this.clients[userid] == undefined) {
       console.log("New client registered: " + userid);
@@ -33,50 +28,42 @@ class SocketService {
     console.log("Created socket server. Waiting for client connection.");
     // "connection" event happens when any client connects to this io instance.
     io.on("connection", socket => {
-      // Get cookies from the session
-      var userid;
-      if (this.openid) {
-        userid = socket.request.session.passport.user.id;
-      } else {
-        userid = socket.request.session.cookie.userid;
-      }
+      var userid = this.openid ? socket.request.session.passport.user.id : socket.request.session.cookie.userid;
+      var name = socket.handshake.query.name;
+      var type = socket.handshake.query.type;
+      var client = this.clients[userid];
 
-      console.log("Client with id " + userid + " connect to socket ", socket.id);
-
-      if (this.clients[userid].activeSessions < 1) {
-        this.clients[userid].initSession(socket);
+      console.log("Client with id " + userid + " connect to the machine '" + socket.handshake.query.name + "' via socket ", socket.id);
+      client.requestTerm(name, type, socket);
+      /*if (client.activeSessions < 1) {
+        client.initSession(socket);
       } else {
-        this.clients[userid].requestNewSession(socket);
-      }
+        client.requestNewSession(socket);
+      }*/
 
       socket.on("disconnect", () => {
         console.log("Client with id " + userid + " disconnected from socket ", socket.id);
-        this.clients[userid].attachedSessions--;
+        client.attachedSessions--;
       });
 
       socket.on('resize', (data) => {
         console.log((new Date()) + " -- resize terminal col=" + data.col + ", row=" + data.row);
-        var currClient =  this.clients[userid];
-        currClient.ptys[socket.id].ptyProcess.resize(data.col, data.row);
+        var pty = type == "host" ? client.ptysHost[name] : client.ptysSwitch[name];
+        pty.ptyProcess.resize(data.col, data.row);
       });
 
       // Attach any event listeners which runs if any event is triggered from socket.io client
       // For now, we are only adding "input" event, where client sends the strings you type on terminal UI.
       socket.on("input", (input) => {
         //Runs this event function socket receives "input" events from socket.io client
-        var currClient =  this.clients[userid];
-        currClient.ptys[socket.id].write(input); 
+        var pty = type == "host" ? client.ptysHost[name] : client.ptysSwitch[name];
+        pty.write(input);
       });
     });
   }
 
-  handlePost(request) {
-    var userid;
-    if (this.openid) {
-      userid = request.session.passport.user.id;
-    } else {
-      userid = request.session.cookie.userid;
-    }
+  receiveTopo(request) {
+    var userid = this.openid ? request.session.passport.user.id : request.session.cookie.userid;
     console.log("Run topology \n" + request.body + "for client ", this.clients[userid]);
     this.clients[userid].initSession(request.body);
   }

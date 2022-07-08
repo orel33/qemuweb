@@ -4,15 +4,20 @@ import $ from 'jquery';
 import jquery_ui from '@/jquery-ui/jquery-ui.js';
 
 export class Terminal {
-    constructor() {
+    constructor(id, type) {
         this.terminalUI = new TerminalUI();
         this.address = (location.protocol == "https:" ? "wss://" : "ws://") + location.host;
         this.connected = false;
+        this.type = type;
+        this.id = id;
     }
 
     connectToSocket(serverAddr) {
         return new Promise(res => {
-            const socket = io(serverAddr);
+            console.log("this.id: " + this.id)
+            console.log(document.getElementById("term-" + this.id))
+            var name = document.getElementById("term-" + this.id).querySelector(".term-name").innerHTML;
+            const socket = io(serverAddr, { query: {name: name, type: this.type} });
             res(socket);
         });
     }

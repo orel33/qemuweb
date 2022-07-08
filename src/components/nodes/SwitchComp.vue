@@ -37,7 +37,7 @@ export default defineComponent({
             portsSide: new MyMap(),
             showParamModal: false,
             settings: null,
-            terminal: new Terminal(),
+            terminal: null,
         }
     },
     computed: {
@@ -81,7 +81,9 @@ export default defineComponent({
         this.editor; // Need to load editor before call it in $nextTick, don't ask
         this.settings = new Settings();
         this.$nextTick(() => {
+            //nextTick runs in a context where Drawflow has already created the component
             this.id = Number(this.$el.parentElement.parentElement.id.split('-')[1]);
+            this.terminal = new Terminal(this.id, "switch");
             this.number = this.getNumber()+1;
             this.name = this.name + this.number;
             this.updateNodeData();

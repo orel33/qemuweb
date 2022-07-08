@@ -1,2 +1,2 @@
 #!/bin/bash
-echo "Exiting qemunet session"
+echo "SCRIPTS Exiting qemunet session"

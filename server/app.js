@@ -132,13 +132,14 @@ var textParser = bodyParser.text();
 
 app.post('/index/runtopo', textParser, function (req, res, next) {
   res.sendStatus(200);
-  socketService.handlePost(req);
+  socketService.receiveTopo(req);
 });
 
 app.use('/index', express.static(path.join(__dirname, 'dist')));
 
 app.use('/', function (req, res, next) {
   res.redirect('/index');
+  next();
 });
 
 // catch 404 and forward to error handler
