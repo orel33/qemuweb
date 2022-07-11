@@ -17,22 +17,22 @@ export class ServerExchanges {
     }
 
     getServerState() {
-        var state = {nothing: "staten"};
+        var state = {nothing: "nothing"};
         this.xhttp.open("GET", "state", false);
         this.xhttp.send();
         if (this.xhttp.status != 200) {
             alert("Can't get state of server terminals: bad response of the server")
         } else {
-            state = this.xhttp.responseText; 
+            state = JSON.parse(this.xhttp.responseText);
         }
         return state;
     }
 
     sendTopoToServer(topo) {
-        fetch("/index/runtopo", { method: "POST", body: topo, headers: { 'Content-Type': 'text/plain' } })
+        fetch("runtopo", { method: "POST", body: topo, headers: { 'Content-Type': 'text/plain' } })
         .then(function(response) {
             if (response.ok) {
-                console.log("Topology successfully sent to server")
+                console.log("SERVER: Topology successfully received, running it...")
             } else {
                 alert('Bad response of the server sending the topology');
             }
@@ -44,7 +44,7 @@ export class ServerExchanges {
 
     stopExecutionAtServer() {
         var success = true;
-        fetch("/index/stoptopo")
+        fetch("stoptopo")
         .then(function(response) {
             if (response.ok) {
                 console.log("SERVER: Execution successfully stopped")

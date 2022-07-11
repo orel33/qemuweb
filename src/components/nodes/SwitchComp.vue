@@ -83,7 +83,7 @@ export default defineComponent({
         }
     },
     mounted() {
-        this.editor; // Need to load editor before call it in $nextTick, don't ask
+        this.editor; // Need to call editor before call it in $nextTick, don't ask
         this.settings = new Settings();
         this.$nextTick(() => {
             //nextTick runs in a context where Drawflow has already created the component
