@@ -134,6 +134,7 @@ export default {
         this.exportEditorTopo();
         this.serverExchanges.sendTopoToServer(this.topoData);
       }
+      console.log(this.serverExchanges.getServerState());
     },
     displaySettings() {
       this.dialogSettings = true;
@@ -213,6 +214,7 @@ export default {
     this.settings.setOption('reduced-mode', false);
 
     this.serverExchanges.getDistribFromServer();
+    console.log(this.serverExchanges.getServerState());
   },
   setup() {
     const listNodes = readonly([

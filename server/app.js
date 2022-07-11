@@ -128,6 +128,10 @@ app.use('/index/images', function (req, res, next) {
   res.send(fs.readFileSync(path.resolve('./images.json'), 'utf8'));
 });
 
+app.get('/index/state', function (req, res, next) {
+  res.send(JSON.stringify(socketService.getClientState(req)));
+});
+
 var textParser = bodyParser.text();
 
 app.post('/index/runtopo', textParser, function (req, res, next) {

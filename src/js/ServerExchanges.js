@@ -1,35 +1,30 @@
 export class ServerExchanges {
-    getDistribFromServer() {
-        fetch('images')
-        .then(function(response) {
-            if(response.ok) {
-                response.json().then(function(json) {
-                    document.getElementById("distributions-storage").innerHTML = JSON.stringify(json);
-                });
-            } else {
-                console.log('fetch: Bad response response of network');
-            }
-        })
-        .catch(function(error) {
-            console.log('There was a problem retrieving the list of available systems: ' + error.message);
-        });
+    constructor() {
+        this.xhttp = new XMLHttpRequest();
+        this.xhttp.onabort = function(err) {
+            console.log(err);
+        }
     }
 
-    getTerminalsState() {
-        var state = {};
-        fetch("/index/state")
-        .then(function(response) {
-            if (response.ok) {
-                response.json().then(function(json) {
-                    state = json;
-                });
-            } else {
-                console.log('Bad response of the server getting the terminals state');
-            }
-        })
-        .catch(function(error) {
-            console.log('There was a problem getting the terminals state: ' + error.message);
-        });
+    getDistribFromServer() {
+        this.xhttp.open("GET", "images", false);
+        this.xhttp.send();
+        if (this.xhttp.status != 200) {
+            alert("Can't get distributions list: bad response of the server")
+        } else {
+            document.getElementById("distributions-storage").innerHTML = this.xhttp.responseText; 
+        }
+    }
+
+    getServerState() {
+        var state = {nothing: "staten"};
+        this.xhttp.open("GET", "state", false);
+        this.xhttp.send();
+        if (this.xhttp.status != 200) {
+            alert("Can't get state of server terminals: bad response of the server")
+        } else {
+            state = this.xhttp.responseText; 
+        }
         return state;
     }
 

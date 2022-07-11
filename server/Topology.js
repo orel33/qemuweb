@@ -2,9 +2,11 @@ class Topology {
     constructor() {
         this.switches = [];
         this.hosts = [];
+        this.text = "";
     }
 
     parse(textContent) {
+        this.text = textContent;
         var lines = textContent.split('\n');
         for (const line of lines) {
             var firstChar = line[line.search(/\S/)];

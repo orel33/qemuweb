@@ -10,6 +10,7 @@ class Client {
         this.ptyControl = new PTY();
         this.topology = new Topology();
         this.scriptsFolder = "/srv/qemuweb/server/scripts/";
+        this.runningMachines = false;
     }
 
     requestTerm(name, type, socket) {
@@ -27,6 +28,7 @@ class Client {
         this.topology.parse(topologyText);
         this.createSwitches();
         this.createHosts();
+        this.runningMachines = true;
         console.log("Session initiated for user " + this.userid);
     }
 
@@ -57,12 +59,40 @@ class Client {
         for (var key of Object.keys(this.ptysHost)) {
             this.ptysHost[key].killPtyProcess();
         }
+        this.ptysSwitch = {};
+        this.ptysHost = {};
+        this.runningMachines = false;
         console.log("Qemunet session exited for " + this.userid);
     }
 
     killSession() {
         this.ptyControl.sendCommand(this.scriptsFolder + "session-killall.sh " + this.userid);
         console.log("Session killed for " + this.userid);
+    }
+
+    getState() {
+        var state = { running: this.runningMachines, topology: this.topology.text };
+        var ptys = {};
+
+        ptys["control"] = {killed: this.ptyControl.killed}
+
+        var hosts = {};
+        for (var key of Object.keys(this.ptysHost)) {
+            var h = this.ptysHost[key];
+            hosts[key] = {connected: h.connected, killed: h.killed}
+        }
+        ptys["hosts"] = hosts;
+
+        var switches = {};
+        for (var key of Object.keys(this.ptysSwitch)) {
+            var s = this.ptysSwitch[key];
+            switches[key] = {connected: s.connected, killed: s.killed}
+        }
+        ptys["switches"] = switches;
+
+        state["ptys"] = ptys;
+        console.log(state);
+        return state;
     }
 }
   

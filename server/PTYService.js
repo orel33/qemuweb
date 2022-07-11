@@ -7,6 +7,7 @@ class PTY {
     this.ptyProcess = null;
     this.type = type;
     this.connected = false;
+    this.killed = false;
     // Initialize PTY process.
     this.startPtyProcess();
   }
@@ -24,24 +25,21 @@ class PTY {
 
   killPtyProcess() {
     this.ptyProcess.kill();
+    this.killed = true;
   }
 
-  /*createSession(userid, sessionCount) {
-    const sessionId = userid + "_" + sessionCount;
-    this.sendCommand("tmux ls | grep " + userid + " && tmux attach -t " + sessionId + " || tmux new -s " + sessionId);
+  getState() {
+    return { connected: this.connected, killed: this.killed };
   }
-
-  attachSession(userid, sessionCount) {
-    const sessionId = userid + "_" + sessionCount;
-    this.sendCommand("tmux attach -t " + sessionId);
-  }*/
 
   bindTerminal(socket) {
     // Add a "data" event listener.
     this.ptyProcess.on("data", data => {
       // Whenever terminal generates any data, send that output to socket.io client to display on UI
       this.sendToClient(socket, data);
+      this.connected = true;
     });
+    //TO DO OnExit, send event to client via websocket to close xtermjs
   }
 
   /**

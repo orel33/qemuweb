@@ -67,6 +67,11 @@ class SocketService {
     console.log("Stop topology for client ", userid);
     this.clients[userid].killQemunetSession();
   }
+
+  getClientState(request) {
+    var userid = this.openid ? request.session.passport.user.id : request.session.cookie.userid;
+    return this.clients[userid].getState();
+  }
 }
 
 module.exports = SocketService;
