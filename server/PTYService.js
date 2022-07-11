@@ -39,7 +39,10 @@ class PTY {
       this.sendToClient(socket, data);
       this.connected = true;
     });
-    //TO DO OnExit, send event to client via websocket to close xtermjs
+    this.ptyProcess.onExit((code, signal) => {
+      socket.emit("exit");
+      this.killed = true;
+    });
   }
 
   /**

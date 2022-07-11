@@ -24,6 +24,9 @@ export class TerminalUI {
       // When there is data from PTY on server, print that on Terminal.
       this.write(data);
     });
+    this.socket.on("exit", () => {
+      this.write("The machine has exited");
+    });
   }
 
   /**
@@ -60,7 +63,6 @@ export class TerminalUI {
     container.parentElement.addEventListener('resize', function () {
       self.fitAddon.fit();
       self.socket.emit('resize', { col: self.xterm.cols, row: self.xterm.rows } );
-      console.log("terminal " + this.id + " fitted");
     });
 
     // Default text to display on terminal.

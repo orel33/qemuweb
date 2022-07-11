@@ -15,11 +15,7 @@ class Client {
 
     requestTerm(name, type, socket) {
         var currPty = type == "host" ? this.ptysHost[name] : this.ptysSwitch[name];
-        if (currPty.connected) {
-            console.log("ALREADY CONNECTED")
-        } else {
-            currPty.bindTerminal(socket);
-        }
+        currPty.bindTerminal(socket);
     }
 
     initSession(topologyText) {

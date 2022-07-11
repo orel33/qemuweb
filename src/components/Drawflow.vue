@@ -104,12 +104,17 @@ export default {
     }
   },
   methods: {
-    toggleDropDown() {
-      document.getElementById("dropdownmenu").classList.toggle("show");
-    },
+    /// Edit/Execution mode
     toggleExecution() {
+      if (!this.execMode) {
+        this.toExecMode();  
+      } else {
+        this.toEditMode();
+      }
+
       var aside = document.querySelector("aside");
       var cogs = document.querySelectorAll(".cog");
+      console.log(cogs);
       var runPrompts = document.querySelectorAll(".run-prompt");
       var prompts = document.querySelectorAll(".terminal-frame");
 
@@ -125,16 +130,13 @@ export default {
       for (let i = 0; i < document.querySelectorAll(".cog").length; i++) {
         cogs[i].style.display = cogs[i].style.display == 'none' ? 'initial' : 'none';
         runPrompts[i].style.display = runPrompts[i].style.display == 'initial' ? 'none' : 'initial';
-        prompts[i].style.display = 'none';
+        if (prompts[i]) {
+          prompts[i].style.display = 'none';
+        }
       }
 
       this.execMode = !this.execMode;
       
-      if (this.execMode) {
-        this.toExecMode();  
-      } else {
-        this.toEditMode();
-      }
       console.log(this.serverExchanges.getServerState());
     },
     toExecMode() {
@@ -149,12 +151,19 @@ export default {
     toEditMode() {
       this.serverExchanges.stopExecutionAtServer();
     },
+
+    /// Handle general modals
     displaySettings() {
       this.dialogSettings = true;
     },
     displayAbout() {
       this.dialogAbout = true;
     },
+    toggleDropDown() {
+      document.getElementById("dropdownmenu").classList.toggle("show");
+    },
+
+    /// Import/Export
     exportJSON(data) {
       this.systemIO.saveFile(JSON.stringify(data), "export.json", "json");
     },

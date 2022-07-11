@@ -42,7 +42,6 @@ class SocketService {
       });
 
       socket.on('resize', (data) => {
-        console.log((new Date()) + " -- resize terminal col=" + data.col + ", row=" + data.row);
         var pty = type == "host" ? client.ptysHost[name] : client.ptysSwitch[name];
         pty.ptyProcess.resize(data.col, data.row);
       });
