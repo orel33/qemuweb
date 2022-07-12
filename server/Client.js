@@ -7,7 +7,7 @@ class Client {
         this.userid = userid;
         this.ptysSwitch = {}; // Map<switchName, PTY>
         this.ptysHost = {}; // Map<hostName, PTY>
-        this.ptyControl = new PTY();
+        this.ptyControl = new PTY(true, "");
         this.topology = new Topology();
         this.scriptsFolder = "/srv/qemuweb/server/scripts/";
         this.runningMachines = false;
@@ -21,7 +21,7 @@ class Client {
 
     initSession(topologyText) {
         if (this.ptyControl.killed) {
-            this.ptyControl = new PTY();
+            this.ptyControl = new PTY(true, "");
         }
         this.ptyControl.sendCommand(this.scriptsFolder + "session-start.sh " + this.userid);
         this.ptyControl.sendCommand(this.scriptsFolder + "session-run-cmd.sh " + this.scriptsFolder + "qemunet-start.sh " + this.userid);
@@ -35,7 +35,7 @@ class Client {
     createSwitches() {
         for (var i in this.topology.switches) {
             const switchName = this.topology.switches[i];
-            this.ptysSwitch[switchName] = new PTY("switch");
+            this.ptysSwitch[switchName] = new PTY(false, this.userid);
             this.ptysSwitch[switchName].sendCommand(this.scriptsFolder + "session-run-cmd.sh " + this.scriptsFolder + "qemunet-switch.sh " + this.userid + " " + switchName);
             console.log("Started switch " + switchName + " for user " + this.userid);
         }
@@ -44,7 +44,7 @@ class Client {
     createHosts() {
         for (var i in this.topology.hosts) {
             const host = this.topology.hosts[i];
-            this.ptysHost[host.name] = new PTY("host");
+            this.ptysHost[host.name] = new PTY(false, this.userid);
             this.ptysHost[host.name].sendCommand(this.scriptsFolder + "session-run-cmd.sh " + this.scriptsFolder + "qemunet-host.sh " + this.userid 
                                         + " " + host.system + " " + host.name + " " + host.neighboors);
             console.log("Started host " + host.name + " for user " + this.userid);

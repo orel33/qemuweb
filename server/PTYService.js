@@ -2,10 +2,12 @@ const os = require("os");
 const pty = require("node-pty");
 
 class PTY {
-  constructor(type) {
+  constructor(isControl, userid) {
     this.shell = os.platform() === "win32" ? "cmd.exe" : "bash";
+    this.firejail = "/usr/bin/firejail"
+    this.argvJoin = ["--noroot", "--private=/tmp/" + userid, "--private-tmp", "--net=none", "--join=" + userid, "\0"]
     this.ptyProcess = null;
-    this.type = type;
+    this.isControl = isControl;
     this.connected = false;
     this.killed = false;
     // Initialize PTY process.
@@ -16,11 +18,19 @@ class PTY {
    * Spawn an instance of pty with a selected shell.
    */
   startPtyProcess() {
-    this.ptyProcess = pty.spawn(this.shell, [], {
-      name: "xterm-color",
-      cwd: process.env.HOME, // Which path should terminal start
-      env: process.env // Pass environment variables
-    });
+    if (this.isControl) {
+      this.ptyProcess = pty.spawn(this.shell, [], {
+        name: "xterm-color",
+        cwd: process.env.HOME, // Which path should terminal start
+        env: process.env // Pass environment variables
+      });
+    } else {
+      this.ptyProcess = pty.spawn(this.firejail, this.argvJoin, {
+        name: "xterm-color",
+        cwd: process.env.HOME, // Which path should terminal start
+        env: process.env // Pass environment variables
+      });
+    }
   }
 
   killPtyProcess() {
