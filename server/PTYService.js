@@ -41,6 +41,7 @@ class PTY {
     });
     this.ptyProcess.onExit((code, signal) => {
       socket.emit("exit");
+      socket.disconnect();
       this.killed = true;
     });
   }

@@ -11,6 +11,7 @@ class Client {
         this.topology = new Topology();
         this.scriptsFolder = "/srv/qemuweb/server/scripts/";
         this.runningMachines = false;
+        this.timeToDie = null;
     }
 
     requestTerm(name, type, socket) {
@@ -19,6 +20,9 @@ class Client {
     }
 
     initSession(topologyText) {
+        if (this.ptyControl.killed) {
+            this.ptyControl = new PTY();
+        }
         this.ptyControl.sendCommand(this.scriptsFolder + "session-start.sh " + this.userid);
         this.ptyControl.sendCommand(this.scriptsFolder + "session-run-cmd.sh " + this.scriptsFolder + "qemunet-start.sh " + this.userid);
         this.topology.parse(topologyText);
@@ -87,7 +91,7 @@ class Client {
         ptys["switches"] = switches;
 
         state["ptys"] = ptys;
-        console.log(state);
+
         return state;
     }
 }

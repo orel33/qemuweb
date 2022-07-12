@@ -25,7 +25,7 @@ export class TerminalUI {
       this.write(data);
     });
     this.socket.on("exit", () => {
-      this.write("The machine has exited");
+      this.write("\n***\nThe machine has exited\n***");
     });
     this.sendInput("\n");
   }
