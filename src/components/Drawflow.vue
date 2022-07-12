@@ -26,7 +26,7 @@
         </div>
     </el-header>
     <el-container class="container">
-      <el-aside width="110px" class="column">
+      <el-aside width="60px" class="column">
           <ul>
               <li v-for="n in listNodes" :key="n" draggable="true" :data-node="n.item" @dragstart="drag($event)" class="drag-drawflow" >
                   <div class="node" :style="`background: ${n.color};text-align: center`" >
@@ -414,9 +414,10 @@ export default {
     border-radius: 8px;
     border: 2px solid #494949;
     display: block;
-    height:88px;
+    height:44px;
+    width: 44px;
     line-height:40px;
-    padding: 10px;
+    padding: 4px;
     margin: 10px 0px;
     cursor: move;
 }

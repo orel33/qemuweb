@@ -77,6 +77,11 @@ img.switch, img.computer {
     height:65px;
 }
 
+.node img.switch, .node img.computer {
+    width:32px;
+    height:32px;
+}
+
 img.run-prompt {
     width: 24px;
     height: 24px;
