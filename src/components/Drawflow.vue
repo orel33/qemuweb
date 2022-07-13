@@ -341,7 +341,7 @@ export default {
       } else {
         ev.preventDefault();
         var data = ev.dataTransfer.getData("node");
-        addNodeToDrawFlow(data, ev.clientX, ev.clientY);
+        addNodeToDrawFlow(data, ev.clientX - 50, ev.clientY - 50);
       }
     }
     const allowDrop = (ev) => {
