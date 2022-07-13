@@ -1,8 +1,10 @@
 <template>
   <el-container>
     <el-header class="header">
-        <h3>QemuWeb</h3>
-        <div id="play-stop" class="play-button" @click="toggleEditorMode(); toggleExecution()"></div>
+        <div id="header-left">
+          <h3 id="header-title">QemuWeb</h3>
+          <div id="play-stop" class="play-button" @click="toggleEditorMode(); toggleExecution()"></div>
+        </div>
         <div class="dropdown">
           <button @click="toggleDropDown" class="dropbtn">
             <span class="burger-slice"></span>
@@ -399,46 +401,3 @@ export default {
 }
 
 </script>
-
-<style scoped>
-.header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-bottom: 1px solid #494949;
-}
-.container {
-    min-height: calc(100vh - 100px);
-}
-.column {
-    border-right: 1px solid #494949;
-}
-.column ul {
-    padding-inline-start: 0px;
-    padding: 10px 8px;
-}
-.column li {
-    background: transparent;
-}
-
-.node {
-    border-radius: 8px;
-    border: 2px solid #494949;
-    display: block;
-    height:44px;
-    width: 44px;
-    line-height:40px;
-    padding: 4px;
-    margin: 10px 0px;
-    cursor: move;
-}
-
-#drawflow {
-  width: 100%;
-  height: 97%;
-  text-align: initial;
-  background: #2b2c30;
-  background-size: 20px 20px;
-  background-image: radial-gradient(#494949 1px, transparent 1px); 
-}
-</style>
