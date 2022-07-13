@@ -36,8 +36,13 @@ class SocketService {
 
       this.setTimerToDeath(userid);
 
-      console.log("Client with id " + userid + " connect to the machine '" + socket.handshake.query.name + "' via socket ", socket.id);
+      if (!client.runningMachines) {
+        socket.disconnect();
+        return;
+      }
+
       client.requestTerm(name, type, socket);
+      console.log("Client with id " + userid + " connected to the machine '" + socket.handshake.query.name + "' via socket ", socket.id);
 
       socket.on("disconnect", () => {
         console.log("Client with id " + userid + " disconnected from socket ", socket.id);
@@ -94,9 +99,11 @@ class SocketService {
     client.timeToDie = setTimeout((function() {
         client.killQemunetSession();
         client.killSession();
-        client.ptyControl.killPtyProcess();
+        if (client.ptyControl) {
+          client.ptyControl.killPtyProcess();
+        }
         delete this.clients[userid];
-        console.log("CLIENT " + userid + " has succefully been finished and doesn't exist anymore");
+        console.log("CLIENT " + userid + " has succefully been erased and doesn't exist anymore");
     }).bind(this), 1000 * 60 * 60 * 3); // Executed after 3 hours
   }
 }

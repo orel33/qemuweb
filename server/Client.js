@@ -67,6 +67,15 @@ class Client {
 
     killSession() {
         this.ptyControl.sendCommand(this.scriptsFolder + "session-killall.sh " + this.userid);
+        for (var key of Object.keys(this.ptysSwitch)) {
+            this.ptysSwitch[key].killPtyProcess();
+        }
+        for (var key of Object.keys(this.ptysHost)) {
+            this.ptysHost[key].killPtyProcess();
+        }
+        this.ptysSwitch = {};
+        this.ptysHost = {};
+        this.runningMachines = false;
         console.log("Session killed for " + this.userid);
     }
 
