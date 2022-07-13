@@ -108,6 +108,11 @@ export default {
   methods: {
     /// Edit/Execution mode
     toggleExecution() {
+      if (document.getElementsByClassName('drawflow-node').length == 0) {
+        alert("The virtual network has no components!");
+        return;
+      }
+
       this.toggleEditorMode();
 
       if (!this.execMode) {
