@@ -19,22 +19,42 @@ Install with `sudo apt install tmux`
 
 ## Install
 
+`npm install` doesn't work on qemuweb-v0 machine because it connects to a mirror that is a local packages repository at CREMI and this local repository doesn't have all the dependancies for the project. You have to construct the node_modules folders on an other machine and copy those folders manually.
+
+#### On your PC
+```
+git clone git@gitlab.emi.u-bordeaux.fr:qemunet/qemuweb.git
+```
 ```
 cd qemuweb
 npm install
-npm run build
+scp -r node_modules root@qemuweb:/root/srv/qemuweb/
 
 cd qemuweb/server
 npm install
+scp -r node_modules root@qemuweb:/root/srv/qemuweb/server/
+```
+
+#### On qemuweb-V0 machine at CREMI
+If your PC and qemuweb-v0 have a different version of Node or npm, you have to `rebuild` the modules.
+```
+git clone git@gitlab.emi.u-bordeaux.fr:qemunet/qemuweb.git
+```
+```
+cd qemuweb
+npm rebuild
+
+cd qemuweb/server
+npm rebuild
 ```
 
 ## Run
 
 ```
 cd qemuweb/server
-node app.js
+node app.js -s -o -p 443
 ```
-Then open http://localhost:3000 on a browser.
+Then open https://qemuweb.emi.u-bordeaux.fr on a browser.
 
 ## Options
 
