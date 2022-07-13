@@ -70,23 +70,26 @@ class Client {
         console.log("Session killed for " + this.userid);
     }
 
-    getState() {
-        var state = { running: this.runningMachines, topology: this.topology.text };
-        var ptys = {};
+    registerDrawJSON(json) {
+        this.topology.drawflowJSON = json;
+    }
 
-        ptys["control"] = {killed: this.ptyControl.killed}
+    getState() {
+        var state = { running: this.runningMachines, topology: this.topology.text, drawflow: this.topology.drawflowJSON };
+        var ptys = {};
+        ptys["control"] = { killed: this.ptyControl.killed }
 
         var hosts = {};
         for (var key of Object.keys(this.ptysHost)) {
             var h = this.ptysHost[key];
-            hosts[key] = {connected: h.connected, killed: h.killed}
+            hosts[key] = { connected: h.connected, killed: h.killed }
         }
         ptys["hosts"] = hosts;
 
         var switches = {};
         for (var key of Object.keys(this.ptysSwitch)) {
             var s = this.ptysSwitch[key];
-            switches[key] = {connected: s.connected, killed: s.killed}
+            switches[key] = { connected: s.connected, killed: s.killed }
         }
         ptys["switches"] = switches;
 

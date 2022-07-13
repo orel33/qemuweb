@@ -66,6 +66,12 @@ class SocketService {
     this.clients[userid].initSession(request.body);
   }
 
+  receiveDrawJSON(request) {
+    var userid = this.openid ? request.session.passport.user.id : request.session.cookie.userid;
+    this.setTimerToDeath(userid);
+    this.clients[userid].registerDrawflowJSON(request.body);
+  }
+
   stopTopo(request) {
     var userid = this.openid ? request.session.passport.user.id : request.session.cookie.userid;
     this.setTimerToDeath(userid);

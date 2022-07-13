@@ -3,6 +3,7 @@ class Topology {
         this.switches = [];
         this.hosts = [];
         this.text = "";
+        this.drawflowJSON = {};
     }
 
     parse(textContent) {

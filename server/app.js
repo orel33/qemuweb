@@ -139,6 +139,13 @@ app.post('/index/runtopo', textParser, function (req, res, next) {
   socketService.receiveTopo(req);
 });
 
+var jsonParser = bodyParser.json();
+
+app.post('/index/registerjson', jsonParser, function (req, res, next) {
+  res.sendStatus(200);
+  socketService.receiveDrawJSON(req);
+});
+
 app.get('/index/stoptopo', function (req, res, next) {
   res.sendStatus(200);
   socketService.stopTopo(req);
