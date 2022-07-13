@@ -107,19 +107,22 @@ export default {
   },
   methods: {
     /// Edit/Execution mode
-    toggleExecution() {
-      if (document.getElementsByClassName('drawflow-node').length == 0) {
-        alert("The virtual network has no components!");
-        return;
-      }
-
-      this.toggleEditorMode();
-
+    toggleExecution(serverRunning = false) {
       if (!this.execMode) {
+        if (document.getElementsByClassName('drawflow-node').length == 0 && !serverRunning) {
+          alert("The virtual network has no components!");
+          return;
+        }
+        if (!this.checkNamesUnicity() && !serverRunning) {
+          alert("Some components have the same name : can't run the virtual network");
+          return;
+        }
         this.toExecMode();  
       } else {
         this.toEditMode();
       }
+
+      this.toggleEditorMode();
 
       var aside = document.querySelector("aside");
       var cogs = document.querySelectorAll(".cog");
@@ -127,7 +130,7 @@ export default {
       var prompts = document.querySelectorAll(".terminal-frame");
 
       if (this.execMode) {
-        var conf = window.confirm("You will stop the virtual network execution and kill all the machines, do you confirm?")
+        var conf = window.confirm("You will stop the virtual network execution and kill savagely all the machines, do you confirm?")
         if (!conf) { return; }
         if (!this.serverExchanges.stopExecutionAtServer()) { return; }
       }
@@ -162,6 +165,15 @@ export default {
     },
     toEditMode() {
       this.serverExchanges.stopExecutionAtServer();
+    },
+    checkNamesUnicity() {
+      /** Return true if there is no duplicate names for hosts or switches, false if there is duplication */
+      var hostsName = Array.from(document.getElementsByClassName('host-name'), span => span.innerHTML);
+      var switchesName = Array.from(document.getElementsByClassName('switch-name'), span => span.innerHTML);
+      if (hostsName.length > new Set(hostsName).size || switchesName.length > new Set(switchesName).size) {
+        return false;
+      }
+      return true;
     },
 
     /// Handle general modals
@@ -240,6 +252,8 @@ export default {
       }
     });
 
+    console.log(this.checkNamesUnicity);
+
     this.systemIO = new SystemIO();
     this.settings = new Settings();
     this.serverExchanges = new ServerExchanges();
@@ -251,8 +265,7 @@ export default {
 
     this.serverExchanges.getDistribFromServer();
     if (this.serverExchanges.getServerState().running) {
-      this.toggleEditorMode();
-      this.toggleExecution();
+      this.toggleExecution(true);
     }
   },
   setup() {
