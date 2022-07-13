@@ -3,7 +3,7 @@
     <el-header class="header">
         <div id="header-left">
           <h3 id="header-title">QemuWeb</h3>
-          <div id="play-stop" class="play-button" @click="toggleEditorMode(); toggleExecution()"></div>
+          <div id="play-stop" class="play-button" @click="toggleExecution()"></div>
         </div>
         <div class="dropdown">
           <button @click="toggleDropDown" class="dropbtn">
@@ -16,12 +16,12 @@
               Load
               <input type="file" id="import-json-input" accept="application/json" @change="importJSON" style="width:0px;width:0px">
             </a>
-            <a href="#" @click="exportEditor(); exportJSON(JSONData)">Save</a>
+            <a href="#" @click="exportJSON()">Save</a>
             <a href="#" @click="uploadTopo()">
               Import
               <input type="file" id="import-topo-input" @change="importTopo" style="width:0px;width:0px">
             </a>
-            <a href="#" @click="exportEditorTopo(); exportTopo(topoData)">Export</a>
+            <a href="#" @click="exportTopo()">Export</a>
             <a id="open-settings" href="#" @click="displaySettings">Settings</a>
             <a href="#" @click="displayAbout">About</a>
           </div>
@@ -108,6 +108,8 @@ export default {
   methods: {
     /// Edit/Execution mode
     toggleExecution() {
+      this.toggleEditorMode();
+
       if (!this.execMode) {
         this.toExecMode();  
       } else {
@@ -169,8 +171,9 @@ export default {
     },
 
     /// Import/Export
-    exportJSON(data) {
-      this.systemIO.saveFile(JSON.stringify(data), "export.json", "json");
+    exportJSON() {
+      this.exportEditor();
+      this.systemIO.saveFile(JSON.stringify(this.JSONData), "export.json", "json");
     },
     uploadJSON() {
       var input = document.getElementById("import-json-input");
@@ -189,9 +192,10 @@ export default {
         input.value = null;
       })
     },
-    exportTopo(data) {
-      console.log("Exporting data = \n", data);
-      this.systemIO.saveFile(data, "export.topo", "topo");
+    exportTopo() {
+      this.exportEditorTopo();
+      console.log("Exporting data = \n", this.topoData);
+      this.systemIO.saveFile(this.topoData, "export.topo", "topo");
     },
     uploadTopo() {
       var input = document.getElementById("import-topo-input");
