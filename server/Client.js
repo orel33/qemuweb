@@ -70,7 +70,7 @@ class Client {
         console.log("Session killed for " + this.userid);
     }
 
-    registerDrawJSON(json) {
+    registerDrawflowJSON(json) {
         this.topology.drawflowJSON = json;
     }
 

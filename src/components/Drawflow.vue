@@ -14,7 +14,7 @@
               Load
               <input type="file" id="import-json-input" accept="application/json" @change="importJSON" style="width:0px;width:0px">
             </a>
-            <a href="#" @click="exportEditor(); exportJSON(dialogData)">Save</a>
+            <a href="#" @click="exportEditor(); exportJSON(JSONData)">Save</a>
             <a href="#" @click="uploadTopo()">
               Import
               <input type="file" id="import-topo-input" @change="importTopo" style="width:0px;width:0px">
@@ -114,7 +114,6 @@ export default {
 
       var aside = document.querySelector("aside");
       var cogs = document.querySelectorAll(".cog");
-      console.log(cogs);
       var runPrompts = document.querySelectorAll(".run-prompt");
       var prompts = document.querySelectorAll(".terminal-frame");
 
@@ -136,16 +135,20 @@ export default {
       }
 
       this.execMode = !this.execMode;
-      
-      console.log(this.serverExchanges.getServerState());
     },
     toExecMode() {
       var state = this.serverExchanges.getServerState();
       if (state.running && state.topology.length > 0) {
-        this.importEditor(this.systemIO.topoToJSON(state.topology));
+        if (state.drawflow && state.drawflow.drawflow) {
+          this.importEditor(state.drawflow);  
+        } else {
+          this.importEditor(this.systemIO.topoToJSON(state.topology));
+        }
       } else {
         this.exportEditorTopo();
         this.serverExchanges.sendTopoToServer(this.topoData);
+        this.exportEditor();
+        this.serverExchanges.sendDrawflowToServer(this.JSONData);
       }
     },
     toEditMode() {
@@ -236,7 +239,6 @@ export default {
     this.settings.setOption('reduced-mode', false);
 
     this.serverExchanges.getDistribFromServer();
-    console.log(this.serverExchanges.getServerState());
     if (this.serverExchanges.getServerState().running) {
       this.toggleEditorMode();
       this.toggleExecution();
@@ -265,13 +267,13 @@ export default {
     ])
     
     var editor;// = shallowRef({})
-    const dialogData = ref({});
+    const JSONData = ref({});
     const topoData = ref({});
     const Vue = { version: 3, h, render };
     const internalInstance = getCurrentInstance();
     
     function exportEditor() {
-      dialogData.value = editor.export();
+      JSONData.value = editor.export();
     }
 
     function importEditor(data) {
@@ -280,25 +282,34 @@ export default {
         if (confirm) {
           editor.clear();
           editor.nodeId = 1; // reset nodeId because clear() doesn't do it
-          dialogData.value = editor.import(data);
+          JSONData.value = editor.import(data);
         }
       } else {
-        dialogData.value = editor.import(data);
+        JSONData.value = editor.import(data);
       }
+
+      // Force to use setTimeout to delay the re-draw because drawflow seems to draw (badly) the connections after this function
+      setTimeout(() => {
+        var allNodes = editor.getNodesFromName('Host').concat(editor.getNodesFromName('Switch'));
+        for (let id of allNodes) {
+          // Re-draw all connections
+          editor.updateConnectionNodes("node-" + id);
+        }
+      }, 500);
     }
 
     function exportEditorTopo() {
-      var jsonData = editor.export().drawflow.Home.data;
+      var data = editor.export().drawflow.Home.data;
       var result = "";
       var key, node;
-      for (key of Object.keys(jsonData)) {
-        node = jsonData[key];
+      for (key of Object.keys(data)) {
+        node = data[key];
         if (node.class == "Switch") {
           result += "SWITCH " + node.data.name + "\n";
         }
       }
-      for (key of Object.keys(jsonData)) {
-        node = jsonData[key];
+      for (key of Object.keys(data)) {
+        node = data[key];
         if (node.class == "Host") {
           result += "HOST " + node.data.system + " " + node.data.name;
           for (var i of Object.keys(node.outputs)) {
@@ -381,7 +392,7 @@ export default {
     })
 
     return {
-      exportEditor, listNodes, drag, drop, allowDrop, dialogData, importEditor, exportEditorTopo, topoData, toggleEditorMode
+      exportEditor, listNodes, drag, drop, allowDrop, JSONData, importEditor, exportEditorTopo, topoData, toggleEditorMode
     }
 
   }

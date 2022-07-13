@@ -48,7 +48,7 @@ export class Settings {
 
     updateNodeDisplay() {
         var allNodes = this.editor.getNodesFromName('Host').concat(this.editor.getNodesFromName('Switch'));
-        for (const id in allNodes) {
+        for (let id of allNodes) {
             this.editor.updateConnectionNodes("node-" + id);
         }
     }

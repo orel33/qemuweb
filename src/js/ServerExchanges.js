@@ -42,6 +42,19 @@ export class ServerExchanges {
         });
     }
 
+    sendDrawflowToServer(json) {
+        console.log("JSON TO SEND TO SERVER: ", JSON.stringify(json));
+        fetch("registerjson", { method: "POST", body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } })
+        .then(function(response) {
+            if (!response.ok) {
+                console.log('Bad response of the server sending drawflow json');
+            }
+        })
+        .catch(function(error) {
+            console.log('There was a problem sending drawflow json: ' + error.message);
+        });
+    }
+
     stopExecutionAtServer() {
         var success = true;
         fetch("stoptopo")
