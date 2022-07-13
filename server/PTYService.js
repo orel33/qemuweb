@@ -4,8 +4,9 @@ const pty = require("node-pty");
 class PTY {
   constructor(isControl, userid) {
     this.shell = os.platform() === "win32" ? "cmd.exe" : "bash";
-    this.firejail = "/usr/bin/firejail"
-    this.argvJoin = ["--noroot", "--private=/tmp/" + userid, "--private-tmp", "--net=none", "--join=" + userid, "\0"]
+    this.firejail = "/usr/bin/firejail";
+    //this.argvJoin = ["--noroot", "--private=/tmp/" + userid, "--private-tmp", "--net=none", "--join=" + userid]
+    this.argvJoin = [];
     this.ptyProcess = null;
     this.isControl = isControl;
     this.connected = false;
