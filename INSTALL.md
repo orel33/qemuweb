@@ -9,6 +9,14 @@ Install with ```sudo apt install node```
 
 Install with ```sudo apt install npm```
 
+- Firejail
+
+Install with ```sudo apt install firejail```
+
+- Tmux
+
+Install with ```sudo apt install tmux```
+
 ## Install
 
 ```
