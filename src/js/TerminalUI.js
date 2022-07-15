@@ -16,6 +16,7 @@ export class TerminalUI {
 
   /**
    * Attach event listeners for terminal UI and socket.io client
+   * @param {*} socket the listened socket 
    */
   startListening(socket) {
     this.socket = socket;
@@ -32,6 +33,7 @@ export class TerminalUI {
 
   /**
    * Print something to terminal UI.
+   * @param {String} text the content writed on the terminal UI
    */
   write(text) {
     this.xterm.write(text);
@@ -46,14 +48,14 @@ export class TerminalUI {
 
   /**
    * Send whatever you type in Terminal UI to PTY process in server.
-   * @param {*} input Input to send to server
+   * @param {*} input content to send to server
    */
   sendInput(input) {
     this.socket.emit("input", input);
   }
 
   /**
-   *
+   * Init a new xterm in a container
    * @param {HTMLElement} container HTMLElement where xterm can attach terminal ui instance.
    */
   attachTo(container) {
@@ -72,6 +74,9 @@ export class TerminalUI {
     this.prompt();
   }
 
+  /**
+   * Clear the xterm
+   */
   clear() {
     this.xterm.clear();
   }

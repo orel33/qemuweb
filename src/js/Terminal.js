@@ -12,6 +12,11 @@ export class Terminal {
         this.id = id;
     }
 
+    /**
+     * Create a new socket object
+     * @param {String} serverAddr 
+     * @returns a Promise on the socket
+     */
     connectToSocket(serverAddr) {
         return new Promise(res => {
             var name = document.getElementById("term-" + this.id).querySelector(".term-name").innerHTML;
@@ -20,10 +25,17 @@ export class Terminal {
         });
     }
 
+    /**
+     * Bind this TerminalUI to the instance of the terminal in server via the socket
+     * @param {*} socket the socket that bind TerminalUI and real terminal in server
+     */
     startListening(socket) {
         this.terminalUI.startListening(socket);
     }
 
+    /**
+     * Start the connection of this Terminal
+     */
     startConnection() {
         console.log("connect on " + this.address)
         this.connectToSocket(this.address).then(socket => {
@@ -32,6 +44,11 @@ export class Terminal {
         });
     }
 
+    /**
+     * Create a new terminal container element in the DOM
+     * @param {Number} nodeId the id of the component to which this terminal is attached
+     * @param {String} name the name of the component to which this terminal is attached
+     */
     createTerminal(nodeId, name) {
         var frame = document.createElement("div");
         var container = document.createElement("div");

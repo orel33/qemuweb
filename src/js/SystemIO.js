@@ -1,4 +1,10 @@
 export class SystemIO {
+    /**
+     * Save a file locally
+     * @param {*} data the data to write in the file
+     * @param {String} filename the name of the file
+     * @param {String} type the type of the file
+     */
     saveFile(data, filename, type) {
         var file = new Blob([data], {type: type});
         var a = document.createElement("a"), url = URL.createObjectURL(file);
@@ -12,6 +18,11 @@ export class SystemIO {
         }, 0); 
     }
 
+    /**
+     * Read a local file
+     * @param {Blob, File} file the file to read
+     * @param {Function} callback the function called when the file is read 
+     */
     readFile(file, callback) {
         var reader = new FileReader();
         var content = "nothing";
@@ -22,6 +33,11 @@ export class SystemIO {
         reader.readAsText(file);
     }
 
+    /**
+     * Convert a topology to a JSON understandable by Drawflow 
+     * @param {String} content the topology
+     * @returns a JSON understandable by Drawflow
+     */
     topoToJSON(content) {
         var lines = content.split('\n');
         var fullData = { "drawflow": { "Home": { "data": {}}}};
@@ -95,6 +111,11 @@ export class SystemIO {
         return fullData;
     }
 
+    /**
+     * Return a random integer
+     * @param {Number} max the ceil for the random integer 
+     * @returns a random integer between 0 and max
+     */
     getRandomInt(max) {
         return Math.floor(Math.random() * max);
     }
