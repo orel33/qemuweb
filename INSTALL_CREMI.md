@@ -43,6 +43,7 @@ git clone git@gitlab.emi.u-bordeaux.fr:qemunet/qemuweb.git
 ```
 cd qemuweb
 npm rebuild
+npm run build
 
 cd qemuweb/server
 npm rebuild
