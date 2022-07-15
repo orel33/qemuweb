@@ -52,5 +52,20 @@ Options:
     -h, --help           display help for command
 ```
 
+## OpenId
+
+If you use the --openid option, the server will ask you to authenticate via OpenId before you can access the page.
+The setup of the OpenId server is made in [app.js](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/blob/main/server/app.js).
+Some parameters are hard-coded and others are in [.env](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/blob/main/server/.env) configuration file.
+    - In .env, you can find:
+        - OIDC_BASE_URI: The base URI for your authentication OpenId server
+        - OIDC_CLIENT_ID and OIDC_CLIENT_SECRET : Your credentials that allow you to request the OpenId server
+        - OIDC_REDIRECT_URI: The URI that the OpenId server calls when the client has successfully authenticate (=callback URI)
+        - PORT : The port through which you request the server
+    - In app.js, you can find :
+        - authorizationURL: The URL which is requested when your server ask for an authentication to the OpenId server
+        - userInfoURL: The URL which is requested when your server ask for user info to the OpenId server
+        - authorizationURL: The URL which is requested when your server ask for the connection token to the OpenId server
+If you want to change OIDC_REDIRECT_URI parameter, you have also to add a callback handler for this specific route as is done for '/.oidc' in app.js .
 
 
