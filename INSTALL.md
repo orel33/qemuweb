@@ -57,7 +57,7 @@ Options:
 - `node app.js --secure` run a server in with secure http listening https connections. To secure the connections, the server use by default self-signed certificate located in the [cert](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/tree/main/server/cert) folder.
     - You can modify the certificate and put the one you want instead, for instance:
         - `node app.js --secure --sslkey /path/to/my/supercert/key.pem --sslcert /path/to/my/supercert/server.crt`
-- `node app.js --openid` run a server will force the users to authenticate with OpenId before accessing the page.
+- `node app.js --openid` run a server that will force the users to authenticate with OpenId before accessing the page.
     - :lock: If you don't put `--secure` option with `--openid`, the secure mode will be enable anyway because the OpenId server only accept https requests. 
 - `node app.js -s -o -p 443` run a server protected by OpenId authentication and listening https connections on port 443. This is the command run on the qemuweb-v0 server at CREMI.
 
