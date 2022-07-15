@@ -14,7 +14,6 @@ export default {
     name: String,
     distributions: Array,
     system: String,
-    neighboors: Map,
     interfacesCount: Number,
     interfacesSide: Object,
     refreshInterfacesDisplay: Function
@@ -34,14 +33,6 @@ export default {
       },
       set(value) {
         this.$emit('updateHostName', value)
-      }
-    },
-    localNeighboors: {
-      get() {
-        return this.neighboors;
-      },
-      set(value) {
-        this.$emit('updateNeighboors', value)
       }
     },
     localInterfacesCount: {

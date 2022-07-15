@@ -47,7 +47,6 @@ export class Terminal {
         document.getElementById("node-" + nodeId).after(frame);
         frame.setAttribute("id", "term-" + nodeId);
         nameSpan.innerHTML = name;
-        console.log("terminal" + " term-" + nodeId + " created");
 
         $(frame).draggable({ cursor: "move"});
         $(frame).resizable({ resize: function(ev) {

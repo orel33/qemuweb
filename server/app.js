@@ -66,12 +66,7 @@ if (options.openid) {
     passReqToCallback: true
   },
   function(req, issuer, userId, profile, accessToken, refreshToken, params, cb) {
-    /*console.log('issuer:', issuer);
-    console.log('userId:', userId);
-    console.log('accessToken:', accessToken);
-    console.log('refreshToken:', refreshToken);
-    console.log('params:', params);*/
-
+    
     req.session.accessToken = accessToken;
     req.session.idToken = params['id_token'];
 

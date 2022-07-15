@@ -8,10 +8,10 @@
         <span class="host-name">{{name}}</span>
 
         <Teleport to="body">
-            <modal @updateSystem="updateSystem" @updateHostName="updateName" @updateNeighboors="updateNeighboors" @updateInterfaces="updateInterfaces" 
+            <modal @updateSystem="updateSystem" @updateHostName="updateName" @updateInterfaces="updateInterfaces" 
                     @close="showParamModal = false" 
                     :show="showParamModal" :hostId="id" :name="name" :distributions="distributions" :system="system" 
-                    :neighboors="neighboors" :interfacesCount="interfacesCount" :interfacesSide="interfacesSide"
+                    :interfacesCount="interfacesCount" :interfacesSide="interfacesSide"
                     :refreshInterfacesDisplay="refreshInterfacesDisplay">
             <template #header>
                 <h2>Host settings</h2>
@@ -40,7 +40,6 @@ export default defineComponent({
             name: "host",
             number: -1,
             system: "debian10",
-            neighboors: new MyMap(), // Map<interfaceNumber, neighboorNodeId:portNumber>,
             interfacesCount: 1,
             interfacesSide: new MyMap(), // Map<interfaceNumber, side>
             settings: new Settings(),
@@ -85,10 +84,6 @@ export default defineComponent({
             this.name = value;
             this.updateNodeData();
         },
-        updateNeighboors(value) {
-            this.neighboors = value;
-            this.updateNodeData();
-        },
         updateInterfaces(value) {
             this.interfacesCount = value;
             this.updateNodeData();
@@ -96,8 +91,7 @@ export default defineComponent({
         updateNodeData() {
             this.editor.updateNodeDataFromId(this.id, { "name": this.name, 
                                                         "interfacesCount": this.interfacesCount,
-                                                        "system": this.system,
-                                                        "neighboors": Object.fromEntries(this.neighboors)});
+                                                        "system": this.system });
         },
         refreshInterfacesDisplay() {
             var checked = this.settings.getOption("display-interfaces-name") == "true";
@@ -134,17 +128,6 @@ export default defineComponent({
                         const removeConnectionInfo = nodeInfo.outputs[info.output_class].connections[0];
                         comp.editor.removeSingleConnection(info.output_id, removeConnectionInfo.node, info.output_class, removeConnectionInfo.output);
                     }
-                    comp.neighboors.set(inter, info.input_id + ":" + info.input_class.slice(-1));
-                    comp.updateNodeData();
-                    console.log("Host " + comp.id + " added neighboor : ", comp.neighboors);
-                }
-            });
-
-            this.editor.on("connectionRemoved", function(info) {
-                if (info.output_id == comp.id) {
-                    comp.neighboors.delete(Number(info.output_class.slice(-1)));
-                    comp.updateNodeData();
-                    console.log("Host " + comp.id + " removed neighboor : ", comp.neighboors);
                 }
             });
             this.number = this.getNumber() + 1;

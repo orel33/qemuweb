@@ -43,7 +43,6 @@ export class ServerExchanges {
     }
 
     sendDrawflowToServer(json) {
-        console.log("JSON TO SEND TO SERVER: ", JSON.stringify(json));
         fetch("registerjson", { method: "POST", body: JSON.stringify(json), headers: { 'Content-Type': 'application/json' } })
         .then(function(response) {
             if (!response.ok) {
