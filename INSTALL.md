@@ -22,16 +22,16 @@ Install with `sudo apt install tmux`
 ```
 cd qemuweb
 npm install
-npm run build
 
-cd qemuweb/server
+cd qemuweb/frontend
 npm install
+npm run build
 ```
 
 ## Run
 
 ```
-cd qemuweb/server
+cd qemuweb
 node app.js
 ```
 Then open http://localhost:3000 on a browser.
@@ -54,7 +54,7 @@ Options:
 #### Exemples
 
 - `node app.js` run a server listening http connections on port 3000. Perfect for **local testing** but you can also use it to deploy your server through a simple way.
-- `node app.js --secure` run a server in with secure http listening https connections. To secure the connections, the server use by default self-signed certificate located in the [cert](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/tree/main/server/cert) folder.
+- `node app.js --secure` run a server in with secure http listening https connections. To secure the connections, the server use by default self-signed certificate located in the [cert](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/tree/main/cert) folder.
     - You can modify the certificate and put the one you want instead, for instance:
         - `node app.js --secure --sslkey /path/to/my/supercert/key.pem --sslcert /path/to/my/supercert/server.crt`
 - `node app.js --openid` run a server that will force the users to authenticate with OpenId before accessing the page.
@@ -64,8 +64,8 @@ Options:
 ## OpenId
 
 If you use the --openid option, the server will ask you to authenticate via OpenId before you can access the page.
-The setup of the OpenId server is made in [app.js](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/blob/main/server/app.js).
-Some parameters are hard-coded and others are in [.env](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/blob/main/server/.env) configuration file.
+The setup of the OpenId server is made in [app.js](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/blob/main/app.js).
+Some parameters are hard-coded and others are in [.env](https://gitlab.emi.u-bordeaux.fr/qemunet/qemuweb/-/blob/main/.env) configuration file.
 
 - In .env, you can find:
     - OIDC_BASE_URI: The base URI for your authentication OpenId server

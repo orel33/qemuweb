@@ -1,51 +1,34 @@
 {
-  "name": "demo-xtermjs",
-  "version": "0.1.0",
+  "name": "web-terminal-tutorial-server",
+  "version": "1.0.0",
+  "description": "",
+  "main": "src/index.js",
   "scripts": {
-    "serve": "vue-cli-service serve",
-    "build": "vue-cli-service build --dest ./server/dist",
-    "lint": "vue-cli-service lint"
+    "start": "nodemon src/index.js localhost 8080"
   },
   "dependencies": {
-    "@element-plus/icons": "^0.0.11",
-    "drawflow": "^0.0.51",
-    "element-plus": "^1.1.0-beta.24",
-    "jquery": "^3.6.0",
-    "socket.io-client": "2.3.0",
-    "vue": "^3.2.13",
-    "xterm": "4.6.0",
-    "xterm-addon-fit": "^0.5.0"
+    "body-parser": "^1.20.0",
+    "child_process": "^1.0.2",
+    "commander": "^9.3.0",
+    "cookie-parser": "^1.4.5",
+    "cookie-session": "^2.0.0",
+    "dotenv": "^5.0.1",
+    "express": "^4.18.1",
+    "express-openid-connect": "^2.7.2",
+    "express-session": "^1.17.2",
+    "fs": "^0.0.1-security",
+    "https": "^1.0.0",
+    "node-pty": "0.9.0",
+    "openid-client": "^5.1.6",
+    "passport": "^0.4.1",
+    "passport-openidconnect": "0.0.2",
+    "path": "^0.12.7",
+    "request": "^2.88.2",
+    "socket.io": "2.3.0",
+    "uuid": "^8.3.2"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.16",
-    "@babel/eslint-parser": "^7.12.16",
-    "@vue/cli-plugin-babel": "~5.0.0",
-    "@vue/cli-plugin-eslint": "~5.0.0",
-    "@vue/cli-service": "~5.0.0",
-    "eslint": "^7.32.0",
-    "eslint-plugin-vue": "^8.0.3"
+    "nodemon": "1.18.4"
   },
-  "eslintConfig": {
-    "root": true,
-    "env": {
-      "node": true
-    },
-    "extends": [
-      "plugin:vue/vue3-essential",
-      "eslint:recommended"
-    ],
-    "parserOptions": {
-      "parser": "@babel/eslint-parser"
-    },
-    "rules": {
-      "no-unused-vars": "off",
-      "vue/multi-word-component-names": "off"
-    }
-  },
-  "browserslist": [
-    "> 1%",
-    "last 2 versions",
-    "not dead",
-    "not ie 11"
-  ]
+  "keywords": []
 }

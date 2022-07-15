@@ -9,7 +9,7 @@ class Client {
         this.ptysHost = {}; // Map<hostName, PTY>
         this.ptyControl = new PTY(true, "");
         this.topology = new Topology();
-        this.scriptsFolder = "/srv/qemuweb/server/scripts/";
+        this.scriptsFolder = "/srv/qemuweb/scripts/";
         this.runningMachines = false;
         this.timeToDie = null;
     }
