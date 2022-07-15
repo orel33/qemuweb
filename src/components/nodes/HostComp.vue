@@ -74,6 +74,9 @@ export default defineComponent({
     },
     methods: {
         getNumber() {
+            /**
+             * Return the index of this switch among all the switches
+             */
             return this.editor.getNodesFromName('Host').indexOf(this.id);
         },
         updateSystem(value) {
@@ -94,13 +97,16 @@ export default defineComponent({
                                                         "system": this.system });
         },
         refreshInterfacesDisplay() {
+            /**
+             * Display or not interfaces name according to the general setting
+             */
             var checked = this.settings.getOption("display-interfaces-name") == "true";
             var display = checked ? "block" : "none";
             var outputs = document.querySelectorAll(".drawflow-node.Host .outputs .output");
             for (let output of outputs) {
                 output.style.setProperty('--vardisplay', display);
             }
-            this.settings.changeReducedMode();
+            this.settings.updateReducedMode();
         },
         showPrompt() {
             var term = document.getElementById("term-" + this.id);

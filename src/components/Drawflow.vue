@@ -57,7 +57,7 @@
     </div>
     <div class="modal-section">
       <span> Reduced mode : </span>
-      <input id="reduced-check" type="checkbox" @change="settings.changeReducedMode">
+      <input id="reduced-check" type="checkbox" @change="settings.updateReducedMode">
       <img class="info-img" src="@/assets/info.png" title="Hide outputs/inputs circle">
     </div>
   </el-dialog>
@@ -106,8 +106,13 @@ export default {
     }
   },
   methods: {
-    /// Edit/Execution mode
+    /* Edit/Execution mode */
     toggleExecution(serverRunning = false) {
+      /**
+       * Enable/Disable execution mode
+       */
+
+      // Tell to the server to run/stop
       if (!this.execMode) {
         if (document.getElementsByClassName('drawflow-node').length == 0 && !serverRunning) {
           alert("The virtual network has no components!");
@@ -119,8 +124,13 @@ export default {
         }
         this.toExecMode();  
       } else {
-        this.toEditMode();
+        var conf = window.confirm("You will stop the virtual network execution and kill savagely all the machines, do you confirm?")
+        if (!conf) { return; }
+        if (!this.serverExchanges.stopExecutionAtServer()) { return; }
       }
+
+
+      // Then update the view on the page
 
       this.toggleEditorMode();
 
@@ -128,12 +138,6 @@ export default {
       var cogs = document.querySelectorAll(".cog");
       var runPrompts = document.querySelectorAll(".run-prompt");
       var prompts = document.querySelectorAll(".terminal-frame");
-
-      if (this.execMode) {
-        var conf = window.confirm("You will stop the virtual network execution and kill savagely all the machines, do you confirm?")
-        if (!conf) { return; }
-        if (!this.serverExchanges.stopExecutionAtServer()) { return; }
-      }
 
       document.getElementById("play-stop").classList.toggle("play-button");
       document.getElementById("play-stop").classList.toggle("stop-button");
@@ -149,6 +153,10 @@ export default {
       this.execMode = !this.execMode;
     },
     toExecMode() {
+      /**
+       * Switch to execution mode by sending topology to the server
+       * if already in execution mode (on refresh) only load the topology
+       */
       var state = this.serverExchanges.getServerState();
       if (state.running && state.topology.length > 0) {
         if (state.drawflow && state.drawflow.drawflow) {
@@ -163,11 +171,10 @@ export default {
         this.serverExchanges.sendDrawflowToServer(this.JSONData);
       }
     },
-    toEditMode() {
-      this.serverExchanges.stopExecutionAtServer();
-    },
     checkNamesUnicity() {
-      /** Return true if there is no duplicate names for hosts or switches, false if there is duplication */
+      /**
+       *  Return true if there is no duplicate names for hosts or switches, false if there is duplication 
+       */
       var hostsName = Array.from(document.getElementsByClassName('host-name'), span => span.innerHTML);
       var switchesName = Array.from(document.getElementsByClassName('switch-name'), span => span.innerHTML);
       if (hostsName.length > new Set(hostsName).size || switchesName.length > new Set(switchesName).size) {
@@ -176,7 +183,7 @@ export default {
       return true;
     },
 
-    /// Handle general modals
+    /* Handle general modals display */
     displaySettings() {
       this.dialogSettings = true;
     },
@@ -187,16 +194,25 @@ export default {
       document.getElementById("dropdownmenu").classList.toggle("show");
     },
 
-    /// Import/Export
+    /* Import/Export */
     exportJSON() {
+      /**
+       * save JSON of drawflow composition locally
+       */
       this.exportEditor();
       this.systemIO.saveFile(JSON.stringify(this.JSONData), "export.json", "json");
     },
     uploadJSON() {
+      /**
+       * Trigger the hidden file input for JSON load
+       */
       var input = document.getElementById("import-json-input");
       input.click();
     },
     importJSON() {
+      /**
+       * load JSON of drawflow compostion from local file
+       */
       var input = document.getElementById("import-json-input");
       var importEditor = this.importEditor;
 
@@ -210,17 +226,23 @@ export default {
       })
     },
     exportTopo() {
+      /**
+       * save locally the topology file from current composition
+       */
       this.exportEditorTopo();
       this.systemIO.saveFile(this.topoData, "export.topo", "topo");
     },
     uploadTopo() {
+      /**
+       * Trigger the hidden file input for topology file load
+       */
       var input = document.getElementById("import-topo-input");
       input.click();
     },
-    getRandomInt(max) {
-      return Math.floor(Math.random() * max);
-    },
     importTopo() {
+      /**
+       * load topology from local topology file in current composition
+       */
       var input = document.getElementById("import-topo-input");
       var importEditor = this.importEditor;
 
@@ -237,6 +259,15 @@ export default {
     }
   },
   mounted() {
+    this.systemIO = new SystemIO();
+    this.settings = new Settings();
+    this.serverExchanges = new ServerExchanges();
+    this.settings.mountInDOM();
+    this.settings.setOption('display-ports-name', true);
+    this.settings.setOption('display-interfaces-name', true);
+    this.settings.setOption('curved-connections', true);
+    this.settings.setOption('reduced-mode', false);
+
     // Close the dropdown menu if the user clicks outside of it
     window.addEventListener('click', function(event) {
       if (!event.target.matches('.dropbtn') && !event.target.matches('.burger-slice')) {
@@ -251,15 +282,7 @@ export default {
       }
     });
 
-    this.systemIO = new SystemIO();
-    this.settings = new Settings();
-    this.serverExchanges = new ServerExchanges();
-    this.settings.mountInDOM();
-    this.settings.setOption('display-ports-name', true);
-    this.settings.setOption('display-interfaces-name', true);
-    this.settings.setOption('curved-connections', true);
-    this.settings.setOption('reduced-mode', false);
-
+    // If the server is in running state, load its composition
     this.serverExchanges.getDistribFromServer();
     if (this.serverExchanges.getServerState().running) {
       this.toggleExecution(true);
@@ -287,7 +310,7 @@ export default {
       }
     ])
     
-    var editor;// = shallowRef({})
+    var editor;
     const JSONData = ref({});
     const topoData = ref({});
     const Vue = { version: 3, h, render };
@@ -297,6 +320,10 @@ export default {
       JSONData.value = editor.export();
     }
 
+    /**
+     * Load a JSON of drawflow composition in editor
+     * @param {String} data the data containing the JSON
+     */
     function importEditor(data) {
       if (Object.keys(editor.export().drawflow.Home.data).length > 0) {
         var confirm =  window.confirm("En important vous allez effacer la composition actuelle. Êtes-vous sûr ?");
@@ -309,7 +336,7 @@ export default {
         JSONData.value = editor.import(data);
       }
 
-      // Force to use setTimeout to delay the re-draw because drawflow seems to draw (badly) the connections after this function
+      // Force to use setTimeout to delay the re-draw because drawflow seems to draw (badly) the connections after this function is executed
       setTimeout(() => {
         var allNodes = editor.getNodesFromName('Host').concat(editor.getNodesFromName('Switch'));
         for (let id of allNodes) {
@@ -319,6 +346,10 @@ export default {
       }, 500);
     }
 
+    /**
+     * Convert the JSON of current composition to a topology file data
+     * The result is store in topoData
+     */
     function exportEditorTopo() {
       var data = editor.export().drawflow.Home.data;
       var result = "";

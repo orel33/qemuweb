@@ -174,7 +174,7 @@ export class Settings {
    * Enable/Disable the reduce mode
    * The reduce mode hide all inputs and outputs
    */
-  changeReducedMode() {
+  updateReducedMode() {
     var checked = document.getElementById("reduced-check").checked;
     this.setOption("reduced-mode", checked);
     

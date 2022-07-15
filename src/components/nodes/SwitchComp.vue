@@ -49,6 +49,9 @@ export default defineComponent({
     },
     methods: {
         getNumber() {
+            /**
+             * Return the index of this host among all the hosts
+             */
             return this.editor.getNodesFromName('Switch').indexOf(this.id);
         },
         updateName(value) {
@@ -70,7 +73,7 @@ export default defineComponent({
             for (let input of inputs) {
                 input.style.setProperty('--vardisplay', display);
             }
-            this.settings.changeReducedMode();
+            this.settings.updateReducedMode();
         },
         showPrompt() {
             var term = document.getElementById("term-" + this.id);
