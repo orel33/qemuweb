@@ -30,9 +30,9 @@ cd qemuweb
 npm install
 scp -r node_modules root@qemuweb:/root/srv/qemuweb/
 
-cd qemuweb/server
+cd qemuweb/frontend
 npm install
-scp -r node_modules root@qemuweb:/root/srv/qemuweb/server/
+scp -r node_modules root@qemuweb:/root/srv/qemuweb/frontend/
 ```
 
 #### On qemuweb-V0 machine at CREMI
@@ -43,16 +43,16 @@ git clone git@gitlab.emi.u-bordeaux.fr:qemunet/qemuweb.git
 ```
 cd qemuweb
 npm rebuild
-npm run build
 
-cd qemuweb/server
+cd qemuweb/frontend
 npm rebuild
+npm run build
 ```
 
 ## Run
 
 ```
-cd qemuweb/server
+cd qemuweb
 node app.js -s -o -p 443
 ```
 Then open https://qemuweb.emi.u-bordeaux.fr on a browser.
