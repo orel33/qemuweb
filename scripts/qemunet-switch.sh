@@ -21,9 +21,8 @@ mkdir -p $SWITCHDIR
 # launch vde switch in daemon mode
 CMD="vde_switch -d -s $SWITCHDIR -p $PIDFILE -M $SWITCHMGMT"
 CMDFILE="$SESSIONDIR/$SWITCHNAME.sh"
-LOGFILE="$SESSIONDIR/$SWITCHNAME.log"
 echo "$CMD" > $CMDFILE
-( set -x ; $CMD |& tee $LOGFILE)
+( set -x ; $CMD )
 
 # launch terminal for vde management sockets
 vdeterm $SWITCHMGMT
