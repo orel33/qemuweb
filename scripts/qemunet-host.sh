@@ -59,7 +59,4 @@ echo "$CMD" > $CMDFILE
 ( set -x ; bash -c "$CMD" )
 # ( set -x ; bash -c "${CMD[@]}" )
 
-# -netdev vde,sock=/tmp/qemunet-orel-872URz/switch/s1,port=1,id=s1
-# -device e1000,netdev=s1,mac=AA:AA:AA:AA:00:00
-
 ###

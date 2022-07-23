@@ -17,7 +17,7 @@ This script is a light version of *Qemunet* dedicated to Linux VM (in mode text)
 ```bash
 $ ./scripts/qemunet-start.sh <sessionid>
 $ ./scripts/qemunet-switch.sh <sessionid> <switchname>
-$ ./scripts/qemunet-host.sh <sessionid> <sysname> <hostname> <switch0>[:<port0>] <switch1>[:<port1>] [...]
+$ ./scripts/qemunet-host.sh <sessionid> <sysname> <hostname> <switch0>:<port0> <switch1>:<port1> [...]
 $ ./scripts/qemunet-exit.sh <sessionid>
 ```
 
