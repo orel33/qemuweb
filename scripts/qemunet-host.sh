@@ -45,7 +45,8 @@ HOSTNUM=1 # random ?
 for NETARG in $NETARGS ; do
     SWITCHNAME=$(cut -d: -f1 <<< "$NETARG")
     PORTNUM=$(cut -d: -f2 <<< "$NETARG")
-    MAC=$(printf "AA:AA:AA:AA:%02x:%02x" $HOSTNUM $IFACENUM)
+    # MAC=$(printf "AA:AA:AA:AA:%02x:%02x" $HOSTNUM $IFACENUM)
+    MAC=$(hexdump -n3 -e'/3 "AA:AA:AA" 3/1 ":%02X"' /dev/urandom)
     SWITCHDIR="$SESSIONDIR/switch/$SWITCHNAME"
     NETOPT="$NETOPT -netdev vde,sock=$SWITCHDIR,port=$PORTNUM,id=$SWITCHNAME -device $NETDEV,netdev=$SWITCHNAME,mac=$MAC"
     ((IFACENUM++))
