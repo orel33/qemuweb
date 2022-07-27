@@ -18,13 +18,13 @@ mkdir -p $SESSIONDIR
 # image directory
 # QEMUNETDIR="$(dirname $(readlink -f $0))"
 # IMGDIR="$QEMUNETDIR/images"
-IMGDIR="/home/orel/Documents/qemunet/qemunet/images"
+IMGDIR="$HOME/images"
 
 # system configuration
 HOSTFS="$IMGDIR/$SYSNAME.img"
 HOSTOPT="-m 200"
-HOSTKERNEL="$IMGDIR/$SYSNAME.vmlinuz"
-HOSTINITRD="$IMGDIR/$SYSNAME.initrd"
+# HOSTKERNEL="$IMGDIR/$SYSNAME.vmlinuz"
+# HOSTINITRD="$IMGDIR/$SYSNAME.initrd"
 HOSTQCOW="$SESSIONDIR/$HOSTNAME.qcow2"
 
 # create system image (qcow2)
@@ -34,8 +34,8 @@ CMD="qemu-img create -q -b $HOSTFS -F raw -f qcow2 $HOSTQCOW"
 # qemu host options
 BASICOPT="-name $HOSTNAME -rtc base=localtime -k fr -M accel=kvm -nographic"
 DRIVEOPT="-drive file=$HOSTQCOW,format=qcow2,index=0,media=disk"
-KERNELARGS="root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0"
-SYSOPT="-kernel $HOSTKERNEL -initrd $HOSTINITRD -append '$KERNELARGS'"
+# KERNELARGS="root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0"
+# SYSOPT="-kernel $HOSTKERNEL -initrd $HOSTINITRD -append '$KERNELARGS'"
 
 # qemu network options
 NETDEV="e1000"

@@ -36,13 +36,14 @@ WORKDIR /home/toto
 
 ### qemunet & qemuweb
 RUN git clone https://github.com/orel33/qemunet.git
-RUN git clone https://github.com/orel33/qemuweb.git
+RUN git clone https://github.com/orel33/qemuweb.git -b dev
 
 ### qemu images
+RUN mkdir images
 # RUN mkdir images && cd images && wget -q "http://aurelien.esnard.emi.u-bordeaux.fr/qemunet/debian10.tgz" && tar xvzf debian10.tgz && rm debian10.tgz
 # COPY images/debian10.tgz .
-# COPY images/toto .
-# RUN mkdir images && mv debian10.tgz images/ && cd images && tar xvzf debian10.tgz && rm debian10.tgz
+COPY debian11.tgz images/
+RUN cd images && tar xvzf debian11.tgz && rm debian11.tgz
 
 ### command to run within docker
 # CMD python /app/app.py
