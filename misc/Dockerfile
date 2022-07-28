@@ -53,8 +53,8 @@ RUN cd qemuweb && npm install && cd frontend && npm install && npm run build
 # COPY debian11.tgz qemuweb/images/
 # RUN cd qemuweb/images && tar xvzSf debian11.tgz && rm debian11.tgz
 
-### command to run within docker
-# CMD python /app/app.py
+### start qemuweb app
 # CMD virt-host-validate qemu ; bash
 CMD cd qemuweb && node app.js -p 3000
+
 # EOF
