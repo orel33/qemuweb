@@ -8,5 +8,5 @@ XOPT="-e DISPLAY=$DISPLAY -v /tmp/.X11-unix:/tmp/.X11-unix"
 
 KOPT="--privileged -v /dev/kvm:/dev/kvm" # insecure !
 
-docker run -it $XOPT $KOPT orel33/qemuweb
+docker run -it $XOPT $KOPT -p 3000:3000 orel33/qemuweb
 

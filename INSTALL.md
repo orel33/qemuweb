@@ -1,9 +1,10 @@
 # QemuWeb
 
 ## Requires
+
 - Node : version 10.13.0 or newer
 
-Install with `sudo apt install node`
+Install with `sudo apt install nodejs`
 
 - npm : version 6.14.17 or newer
 

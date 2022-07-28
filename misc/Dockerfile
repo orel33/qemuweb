@@ -6,8 +6,8 @@ WORKDIR /home/docker
 ARG DEBIAN_FRONTEND=noninteractive
 
 ### apt tools
-RUN apt-get update
-RUN apt-get install -yq build-essential apt-utils apt-file gdebi
+RUN apt update
+RUN apt -yq install build-essential apt-utils apt-file nano
 
 ### set locales
 RUN apt-get install -yq locales-all
@@ -16,13 +16,17 @@ ENV LANGUAGE en_US:en
 ENV LC_ALL en_US.UTF-8
 
 ### tools
-RUN apt-get install -y socat rlwrap wget git unzip curl kmod tmux screen nano sudo
+RUN apt -yq install wget git unzip curl kmod tmux screen sudo firejail
 
 ### x11
-RUN apt-get install -y x11-apps xterm
+RUN apt -yq install x11-apps xterm
 
 ### qemu
-RUN apt-get install -y qemu-system-x86 libvirt-clients vde2
+RUN apt -yq install qemu-system-x86 libvirt-clients vde2
+
+### node.js and dependencies for qemuweb
+RUN apt -yq install nodejs npm
+
 
 # add user toto (as sudoer)
 RUN useradd -ms /bin/bash toto
@@ -34,19 +38,23 @@ USER toto
 ENV HOME /home/toto
 WORKDIR /home/toto
 
-### qemunet & qemuweb
-RUN git clone https://github.com/orel33/qemunet.git
+### qemuweb
+# RUN git clone https://github.com/orel33/qemunet.git
+
+### qemuweb
+ADD https://api.github.com/repos/orel33/qemuweb/git/refs/heads/dev version.json
 RUN git clone https://github.com/orel33/qemuweb.git -b dev
 
+### build qemuweb app
+RUN cd qemuweb && npm install && cd frontend && npm install && npm run build
+
 ### qemu images
-RUN mkdir images
-# RUN mkdir images && cd images && wget -q "http://aurelien.esnard.emi.u-bordeaux.fr/qemunet/debian10.tgz" && tar xvzf debian10.tgz && rm debian10.tgz
-# COPY images/debian10.tgz .
-COPY debian11.tgz images/
-RUN cd images && tar xvzf debian11.tgz && rm debian11.tgz
+# RUN wget -q "http://aurelien.esnard.emi.u-bordeaux.fr/qemunet/debian10.tgz"
+# COPY debian11.tgz qemuweb/images/
+# RUN cd qemuweb/images && tar xvzSf debian11.tgz && rm debian11.tgz
 
 ### command to run within docker
 # CMD python /app/app.py
-CMD virt-host-validate qemu ; bash
-
+# CMD virt-host-validate qemu ; bash
+CMD cd qemuweb && node app.js -p 3000
 # EOF
