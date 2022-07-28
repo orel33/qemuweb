@@ -4,6 +4,8 @@
 
 echo "=> Launching QemuNet host \"$3\" (system \"$2\") for session ID \"$1\""
 
+set -e # immediately exit on first error
+
 # input parameters
 SESSIONID="$1"
 SYSNAME="$2"
@@ -16,9 +18,8 @@ SESSIONDIR="/tmp/$SESSIONID"
 mkdir -p $SESSIONDIR
 
 # image directory
-# QEMUNETDIR="$(dirname $(readlink -f $0))"
-# IMGDIR="$QEMUNETDIR/images"
-IMGDIR="$HOME/images"
+THISDIR="$(dirname $(readlink -f $0))"
+IMGDIR="$THISDIR/images"
 
 # system configuration
 HOSTFS="$IMGDIR/$SYSNAME.img"

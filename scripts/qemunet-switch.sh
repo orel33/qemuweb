@@ -4,6 +4,8 @@
 
 echo "=> Launching QemuNet switch \"$2\" for session ID \"$1\""
 
+set -e # immediately exit on first error
+
 # input parameters
 SESSIONID="$1"
 SWITCHNAME="$2"
