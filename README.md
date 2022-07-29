@@ -1,10 +1,8 @@
 # QemuWeb
 
-This project is an attempt to redesign, as a web application, the
-[QemuNet](https://github.com/orel33/qemunet) pedagogical virtual network
-emulator.
-
-See installation in [INSTALL.md](INSTALL.md).
+[QemuWeb](https://github.com/orel33/qemuweb) is a web application based on
+[QemuNet](https://github.com/orel33/qemunet), that is a virtual network emulator
+based on [Qemu](https://www.qemu.org/) and VDE.
 
 ## Installation
 
@@ -20,6 +18,7 @@ $ sudo apt install qemu-system-x86 qemu-utils vde2
 # install other tools
 $ sudo apt install firejail tmux screen
 ```
+
 ### Build App
 
 ```bash
