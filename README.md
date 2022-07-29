@@ -2,7 +2,8 @@
 
 [QemuWeb](https://github.com/orel33/qemuweb) is a web application based on
 [QemuNet](https://github.com/orel33/qemunet), that is a virtual network emulator
-based on [Qemu](https://www.qemu.org/) and VDE.
+based on [Qemu](https://www.qemu.org/) for virtual machine and VDE for virtual
+Ethernet switch.
 
 ## Installation
 
