@@ -5,6 +5,8 @@
 based on [Qemu](https://www.qemu.org/) for virtual machine and VDE for virtual
 Ethernet switch.
 
+![overview](misc/qemuweb.png)
+
 ## Installation
 
 ### Requirements
