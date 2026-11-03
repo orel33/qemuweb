@@ -3,7 +3,6 @@
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
-const os = require('os');
 const path = require('path');
 const {spawn, execFileSync} = require('child_process');
 const express = require('express');
@@ -88,32 +87,12 @@ function tempFile(name) {
   return path.join(runtime, `qemuweb-${process.pid}-${name}`);
 }
 
-function makeCloudSeed(image) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-cloudinit-'));
-  const userData = path.join(dir, 'user-data');
-  const metaData = path.join(dir, 'meta-data');
-  const networkConfig = path.join(dir, 'network-config');
-  const seedPath = tempFile('debian-seed.iso');
-  const cloudConfig = `#cloud-config\nhostname: qemunet-demo\nmanage_etc_hosts: true\nssh_pwauth: true\nusers:\n  - default\n  - name: demo\n    groups: [sudo]\n    shell: /bin/bash\n    lock_passwd: false\nchpasswd:\n  expire: false\n  users:\n    - {name: demo, password: serial-demo, type: text}\nruncmd:\n  - [systemctl, enable, --now, serial-getty@ttyS0.service]\n`;
-  fs.writeFileSync(userData, cloudConfig);
-  fs.writeFileSync(metaData, `instance-id: qemunet-${process.pid}\nlocal-hostname: qemunet-demo\n`);
-  fs.writeFileSync(networkConfig, 'version: 2\nethernets:\n  all-interfaces:\n    match:\n      name: "en*"\n    dhcp4: true\n');
-  try {
-    execLogged('genisoimage', ['-quiet', '-output', seedPath, '-volid', 'cidata', '-joliet', '-rock', userData, metaData, networkConfig], {stdio: 'pipe'});
-    return seedPath;
-  } catch (error) {
-    try { fs.rmSync(seedPath, {force: true}); } catch (_) {}
-    throw new Error(`Impossible de créer l’image cloud-init Debian (installer genisoimage). ${error.message}`);
-  } finally {
-    fs.rmSync(dir, {recursive: true, force: true});
-  }
-}
-
 function makeRunVdi(image) {
-  const source = path.join(runtime, image.disk);
+  const base = path.join(runtime, image.vdi || '');
+  if (!fs.existsSync(base)) throw new Error(`Base VirtualBox ${image.label} absente ; exécuter bash prepare.sh.`);
   const vdi = tempFile(`${image.id}.vdi`);
-  execLogged('qemu-img', ['convert', '-f', image.format, '-O', 'vdi', source, vdi], {stdio: 'pipe'});
   image.runFiles = [...(image.runFiles || []), vdi];
+  vbox(['createmedium', 'disk', '--filename', vdi, '--diffparent', base, '--format', 'VDI']);
   return vdi;
 }
 
@@ -126,18 +105,11 @@ function qemuArgs(image) {
   if (image.kind === 'iso') {
     return [...common, '-cdrom', path.join(runtime, image.iso), '-boot', 'order=d', '-nic', 'none'];
   }
-  if (image.kind === 'cloud') {
-    const overlay = tempFile('debian-overlay.qcow2');
-    const seed = makeCloudSeed(image);
-    execLogged('qemu-img', ['create', '-f', 'qcow2', '-F', 'qcow2', '-b', path.join(runtime, image.disk), overlay], {stdio: 'pipe'});
-    image.runFiles = [overlay, seed];
-    return [...common, '-drive', `file=${overlay},if=virtio,format=qcow2`, '-drive', `file=${seed},media=cdrom,readonly=on`, '-boot', 'order=c', '-nic', 'user,restrict=on'];
-  }
-  if (image.kind === 'disk') {
+  if (image.kind === 'raw') {
     const overlay = tempFile(`${image.id}-overlay.qcow2`);
-    execLogged('qemu-img', ['create', '-f', 'qcow2', '-F', image.format, '-b', path.join(runtime, image.disk), overlay], {stdio: 'pipe'});
+    execLogged('qemu-img', ['create', '-f', 'qcow2', '-F', 'raw', '-b', path.join(runtime, image.disk), overlay], {stdio: 'pipe'});
     image.runFiles = [overlay];
-    return [...common, '-drive', `file=${overlay},if=virtio,format=qcow2`, '-boot', 'order=c', '-nic', 'none'];
+    return [...common, '-drive', `file=${overlay},if=virtio,format=qcow2`, '-boot', 'order=c', '-nic', image.qemuNic || 'none'];
   }
   throw new Error(`Type d’image non pris en charge : ${image.kind}`);
 }
@@ -175,32 +147,32 @@ function vbox(args) {
 
 function spawnVirtualBox(image) {
   let diskPath;
-  let seedPath;
+  const vmDir = tempFile('vbox-vm');
+  fs.mkdirSync(vmDir, {recursive: true});
   try {
-    vbox(['createvm', '--name', vmName, '--ostype', image.vboxType || 'Linux_64', '--register']);
-    vbox(['modifyvm', vmName, '--memory', String(image.memory), '--cpus', '1', '--nic1', image.kind === 'cloud' ? 'nat' : 'none', '--uart1', '0x3F8', '4', '--uartmode1', 'server', socketPath]);
+    vbox(['createvm', '--name', vmName, '--basefolder', vmDir, '--ostype', image.vboxType || 'Linux_64', '--register']);
+    vbox(['modifyvm', vmName, '--memory', String(image.memory), '--cpus', '1', '--nic1', image.vboxNic || 'none', '--uart1', '0x3F8', '4', '--uartmode1', 'server', socketPath]);
     if (image.kind === 'iso') {
       vbox(['storagectl', vmName, '--name', 'IDE', '--add', 'ide']);
       vbox(['storageattach', vmName, '--storagectl', 'IDE', '--port', '0', '--device', '0', '--type', 'dvddrive', '--medium', path.join(runtime, image.iso)]);
       vbox(['modifyvm', vmName, '--boot1', 'dvd', '--boot2', 'none', '--boot3', 'none', '--boot4', 'none']);
-    } else {
+    } else if (image.kind === 'raw') {
       image.runFiles = [];
       diskPath = makeRunVdi(image);
       vbox(['storagectl', vmName, '--name', 'SATA', '--add', 'sata', '--controller', 'IntelAhci']);
       vbox(['storageattach', vmName, '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', diskPath]);
-      if (image.kind === 'cloud') {
-        seedPath = makeCloudSeed(image);
-        vbox(['storagectl', vmName, '--name', 'IDE', '--add', 'ide']);
-        vbox(['storageattach', vmName, '--storagectl', 'IDE', '--port', '0', '--device', '0', '--type', 'dvddrive', '--medium', seedPath]);
-        image.runFiles = [...image.runFiles, seedPath];
-      }
       vbox(['modifyvm', vmName, '--boot1', 'disk', '--boot2', 'dvd', '--boot3', 'none', '--boot4', 'none']);
+    } else {
+      throw new Error(`Type d’image VirtualBox non pris en charge : ${image.kind}`);
     }
     vbox(['startvm', vmName, '--type', 'headless']);
-    machine = {kind: 'virtualbox'};
+    machine = {kind: 'virtualbox', vmDir};
   } catch (error) {
+    try { vbox(['controlvm', vmName, 'poweroff']); } catch (_) {}
+    try { vbox(['unregistervm', vmName]); } catch (_) {}
+    for (const file of image.runFiles || []) { try { vbox(['closemedium', 'disk', file, '--delete']); } catch (_) {} }
     cleanupRunFiles(image);
-    try { vbox(['unregistervm', vmName, '--delete']); } catch (_) {}
+    fs.rmSync(vmDir, {recursive: true, force: true});
     throw error;
   }
 }
@@ -211,6 +183,7 @@ function start(selectedEngine, imageId) {
   if (!image) throw new Error('Image inconnue. Exécuter bash prepare.sh pour préparer le catalogue des systèmes.');
   const needed = image.kind === 'iso' ? image.iso : image.disk;
   if (!fs.existsSync(path.join(runtime, needed))) throw new Error(`Image ${image.label} absente ; exécuter bash prepare.sh.`);
+  if (selectedEngine === 'virtualbox' && image.kind === 'raw' && !fs.existsSync(path.join(runtime, image.vdi || ''))) throw new Error(`Base VirtualBox ${image.label} absente ; exécuter bash prepare.sh.`);
   if (fs.existsSync(socketPath)) fs.unlinkSync(socketPath);
   stopping = false;
   runLog = [];
@@ -236,7 +209,9 @@ async function stop() {
     try { vbox(['controlvm', vmName, 'acpipowerbutton']); } catch (_) {}
     await new Promise(resolve => setTimeout(resolve, 3000));
     try { vbox(['controlvm', vmName, 'poweroff']); } catch (_) {}
-    try { vbox(['unregistervm', vmName, '--delete']); } catch (error) { console.error(error.message); }
+    try { vbox(['unregistervm', vmName]); } catch (error) { console.error(error.message); }
+    for (const file of image.runFiles || []) { try { vbox(['closemedium', 'disk', file, '--delete']); } catch (error) { console.error(error.message); } }
+    if (current.vmDir) fs.rmSync(current.vmDir, {recursive: true, force: true});
   } else {
     appendLog('$ signal envoyé à qemu-system-x86_64: SIGTERM');
     current.kill('SIGTERM');
