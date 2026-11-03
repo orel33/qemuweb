@@ -147,5 +147,23 @@ io.on('connection', socket => {
 });
 
 server.listen(3002, '127.0.0.1', () => console.log('Console de test : http://127.0.0.1:3002'));
-process.on('SIGINT', async () => { await stop(); server.close(() => process.exit(0)); });
-process.on('SIGTERM', async () => { await stop(); server.close(() => process.exit(0)); });
+
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+
+  const forceExit = setTimeout(() => process.exit(1), 5000);
+  try {
+    await stop();
+  } catch (error) {
+    console.error('Arrêt de la VM :', error);
+  }
+  io.close(() => {
+    clearTimeout(forceExit);
+    process.exit(0);
+  });
+}
+
+process.on('SIGINT', shutdown);
+process.on('SIGTERM', shutdown);
