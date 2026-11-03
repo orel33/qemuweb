@@ -9,13 +9,15 @@ const express = require('express');
 const socketIo = require('socket.io');
 
 const root = __dirname;
+const images = path.join(root, 'images');
 const runtime = path.join(root, 'runtime');
-const catalogPath = path.join(runtime, 'catalog.json');
+const catalogPath = path.join(images, 'catalog.json');
 const port = Number(process.env.PORT || 3002);
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const sessions = new Map();
+fs.mkdirSync(runtime, {recursive: true});
 
 function shellQuote(value) {
   const text = String(value);
@@ -126,7 +128,6 @@ function connectSerial(session, attempt = 0, generation = session.generation) {
       if (!session.stopping && session.action !== 'reboot' && session.machine) publishState(session, 'Console série déconnectée');
     });
     connection.on('error', error => console.error('serial:', error.message));
-    connection.write('\r');
   });
   connection.once('error', () => setTimeout(() => connectSerial(session, attempt + 1, generation), 250));
 }
@@ -136,7 +137,7 @@ function tempFile(session, name) {
 }
 
 function makeRunVdi(session, image) {
-  const base = path.join(runtime, image.vdi || '');
+  const base = path.join(images, image.vdi || '');
   if (!fs.existsSync(base)) throw new Error(`Base VirtualBox ${image.label} absente ; exécuter bash prepare.sh.`);
   const vdi = tempFile(session, `${image.id}.vdi`);
   image.runFiles = [...(image.runFiles || []), vdi];
@@ -152,13 +153,13 @@ function qemuArgs(session, image, reuseDisk = false) {
     '-chardev', `socket,id=serial0,path=${session.socketPath},server=on,wait=off`, '-serial', 'chardev:serial0'
   ];
   if (image.kind === 'iso') {
-    return [...common, '-cdrom', path.join(runtime, image.iso), '-boot', 'order=d', '-nic', 'none'];
+    return [...common, '-cdrom', path.join(images, image.iso), '-boot', 'order=d', '-nic', 'none'];
   }
   if (image.kind === 'raw') {
     const overlay = reuseDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
     if (!overlay || !fs.existsSync(overlay)) {
       if (reuseDisk) throw new Error('Le disque différentiel à redémarrer est introuvable.');
-      execLogged(session, 'qemu-img', ['create', '-f', 'qcow2', '-F', 'raw', '-b', path.join(runtime, image.disk), overlay], {stdio: 'pipe'});
+      execLogged(session, 'qemu-img', ['create', '-f', 'qcow2', '-F', 'raw', '-b', path.join(images, image.disk), overlay], {stdio: 'pipe'});
     }
     image.runFiles = [overlay];
     session.runDisk = overlay;
@@ -222,7 +223,7 @@ function spawnVirtualBox(session, image) {
     vbox(session, ['modifyvm', session.vmName, '--memory', String(image.memory), '--cpus', '1', '--nic1', image.vboxNic || 'none', '--uart1', '0x3F8', '4', '--uartmode1', 'server', session.socketPath]);
     if (image.kind === 'iso') {
       vbox(session, ['storagectl', session.vmName, '--name', 'IDE', '--add', 'ide']);
-      vbox(session, ['storageattach', session.vmName, '--storagectl', 'IDE', '--port', '0', '--device', '0', '--type', 'dvddrive', '--medium', path.join(runtime, image.iso)]);
+      vbox(session, ['storageattach', session.vmName, '--storagectl', 'IDE', '--port', '0', '--device', '0', '--type', 'dvddrive', '--medium', path.join(images, image.iso)]);
       vbox(session, ['modifyvm', session.vmName, '--boot1', 'dvd', '--boot2', 'none', '--boot3', 'none', '--boot4', 'none']);
     } else if (image.kind === 'raw') {
       image.runFiles = [];
@@ -258,8 +259,8 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   const image = imageById(imageId);
   if (!image) throw new Error('Image inconnue. Exécuter bash prepare.sh pour préparer le catalogue des systèmes.');
   const needed = image.kind === 'iso' ? image.iso : image.disk;
-  if (!fs.existsSync(path.join(runtime, needed))) throw new Error(`Image ${image.label} absente ; exécuter bash prepare.sh.`);
-  if (selectedEngine === 'virtualbox' && image.kind === 'raw' && !fs.existsSync(path.join(runtime, image.vdi || ''))) throw new Error(`Base VirtualBox ${image.label} absente ; exécuter bash prepare.sh.`);
+  if (!fs.existsSync(path.join(images, needed))) throw new Error(`Image ${image.label} absente ; exécuter bash prepare.sh.`);
+  if (selectedEngine === 'virtualbox' && image.kind === 'raw' && !fs.existsSync(path.join(images, image.vdi || ''))) throw new Error(`Base VirtualBox ${image.label} absente ; exécuter bash prepare.sh.`);
   if (fs.existsSync(session.socketPath)) fs.unlinkSync(session.socketPath);
   session.stopping = false;
   session.generation += 1;

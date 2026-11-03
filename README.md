@@ -6,12 +6,14 @@ Cette démo lance Alpine Linux, Debian 13 ou OpenWrt dans QEMU ou VirtualBox, et
 
 `prepare.sh` prépare les systèmes avant leur utilisation :
 
-- **Alpine** reste une ISO live.
+- **Alpine** : le script télécharge et vérifie l’ISO `virt` officielle, l’installe de manière non interactive dans une image RAW, prépare les comptes `root` et `toto`, force le démarrage et le login sur `ttyS0`, puis produit la base VDI destinée à VirtualBox.
 - **Debian 13** : le script télécharge et vérifie l’image cloud officielle, la démarre une fois dans une VM QEMU temporaire isolée, prépare les comptes `root`, `toto` et `demo`, configure l’accès série et le réseau DHCP, désactive cloud-init pour les démarrages suivants, puis produit une image RAW en lecture seule.
 - **OpenWrt** : le script vérifie et décompresse l’image officielle RAW.
 - Pour **VirtualBox**, le script convertit chaque image RAW en VDI de base en lecture seule.
 
-Au lancement, le serveur ne configure plus aucun système : QEMU crée un QCOW2 différentiel basé sur le RAW ; VirtualBox crée un VDI différentiel basé sur le VDI préparé. Chaque instance a ses écritures à elle, supprimées à l’arrêt. Les fichiers de base dans `runtime/` ne sont jamais modifiés.
+Au lancement, le serveur ne configure plus aucun système : QEMU crée un QCOW2 différentiel basé sur le RAW ; VirtualBox crée un VDI différentiel basé sur le VDI préparé. Chaque instance a ses écritures à elle. Elles sont conservées par **Arrêter** et **Reboot**, puis supprimées par **Reset** ou par la fermeture de l’onglet. Les fichiers de base dans `images/` ne sont jamais modifiés.
+
+`images/` contient les téléchargements officiels, les bases RAW/VDI préparées et `catalog.json`. Ce répertoire peut être conservé durablement afin de ne pas reconstruire les images. `runtime/` ne contient que les disques différentiels, sockets et états temporaires des VM ; après arrêt du serveur et des VM, son contenu peut être entièrement supprimé. Le serveur recrée le répertoire au lancement.
 
 ### Formats utilisés
 
@@ -45,7 +47,7 @@ La préparation télécharge les images manquantes depuis les dépôts officiels
 
 - Linux x86_64, Node.js 18 ou plus récent et npm.
 - `curl`, `sha256sum`, `sha512sum`, `gzip` et `qemu-img`. `qemu-img` sert à préparer les bases et à créer les overlays QEMU.
-- Pour préparer Debian, `qemu-system-x86_64`, `genisoimage` et `python3` sont également requis. KVM accélère la préparation si `/dev/kvm` est accessible en lecture et écriture ; sinon elle utilise TCG, plus lent.
+- Pour préparer Alpine et Debian, `qemu-system-x86_64` et `python3` sont également requis ; Debian demande aussi `genisoimage`. KVM accélère la préparation si `/dev/kvm` est accessible en lecture et écriture ; sinon elle utilise TCG, plus lent. La préparation Alpine choisit également TCG lorsqu’une VM VirtualBox tourne déjà.
 - Pour lancer avec QEMU : `qemu-system-x86_64`. Pour lancer avec VirtualBox : VirtualBox et `VBoxManage`.
 
 ## Installation et préparation
@@ -57,7 +59,7 @@ npm ci
 bash prepare.sh
 ```
 
-Le script place dans `runtime/` les images officielles, les bases préparées en RAW et VDI, ainsi que `catalog.json`, utilisé pour alimenter le menu de la page. Les images et les disques temporaires sont ignorés par Git.
+Le script place dans `images/` les images officielles, les bases préparées en RAW et VDI, ainsi que `catalog.json`, utilisé pour alimenter le menu de la page. `runtime/` est réservé aux fichiers des VM en cours. Le contenu de ces deux répertoires est ignoré par Git, à l’exception des fichiers `.gitkeep` qui conservent leur structure.
 
 ## Lancement
 
@@ -69,11 +71,11 @@ Ouvre <http://127.0.0.1:3002>. Chaque onglet représente une VM : **＋ Nouvelle
 
 QEMU sélectionne KVM quand il est disponible. Pour faire tourner QEMU en même temps que VirtualBox, choisis **QEMU · TCG** (émulation logicielle, plus lente) avant de démarrer QEMU. Si VirtualBox est déjà lancé, le choix **QEMU · KVM auto** bascule automatiquement cette nouvelle VM en TCG. VirtualBox ne peut pas démarrer tant qu’une VM QEMU utilise KVM ; l’interface affiche alors un message qui explique comment relancer les VM en mode compatible.
 
-- **Alpine Linux 3.24** : `root`, mot de passe vide ; ISO live sans disque ni réseau.
+- **Alpine Linux 3.24** : `root`, mot de passe vide, ou `toto` / `toto` ; disque différentiel éphémère, DHCP restreint dans QEMU et NAT dans VirtualBox.
 - **Debian 13** : `root` sans mot de passe ; `toto` / `toto` ou `demo` / `serial-demo` ; disque différentiel éphémère, DHCP restreint dans QEMU et NAT dans VirtualBox.
 - **OpenWrt 25.12 x86-64** : appuie sur Entrée pour ouvrir le shell `root` sans mot de passe ; disque différentiel éphémère, réseau désactivé.
 
-**Reboot** demande un arrêt propre du système, puis relance la VM sur le même disque différentiel : toutes les modifications écrites dans ce disque sont conservées. **Reset** affiche un avertissement, arrête uniquement la VM de l’onglet courant, supprime son disque différentiel, en recrée un depuis l’image de base, puis la redémarre : les autres VM ne sont pas affectées. Alpine démarre depuis une ISO sans disque de travail et ne traite pas l’arrêt ACPI de la démo ; Reboot utilise donc un reset matériel pour relancer son ISO. Ces commandes gardent le même onglet et le même hostname. Si tu utilises **Arrêter**, tu peux ensuite choisir **Reset** pour la redémarrer depuis sa base ; le bouton **Démarrer** reste réservé au premier lancement de l’onglet. Fermer un onglet arrête et supprime sa session. Quand tu arrêtes le serveur avec Ctrl+C, toutes les VM qu’il gère sont arrêtées.
+**Reboot** demande un arrêt propre du système, puis relance la VM sur le même disque différentiel : toutes les modifications écrites dans ce disque sont conservées. **Reset** affiche un avertissement, arrête uniquement la VM de l’onglet courant, supprime son disque différentiel, en recrée un depuis l’image de base, puis la redémarre : les autres VM ne sont pas affectées. Ces commandes gardent le même onglet et le même hostname. Si tu utilises **Arrêter**, tu peux ensuite choisir **Reset** pour la redémarrer depuis sa base ; le bouton **Démarrer** reste réservé au premier lancement de l’onglet. Fermer un onglet arrête et supprime sa session. Quand tu arrêtes le serveur avec Ctrl+C, toutes les VM qu’il gère sont arrêtées.
 
 Si le port 3002 est déjà pris, arrête l’ancien serveur ou choisis un autre port :
 

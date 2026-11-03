@@ -1,6 +1,7 @@
 node_modules/
-runtime/
+images/*
+!images/.gitkeep
+runtime/*
+!runtime/.gitkeep
 dist/
 preview/
-images/debian11.img
-images/debian11.tgz
