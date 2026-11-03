@@ -104,8 +104,8 @@
         close.type = 'button';
         close.className = 'machine-close';
         close.textContent = '×';
-        close.title = 'Arrêter et fermer cette machine';
-        close.setAttribute('aria-label', `Arrêter et fermer ${machine.hostname} (${machine.osHint})`);
+        close.title = 'Forcer l’arrêt et supprimer entièrement cette session';
+        close.setAttribute('aria-label', `Forcer l’arrêt et supprimer ${machine.hostname} (${machine.osHint})`);
         close.onclick = () => closeMachine(machine.id);
         tab.append(select, close);
         tabs.insertBefore(tab, document.getElementById('new-machine'));

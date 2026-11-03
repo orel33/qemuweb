@@ -360,6 +360,7 @@ async function reboot(session) {
       await waitForVirtualBoxPowerOff(session);
       session.machine = null;
     }
+    if (session.action !== 'reboot' || !sessions.has(session.id)) throw new Error('La session a été supprimée pendant le Reboot.');
     if (session.serial) { session.serial.destroy(); session.serial = null; }
     session.generation += 1;
     session.serialBuffer = '';
@@ -389,6 +390,7 @@ async function reset(session) {
   try {
     publishState(session, 'Réinitialisation depuis l’image de base…');
     if (session.machine) await stop(session);
+    if (session.action !== 'reset' || !sessions.has(session.id)) throw new Error('La session a été supprimée pendant le Reset.');
     session.everStarted = false;
     start(session.id, engine, imageId, {reset: true});
   } catch (error) {
@@ -425,6 +427,37 @@ async function stop(session) {
   try { fs.unlinkSync(session.monitorPath); } catch (_) {}
   session.stopping = false;
   publishState(session, 'VM arrêtée');
+}
+
+async function destroySession(session) {
+  if (!session) return;
+  session.action = 'destroy';
+  session.stopping = true;
+  session.generation += 1;
+  if (session.serial) { session.serial.destroy(); session.serial = null; }
+  const current = session.machine;
+  const image = session.selectedImage || {};
+  session.machine = null;
+  if (current && current.kind === 'virtualbox') {
+    try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {}
+    try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
+    for (const file of image.runFiles || []) {
+      try { vbox(session, ['closemedium', 'disk', file, '--delete']); } catch (_) {}
+    }
+    if (current.vmDir) fs.rmSync(current.vmDir, {recursive: true, force: true});
+  } else if (current) {
+    appendLog(session, '$ kill forcé de qemu-system-x86_64: SIGKILL');
+    current.kill('SIGKILL');
+    try { await waitForQemuExit(current, 5000); } catch (_) {}
+  }
+  cleanupRunFiles(session, image);
+  try { fs.unlinkSync(session.socketPath); } catch (_) {}
+  try { fs.unlinkSync(session.monitorPath); } catch (_) {}
+  session.runLog = [];
+  session.serialBuffer = '';
+  session.selectedImage = null;
+  session.everStarted = false;
+  sessions.delete(session.id);
 }
 
 app.post('/api/start', (req, res) => {
@@ -465,11 +498,7 @@ app.post('/api/reset/:sessionId', async (req, res) => {
 app.delete('/api/sessions/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (session) {
-      if (session.action) throw new Error('Attends la fin de l’action en cours avant de fermer cette machine.');
-      await stop(session);
-      sessions.delete(session.id);
-    }
+    await destroySession(session);
     res.json({ok: true});
   } catch (error) { res.status(500).json({error: error.message}); }
 });
