@@ -3,18 +3,23 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Alpine Linux — console série</title>
+  <title>QemuNet — console série</title>
   <link rel="stylesheet" href="/vendor/css/xterm.css">
   <style>
     * { box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; }
     body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; margin: 0; background: #141a22; color: #e7edf5; font: 15px system-ui, sans-serif; }
-    header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #35404c; }
+    header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #35404c; }
     h1 { margin: 0 auto 0 0; font-size: 18px; }
     button, select { padding: 8px 12px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
     button { cursor: pointer; }
     button:disabled { opacity: .45; cursor: default; }
     #status { min-width: 120px; color: #bdc8d6; }
+    #image-info { min-height: 18px; }
+    .logs { flex: none; max-height: 24vh; overflow: auto; margin: 0 16px 10px; border: 1px solid #35404c; border-radius: 6px; background: #10151c; }
+    .logs summary { padding: 7px 10px; cursor: pointer; color: #bdc8d6; }
+    .logs pre { margin: 0; padding: 8px 10px; max-height: 20vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
+    @media (max-width: 760px) { header { flex-wrap: wrap; padding: 10px; gap: 8px; } h1 { width: 100%; } #status { flex: 1; } .note { margin-inline: 10px; } .logs { margin-inline: 10px; } main { padding: 10px; } }
     .note { flex: none; margin: 10px 20px 0; color: #bdc8d6; font-size: 13px; }
     main { display: flex; flex: 1; min-width: 0; min-height: 0; padding: 16px; }
     #terminal { flex: 1; min-width: 0; min-height: 0; width: 100%; padding: 10px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
@@ -22,14 +27,17 @@
 </head>
 <body>
   <header>
-    <h1>Alpine Linux · console série</h1>
+    <h1>QemuNet · console série</h1>
+    <label for="os-image">Système</label>
+    <select id="os-image" aria-label="Système à lancer"></select>
     <label for="engine">Moteur</label>
     <select id="engine"><option value="qemu">QEMU</option><option value="virtualbox">VirtualBox</option></select>
     <button id="start">Démarrer</button>
     <button id="stop" disabled>Arrêter</button>
     <span id="status">Arrêtée</span>
   </header>
-  <p class="note">Console live Alpine, sans réseau ni disque persistant. Connexion <code>root</code> sans mot de passe. QEMU utilise KVM si disponible, sinon TCG ; VirtualBox requiert VT-x libre.</p>
+  <p class="note" id="image-info">Chargement du catalogue runtime…</p>
+  <details class="logs"><summary>Journal de lancement</summary><pre id="launch-logs">Les commandes de lancement apparaîtront ici.</pre></details>
   <main><div id="terminal"></div></main>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
@@ -41,17 +49,48 @@
     terminal.open(document.getElementById('terminal'));
     fit.fit();
     window.addEventListener('resize', () => fit.fit());
-    terminal.write('Console série Alpine Linux. Choisir un moteur puis cliquer sur Démarrer.\r\n');
+    new ResizeObserver(() => fit.fit()).observe(document.querySelector('main'));
+    terminal.write('Console série QemuNet. Choisir un système et un moteur puis cliquer sur Démarrer.\r\n');
     const socket = io({transports: ['websocket', 'polling']});
     const start = document.getElementById('start');
     const stop = document.getElementById('stop');
     const status = document.getElementById('status');
+    const imageSelect = document.getElementById('os-image');
+    const imageInfo = document.getElementById('image-info');
+    let images = [];
+    function updateImageInfo() {
+      const image = images.find(item => item.id === imageSelect.value);
+      imageInfo.textContent = image ? `${image.description}. Connexion : ${image.login}. Réseau : ${image.network}. QEMU utilise KVM si disponible, sinon TCG.` : 'Aucune image disponible ; exécuter bash prepare.sh.';
+    }
+    fetch('/api/images').then(response => response.json()).then(items => {
+      images = items;
+      imageSelect.replaceChildren(...items.map(image => { const option = document.createElement('option'); option.value = image.id; option.textContent = image.label; return option; }));
+      updateImageInfo();
+    }).catch(error => { imageInfo.textContent = `Catalogue indisponible : ${error.message}`; });
+    imageSelect.addEventListener('change', updateImageInfo);
+    document.querySelector('.logs').addEventListener('toggle', () => requestAnimationFrame(() => fit.fit()));
+    const launchLogs = document.getElementById('launch-logs');
+    function appendLog(line) {
+      if (launchLogs.textContent === 'Les commandes de lancement apparaîtront ici.') launchLogs.textContent = '';
+      launchLogs.textContent += `${line}\n`;
+      const details = document.querySelector('.logs');
+      launchLogs.scrollTop = launchLogs.scrollHeight;
+      if (line.startsWith('$ ') && !details.open) { details.open = true; requestAnimationFrame(() => fit.fit()); }
+    }
+    fetch('/api/logs').then(response => response.json()).then(lines => {
+      launchLogs.textContent = '';
+      lines.forEach(appendLog);
+      if (!lines.length) launchLogs.textContent = 'Les commandes de lancement apparaîtront ici.';
+    });
+    socket.on('logs-reset', () => { launchLogs.textContent = ''; });
+    socket.on('log', appendLog);
     socket.on('serial', data => terminal.write(data));
     socket.on('state', data => {
       status.textContent = data.message;
       start.disabled = data.running;
       stop.disabled = !data.running;
       document.getElementById('engine').disabled = data.running;
+      imageSelect.disabled = data.running;
     });
     socket.on('connect_error', error => { status.textContent = 'WebSocket indisponible'; console.error(error); });
     terminal.onData(data => socket.emit('input', data));
@@ -59,13 +98,14 @@
       start.disabled = true;
       status.textContent = 'Démarrage…';
       terminal.reset();
-      terminal.write('Démarrage de la VM Alpine…\r\n');
+      const selected = images.find(image => image.id === imageSelect.value);
+      terminal.write(`Démarrage de ${selected ? selected.label : 'la VM'}…\r\n`);
       try {
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({engine: document.getElementById('engine').value})});
+        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({engine: document.getElementById('engine').value, imageId: imageSelect.value})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Échec du démarrage');
         terminal.focus();
-      } catch (error) { status.textContent = error.message; start.disabled = false; }
+      } catch (error) { status.textContent = error.message; start.disabled = false; imageSelect.disabled = false; document.getElementById('engine').disabled = false; }
     };
     stop.onclick = async () => {
       stop.disabled = true;
