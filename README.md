@@ -7,11 +7,23 @@ Cette démo lance Alpine Linux, Debian 13 ou OpenWrt dans QEMU ou VirtualBox, et
 `prepare.sh` prépare les systèmes avant leur utilisation :
 
 - **Alpine** reste une ISO live.
-- **Debian 13** : le script télécharge et vérifie l’image cloud officielle, la démarre une fois dans une VM QEMU temporaire isolée, applique la configuration de démo (compte `demo`, accès série, réseau DHCP), désactive cloud-init pour les démarrages suivants, puis produit une image RAW en lecture seule.
+- **Debian 13** : le script télécharge et vérifie l’image cloud officielle, la démarre une fois dans une VM QEMU temporaire isolée, prépare les comptes `root`, `toto` et `demo`, configure l’accès série et le réseau DHCP, désactive cloud-init pour les démarrages suivants, puis produit une image RAW en lecture seule.
 - **OpenWrt** : le script vérifie et décompresse l’image officielle RAW.
 - Pour **VirtualBox**, le script convertit chaque image RAW en VDI de base en lecture seule.
 
 Au lancement, le serveur ne configure plus aucun système : QEMU crée un QCOW2 différentiel basé sur le RAW ; VirtualBox crée un VDI différentiel basé sur le VDI préparé. Chaque instance a ses écritures à elle, supprimées à l’arrêt. Les fichiers de base dans `runtime/` ne sont jamais modifiés.
+
+### Matrice des formats disque
+
+| Moteur | Image source en lecture seule | Disque différentiel inscriptible | Statut dans cette démo |
+|---|---|---|---|
+| QEMU | RAW | QCOW2 | **Utilisé** : le QCOW2 s’appuie directement sur la RAW. |
+| QEMU | VDI | QCOW2 | Possible ; QEMU sait lire une VDI comme base. |
+| QEMU | VDI | VDI | Non pris en charge par le QEMU testé : son pilote VDI ne crée pas de disque différentiel. |
+| VirtualBox | VDI | VDI | **Utilisé** : le VDI différentiel dépend du VDI préparé. |
+| VirtualBox | RAW | VDI | Pas de lien différentiel direct ; le RAW doit d’abord être converti en VDI. |
+
+La RAW reste la source maître commune. `prepare.sh` crée aussi une VDI en lecture seule pour VirtualBox, ce qui consomme de l’espace disque supplémentaire ; VirtualBox ne sait pas utiliser directement la RAW comme parent d’un VDI différentiel. Les compatibilités indiquées ont été vérifiées avec QEMU 8.2.2 et VirtualBox 7.1.14.
 
 La préparation télécharge les images manquantes depuis les dépôts officiels, puis les vérifie avec les sommes publiées. Une fois les images préparées, le démarrage et l’exécution des VM ne nécessitent aucun téléchargement ni service cloud.
 
