@@ -13,17 +13,31 @@ Cette démo lance Alpine Linux, Debian 13 ou OpenWrt dans QEMU ou VirtualBox, et
 
 Au lancement, le serveur ne configure plus aucun système : QEMU crée un QCOW2 différentiel basé sur le RAW ; VirtualBox crée un VDI différentiel basé sur le VDI préparé. Chaque instance a ses écritures à elle, supprimées à l’arrêt. Les fichiers de base dans `runtime/` ne sont jamais modifiés.
 
-### Matrice des formats disque
+### Formats utilisés
 
-| Moteur | Image source en lecture seule | Disque différentiel inscriptible | Statut dans cette démo |
-|---|---|---|---|
-| QEMU | RAW | QCOW2 | **Utilisé** : le QCOW2 s’appuie directement sur la RAW. |
-| QEMU | VDI | QCOW2 | Possible ; QEMU sait lire une VDI comme base. |
-| QEMU | VDI | VDI | Non pris en charge par le QEMU testé : son pilote VDI ne crée pas de disque différentiel. |
-| VirtualBox | VDI | VDI | **Utilisé** : le VDI différentiel dépend du VDI préparé. |
-| VirtualBox | RAW | VDI | Pas de lien différentiel direct ; le RAW doit d’abord être converti en VDI. |
+| Moteur | Base en lecture seule | Disque différentiel de l’instance |
+|---|---|---|
+| QEMU | RAW | QCOW2 |
+| VirtualBox | VDI converti depuis la même RAW | VDI différentiel |
 
-La RAW reste la source maître commune. `prepare.sh` crée aussi une VDI en lecture seule pour VirtualBox, ce qui consomme de l’espace disque supplémentaire ; VirtualBox ne sait pas utiliser directement la RAW comme parent d’un VDI différentiel. Les compatibilités indiquées ont été vérifiées avec QEMU 8.2.2 et VirtualBox 7.1.14.
+La RAW reste la source maître. `prepare.sh` produit une base VDI supplémentaire pour VirtualBox ; elle prend donc de l’espace disque. Les deux moteurs utilisent le même contenu OS, mais chacun crée son propre disque de travail. Les bases ne sont jamais modifiées.
+
+### Conversions et commandes
+
+Les commandes équivalentes aux étapes exécutées par le projet sont :
+
+```sh
+# Conversion de la base RAW en VDI (préparation VirtualBox)
+qemu-img convert -f raw -O vdi base.raw base.vdi
+
+# Disque de travail QEMU basé sur la RAW
+qemu-img create -f qcow2 -F raw -b base.raw instance.qcow2
+
+# Disque différentiel VirtualBox basé sur la VDI
+VBoxManage createmedium disk --filename instance.vdi --diffparent base.vdi --format VDI
+```
+
+VirtualBox peut aussi convertir la RAW en VDI avec `VBoxManage convertfromraw base.raw base.vdi --format VDI`. QEMU peut utiliser une VDI comme base d’un QCOW2 en remplaçant `-F raw` par `-F vdi` dans la commande de création d’overlay. Ces deux variantes ne sont pas utilisées par la démo.
 
 La préparation télécharge les images manquantes depuis les dépôts officiels, puis les vérifie avec les sommes publiées. Une fois les images préparées, le démarrage et l’exécution des VM ne nécessitent aucun téléchargement ni service cloud.
 
