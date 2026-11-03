@@ -350,6 +350,19 @@ async function reboot(session) {
   try {
     const image = session.selectedImage;
     const current = session.machine;
+    if (image.kind === 'iso') {
+      session.serialBuffer = '';
+      io.to(session.id).emit('serial-reset', {sessionId: session.id});
+      publishState(session, 'Redémarrage de l’ISO…');
+      if (session.engine.startsWith('qemu')) {
+        appendLog(session, '$ QEMU monitor: system_reset');
+        await sendMonitorCommand(session, 'system_reset');
+      } else {
+        vbox(session, ['controlvm', session.vmName, 'reset']);
+      }
+      publishState(session, `${stateMessage(session)} · redémarrage`);
+      return;
+    }
     publishState(session, 'Arrêt propre avant redémarrage…');
     if (session.engine.startsWith('qemu')) {
       appendLog(session, '$ QEMU monitor: system_powerdown');
