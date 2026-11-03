@@ -65,13 +65,17 @@ Le script place dans `runtime/` les images officielles, les bases préparées en
 npm start
 ```
 
-Ouvre <http://127.0.0.1:3002>, choisis un système et un moteur, puis clique sur **Démarrer**. Le panneau **Journal de lancement** affiche les commandes QEMU ou VirtualBox. Les identifiants apparaissent au-dessus du terminal :
+Ouvre <http://127.0.0.1:3002>. Chaque onglet représente une VM : **＋ Nouvelle machine** crée un nouvel onglet. Choisis un système et un moteur, puis clique une fois sur **Démarrer**. Le nom de l’onglet est le hostname de l’image ; le nom de l’OS apparaît dans son infobulle. Les VM des autres onglets continuent de tourner en parallèle. Les sorties série et les journaux sont propres à chaque machine ; coche **Logs** pour afficher les commandes QEMU ou VirtualBox. Fermer un onglet arrête sa VM, sans affecter les autres. Les identifiants apparaissent au-dessus du terminal :
+
+QEMU sélectionne KVM quand il est disponible. Pour faire tourner QEMU en même temps que VirtualBox, choisis **QEMU · TCG** (émulation logicielle, plus lente) avant de démarrer QEMU. Si VirtualBox est déjà lancé, le choix **QEMU · KVM auto** bascule automatiquement cette nouvelle VM en TCG. VirtualBox ne peut pas démarrer tant qu’une VM QEMU utilise KVM ; l’interface affiche alors un message qui explique comment relancer les VM en mode compatible.
 
 - **Alpine Linux 3.24** : `root`, mot de passe vide ; ISO live sans disque ni réseau.
 - **Debian 13** : `root` sans mot de passe ; `toto` / `toto` ou `demo` / `serial-demo` ; disque différentiel éphémère, DHCP restreint dans QEMU et NAT dans VirtualBox.
 - **OpenWrt 25.12 x86-64** : appuie sur Entrée pour ouvrir le shell `root` sans mot de passe ; disque différentiel éphémère, réseau désactivé.
 
-Arrête la VM avec le bouton **Arrêter**, puis le serveur avec Ctrl+C dans le terminal où `npm start` tourne. Si le port 3002 est déjà pris, arrête l’ancien serveur ou choisis un autre port :
+**Reboot** redémarre la VM en conservant son disque différentiel et toutes ses modifications. **Reset** arrête la VM, recrée son disque différentiel depuis l’image de base, puis la redémarre ; les modifications du disque de travail sont perdues. Pour Alpine, qui démarre depuis une ISO sans disque de travail, Reset redémarre simplement l’ISO. Ces deux commandes gardent le même onglet et le même hostname. Si tu utilises **Arrêter**, tu peux ensuite choisir **Reset** pour la redémarrer depuis sa base ; le bouton **Démarrer** reste réservé au premier lancement de l’onglet. Fermer un onglet arrête et supprime sa session. Quand tu arrêtes le serveur avec Ctrl+C, toutes les VM qu’il gère sont arrêtées.
+
+Si le port 3002 est déjà pris, arrête l’ancien serveur ou choisis un autre port :
 
 ```sh
 PORT=3003 npm start

@@ -196,6 +196,7 @@ cat > "$RUNTIME/catalog.json" <<JSON
 [
   {
     "id": "alpine",
+    "hostname": "alpine",
     "label": "Alpine Linux 3.24",
     "description": "Console live, sans disque ni réseau",
     "kind": "iso",
@@ -206,6 +207,7 @@ cat > "$RUNTIME/catalog.json" <<JSON
   },
   {
     "id": "debian13",
+    "hostname": "qemunet-demo",
     "label": "Debian 13",
     "description": "Image RAW préparée, disque de travail éphémère",
     "kind": "raw",
@@ -220,6 +222,7 @@ cat > "$RUNTIME/catalog.json" <<JSON
   },
   {
     "id": "openwrt",
+    "hostname": "OpenWrt",
     "label": "OpenWrt 25.12 x86-64",
     "description": "Image RAW, disque de travail éphémère",
     "kind": "raw",

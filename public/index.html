@@ -3,42 +3,58 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>QemuNet — console série</title>
+  <title>QemuNet — consoles série</title>
   <link rel="stylesheet" href="/vendor/css/xterm.css">
   <style>
     * { box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; }
     body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; margin: 0; background: #141a22; color: #e7edf5; font: 15px system-ui, sans-serif; }
-    header { display: flex; align-items: center; gap: 10px; padding: 14px 20px; border-bottom: 1px solid #35404c; }
-    h1 { margin: 0 auto 0 0; font-size: 18px; }
-    button, select { padding: 8px 12px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
+    header { display: flex; align-items: center; gap: 9px; padding: 12px 16px; border-bottom: 1px solid #35404c; }
+    h1 { margin: 0 auto 0 0; font-size: 18px; white-space: nowrap; }
+    button, select { padding: 8px 11px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
     button { cursor: pointer; }
     button:disabled { opacity: .45; cursor: default; }
     #status { min-width: 120px; color: #bdc8d6; }
+    .logs-toggle { display: inline-flex; align-items: center; gap: 6px; color: #bdc8d6; white-space: nowrap; cursor: pointer; }
+    .logs-toggle input { accent-color: #70a8ff; }
+    .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
+    .machine-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 7px 5px 10px; white-space: nowrap; background: #1b2531; }
+    .machine-tab[aria-selected="true"] { background: #355177; border-color: #70a8ff; }
+    .machine-tab .machine-name { border: 0; padding: 2px; background: transparent; text-align: left; }
+    .machine-tab .machine-close { padding: 2px 6px; color: #bdc8d6; background: transparent; border: 0; }
+    #new-machine { flex: none; background: #1b2531; }
     #image-info { min-height: 18px; }
-    .logs { flex: none; max-height: 24vh; overflow: auto; margin: 0 16px 10px; border: 1px solid #35404c; border-radius: 6px; background: #10151c; }
-    .logs summary { padding: 7px 10px; cursor: pointer; color: #bdc8d6; }
+    .note { flex: none; margin: 9px 16px 0; color: #bdc8d6; font-size: 13px; }
+    .logs { flex: none; max-height: 24vh; overflow: auto; margin: 0 16px 8px; border: 1px solid #35404c; border-radius: 6px; background: #10151c; }
+    .logs[hidden] { display: none; }
+    .logs-title { padding: 7px 10px; color: #bdc8d6; border-bottom: 1px solid #35404c; }
     .logs pre { margin: 0; padding: 8px 10px; max-height: 20vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
-    @media (max-width: 760px) { header { flex-wrap: wrap; padding: 10px; gap: 8px; } h1 { width: 100%; } #status { flex: 1; } .note { margin-inline: 10px; } .logs { margin-inline: 10px; } main { padding: 10px; } }
-    .note { flex: none; margin: 10px 20px 0; color: #bdc8d6; font-size: 13px; }
-    main { display: flex; flex: 1; min-width: 0; min-height: 0; padding: 16px; }
+    main { display: flex; flex: 1; min-width: 0; min-height: 0; padding: 12px 16px 16px; }
     #terminal { flex: 1; min-width: 0; min-height: 0; width: 100%; padding: 10px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
+    @media (max-width: 900px) { header { flex-wrap: wrap; } h1 { width: 100%; } #status { flex: 1; } }
+    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .note { margin-inline: 10px; } .logs { margin-inline: 10px; } main { padding: 10px; } }
   </style>
 </head>
 <body>
   <header>
-    <h1>QemuNet · console série</h1>
+    <h1>QemuNet · consoles série</h1>
     <label for="os-image">Système</label>
     <select id="os-image" aria-label="Système à lancer"></select>
     <label for="engine">Moteur</label>
-    <select id="engine"><option value="qemu">QEMU</option><option value="virtualbox">VirtualBox</option></select>
-    <button id="start">Démarrer</button>
+    <select id="engine" aria-label="Moteur de virtualisation"><option value="qemu">QEMU · KVM auto</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
+    <button id="start" disabled>Démarrer</button>
     <button id="stop" disabled>Arrêter</button>
+    <button id="reboot" disabled title="Redémarrer en conservant le disque différentiel">Reboot</button>
+    <button id="reset" disabled title="Recréer le disque de travail depuis l’image de base">Reset</button>
+    <label class="logs-toggle" for="show-logs"><input id="show-logs" type="checkbox"> Logs</label>
     <span id="status">Arrêtée</span>
   </header>
   <p class="note" id="image-info">Chargement du catalogue runtime…</p>
-  <details class="logs"><summary>Journal de lancement</summary><pre id="launch-logs">Les commandes de lancement apparaîtront ici.</pre></details>
+  <section class="logs" id="logs-panel" aria-label="Journal de lancement" hidden><div class="logs-title">Journal de lancement</div><pre id="launch-logs">Les commandes de lancement apparaîtront ici.</pre></section>
   <main><div id="terminal"></div></main>
+  <nav class="machines" id="machine-tabs" aria-label="Machines virtuelles">
+    <button id="new-machine" type="button">＋ Nouvelle machine</button>
+  </nav>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
   <script src="/vendor-addon-fit/lib/xterm-addon-fit.js"></script>
@@ -50,71 +66,295 @@
     fit.fit();
     window.addEventListener('resize', () => fit.fit());
     new ResizeObserver(() => fit.fit()).observe(document.querySelector('main'));
-    terminal.write('Console série QemuNet. Choisir un système et un moteur puis cliquer sur Démarrer.\r\n');
     const socket = io({transports: ['websocket', 'polling']});
-    const start = document.getElementById('start');
-    const stop = document.getElementById('stop');
+    const startButton = document.getElementById('start');
+    const stopButton = document.getElementById('stop');
+    const rebootButton = document.getElementById('reboot');
+    const resetButton = document.getElementById('reset');
     const status = document.getElementById('status');
     const imageSelect = document.getElementById('os-image');
+    const engineSelect = document.getElementById('engine');
     const imageInfo = document.getElementById('image-info');
+    const tabs = document.getElementById('machine-tabs');
+    const showLogs = document.getElementById('show-logs');
+    const logsPanel = document.getElementById('logs-panel');
+    const launchLogs = document.getElementById('launch-logs');
+    const machines = new Map();
     let images = [];
+    let activeId = null;
+
+    function activeMachine() { return activeId ? machines.get(activeId) : null; }
     function updateImageInfo() {
       const image = images.find(item => item.id === imageSelect.value);
       imageInfo.textContent = image ? `${image.description}. Connexion : ${image.login}. Réseau : ${image.network}. QEMU utilise KVM si disponible, sinon TCG.` : 'Aucune image disponible ; exécuter bash prepare.sh.';
     }
+    function renderTabs() {
+      tabs.querySelectorAll('.machine-tab').forEach(tab => tab.remove());
+      for (const machine of machines.values()) {
+        const tab = document.createElement('div');
+        tab.className = 'machine-tab';
+        tab.setAttribute('aria-selected', String(machine.id === activeId));
+        const select = document.createElement('button');
+        select.type = 'button';
+        select.className = 'machine-name';
+        select.textContent = machine.hostname;
+        select.title = machine.osHint;
+        select.onclick = () => selectMachine(machine.id);
+        const close = document.createElement('button');
+        close.type = 'button';
+        close.className = 'machine-close';
+        close.textContent = '×';
+        close.title = 'Arrêter et fermer cette machine';
+        close.setAttribute('aria-label', `Arrêter et fermer ${machine.hostname} (${machine.osHint})`);
+        close.onclick = () => closeMachine(machine.id);
+        tab.append(select, close);
+        tabs.insertBefore(tab, document.getElementById('new-machine'));
+      }
+    }
+    function updateControls() {
+      const machine = activeMachine();
+      const running = !!(machine && machine.running);
+      if (!machine) return;
+      const busy = !!machine.busy;
+      status.textContent = machine.message;
+      startButton.disabled = running || machine.hasLaunched || busy || !images.length;
+      stopButton.disabled = !running || busy;
+      rebootButton.disabled = !running || busy;
+      resetButton.disabled = !machine.hasLaunched || busy;
+      imageSelect.disabled = running || machine.hasLaunched || busy;
+      engineSelect.disabled = running || machine.hasLaunched || busy;
+      imageSelect.value = machine.imageId;
+      engineSelect.value = machine.engine;
+      const image = images.find(item => item.id === machine.imageId);
+      imageInfo.textContent = image ? `${image.description}. Connexion : ${image.login}. Réseau : ${image.network}. QEMU utilise KVM si disponible, sinon TCG.` : 'Chargement du catalogue runtime…';
+    }
+    function addMachine() {
+      const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+      const image = images.find(item => item.id === imageSelect.value);
+      const machine = {id, hostname: image?.hostname || image?.id || 'alpine', osHint: image?.label || 'Système', imageId: imageSelect.value || 'alpine', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Arrêtée', logs: [], serial: ''};
+      machines.set(id, machine);
+      renderTabs();
+      selectMachine(id);
+    }
+    function selectMachine(id) {
+      const machine = machines.get(id);
+      if (!machine) return;
+      activeId = id;
+      renderTabs();
+      updateControls();
+      logsPanel.hidden = !showLogs.checked;
+      socket.emit('select-session', id);
+      requestAnimationFrame(() => fit.fit());
+    }
+    async function closeMachine(id) {
+      const machine = machines.get(id);
+      if (!machine) return;
+      try {
+        const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {method: 'DELETE'});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Échec de la fermeture');
+        machines.delete(id);
+        if (activeId === id) activeId = null;
+        if (!machines.size) addMachine();
+        else if (activeId === null) selectMachine(machines.keys().next().value);
+        renderTabs();
+        updateControls();
+      } catch (error) { status.textContent = `Fermeture impossible : ${error.message}`; }
+    }
+    function appendLog(machine, line) {
+      machine.logs.push(line);
+      if (machine.logs.length > 1000) machine.logs.shift();
+      if (machine.id === activeId) {
+        if (launchLogs.textContent === 'Les commandes de lancement apparaîtront ici.') launchLogs.textContent = '';
+        launchLogs.textContent += `${line}\n`;
+        if (!logsPanel.hidden) launchLogs.scrollTop = launchLogs.scrollHeight;
+      }
+    }
+
     fetch('/api/images').then(response => response.json()).then(items => {
       images = items;
       imageSelect.replaceChildren(...items.map(image => { const option = document.createElement('option'); option.value = image.id; option.textContent = image.label; return option; }));
-      updateImageInfo();
+      return fetch('/api/sessions').then(response => response.json());
+    }).then(existing => {
+      for (const session of existing) {
+        const image = images.find(item => item.id === session.imageId);
+        machines.set(session.id, {
+          id: session.id,
+          hostname: session.hostname || image?.hostname || image?.id || `machine-${machines.size + 1}`,
+          osHint: image?.label || 'Système inconnu',
+          imageId: image ? image.id : (images[0]?.id || ''),
+          hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
+          engine: session.engine || 'qemu',
+          running: session.running,
+          hasLaunched: session.hasLaunched,
+          message: session.message,
+          logs: [],
+          serial: ''
+        });
+      }
+      if (!machines.size) addMachine();
+      else {
+        renderTabs();
+        selectMachine(machines.keys().next().value);
+      }
     }).catch(error => { imageInfo.textContent = `Catalogue indisponible : ${error.message}`; });
-    imageSelect.addEventListener('change', updateImageInfo);
-    document.querySelector('.logs').addEventListener('toggle', () => requestAnimationFrame(() => fit.fit()));
-    const launchLogs = document.getElementById('launch-logs');
-    function appendLog(line) {
-      if (launchLogs.textContent === 'Les commandes de lancement apparaîtront ici.') launchLogs.textContent = '';
-      launchLogs.textContent += `${line}\n`;
-      const details = document.querySelector('.logs');
-      launchLogs.scrollTop = launchLogs.scrollHeight;
-      if (line.startsWith('$ ') && !details.open) { details.open = true; requestAnimationFrame(() => fit.fit()); }
-    }
-    fetch('/api/logs').then(response => response.json()).then(lines => {
-      launchLogs.textContent = '';
-      lines.forEach(appendLog);
-      if (!lines.length) launchLogs.textContent = 'Les commandes de lancement apparaîtront ici.';
+
+    document.getElementById('new-machine').addEventListener('click', addMachine);
+    imageSelect.addEventListener('change', () => {
+      const machine = activeMachine();
+      if (!machine) return;
+      machine.imageId = imageSelect.value;
+      const image = images.find(item => item.id === machine.imageId);
+      machine.hostname = image?.hostname || image?.id || 'machine';
+      machine.osHint = image?.label || 'Système';
+      machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
+      updateControls();
+      renderTabs();
     });
-    socket.on('logs-reset', () => { launchLogs.textContent = ''; });
-    socket.on('log', appendLog);
-    socket.on('serial', data => terminal.write(data));
-    socket.on('state', data => {
-      status.textContent = data.message;
-      start.disabled = data.running;
-      stop.disabled = !data.running;
-      document.getElementById('engine').disabled = data.running;
-      imageSelect.disabled = data.running;
+    engineSelect.addEventListener('change', () => {
+      const machine = activeMachine();
+      if (!machine) return;
+      machine.engine = engineSelect.value;
+      renderTabs();
     });
+    showLogs.addEventListener('change', () => {
+      logsPanel.hidden = !showLogs.checked;
+      requestAnimationFrame(() => fit.fit());
+    });
+    socket.on('session-snapshot', snapshot => {
+      const machine = machines.get(snapshot.sessionId);
+      if (!machine) return;
+      machine.running = snapshot.state.running;
+      machine.hasLaunched = snapshot.state.hasLaunched;
+      machine.message = snapshot.state.message;
+      machine.logs = snapshot.logs || [];
+      machine.serial = snapshot.serial || '';
+      if (machine.id === activeId) {
+        terminal.reset();
+        if (machine.serial) terminal.write(machine.serial);
+        launchLogs.textContent = machine.logs.length ? `${machine.logs.join('\n')}\n` : 'Les commandes de lancement apparaîtront ici.';
+        updateControls();
+        requestAnimationFrame(() => fit.fit());
+      }
+      renderTabs();
+    });
+    socket.on('serial-reset', event => {
+      const machine = event && machines.get(event.sessionId);
+      if (!machine) return;
+      machine.serial = '';
+      if (machine.id === activeId) terminal.reset();
+    });
+    socket.on('serial', event => {
+      const machine = event && machines.get(event.sessionId);
+      if (!machine) return;
+      machine.serial = (machine.serial + event.data).slice(-65536);
+      if (machine.id === activeId) terminal.write(event.data);
+    });
+    socket.on('log', event => {
+      const machine = event && machines.get(event.sessionId);
+      if (machine) appendLog(machine, event.line);
+    });
+    socket.on('logs-reset', event => {
+      const machine = event && machines.get(event.sessionId);
+      if (!machine) return;
+      machine.logs = [];
+      if (machine.id === activeId) launchLogs.textContent = '';
+    });
+    socket.on('state', event => {
+      const machine = event && machines.get(event.sessionId);
+      if (!machine) return;
+      machine.running = event.running;
+      if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
+      machine.message = event.message;
+      renderTabs();
+      if (machine.id === activeId) updateControls();
+    });
+    socket.on('sessions-changed', event => {
+      const machine = event && machines.get(event.sessionId);
+      if (!machine || machine.id === activeId) return;
+      machine.running = event.running;
+      if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
+      machine.message = event.message;
+      renderTabs();
+    });
+    socket.on('connect', () => { if (activeId) socket.emit('select-session', activeId); });
+    socket.on('session-error', message => { status.textContent = message; });
     socket.on('connect_error', error => { status.textContent = 'WebSocket indisponible'; console.error(error); });
     terminal.onData(data => socket.emit('input', data));
-    start.onclick = async () => {
-      start.disabled = true;
-      status.textContent = 'Démarrage…';
+    startButton.onclick = async () => {
+      const machine = activeMachine();
+      if (!machine || machine.running || machine.hasLaunched) return;
+      machine.busy = true;
+      machine.imageId = imageSelect.value;
+      machine.engine = engineSelect.value;
+      const image = images.find(item => item.id === machine.imageId);
+      machine.hostname = image?.hostname || image?.id || 'machine';
+      machine.osHint = image?.label || 'Système';
+      machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
+      machine.message = 'Démarrage…';
+      updateControls();
+      renderTabs();
       terminal.reset();
-      const selected = images.find(image => image.id === imageSelect.value);
-      terminal.write(`Démarrage de ${selected ? selected.label : 'la VM'}…\r\n`);
+      terminal.write(`Démarrage de ${machine.hostname} (${machine.osHint})…\r\n`);
       try {
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({engine: document.getElementById('engine').value, imageId: imageSelect.value})});
+        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Échec du démarrage');
+        machine.hasLaunched = true;
+        machine.running = true;
         terminal.focus();
-      } catch (error) { status.textContent = error.message; start.disabled = false; imageSelect.disabled = false; document.getElementById('engine').disabled = false; }
+      } catch (error) {
+        machine.running = false;
+        machine.message = error.message;
+        status.textContent = error.message;
+      } finally {
+        machine.busy = false;
+        updateControls();
+        renderTabs();
+      }
     };
-    stop.onclick = async () => {
-      stop.disabled = true;
-      status.textContent = 'Arrêt…';
+    stopButton.onclick = async () => {
+      const machine = activeMachine();
+      if (!machine || !machine.running) return;
+      machine.busy = true;
+      machine.message = 'Arrêt…';
+      updateControls();
       try {
-        const response = await fetch('/api/stop', {method: 'POST'});
+        const response = await fetch(`/api/stop/${encodeURIComponent(machine.id)}`, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Échec de l’arrêt');
-      } catch (error) { status.textContent = error.message; stop.disabled = false; }
+      } catch (error) { machine.message = error.message; }
+      finally { machine.busy = false; updateControls(); }
+    };
+    rebootButton.onclick = async () => {
+      const machine = activeMachine();
+      if (!machine || !machine.running || machine.busy) return;
+      machine.busy = true;
+      machine.message = 'Redémarrage…';
+      updateControls();
+      try {
+        const response = await fetch(`/api/reboot/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Échec du reboot');
+      } catch (error) { machine.message = error.message; }
+      finally { machine.busy = false; updateControls(); }
+    };
+    resetButton.onclick = async () => {
+      const machine = activeMachine();
+      if (!machine || !machine.hasLaunched || machine.busy) return;
+      const resetWarning = machine.hasDifferentialDisk ? ' Les modifications du disque différentiel seront perdues.' : '';
+      if (!window.confirm(`Reset de ${machine.hostname} depuis son image de base.${resetWarning} Continuer ?`)) return;
+      machine.busy = true;
+      machine.message = 'Reset depuis l’image de base…';
+      updateControls();
+      try {
+        const response = await fetch(`/api/reset/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Échec du reset');
+        machine.hasLaunched = true;
+        machine.running = true;
+      } catch (error) { machine.message = error.message; }
+      finally { machine.busy = false; updateControls(); }
     };
   </script>
 </body>
