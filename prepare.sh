@@ -8,8 +8,8 @@ ALPINE="alpine-virt-$ALPINE_VERSION-x86_64.iso"
 ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64"
 DEBIAN_SOURCE="debian-13-genericcloud-amd64.qcow2"
 DEBIAN_URL="https://cloud.debian.org/images/cloud/trixie/latest"
-DEBIAN_RAW="debian-13-qemunet-amd64.raw"
-DEBIAN_VDI="debian-13-qemunet-amd64.vdi"
+DEBIAN_RAW="debian-13-qemunet-v2-amd64.raw"
+DEBIAN_VDI="debian-13-qemunet-v2-amd64.vdi"
 OPENWRT_GZ="openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
 OPENWRT_URL="https://downloads.openwrt.org/releases/25.12.6/targets/x86/64"
 OPENWRT_RAW="${OPENWRT_GZ%.gz}"
@@ -65,9 +65,14 @@ if [[ ! -s "$RUNTIME/$DEBIAN_RAW" ]]; then
 hostname: qemunet-demo
 manage_etc_hosts: true
 ssh_pwauth: true
+disable_root: false
 users:
   - default
   - name: demo
+    groups: [sudo]
+    shell: /bin/bash
+    lock_passwd: false
+  - name: toto
     groups: [sudo]
     shell: /bin/bash
     lock_passwd: false
@@ -75,6 +80,7 @@ chpasswd:
   expire: false
   users:
     - {name: demo, password: serial-demo, type: text}
+    - {name: toto, password: toto, type: text}
 write_files:
   - path: /etc/systemd/network/20-qemunet.network
     permissions: '0644'
@@ -84,6 +90,7 @@ write_files:
       [Network]
       DHCP=yes
 runcmd:
+  - [passwd, -d, root]
   - [systemctl, enable, serial-getty@ttyS0.service]
   - [systemctl, enable, systemd-networkd.service]
   - [touch, /etc/cloud/cloud-init.disabled]
@@ -206,7 +213,7 @@ cat > "$RUNTIME/catalog.json" <<JSON
     "vdi": "$DEBIAN_VDI",
     "format": "raw",
     "memory": 1024,
-    "login": "demo / serial-demo",
+    "login": "root, sans mot de passe ; toto / toto ; demo / serial-demo",
     "qemuNic": "user,restrict=on",
     "vboxNic": "nat",
     "network": "DHCP restreint dans QEMU ; NAT dans VirtualBox"

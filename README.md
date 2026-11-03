@@ -42,8 +42,8 @@ npm start
 Ouvre <http://127.0.0.1:3002>, choisis un système et un moteur, puis clique sur **Démarrer**. Le panneau **Journal de lancement** affiche les commandes QEMU ou VirtualBox. Les identifiants apparaissent au-dessus du terminal :
 
 - **Alpine Linux 3.24** : `root`, mot de passe vide ; ISO live sans disque ni réseau.
-- **Debian 13** : `demo` / `serial-demo` ; disque différentiel éphémère, DHCP restreint dans QEMU et NAT dans VirtualBox.
-- **OpenWrt 25.12 x86-64** : appuie sur Entrée pour ouvrir le shell `root` ; disque différentiel éphémère, réseau désactivé.
+- **Debian 13** : `root` sans mot de passe ; `toto` / `toto` ou `demo` / `serial-demo` ; disque différentiel éphémère, DHCP restreint dans QEMU et NAT dans VirtualBox.
+- **OpenWrt 25.12 x86-64** : appuie sur Entrée pour ouvrir le shell `root` sans mot de passe ; disque différentiel éphémère, réseau désactivé.
 
 Arrête la VM avec le bouton **Arrêter**, puis le serveur avec Ctrl+C dans le terminal où `npm start` tourne. Si le port 3002 est déjà pris, arrête l’ancien serveur ou choisis un autre port :
 
