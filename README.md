@@ -15,6 +15,17 @@ Au lancement, le serveur ne configure plus aucun système : QEMU crée un QCOW2 
 
 `images/` contient les téléchargements officiels, les bases RAW/VDI préparées et `catalog.json`. Ce répertoire peut être conservé durablement afin de ne pas reconstruire les images. `runtime/` ne contient que les disques différentiels, sockets et états temporaires des VM ; après arrêt du serveur et des VM, son contenu peut être entièrement supprimé. Le serveur recrée le répertoire au lancement.
 
+### Arrêt et nettoyage
+
+```sh
+./killall.sh                 # arrête tous les serveurs et VM de ce projet
+./cleanall.sh                # arrête les instances et vide runtime/ ; garde images/
+./cleanall.sh --images       # vide aussi images/ (la prochaine préparation recommence à zéro)
+./cleanall.sh --dry-run      # affiche ce qui serait arrêté et supprimé
+```
+
+Ces scripts visent les processus QEMU/Node et les VM VirtualBox associés à ce répertoire. `cleanall.sh` conserve les fichiers `.gitkeep` et ne supprime ni le code ni `node_modules/`. L’option `--images` supprime également les éventuels autres fichiers présents dans `images/` : à utiliser uniquement si tu souhaites effacer toutes les bases conservées.
+
 ### Formats utilisés
 
 | Moteur | Base en lecture seule | Disque différentiel de l’instance |
