@@ -1,0 +1,18 @@
+{
+  "name": "qemunet-serial-console-demo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Console série xterm.js pour une VM Alpine lancée avec QEMU/KVM ou VirtualBox",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "express": "4.18.1",
+    "socket.io": "2.3.0",
+    "xterm": "4.6.0",
+    "xterm-addon-fit": "0.5.0"
+  }
+}

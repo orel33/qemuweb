@@ -1,0 +1,6 @@
+node_modules/
+runtime/
+dist/
+preview/
+images/debian11.img
+images/debian11.tgz

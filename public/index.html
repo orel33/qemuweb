@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Alpine Linux — console série</title>
+  <link rel="stylesheet" href="/vendor/css/xterm.css">
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #141a22; color: #e7edf5; font: 15px system-ui, sans-serif; }
+    header { display: flex; align-items: center; gap: 12px; padding: 14px 20px; border-bottom: 1px solid #35404c; }
+    h1 { margin: 0 auto 0 0; font-size: 18px; }
+    button, select { padding: 8px 12px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
+    button { cursor: pointer; }
+    button:disabled { opacity: .45; cursor: default; }
+    #status { min-width: 120px; color: #bdc8d6; }
+    .note { margin: 10px 20px 0; color: #bdc8d6; font-size: 13px; }
+    main { padding: 16px; }
+    #terminal { width: 100%; height: calc(100vh - 92px); padding: 10px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Alpine Linux · console série</h1>
+    <label for="engine">Moteur</label>
+    <select id="engine"><option value="qemu">QEMU</option><option value="virtualbox">VirtualBox</option></select>
+    <button id="start">Démarrer</button>
+    <button id="stop" disabled>Arrêter</button>
+    <span id="status">Arrêtée</span>
+  </header>
+  <p class="note">Console live Alpine, sans réseau ni disque persistant. Connexion <code>root</code> sans mot de passe. QEMU utilise KVM si disponible, sinon TCG ; VirtualBox requiert VT-x libre.</p>
+  <main><div id="terminal"></div></main>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/vendor/lib/xterm.js"></script>
+  <script src="/vendor-addon-fit/lib/xterm-addon-fit.js"></script>
+  <script>
+    const terminal = new Terminal({cursorBlink: true, convertEol: true, theme: {background: '#0b0f14'}});
+    const fit = new FitAddon.FitAddon();
+    terminal.loadAddon(fit);
+    terminal.open(document.getElementById('terminal'));
+    fit.fit();
+    window.addEventListener('resize', () => fit.fit());
+    terminal.write('Console série Alpine Linux. Choisir un moteur puis cliquer sur Démarrer.\r\n');
+    const socket = io({transports: ['websocket', 'polling']});
+    const start = document.getElementById('start');
+    const stop = document.getElementById('stop');
+    const status = document.getElementById('status');
+    socket.on('serial', data => terminal.write(data));
+    socket.on('state', data => {
+      status.textContent = data.message;
+      start.disabled = data.running;
+      stop.disabled = !data.running;
+      document.getElementById('engine').disabled = data.running;
+    });
+    socket.on('connect_error', error => { status.textContent = 'WebSocket indisponible'; console.error(error); });
+    terminal.onData(data => socket.emit('input', data));
+    start.onclick = async () => {
+      start.disabled = true;
+      status.textContent = 'Démarrage…';
+      try {
+        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({engine: document.getElementById('engine').value})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Échec du démarrage');
+        terminal.focus();
+      } catch (error) { status.textContent = error.message; start.disabled = false; }
+    };
+    stop.onclick = async () => {
+      stop.disabled = true;
+      status.textContent = 'Arrêt…';
+      try {
+        const response = await fetch('/api/stop', {method: 'POST'});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Échec de l’arrêt');
+      } catch (error) { status.textContent = error.message; stop.disabled = false; }
+    };
+  </script>
+</body>
+</html>
