@@ -342,8 +342,8 @@
     resetButton.onclick = async () => {
       const machine = activeMachine();
       if (!machine || !machine.hasLaunched || machine.busy) return;
-      const resetWarning = machine.hasDifferentialDisk ? ' Les modifications du disque différentiel seront perdues.' : '';
-      if (!window.confirm(`Reset de ${machine.hostname} depuis son image de base.${resetWarning} Continuer ?`)) return;
+      const resetWarning = machine.hasDifferentialDisk ? ' Les modifications de son disque différentiel seront perdues.' : '';
+      if (!window.confirm(`Reset de ${machine.hostname} depuis son image de base.${resetWarning}\n\nSeule la VM de cet onglet sera réinitialisée. Les autres VM ne seront pas affectées.\n\nContinuer ?`)) return;
       machine.busy = true;
       machine.message = 'Reset depuis l’image de base…';
       updateControls();
