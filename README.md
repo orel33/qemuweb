@@ -94,6 +94,10 @@ Preparation downloads missing images from official repositories and verifies the
 - Preparing Alpine and Debian also requires `qemu-system-x86_64` and `python3`; Debian additionally requires `genisoimage`. KVM speeds up preparation when `/dev/kvm` is readable and writable; otherwise preparation uses the slower TCG emulator. Alpine preparation also selects TCG when a VirtualBox VM is already running.
 - To run with QEMU: `qemu-system-x86_64`. To run with VirtualBox: VirtualBox and `VBoxManage`.
 
+For a versioned QEMU build with VDE, run `./misc/install-qemu.sh /opt/`.
+See the [QEMU installer notes](misc/install-qemu.md) for the layout,
+dependencies, and verification steps.
+
 ## Installation and preparation
 
 ```sh
