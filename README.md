@@ -2,6 +2,12 @@
 
 Cette démo lance Alpine Linux, Debian 13 ou OpenWrt dans QEMU ou VirtualBox, et relaie la console série `ttyS0` vers xterm.js dans un serveur web local.
 
+## Console texte : xterm et navigateur
+
+Dans l’ancienne commande QemuNet, `-append '… console=ttyS0 …'` demande explicitement **au noyau Linux** d’écrire sur son premier port série. Avec `xterm -e qemu-system-x86_64 … -nographic`, QEMU masque la vidéo et, lorsqu’aucun `-serial` n’est indiqué, relie implicitement ce port série à son entrée/sortie standard, donc à xterm. QEMU partage aussi cette entrée/sortie avec son moniteur (`Ctrl+A`, puis `C`). Le terme `ttyS0` n’est donc pas implicite : c’est **son raccordement à xterm** qui l’est. Un service `getty` sur `ttyS0` reste nécessaire pour afficher un prompt `login:`.
+
+Dans la démo web, `-display none` masque seulement la vidéo. Le port série est relié explicitement à un socket par `-chardev socket,… -serial chardev:serial0` ; le serveur transmet ensuite les caractères entre ce socket et xterm.js via WebSocket. Le moniteur QEMU dispose d’un autre socket. La console et le login série sont configurés dans les images pendant `prepare.sh`. La [comparaison détaillée des commandes](docs/commandes-qemu.pdf) illustre les deux trajets.
+
 ## Principe des images
 
 `prepare.sh` prépare les systèmes avant leur utilisation :

@@ -59,9 +59,10 @@ code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; ove
       <tr><td><code>-initrd /home/orel/Documents/projet-qemunet/qemunet/images/debian10.initrd \</code></td><td>Charge l’initrd correspondant au noyau.</td></tr>
       <tr><td><code>-append 'root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0 user=orel ' \</code></td><td>Racine sur sda1 en écriture ; noms réseau classiques ; consoles série et vidéo ; « user=orel » dépend de l’image.</td></tr>
       <tr><td><code>-pidfile /tmp/qemunet-orel-OgwDNU/grave.pid \</code></td><td>Enregistre le PID du processus QEMU dans un fichier.</td></tr>
-      <tr><td><code>-nographic</code></td><td>Masque la vidéo QEMU et relie par défaut le port série et le moniteur à stdin/stdout d’xterm. La vidéo tty0 n’est pas visible ici.</td></tr>
+      <tr><td><code>-nographic</code></td><td>Masque la vidéo QEMU. Sans <code>-serial</code> explicite, raccorde le premier port série et le moniteur à stdin/stdout d’xterm.</td></tr>
     </tbody>
   </table>
+  <p class="note"><strong>Ce qui est implicite :</strong> <code>ttyS0</code> est explicitement demandé au noyau par <code>console=ttyS0</code> dans <code>-append</code>. QEMU fournit un premier port série virtuel ; <code>-nographic</code> le relie implicitement à stdin/stdout du processus QEMU lancé dans xterm et y partage aussi le moniteur (<code>Ctrl+A</code>, puis <code>C</code>). <code>-nographic</code> ne configure ni <code>console=ttyS0</code> ni le service <code>getty</code> nécessaire au prompt <code>login:</code>.</p>
 </section>
 
 <section>
@@ -106,9 +107,9 @@ code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; ove
       <tr><td><code>-kernel -initrd -append</code></td><td><code>-boot order=c</code></td><td>Noyau, initrd et root=/dev/sda1 fournis par l’hôte ; la démo démarre sur le disque, puis GRUB fournit noyau, initramfs et root=PARTUUID.</td></tr>
 
       <tr class="category"><td colspan="3">Entrées/sorties standard en mode texte : clavier et écran</td></tr>
-      <tr><td><code>xterm … -e qemu… -nographic</code></td><td><code>-display none</code></td><td>xterm fournit le terminal hôte ; -nographic y redirige la série et le moniteur. -display none cache seulement la vidéo.</td></tr>
+      <tr><td><code>xterm … -e qemu… -nographic</code></td><td><code>-display none</code></td><td>xterm fournit stdin/stdout ; -nographic y relie implicitement série et moniteur. -display none cache seulement la vidéo.</td></tr>
       <tr><td><code>console=ttyS0 console=tty0</code></td><td><code>console=ttyS0,115200</code> préparé</td><td>Les deux utilisent ttyS0 pour le texte interactif ; tty0 reste la sortie vidéo, masquée dans les deux cas.</td></tr>
-      <tr><td>Série/moniteur sur stdin/stdout</td><td><code>-chardev socket -serial … -monitor unix:…</code></td><td>Flux série vers xterm d’un côté ; socket vers Node/WebSocket/xterm.js de l’autre. Moniteur séparé dans la démo.</td></tr>
+      <tr><td>Série/moniteur sur stdin/stdout</td><td><code>-chardev socket -serial … -monitor unix:…</code></td><td>Dans xterm, aucun -serial requis avec -nographic ; dans la démo, -serial raccorde explicitement ttyS0 à un socket. Moniteur séparé.</td></tr>
       <tr><td><code>-k fr</code></td><td>Aucun <code>-k</code></td><td>Réglage QEMU du clavier graphique normalement sans effet sur la saisie série ; xterm ou navigateur gère les touches côté hôte.</td></tr>
 
       <tr class="category"><td colspan="3">Gestion du réseau</td></tr>
@@ -119,7 +120,7 @@ code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; ove
       <tr><td><code>-pidfile</code></td><td>Processus suivi par Node</td><td>PID dans un fichier contre référence du processus en mémoire.</td></tr>
     </tbody>
   </table>
-  <p class="note">Point central : les deux méthodes aboutissent à une session sur <code>ttyS0</code>. L’ancienne lance le noyau depuis l’hôte et relie la série à stdin/stdout d’xterm ; la démo boote sur le disque préparé et relie la série au navigateur par socket et WebSocket.</p>
+  <p class="note">Dans les deux méthodes, <code>ttyS0</code> est configuré côté Linux, et <code>getty</code> fournit le login. Dans l’ancienne commande, seul le raccordement QEMU → stdin/stdout est implicite grâce à <code>-nographic</code> ; la démo utilise un raccordement série explicite vers Node, puis xterm.js.</p>
   <p class="foot">Sources : commandes fournies par Orel et server.js du projet qemuweb ; documentation QEMU : qemu.org/docs/master/system/qemu-manpage.html et qemu.org/docs/master/system/linuxboot.html.</p>
 </section>
 </body>
