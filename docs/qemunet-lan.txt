@@ -1,0 +1,61 @@
+$ ./qemunet.sh -x -t demo/lan.topo
+   ____                       _   _      _
+  / __ \                     | \ | |    | |
+ | |  | | ___ _ __ ___  _   _|  \| | ___| |_
+ | |  | |/ _ \ '_ ` _ \| | | | . ` |/ _ \ __|
+ | |__| |  __/ | | | | | |_| | |\  |  __/ |_
+  \___\_\\___|_| |_| |_|\__,_|_| \_|\___|\__|
+
+********** Let's Rock **********
+QEMUNET DIR: /home/orel/Documents/projet-qemunet/qemunet
+QEMU: qemu-system-x86_64
+VDE SWITCH: vde_switch
+SOCAT: socat
+WGET: wget
+QEMU VERSION
+QEMU emulator version 8.2.2 (Debian 1:8.2.2+ds-0ubuntu1.18)
+Copyright (c) 2003-2023 Fabrice Bellard and the QEMU Project developers
+Accelerator: KVM enabled (intel)
+  QEMU: Checking for hardware virtualization                                 : PASS
+  QEMU: Checking if device /dev/kvm exists                                   : PASS
+  QEMU: Checking if device /dev/kvm is accessible                            : PASS
+  QEMU: Checking if device /dev/cpu/0/msr exists                             : PASS
+  QEMU: Checking if device /dev/vhost-net exists                             : PASS
+  QEMU: Checking if device /dev/net/tun exists                               : PASS
+  QEMU: Checking for cgroup 'cpu' controller support                         : PASS
+  QEMU: Checking for cgroup 'cpuacct' controller support                     : PASS
+  QEMU: Checking for cgroup 'cpuset' controller support                      : PASS
+  QEMU: Checking for cgroup 'memory' controller support                      : PASS
+  QEMU: Checking for cgroup 'devices' controller support                     : WARN (Enable 'devices' in kernel Kconfig file or mount/enable cgroup controller in your system)
+  QEMU: Checking for cgroup 'blkio' controller support                       : PASS
+  QEMU: Checking for device assignment IOMMU support                         : PASS
+  QEMU: Checking if IOMMU is enabled by kernel                               : PASS
+  QEMU: Checking for secure guest support                                    : WARN (Unknown if this platform has Secure Guest support)
+********** Loading VM Config **********
+Loading VM Config File: /home/orel/Documents/projet-qemunet/qemunet/qemunet.cfg
+********** Starting QemuNet Session **********
+MODE: SESSION
+DISPLAY MODE: xterm
+SESSION ID: qemunet-orel-d8nPmA
+SESSION DIRECTORY: /tmp/qemunet-orel-d8nPmA
+SESSION LINK: /home/orel/qemunet-session
+QEMUNET CFG: /home/orel/Documents/projet-qemunet/qemunet/qemunet.cfg
+NETWORK TOPOLOGY: /tmp/qemunet-orel-d8nPmA/topology
+SESSION ARCHIVE:
+EXTRA ARCHIVE:
+[s1] vde_switch -d -s /tmp/qemunet-orel-d8nPmA/switch/s1 -p /tmp/qemunet-orel-d8nPmA/s1.pid -M /tmp/qemunet-orel-d8nPmA/s1.mgmt
+[immortal.qcow2] qemu-img create -q -b /home/orel/Documents/projet-qemunet/qemunet/images/debian10.img -F raw -f qcow2 /tmp/qemunet-orel-d8nPmA/immortal.qcow2
+=> plug immortal:eth0 to switch s1:1
+[immortal] xterm -fg white -bg black -T immortal -e qemu-system-x86_64 -name immortal -rtc base=localtime -k fr -M accel=kvm -m 200 -drive file=/tmp/qemunet-orel-d8nPmA/immortal.qcow2,format=qcow2,index=0,media=disk -fsdev local,id=share0,path=/tmp/qemunet-orel-d8nPmA/immortal,security_model=mapped -device virtio-9p-pci,fsdev=share0,mount_tag=host  -netdev vde,sock=/tmp/qemunet-orel-d8nPmA/switch/s1,port=1,id=s1 -device e1000,netdev=s1,mac=AA:AA:AA:AA:00:00 -kernel /home/orel/Documents/projet-qemunet/qemunet/images/debian10.vmlinuz -initrd /home/orel/Documents/projet-qemunet/qemunet/images/debian10.initrd -append 'root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0 user=orel ' -pidfile /tmp/qemunet-orel-d8nPmA/immortal.pid -nographic
+[opeth.qcow2] qemu-img create -q -b /home/orel/Documents/projet-qemunet/qemunet/images/debian10.img -F raw -f qcow2 /tmp/qemunet-orel-d8nPmA/opeth.qcow2
+=> plug opeth:eth0 to switch s1:2
+[opeth] xterm -fg white -bg black -T opeth -e qemu-system-x86_64 -name opeth -rtc base=localtime -k fr -M accel=kvm -m 200 -drive file=/tmp/qemunet-orel-d8nPmA/opeth.qcow2,format=qcow2,index=0,media=disk -fsdev local,id=share0,path=/tmp/qemunet-orel-d8nPmA/opeth,security_model=mapped -device virtio-9p-pci,fsdev=share0,mount_tag=host  -netdev vde,sock=/tmp/qemunet-orel-d8nPmA/switch/s1,port=2,id=s1 -device e1000,netdev=s1,mac=AA:AA:AA:AA:01:00 -kernel /home/orel/Documents/projet-qemunet/qemunet/images/debian10.vmlinuz -initrd /home/orel/Documents/projet-qemunet/qemunet/images/debian10.initrd -append 'root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0 user=orel ' -pidfile /tmp/qemunet-orel-d8nPmA/opeth.pid -nographic
+[syl.qcow2] qemu-img create -q -b /home/orel/Documents/projet-qemunet/qemunet/images/debian10.img -F raw -f qcow2 /tmp/qemunet-orel-d8nPmA/syl.qcow2
+=> plug syl:eth0 to switch s1:3
+[syl] xterm -fg white -bg black -T syl -e qemu-system-x86_64 -name syl -rtc base=localtime -k fr -M accel=kvm -m 200 -drive file=/tmp/qemunet-orel-d8nPmA/syl.qcow2,format=qcow2,index=0,media=disk -fsdev local,id=share0,path=/tmp/qemunet-orel-d8nPmA/syl,security_model=mapped -device virtio-9p-pci,fsdev=share0,mount_tag=host  -netdev vde,sock=/tmp/qemunet-orel-d8nPmA/switch/s1,port=3,id=s1 -device e1000,netdev=s1,mac=AA:AA:AA:AA:02:00 -kernel /home/orel/Documents/projet-qemunet/qemunet/images/debian10.vmlinuz -initrd /home/orel/Documents/projet-qemunet/qemunet/images/debian10.initrd -append 'root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0 user=orel ' -pidfile /tmp/qemunet-orel-d8nPmA/syl.pid -nographic
+[grave.qcow2] qemu-img create -q -b /home/orel/Documents/projet-qemunet/qemunet/images/debian10.img -F raw -f qcow2 /tmp/qemunet-orel-d8nPmA/grave.qcow2
+=> plug grave:eth0 to switch s1:4
+[grave] xterm -fg white -bg black -T grave -e qemu-system-x86_64 -name grave -rtc base=localtime -k fr -M accel=kvm -m 200 -drive file=/tmp/qemunet-orel-d8nPmA/grave.qcow2,format=qcow2,index=0,media=disk -fsdev local,id=share0,path=/tmp/qemunet-orel-d8nPmA/grave,security_model=mapped -device virtio-9p-pci,fsdev=share0,mount_tag=host  -netdev vde,sock=/tmp/qemunet-orel-d8nPmA/switch/s1,port=4,id=s1 -device e1000,netdev=s1,mac=AA:AA:AA:AA:03:00 -kernel /home/orel/Documents/projet-qemunet/qemunet/images/debian10.vmlinuz -initrd /home/orel/Documents/projet-qemunet/qemunet/images/debian10.initrd -append 'root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0 user=orel ' -pidfile /tmp/qemunet-orel-d8nPmA/grave.pid -nographic
+=> Your QemuNet session is running in this directory: /tmp/qemunet-orel-d8nPmA -> /home/orel/qemunet-session
+* ********* Waiting end of Session **********
+sleep... press ctrl-c to end me!
