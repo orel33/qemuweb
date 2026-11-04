@@ -72,7 +72,7 @@ code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; ove
       <tr><td><code>-monitor unix:/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION.monitor.sock,server=on,wait=off \</code></td><td>Socket de contrôle QEMU utilisé par le serveur.</td></tr>
       <tr><td><code>-chardev socket,id=serial0,path=/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION.sock,server=on,wait=off \</code></td><td>Socket recevant les données de la console série virtuelle.</td></tr>
       <tr><td><code>-serial chardev:serial0 \</code></td><td>Branche le port série de la VM au socket relayé vers xterm.js.</td></tr>
-      <tr><td><code>-drive file=/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION-debian13-overlay.qcow2,if=virtio,format=qcow2 \</code></td><td>Disque différentiel QCOW2 sur bus virtio ; base RAW préparée.</td></tr>
+      <tr><td><code>-drive file=/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION-debian13-overlay.qcow2,if=virtio,format=qcow2,media=disk \</code></td><td>Disque différentiel QCOW2 sur bus virtio ; « disk » explicite ; base RAW préparée.</td></tr>
       <tr><td><code>-boot order=c \</code></td><td>Démarre sur le disque, qui charge son propre noyau.</td></tr>
       <tr><td><code>-nic user,restrict=on</code></td><td>Réseau QEMU en mode utilisateur restreint ; pas de switch VDE.</td></tr>
     </tbody>
@@ -89,7 +89,7 @@ code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; ove
     <tbody>
       <tr><td><code>-M accel=kvm</code></td><td><code>-machine q35 -accel kvm</code></td><td>KVM dans les deux ; q35 fixé dans la démo, TCG possible.</td></tr>
       <tr><td><code>-m 200</code></td><td><code>-m 1024 -smp 1</code></td><td>Mémoire différente ; CPU explicite dans la démo.</td></tr>
-      <tr><td><code>-drive …grave.qcow2</code></td><td><code>-drive …overlay.qcow2,if=virtio</code></td><td>QCOW2 dans les deux ; différentiel sur RAW et bus virtio dans la démo.</td></tr>
+      <tr><td><code>-drive …grave.qcow2,media=disk</code></td><td><code>-drive …overlay.qcow2,if=virtio,media=disk</code></td><td>QCOW2 et support disque dans les deux ; différentiel sur RAW et bus virtio dans la démo.</td></tr>
       <tr><td><code>-kernel -initrd -append</code></td><td><code>-boot order=c</code></td><td>Noyau et paramètres fournis au lancement contre démarrage autonome du disque préparé.</td></tr>
       <tr><td><code>console=ttyS0</code> dans <code>-append</code></td><td><code>-serial chardev:serial0</code></td><td>Le premier dirige le noyau vers le port série ; le second relie ce port à l’hôte. Dans la démo, <code>ttyS0</code> est configuré dans l’image.</td></tr>
       <tr><td><code>-netdev vde + -device e1000</code></td><td><code>-nic user,restrict=on</code></td><td>Switch VDE, port et MAC fixés contre réseau utilisateur QEMU.</td></tr>

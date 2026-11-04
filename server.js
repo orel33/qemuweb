@@ -152,6 +152,7 @@ function qemuArgs(session, image, reuseDisk = false) {
     '-display', 'none', '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
     '-chardev', `socket,id=serial0,path=${session.socketPath},server=on,wait=off`, '-serial', 'chardev:serial0'
   ];
+  // Notation de démarrage QEMU sur PC : d = premier CD-ROM, c = premier disque dur.
   if (image.kind === 'iso') {
     return [...common, '-cdrom', path.join(images, image.iso), '-boot', 'order=d', '-nic', 'none'];
   }
@@ -163,7 +164,7 @@ function qemuArgs(session, image, reuseDisk = false) {
     }
     image.runFiles = [overlay];
     session.runDisk = overlay;
-    return [...common, '-drive', `file=${overlay},if=virtio,format=qcow2`, '-boot', 'order=c', '-nic', image.qemuNic || 'none'];
+    return [...common, '-drive', `file=${overlay},if=virtio,format=qcow2,media=disk`, '-boot', 'order=c', '-nic', image.qemuNic || 'none'];
   }
   throw new Error(`Type d’image non pris en charge : ${image.kind}`);
 }
