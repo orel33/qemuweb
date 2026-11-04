@@ -211,15 +211,15 @@ function qemuArgs(session, image, overlay) {
   return [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`, '-nic', settings.nic];
 }
 
-function qemuAcceleration(engine) {
+function qemuAcceleration(engine, checkAvailability = true) {
+  if (engine === 'qemu-tcg') return 'tcg';
+  if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
+  if (!checkAvailability) return 'kvm';
   const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'virtualbox');
-  if (engine === 'qemu-tcg' || virtualBoxRunning) return 'tcg';
-  else {
-    try {
-      fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
-      return 'kvm';
-    } catch (_) { return 'tcg'; }
-  }
+  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox VM is running. Stop VirtualBox or select QEMU · TCG.');
+  try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
+  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Choose QEMU · TCG or enable KVM.'); }
+  return 'kvm';
 }
 
 function qemuOverlayArgs(image, overlay) {
@@ -227,7 +227,6 @@ function qemuOverlayArgs(image, overlay) {
 }
 
 function spawnQemu(session, image, reuseDisk = false) {
-  session.qemuAcceleration = qemuAcceleration(session.engine);
   const overlay = reuseDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
   if (!overlay || !fs.existsSync(overlay)) {
     if (reuseDisk) throw new Error('The current VM disk was not found.');
@@ -296,7 +295,7 @@ app.get('/api/options/:sessionId', (req, res) => {
       id, vmName: `qemuweb-${process.pid}-${id}`,
       socketPath: path.join(runtime, `qemuweb-${process.pid}-${id}.sock`),
       monitorPath: path.join(runtime, `qemuweb-${process.pid}-${id}.monitor.sock`),
-      engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine) : null,
+      engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
       qemuOptions: engine.startsWith('qemu') ? qemuOptionsFor(image.id) : null
     };
     const isQemu = engine.startsWith('qemu');
@@ -351,6 +350,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (resume && (selectedEngine !== session.engine || imageId !== session.selectedImage?.id)) throw new Error('Resume must use the original system and engine.');
   if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current VM disk was not found.');
   if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
+  const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
   if (selectedEngine === 'virtualbox') {
     const qemuWithKvm = [...sessions.values()].some(other => other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU VM uses KVM. Stop that VM, restart it with QEMU TCG, then start VirtualBox.');
@@ -371,6 +371,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   io.to(session.id).emit('serial-reset', {sessionId: session.id});
   appendLog(session, `${options.reset ? '# Reset from base image' : resume ? '# Resuming from current disk' : '# Starting'} · ${selectedEngine} · ${image.label}`);
   session.engine = selectedEngine;
+  session.qemuAcceleration = acceleration;
   session.selectedImage = image;
   session.hostname = displayName;
   session.qemuOptions = qemuOptions;

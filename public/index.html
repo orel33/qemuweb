@@ -81,7 +81,7 @@
     <label for="os-image">System</label>
     <select id="os-image" aria-label="System to start"></select>
     <label for="engine">Engine</label>
-    <select id="engine" aria-label="Virtualization engine"><option value="qemu">QEMU · KVM auto</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
+    <select id="engine" aria-label="Virtualization engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
     <!-- Lucide icons: play, power, rotate-cw, rotate-ccw, x, eraser, sliders-horizontal, plus. License: /icons/LICENSE-lucide.txt -->
     <button id="start" class="icon-button" disabled title="Start VM from the base image" aria-label="Start VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
     <button id="stop" class="icon-button" disabled title="Stop VM and keep its current disk" aria-label="Stop VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
@@ -200,7 +200,7 @@
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine.id !== activeId) return;
-        optionsStatus.textContent = body.launched ? `Session settings for ${machine.hostname} · ${body.engine}` : `Launch preview · ${body.engine}. KVM/TCG and paths are selected by the server.`;
+        optionsStatus.textContent = body.launched ? `Session settings for ${machine.hostname} · ${body.engine}` : `Launch preview · ${body.engine}. Options match the selected engine.`;
         for (const row of body.rows) {
           const tr = document.createElement('tr');
           for (const value of row) { const td = document.createElement('td'); td.textContent = value; tr.append(td); }

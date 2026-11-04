@@ -42,7 +42,7 @@ At launch, the server performs no further system configuration: QEMU creates a Q
 
 In the web page, click **Settings** to view the system values and their corresponding QEMU or VirtualBox arguments. The dialog also shows settings added by the server and the disk creation and launch commands. Before launch, these are a preview; after launch, the session's settings are displayed. To change settings, edit `config.json` before starting a new VM. The interface and system descriptions are in English.
 
-The **QEMU · KVM auto / TCG** choice remains in the main toolbar because it also depends on `/dev/kvm` and any running VirtualBox VMs. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 differential disk format and control sockets are part of the demo's operation. Configuration changes apply to **new sessions**. **Reboot** and **Reset** retain the options selected when their tab first started.
+The **QEMU · KVM / TCG** choice remains in the main toolbar. **QEMU · KVM** requires accessible `/dev/kvm` and fails with an error if KVM is unavailable or a VirtualBox VM is running. Select **QEMU · TCG** explicitly to use software emulation. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 working disk format and control sockets are part of the demo's operation. Configuration changes apply to **new sessions**. **Reboot** and **Reset** retain the options selected when their tab first started.
 
 ### Stopping and cleaning up
 
@@ -113,7 +113,7 @@ npm start
 
 Open <http://127.0.0.1:3002>. Each tab represents a VM: the turquoise **+** creates a **New VM** tab. Choose a system and an engine, then click **Play**. A display name such as `debian13-00` is assigned at first launch; double-click the tab to change it. This name does not change the Linux hostname inside the VM. Numbering advances from 00 to 99 for each system during the server's lifetime. VMs in other tabs continue to run in parallel. Serial output and logs belong to each machine; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
 
-QEMU selects KVM when available. To run QEMU alongside VirtualBox, choose **QEMU · TCG** (slower software emulation) before starting QEMU. If VirtualBox is already running, **QEMU · KVM auto** automatically switches the new VM to TCG. VirtualBox cannot start while a QEMU VM uses KVM; the interface explains how to restart VMs in a compatible mode.
+**QEMU · KVM** uses hardware acceleration and reports an error if `/dev/kvm` is missing or inaccessible, or if a VirtualBox VM is running. Choose **QEMU · TCG** explicitly to use slower software emulation or to run QEMU alongside VirtualBox. VirtualBox cannot start while a QEMU VM uses KVM; stop that VM or start it with TCG first.
 
 By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exposes the CPU features that the host can provide to the VM. This avoids the `CPUID.80000001H:ECX.svm` warning that QEMU's default CPU model can produce on an Intel host: `svm` is the AMD virtualization feature and is not needed for these VMs. In TCG mode, the profile selects `-cpu qemu64`. This setting affects the virtual CPU, not the Debian image; VMs already running keep their configuration until their next launch.
 
