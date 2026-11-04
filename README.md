@@ -123,19 +123,19 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 
 ### VM actions
 
-The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). Each hint below is the text shown on hover. Actions apply only to the selected tab.
+The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Each hint below is the text shown on hover. Actions apply only to the selected tab.
 
 | Icon / control | Action | Hint | Effect |
 |---|---|---|---|
-| Green `play` | **Start** | `Start VM from the base image` | Create a new working disk and boot the VM. |
-| Green `play` | **Resume** | `Resume VM from its current disk` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
-| Orange `power` | **Stop** | `Stop VM and keep its current disk` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
-| Blue `rotate-cw` | **Reboot** | `Reboot VM with its current disk (keep changes)` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
-| Amber `rotate-ccw` | **Reset** | `Reset VM from the base image (discard changes)` | After a warning, stop the VM, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
-| Red `x` | **Exit** | `Exit VM, delete its disk and close the tab` | Force-stop the VM, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** has the same effect and hint. |
-| Purple `eraser` | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
-| Gold `sliders-horizontal` | **Settings** | `View VM launch settings` | Show the selected system's configuration and launch commands in a read-only dialog. |
-| Turquoise `plus` | **New VM** | `Open a new VM tab` | Add an empty tab; the VM starts only after Start. |
+| ![Play icon](docs/icons/play.svg) | **Start** | `Start VM from the base image` | Create a new working disk and boot the VM. |
+| ![Play icon](docs/icons/play.svg) | **Resume** | `Resume VM from its current disk` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
+| ![Power icon](docs/icons/power.svg) | **Stop** | `Stop VM and keep its current disk` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
+| ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot VM with its current disk (keep changes)` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
+| ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset VM from the base image (discard changes)` | After a warning, stop the VM, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
+| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit VM, delete its disk and close the tab` | Force-stop the VM, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** has the same effect and hint. |
+| ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
+| ![Settings icon](docs/icons/sliders-horizontal.svg) | **Settings** | `View VM launch settings` | Show the selected system's configuration and launch commands in a read-only dialog. |
+| ![New VM icon](docs/icons/plus.svg) | **New VM** | `Open a new VM tab` | Add an empty tab; the VM starts only after Start. |
 | **Log** checkbox | **Log** | `Show or hide VM logs` | Show or hide the log; commands and output are recorded even while hidden. |
 | **Monitor** checkbox | **Monitor** | `Show or hide the QEMU monitor` | Show or hide QEMU's command interface when a QEMU VM is running. |
 
