@@ -69,11 +69,11 @@ section:nth-of-type(2) .note { margin-top: 2mm; padding: 2mm 3mm; font-size: 8.7
 
 <section>
   <h2>Démo web actuelle : lancement type de Debian 13</h2>
-  <p class="sub">Exemple KVM · PID et SESSION varient selon l’instance · les chemins sont absolus en exécution</p>
+  <p class="sub">Exemple KVM · valeurs initiales de config.json · PID et SESSION varient selon l’instance</p>
   <div class="cmd">qemu-system-x86_64 \</div>
   <table>
     <colgroup><col class="w-command"><col class="w-comment"></colgroup>
-    <thead><tr><th>Option construite par server.js</th><th>Fonction / remarque</th></tr></thead>
+    <thead><tr><th>Option assemblée par server.js</th><th>Fonction / remarque</th></tr></thead>
     <tbody>
       <tr><td><code>-machine q35 \</code></td><td>Choisit explicitement le modèle de machine q35.</td></tr>
       <tr><td><code>-accel kvm \</code></td><td>KVM si disponible ; TCG lorsque choisi ou nécessaire.</td></tr>
@@ -88,7 +88,7 @@ section:nth-of-type(2) .note { margin-top: 2mm; padding: 2mm 3mm; font-size: 8.7
       <tr><td><code>-nic user,restrict=on</code></td><td>Réseau QEMU en mode utilisateur restreint ; pas de switch VDE.</td></tr>
     </tbody>
   </table>
-  <p class="note">Avant ce lancement, <code>qemu-img create -f qcow2 -F raw -b images/debian-13-qemunet-v2-amd64.raw runtime/qemuweb-PID-SESSION-debian13-overlay.qcow2</code> crée le différentiel. La console <code>ttyS0</code> et le service de login série sont préparés dans la base RAW. Le navigateur envoie les caractères saisis à Node, qui les transmet au socket QEMU ; la sortie suit le trajet inverse. <code>server=on</code> : QEMU écoute sur chaque socket ; Node se connecte. <code>wait=off</code> : QEMU n’attend pas la connexion pour démarrer.</p>
+  <p class="note">Avant ce lancement, <code>qemu-img create -f qcow2 -F raw -b images/debian13.raw runtime/qemuweb-PID-SESSION-debian13-overlay.qcow2</code> crée le différentiel. La console <code>ttyS0</code> et le service de login série sont préparés dans la base RAW. Le navigateur envoie les caractères saisis à Node, qui les transmet au socket QEMU ; la sortie suit le trajet inverse. <code>server=on</code> : QEMU écoute sur chaque socket ; Node se connecte. <code>wait=off</code> : QEMU n’attend pas la connexion pour démarrer.</p>
   <p class="note">Le moniteur HMP reçoit des commandes QEMU, distinctes du shell invité : <code>help</code>, <code>info status</code>, <code>info block</code>. <code>system_reset</code> ou <code>quit</code> changent l’état de la VM. L’interface web peut afficher ce moniteur pour la VM QEMU de l’onglet courant ; commandes et réponses sont conservées dans les logs.</p>
 </section>
 
@@ -124,7 +124,7 @@ section:nth-of-type(2) .note { margin-top: 2mm; padding: 2mm 3mm; font-size: 8.7
     </tbody>
   </table>
   <p class="note">Dans les deux méthodes, <code>ttyS0</code> est configuré côté Linux, et <code>getty</code> fournit le login. Dans l’ancienne commande, seul le raccordement QEMU → stdin/stdout est implicite grâce à <code>-nographic</code> ; la démo utilise un raccordement série explicite vers Node, puis xterm.js.</p>
-  <p class="foot">Sources : commandes fournies par Orel et server.js du projet qemuweb ; documentation QEMU : qemu.org/docs/master/system/qemu-manpage.html et qemu.org/docs/master/system/linuxboot.html.</p>
+  <p class="foot">Sources : commandes fournies par Orel, config.json et server.js du projet qemuweb ; documentation QEMU : qemu.org/docs/master/system/qemu-manpage.html et qemu.org/docs/master/system/linuxboot.html.</p>
 </section>
 </body>
 </html>

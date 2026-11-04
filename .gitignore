@@ -1,6 +1,8 @@
 node_modules/
 images/*
 !images/.gitkeep
+sources/*
+!sources/.gitkeep
 runtime/*
 !runtime/.gitkeep
 dist/

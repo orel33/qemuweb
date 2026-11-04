@@ -4,14 +4,17 @@ set -euo pipefail
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 RUNTIME="$ROOT/runtime"
 IMAGES="$ROOT/images"
+SOURCES="$ROOT/sources"
 DRY_RUN=0
 CLEAN_IMAGES=0
+CLEAN_SOURCES=0
 
 for option in "$@"; do
   case "$option" in
     --dry-run) DRY_RUN=1 ;;
     --images) CLEAN_IMAGES=1 ;;
-    *) echo "Usage : $0 [--dry-run] [--images]" >&2; exit 2 ;;
+    --sources) CLEAN_SOURCES=1 ;;
+    *) echo "Usage : $0 [--dry-run] [--images] [--sources]" >&2; exit 2 ;;
   esac
 done
 
@@ -32,7 +35,8 @@ clean_directory() {
 
 clean_directory "$RUNTIME"
 if (( CLEAN_IMAGES )); then clean_directory "$IMAGES"; fi
+if (( CLEAN_SOURCES )); then clean_directory "$SOURCES"; fi
 
 if (( DRY_RUN )); then echo 'Simulation terminée : aucun fichier supprimé.'
-elif (( CLEAN_IMAGES )); then echo 'Fichiers temporaires et images préparées supprimés.'
-else echo 'Fichiers temporaires supprimés ; images préparées conservées.'; fi
+elif (( CLEAN_IMAGES || CLEAN_SOURCES )); then echo 'Fichiers temporaires et répertoires demandés nettoyés.'
+else echo 'Fichiers temporaires supprimés ; images préparées et sources conservées.'; fi

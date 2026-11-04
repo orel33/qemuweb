@@ -3,23 +3,25 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
 IMAGES="$ROOT/images"
+SOURCES="$ROOT/sources"
 RUNTIME="$ROOT/runtime"
 ALPINE_VERSION=3.24.3
 ALPINE_ISO="alpine-virt-$ALPINE_VERSION-x86_64.iso"
 ALPINE_URL="https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64"
-ALPINE_RAW="alpine-$ALPINE_VERSION-qemunet-x86_64.raw"
-ALPINE_VDI="alpine-$ALPINE_VERSION-qemunet-x86_64.vdi"
+ALPINE_RAW="alpine.raw"
+ALPINE_VDI="alpine.vdi"
 DEBIAN_SOURCE="debian-13-genericcloud-amd64.qcow2"
 DEBIAN_URL="https://cloud.debian.org/images/cloud/trixie/latest"
-DEBIAN_RAW="debian-13-qemunet-v2-amd64.raw"
-DEBIAN_VDI="debian-13-qemunet-v2-amd64.vdi"
+DEBIAN_RAW="debian13.raw"
+DEBIAN_VDI="debian13.vdi"
 OPENWRT_GZ="openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz"
 OPENWRT_URL="https://downloads.openwrt.org/releases/25.12.6/targets/x86/64"
-OPENWRT_RAW="${OPENWRT_GZ%.gz}"
-OPENWRT_VDI="openwrt-25.12.6-x86-64-qemunet.vdi"
+OPENWRT_SOURCE="${OPENWRT_GZ%.gz}"
+OPENWRT_RAW="openwrt.raw"
+OPENWRT_VDI="openwrt.vdi"
 PREP_QEMU_PID=""
 PREP_DIR=""
-mkdir -p "$IMAGES" "$RUNTIME"
+mkdir -p "$IMAGES" "$SOURCES" "$RUNTIME"
 
 cleanup() {
   if [[ -n "$PREP_QEMU_PID" ]] && kill -0 "$PREP_QEMU_PID" 2>/dev/null; then
@@ -35,29 +37,46 @@ fetch() {
   if [[ ! -s "$target" ]]; then curl -fL --retry 3 "$url" -o "$target"; fi
 }
 
-# Migration sans copie des images créées par les versions précédentes du projet.
-# Les anciens serveurs peuvent continuer à utiliser leur lien dans runtime/.
-for legacy_file in \
-  "$ALPINE_ISO" "$ALPINE_ISO.sha256" "$ALPINE_RAW" "$ALPINE_VDI" \
-  "$DEBIAN_SOURCE" debian-SHA512SUMS "$DEBIAN_RAW" "$DEBIAN_VDI" \
-  "$OPENWRT_GZ" openwrt-sha256sums "$OPENWRT_RAW" "$OPENWRT_VDI"; do
-  if [[ ! -e "$IMAGES/$legacy_file" && -f "$RUNTIME/$legacy_file" ]]; then
-    ln "$RUNTIME/$legacy_file" "$IMAGES/$legacy_file"
+move_legacy() {
+  local old_name="$1" destination="$2"
+  [[ -e "$destination" ]] && return
+  if [[ -f "$IMAGES/$old_name" ]]; then
+    mv -- "$IMAGES/$old_name" "$destination"
+  elif [[ -f "$RUNTIME/$old_name" ]]; then
+    ln -- "$RUNTIME/$old_name" "$destination"
   fi
+}
+
+# Les téléchargements et contrôles de la préparation vont dans sources/.
+for source_file in "$ALPINE_ISO" "$ALPINE_ISO.sha256" "$DEBIAN_SOURCE" debian-SHA512SUMS "$OPENWRT_GZ" openwrt-sha256sums; do
+  move_legacy "$source_file" "$SOURCES/$source_file"
 done
 
-fetch "$ALPINE_URL/$ALPINE_ISO" "$IMAGES/$ALPINE_ISO"
-fetch "$ALPINE_URL/$ALPINE_ISO.sha256" "$IMAGES/$ALPINE_ISO.sha256"
-(cd "$IMAGES" && sha256sum -c "$ALPINE_ISO.sha256")
+# Renommage sans recopie des anciennes bases déjà préparées.
+move_legacy "alpine-$ALPINE_VERSION-qemunet-x86_64.raw" "$IMAGES/$ALPINE_RAW"
+move_legacy "alpine-$ALPINE_VERSION-qemunet-x86_64.vdi" "$IMAGES/$ALPINE_VDI"
+move_legacy "debian-13-qemunet-v2-amd64.raw" "$IMAGES/$DEBIAN_RAW"
+move_legacy "debian-13-qemunet-v2-amd64.vdi" "$IMAGES/$DEBIAN_VDI"
+move_legacy "$OPENWRT_SOURCE" "$IMAGES/$OPENWRT_RAW"
+move_legacy "openwrt-25.12.6-x86-64-qemunet.vdi" "$IMAGES/$OPENWRT_VDI"
+move_legacy catalog.json "$SOURCES/catalog.legacy.json"
 
-fetch "$DEBIAN_URL/$DEBIAN_SOURCE" "$IMAGES/$DEBIAN_SOURCE"
-fetch "$DEBIAN_URL/SHA512SUMS" "$IMAGES/debian-SHA512SUMS"
-(cd "$IMAGES" && grep -E "[ *]$DEBIAN_SOURCE$" debian-SHA512SUMS | sha512sum -c -)
+fetch "$ALPINE_URL/$ALPINE_ISO" "$SOURCES/$ALPINE_ISO"
+fetch "$ALPINE_URL/$ALPINE_ISO.sha256" "$SOURCES/$ALPINE_ISO.sha256"
+(cd "$SOURCES" && sha256sum -c "$ALPINE_ISO.sha256")
 
-fetch "$OPENWRT_URL/$OPENWRT_GZ" "$IMAGES/$OPENWRT_GZ"
-fetch "$OPENWRT_URL/sha256sums" "$IMAGES/openwrt-sha256sums"
-(cd "$IMAGES" && grep -E "[ *]$OPENWRT_GZ$" openwrt-sha256sums | sha256sum -c -)
-if [[ ! -s "$IMAGES/$OPENWRT_RAW" ]]; then gzip -dk "$IMAGES/$OPENWRT_GZ"; fi
+fetch "$DEBIAN_URL/$DEBIAN_SOURCE" "$SOURCES/$DEBIAN_SOURCE"
+fetch "$DEBIAN_URL/SHA512SUMS" "$SOURCES/debian-SHA512SUMS"
+(cd "$SOURCES" && grep -E "[ *]$DEBIAN_SOURCE$" debian-SHA512SUMS | sha512sum -c -)
+
+fetch "$OPENWRT_URL/$OPENWRT_GZ" "$SOURCES/$OPENWRT_GZ"
+fetch "$OPENWRT_URL/sha256sums" "$SOURCES/openwrt-sha256sums"
+(cd "$SOURCES" && grep -E "[ *]$OPENWRT_GZ$" openwrt-sha256sums | sha256sum -c -)
+if [[ ! -s "$IMAGES/$OPENWRT_RAW" ]]; then
+  gzip -dc "$SOURCES/$OPENWRT_GZ" > "$IMAGES/$OPENWRT_RAW.tmp"
+  chmod 444 "$IMAGES/$OPENWRT_RAW.tmp"
+  mv "$IMAGES/$OPENWRT_RAW.tmp" "$IMAGES/$OPENWRT_RAW"
+fi
 
 if [[ ! -s "$IMAGES/$ALPINE_RAW" ]]; then
   for command in qemu-system-x86_64 qemu-img python3 base64; do
@@ -127,7 +146,7 @@ ALPINE_PREPARE
     -machine q35 -accel "$prep_accel" -m 768 -smp 1 \
     -display none -monitor none -serial "unix:$serial_socket,server=on,wait=off" \
     -no-reboot -drive "file=$alpine_disk,if=virtio,format=raw" \
-    -drive "file=$IMAGES/$ALPINE_ISO,media=cdrom,readonly=on" -boot order=d \
+    -drive "file=$SOURCES/$ALPINE_ISO,media=cdrom,readonly=on" -boot order=d \
     -nic user,model=virtio-net-pci \
     >"$PREP_DIR/qemu.stdout" 2>"$PREP_DIR/qemu.stderr" &
   PREP_QEMU_PID=$!
@@ -257,7 +276,7 @@ ethernets:
     dhcp4: true
 NETWORK_CONFIG
 
-  qemu-img create -f qcow2 -F qcow2 -b "$IMAGES/$DEBIAN_SOURCE" "$local_overlay"
+  qemu-img create -f qcow2 -F qcow2 -b "$SOURCES/$DEBIAN_SOURCE" "$local_overlay"
   genisoimage -quiet -output "$seed_iso" -volid cidata -joliet -rock "$user_data" "$meta_data" "$network_config"
   if [[ -r /dev/kvm && -w /dev/kvm ]]; then prep_accel=kvm; else prep_accel=tcg; fi
   qemu-system-x86_64 \
@@ -344,55 +363,20 @@ if [[ ! -s "$IMAGES/$OPENWRT_VDI" ]]; then
   chmod 444 "$IMAGES/$OPENWRT_VDI.tmp"
   mv "$IMAGES/$OPENWRT_VDI.tmp" "$IMAGES/$OPENWRT_VDI"
 fi
-chmod 444 "$IMAGES/$ALPINE_ISO" "$IMAGES/$ALPINE_RAW" "$IMAGES/$ALPINE_VDI" "$IMAGES/$DEBIAN_RAW" "$IMAGES/$DEBIAN_VDI" "$IMAGES/$OPENWRT_RAW" "$IMAGES/$OPENWRT_VDI"
+chmod 444 "$SOURCES/$ALPINE_ISO" "$IMAGES/$ALPINE_RAW" "$IMAGES/$ALPINE_VDI" "$IMAGES/$DEBIAN_RAW" "$IMAGES/$DEBIAN_VDI" "$IMAGES/$OPENWRT_RAW" "$IMAGES/$OPENWRT_VDI"
 
-cat > "$IMAGES/catalog.json" <<JSON
-[
-  {
-    "id": "alpine",
-    "hostname": "alpine",
-    "label": "Alpine Linux 3.24",
-    "description": "Image RAW préparée, disque de travail éphémère",
-    "kind": "raw",
-    "disk": "$ALPINE_RAW",
-    "vdi": "$ALPINE_VDI",
-    "format": "raw",
-    "memory": 512,
-    "login": "root, sans mot de passe ; toto / toto",
-    "qemuNic": "user,restrict=on",
-    "vboxNic": "nat",
-    "network": "DHCP restreint dans QEMU ; NAT dans VirtualBox"
-  },
-  {
-    "id": "debian13",
-    "hostname": "qemunet-demo",
-    "label": "Debian 13",
-    "description": "Image RAW préparée, disque de travail éphémère",
-    "kind": "raw",
-    "disk": "$DEBIAN_RAW",
-    "vdi": "$DEBIAN_VDI",
-    "format": "raw",
-    "memory": 1024,
-    "login": "root, sans mot de passe ; toto / toto ; demo / serial-demo",
-    "qemuNic": "user,restrict=on",
-    "vboxNic": "nat",
-    "network": "DHCP restreint dans QEMU ; NAT dans VirtualBox"
-  },
-  {
-    "id": "openwrt",
-    "hostname": "OpenWrt",
-    "label": "OpenWrt 25.12 x86-64",
-    "description": "Image RAW, disque de travail éphémère",
-    "kind": "raw",
-    "disk": "$OPENWRT_RAW",
-    "vdi": "$OPENWRT_VDI",
-    "format": "raw",
-    "memory": 256,
-    "login": "Entrée puis root, sans mot de passe",
-    "network": "Désactivé"
+node - "$ROOT" <<'NODE'
+const fs = require('fs');
+const path = require('path');
+const root = process.argv[2];
+const config = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
+for (const [id, system] of Object.entries(config.systems)) {
+  for (const format of ['raw', 'vdi']) {
+    const file = path.resolve(root, system.images[format]);
+    if (!fs.existsSync(file)) throw new Error(`Image ${format} absente pour ${id} : ${file}`);
   }
-]
-JSON
+}
+NODE
 
 echo "Bases prêtes et en lecture seule dans $IMAGES."
 echo "QEMU utilisera des overlays QCOW2 ; VirtualBox des disques différentiels VDI."

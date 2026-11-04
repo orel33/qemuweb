@@ -13,6 +13,7 @@
     h1 { margin: 0 auto 0 0; font-size: 18px; white-space: nowrap; }
     button, select { padding: 8px 11px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
     button { cursor: pointer; }
+    .icon-button { min-width: 38px; font-size: 18px; line-height: 1; }
     button:disabled { opacity: .45; cursor: default; }
     #status { min-width: 120px; color: #bdc8d6; }
     .logs-toggle { display: inline-flex; align-items: center; gap: 6px; color: #bdc8d6; white-space: nowrap; cursor: pointer; }
@@ -24,7 +25,7 @@
     .machine-tab .machine-close { padding: 2px 6px; color: #bdc8d6; background: transparent; border: 0; }
     #new-machine { flex: none; background: #1b2531; }
     #image-info { min-height: 18px; }
-    .note { flex: none; margin: 9px 16px 0; color: #bdc8d6; font-size: 13px; }
+    .note { flex: none; max-height: 12vh; overflow: auto; margin: 9px 16px 0; color: #bdc8d6; font-size: 13px; }
     .logs { flex: none; max-height: 24vh; overflow: auto; margin: 0 16px 8px; border: 1px solid #35404c; border-radius: 6px; background: #10151c; }
     .logs[hidden] { display: none; }
     .logs-title { padding: 7px 10px; color: #bdc8d6; border-bottom: 1px solid #35404c; }
@@ -35,6 +36,13 @@
     .monitor pre { min-height: 32px; max-height: 15vh; overflow: auto; margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 ui-monospace, monospace; }
     .monitor form { display: flex; gap: 8px; }
     .monitor input { flex: 1; min-width: 0; padding: 7px 9px; color: #e7edf5; background: #0b0f14; border: 1px solid #506176; border-radius: 6px; font: 13px ui-monospace, monospace; }
+    .qemu-options { flex: none; max-height: 28vh; overflow: auto; margin: 0 16px 8px; padding: 9px 10px; border: 1px solid #35404c; border-radius: 6px; background: #10151c; }
+    .qemu-options[hidden] { display: none; }
+    .qemu-options form { display: flex; flex-wrap: wrap; align-items: end; gap: 8px 12px; }
+    .qemu-options label { display: flex; flex-direction: column; gap: 4px; color: #bdc8d6; font-size: 12px; }
+    .qemu-options input, .qemu-options select { width: 145px; padding: 6px 8px; color: #e7edf5; background: #0b0f14; border: 1px solid #506176; border-radius: 5px; font: 12px ui-monospace, monospace; }
+    .qemu-options p { margin: 7px 0 0; color: #bdc8d6; font-size: 12px; }
+    #qemu-config-status { align-self: center; color: #bdc8d6; font-size: 12px; }
     main { display: flex; flex: 1; min-width: 0; min-height: 0; padding: 12px 16px 16px; }
     .terminal-frame { display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 10px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
     #terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
@@ -45,7 +53,7 @@
     #terminal-scroll::-moz-range-thumb { width: 12px; height: 44px; border: 1px solid #a9bfd8; border-radius: 7px; background: #7894b1; }
     #terminal-scroll:disabled { cursor: default; opacity: .55; }
     @media (max-width: 900px) { header { flex-wrap: wrap; } h1 { width: 100%; } #status { flex: 1; } }
-    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .note { margin-inline: 10px; } .logs, .monitor { margin-inline: 10px; } main { padding: 10px; } }
+    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .note { margin-inline: 10px; } .logs, .monitor, .qemu-options { margin-inline: 10px; } main { padding: 10px; } }
   </style>
 </head>
 <body>
@@ -55,24 +63,43 @@
     <select id="os-image" aria-label="Système à lancer"></select>
     <label for="engine">Moteur</label>
     <select id="engine" aria-label="Moteur de virtualisation"><option value="qemu">QEMU · KVM auto</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
-    <button id="start" disabled>Démarrer</button>
-    <button id="stop" disabled>Arrêter</button>
-    <button id="reboot" disabled title="Arrêter proprement puis redémarrer sur le même disque différentiel">Reboot</button>
-    <button id="reset" disabled title="Recréer le disque de travail depuis l’image de base">Reset</button>
+    <button id="start" class="icon-button" disabled title="Démarrer" aria-label="Démarrer">▶</button>
+    <button id="stop" class="icon-button" disabled title="Arrêter" aria-label="Arrêter">■</button>
+    <button id="reboot" class="icon-button" disabled title="Reboot : redémarrer sur le même disque différentiel" aria-label="Reboot">↻</button>
+    <button id="reset" class="icon-button" disabled title="Reset : repartir de l’image de base" aria-label="Reset">⟲</button>
+    <button id="clear-console" class="icon-button" type="button" title="Clear : effacer la console de cet onglet" aria-label="Clear : effacer la console">⌫</button>
     <label class="logs-toggle" for="show-logs"><input id="show-logs" type="checkbox"> Logs</label>
     <label class="logs-toggle" for="show-monitor"><input id="show-monitor" type="checkbox"> Moniteur QEMU</label>
+    <label class="logs-toggle" for="show-qemu-options"><input id="show-qemu-options" type="checkbox"> Options QEMU</label>
     <span id="status">Arrêtée</span>
   </header>
-  <p class="note" id="image-info">Chargement du catalogue runtime…</p>
+  <p class="note" id="image-info">Chargement des systèmes depuis config.json…</p>
   <section class="logs" id="logs-panel" aria-label="Journal de lancement" hidden><div class="logs-title">Journal de lancement</div><pre id="launch-logs">Les commandes de lancement apparaîtront ici.</pre></section>
   <section class="monitor" id="monitor-panel" aria-label="Moniteur QEMU" hidden>
     <p>Commandes QEMU (pas un shell Linux) : <code>help</code>, <code>info status</code>, <code>info block</code>. Certaines commandes modifient ou arrêtent la VM.</p>
     <pre id="monitor-output" aria-live="polite"></pre>
     <form id="monitor-form"><input id="monitor-command" aria-label="Commande du moniteur QEMU" placeholder="info status" maxlength="256" autocomplete="off" spellcheck="false"><button id="monitor-send" type="submit">Envoyer</button></form>
   </section>
+  <section class="qemu-options" id="qemu-options-panel" aria-label="Options de lancement QEMU" hidden>
+    <form id="qemu-options-form">
+      <label>Profil <select id="qemu-profile"><option value="system">Système sélectionné</option><option value="defaults">Défauts communs</option></select></label>
+      <label>Machine <input name="machine" required title="Option -machine"></label>
+      <label>CPU KVM <input name="cpuKvm" required title="Option -cpu avec KVM"></label>
+      <label>CPU TCG <input name="cpuTcg" required title="Option -cpu avec TCG"></label>
+      <label>Mémoire (Mio) <input name="memory" type="number" min="64" max="32768" required title="Option -m"></label>
+      <label>CPU virtuels <input name="smp" type="number" min="1" max="64" required title="Option -smp"></label>
+      <label>Affichage <input name="display" required title="Option -display"></label>
+      <label>Bus disque <select name="diskInterface" title="Option if= dans -drive"><option value="virtio">virtio</option><option value="ide">ide</option></select></label>
+      <label>Boot disque <input name="bootDisk" required title="Option -boot order= pour un disque RAW"></label>
+      <label>Réseau <input name="nic" required title="Option -nic"></label>
+      <button id="save-qemu-options" type="submit">Enregistrer dans config.json</button>
+      <span id="qemu-config-status" role="status"></span>
+    </form>
+    <p>Ces valeurs s’appliquent aux prochains lancements QEMU. Reboot et Reset gardent les options de la VM déjà lancée. Les chemins des sockets série et moniteur sont générés pour chaque VM.</p>
+  </section>
   <main><div class="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Défiler la console" title="Défiler l’historique de la console"></div></main>
   <nav class="machines" id="machine-tabs" aria-label="Machines virtuelles">
-    <button id="new-machine" type="button">＋ Nouvelle machine</button>
+    <button id="new-machine" class="icon-button" type="button" title="Nouvelle machine" aria-label="Nouvelle machine">＋</button>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
@@ -113,14 +140,75 @@
     const monitorOutput = document.getElementById('monitor-output');
     const monitorCommand = document.getElementById('monitor-command');
     const monitorSend = document.getElementById('monitor-send');
+    const showQemuOptions = document.getElementById('show-qemu-options');
+    const qemuOptionsPanel = document.getElementById('qemu-options-panel');
+    const qemuForm = document.getElementById('qemu-options-form');
+    const qemuProfile = document.getElementById('qemu-profile');
+    const qemuSave = document.getElementById('save-qemu-options');
+    const qemuConfigStatus = document.getElementById('qemu-config-status');
+    const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'diskInterface', 'bootDisk', 'nic'];
+    const qemuDrafts = new Map();
     const machines = new Map();
     let images = [];
+    let qemuConfig = null;
     let activeId = null;
+    let replayGeneration = 0;
+    let replaying = false;
+    let replayPending = '';
+    let selectionToken = 0;
+
+    function finishReplay(generation, id) {
+      if (generation !== replayGeneration || id !== activeId) return;
+      if (replayPending) {
+        const pending = replayPending;
+        replayPending = '';
+        terminal.write(pending, () => finishReplay(generation, id));
+      } else {
+        replaying = false;
+        terminal.scrollToBottom();
+        syncConsoleScroll();
+      }
+    }
 
     function activeMachine() { return activeId ? machines.get(activeId) : null; }
+    function qemuProfileKey(scope, imageId) { return scope === 'defaults' ? 'defaults' : `system:${imageId}`; }
+    function renderQemuOptions() {
+      const imageId = activeMachine()?.imageId || imageSelect.value;
+      const scope = qemuProfile.value;
+      qemuProfile.disabled = !qemuConfig;
+      qemuSave.disabled = !qemuConfig || (scope === 'system' && !imageId);
+      if (!qemuConfig) { qemuConfigStatus.textContent = 'Configuration indisponible : redémarrer le serveur.'; return; }
+      const key = qemuProfileKey(scope, imageId);
+      const saved = scope === 'defaults' ? qemuConfig.defaults : {...qemuConfig.defaults, ...(qemuConfig.systems[imageId] || {})};
+      const values = qemuDrafts.get(key) || saved;
+      for (const field of qemuFields) qemuForm.elements.namedItem(field).value = values[field] ?? '';
+      qemuConfigStatus.textContent = qemuDrafts.has(key) ? 'Modifications non enregistrées.' : (scope === 'defaults' ? 'Défauts communs enregistrés.' : 'Valeurs de ce système enregistrées.');
+    }
+    function readQemuForm() {
+      return Object.fromEntries(qemuFields.map(field => [field, qemuForm.elements.namedItem(field).value]));
+    }
+    async function saveQemuDraft(scope, imageId) {
+      const key = qemuProfileKey(scope, imageId);
+      const draft = qemuDrafts.get(key);
+      if (!draft) return;
+      const options = {...draft, memory: Number(draft.memory), smp: Number(draft.smp)};
+      qemuConfigStatus.textContent = 'Enregistrement…';
+      const response = await fetch('/api/qemu-config', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({scope, imageId, options})});
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Échec de l’enregistrement QEMU');
+      qemuConfig = body;
+      if (qemuDrafts.get(key) === draft) qemuDrafts.delete(key);
+      renderQemuOptions();
+      updateControls();
+    }
+    function describeImage(image) {
+      if (!image) return 'Aucune image disponible ; exécuter bash prepare.sh.';
+      const nic = qemuConfig ? ({...qemuConfig.defaults, ...(qemuConfig.systems[image.id] || {})}).nic : 'configuration indisponible';
+      return `${image.description} Connexion : ${image.login}. RAW : ${image.images.raw} ; VDI : ${image.images.vdi}. Réseau QEMU : ${nic} ; VirtualBox : ${image.vboxNic || 'none'}.`;
+    }
     function updateImageInfo() {
       const image = images.find(item => item.id === imageSelect.value);
-      imageInfo.textContent = image ? `${image.description}. Connexion : ${image.login}. Réseau : ${image.network}. QEMU utilise KVM si disponible, sinon TCG.` : 'Aucune image disponible ; exécuter bash prepare.sh.';
+      imageInfo.textContent = describeImage(image);
     }
     function renderTabs() {
       tabs.querySelectorAll('.machine-tab').forEach(tab => tab.remove());
@@ -133,7 +221,18 @@
         select.className = 'machine-name';
         select.textContent = machine.hostname;
         select.title = machine.osHint;
-        select.onclick = () => selectMachine(machine.id);
+        select.onclick = () => { if (machine.id !== activeId) selectMachine(machine.id); };
+        select.ondblclick = async () => {
+          if (!machine.hasLaunched) return;
+          const name = window.prompt('Nom affiché pour cette VM :', machine.hostname);
+          if (name === null || !name.trim()) return;
+          try {
+            const response = await fetch(`/api/sessions/${encodeURIComponent(machine.id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
+            const body = await response.json();
+            if (!response.ok) throw new Error(body.error);
+          } catch (error) { status.textContent = error.message; }
+        };
+        select.title = `${machine.osHint} · double-clic pour renommer`;
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'machine-close';
@@ -163,12 +262,12 @@
       imageSelect.value = machine.imageId;
       engineSelect.value = machine.engine;
       const image = images.find(item => item.id === machine.imageId);
-      imageInfo.textContent = image ? `${image.description}. Connexion : ${image.login}. Réseau : ${image.network}. QEMU utilise KVM si disponible, sinon TCG.` : 'Chargement du catalogue runtime…';
+      imageInfo.textContent = describeImage(image);
     }
     function addMachine() {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const image = images.find(item => item.id === imageSelect.value);
-      const machine = {id, hostname: image?.hostname || image?.id || 'alpine', osHint: image?.label || 'Système', imageId: imageSelect.value || 'alpine', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Arrêtée', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, hostname: image?.id || 'machine', osHint: image?.label || 'Système', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Arrêtée', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       renderTabs();
       selectMachine(id);
@@ -177,12 +276,17 @@
       const machine = machines.get(id);
       if (!machine) return;
       activeId = id;
+      replayGeneration++;
+      replaying = true;
+      replayPending = '';
       renderTabs();
       updateControls();
       logsPanel.hidden = !showLogs.checked;
       monitorPanel.hidden = !showMonitor.checked;
+      qemuOptionsPanel.hidden = !showQemuOptions.checked;
       monitorOutput.textContent = machine.monitorOutput || 'Le moniteur est disponible quand cette VM QEMU fonctionne.';
-      socket.emit('select-session', id);
+      renderQemuOptions();
+      socket.emit('select-session', id, ++selectionToken);
       requestAnimationFrame(fitTerminal);
     }
     async function closeMachine(id) {
@@ -210,16 +314,19 @@
       }
     }
 
-    fetch('/api/images').then(response => response.json()).then(items => {
+    Promise.all([
+      fetch('/api/systems').then(response => response.json()),
+      fetch('/api/qemu-config').then(response => response.ok ? response.json() : null).catch(() => null),
+      fetch('/api/sessions').then(response => response.json())
+    ]).then(([items, config, existing]) => {
       images = items;
+      qemuConfig = config;
       imageSelect.replaceChildren(...items.map(image => { const option = document.createElement('option'); option.value = image.id; option.textContent = image.label; return option; }));
-      return fetch('/api/sessions').then(response => response.json());
-    }).then(existing => {
       for (const session of existing) {
         const image = images.find(item => item.id === session.imageId);
         machines.set(session.id, {
           id: session.id,
-          hostname: session.hostname || image?.hostname || image?.id || `machine-${machines.size + 1}`,
+          hostname: session.hostname || image?.id || `machine-${machines.size + 1}`,
           osHint: image?.label || 'Système inconnu',
           imageId: image ? image.id : (images[0]?.id || ''),
           hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
@@ -245,10 +352,11 @@
       if (!machine) return;
       machine.imageId = imageSelect.value;
       const image = images.find(item => item.id === machine.imageId);
-      machine.hostname = image?.hostname || image?.id || 'machine';
+      machine.hostname = image?.id || 'machine';
       machine.osHint = image?.label || 'Système';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       updateControls();
+      renderQemuOptions();
       renderTabs();
     });
     engineSelect.addEventListener('change', () => {
@@ -264,6 +372,26 @@
     showMonitor.addEventListener('change', () => {
       monitorPanel.hidden = !showMonitor.checked;
       requestAnimationFrame(fitTerminal);
+    });
+    showQemuOptions.addEventListener('change', () => {
+      qemuOptionsPanel.hidden = !showQemuOptions.checked;
+      requestAnimationFrame(fitTerminal);
+    });
+    qemuProfile.addEventListener('change', renderQemuOptions);
+    qemuForm.addEventListener('input', event => {
+      if (event.target === qemuProfile || !qemuConfig) return;
+      const imageId = activeMachine()?.imageId || imageSelect.value;
+      qemuDrafts.set(qemuProfileKey(qemuProfile.value, imageId), readQemuForm());
+      qemuConfigStatus.textContent = 'Modifications non enregistrées.';
+    });
+    qemuForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const scope = qemuProfile.value;
+      const imageId = activeMachine()?.imageId || imageSelect.value;
+      qemuSave.disabled = true;
+      try { await saveQemuDraft(scope, imageId); }
+      catch (error) { qemuConfigStatus.textContent = error.message; }
+      finally { qemuSave.disabled = false; }
     });
     document.getElementById('monitor-form').addEventListener('submit', async event => {
       event.preventDefault();
@@ -292,15 +420,23 @@
     socket.on('session-snapshot', snapshot => {
       const machine = machines.get(snapshot.sessionId);
       if (!machine) return;
+      if (snapshot.sessionId !== activeId || snapshot.token !== selectionToken) return;
       machine.running = snapshot.state.running;
       machine.hasLaunched = snapshot.state.hasLaunched;
       machine.message = snapshot.state.message;
       machine.logs = snapshot.logs || [];
       machine.serial = snapshot.serial || '';
       if (machine.id === activeId) {
-        terminal.reset();
-        syncConsoleScroll();
-        if (machine.serial) terminal.write(machine.serial, syncConsoleScroll);
+        const generation = replayGeneration;
+        const history = machine.serial;
+        replaying = true;
+        replayPending = '';
+        terminal.write('', () => {
+          if (generation !== replayGeneration || machine.id !== activeId) return;
+          terminal.reset();
+          syncConsoleScroll();
+          terminal.write(history || '', () => finishReplay(generation, machine.id));
+        });
         launchLogs.textContent = machine.logs.length ? `${machine.logs.join('\n')}\n` : 'Les commandes de lancement apparaîtront ici.';
         updateControls();
         requestAnimationFrame(fitTerminal);
@@ -311,13 +447,22 @@
       const machine = event && machines.get(event.sessionId);
       if (!machine) return;
       machine.serial = '';
-      if (machine.id === activeId) { terminal.reset(); syncConsoleScroll(); }
+      if (machine.id === activeId) {
+        const generation = ++replayGeneration;
+        replaying = true;
+        replayPending = '';
+        terminal.write('', () => {
+          if (generation !== replayGeneration || machine.id !== activeId) return;
+          terminal.reset();
+          finishReplay(generation, machine.id);
+        });
+      }
     });
     socket.on('serial', event => {
       const machine = event && machines.get(event.sessionId);
       if (!machine) return;
       machine.serial = (machine.serial + event.data).slice(-262144);
-      if (machine.id === activeId) terminal.write(event.data, syncConsoleScroll);
+      if (machine.id === activeId) { if (replaying) replayPending += event.data; else terminal.write(event.data, syncConsoleScroll); }
     });
     socket.on('log', event => {
       const machine = event && machines.get(event.sessionId);
@@ -346,10 +491,14 @@
       machine.message = event.message;
       renderTabs();
     });
-    socket.on('connect', () => { if (activeId) socket.emit('select-session', activeId); });
+    socket.on('connect', () => { if (activeId) socket.emit('select-session', activeId, ++selectionToken); });
+    socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); } });
     socket.on('session-error', message => { status.textContent = message; });
     socket.on('connect_error', error => { status.textContent = 'WebSocket indisponible'; console.error(error); });
-    terminal.onData(data => socket.emit('input', data));
+    terminal.onData(data => { if (!replaying) socket.emit('input', data); });
+    document.getElementById('clear-console').addEventListener('click', () => {
+      if (activeId) socket.emit('clear-console', activeId);
+    });
     startButton.onclick = async () => {
       const machine = activeMachine();
       if (!machine || machine.running || machine.hasLaunched) return;
@@ -357,19 +506,29 @@
       machine.imageId = imageSelect.value;
       machine.engine = engineSelect.value;
       const image = images.find(item => item.id === machine.imageId);
-      machine.hostname = image?.hostname || image?.id || 'machine';
+      machine.hostname = image?.id || 'machine';
       machine.osHint = image?.label || 'Système';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       machine.message = 'Démarrage…';
       updateControls();
       renderTabs();
+      replaying = true;
       terminal.reset();
       syncConsoleScroll();
       terminal.write(`Démarrage de ${machine.hostname} (${machine.osHint})…\r\n`, syncConsoleScroll);
       try {
+        await new Promise((resolve, reject) => {
+          const timeout = setTimeout(() => reject(new Error('Connexion console indisponible.')), 5000);
+          socket.emit('select-session', machine.id, ++selectionToken, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
+        });
+        if (machine.engine.startsWith('qemu')) {
+          await saveQemuDraft('defaults');
+          await saveQemuDraft('system', machine.imageId);
+        }
         const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Échec du démarrage');
+        machine.hostname = body.name;
         machine.hasLaunched = true;
         machine.running = true;
         terminal.focus();

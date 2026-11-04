@@ -1,0 +1,73 @@
+{
+  "qemu": {
+    "defaults": {
+      "machine": "q35",
+      "cpuKvm": "host",
+      "cpuTcg": "qemu64",
+      "memory": 512,
+      "smp": 1,
+      "display": "none",
+      "diskInterface": "virtio",
+      "bootDisk": "c",
+      "nic": "user,restrict=on"
+    }
+  },
+  "systems": {
+    "alpine": {
+      "type": "linux",
+      "mode": "text",
+      "label": "Alpine Linux 3.24",
+      "description": "Distribution Linux légère préparée pour une console série interactive sur ttyS0. Les comptes root et toto sont disponibles ; l’image RAW est conservée en lecture seule et chaque VM utilise son propre disque de travail.",
+      "login": "root sans mot de passe ; toto / toto",
+      "images": {
+        "raw": "images/alpine.raw",
+        "vdi": "images/alpine.vdi"
+      },
+      "qemu": {},
+      "virtualbox": {
+        "memory": 512,
+        "nic": "nat",
+        "osType": "Linux_64"
+      }
+    },
+    "debian13": {
+      "type": "linux",
+      "mode": "text",
+      "label": "Debian 13",
+      "description": "Debian 13 préparée hors ligne à partir de l’image cloud officielle. Elle démarre sur son disque avec GRUB, affiche le démarrage et le login sur ttyS0, et dispose des comptes root, toto et demo.",
+      "login": "root sans mot de passe ; toto / toto ; demo / serial-demo",
+      "images": {
+        "raw": "images/debian13.raw",
+        "vdi": "images/debian13.vdi"
+      },
+      "qemu": {
+        "memory": 1024
+      },
+      "virtualbox": {
+        "memory": 1024,
+        "nic": "nat",
+        "osType": "Linux_64"
+      }
+    },
+    "openwrt": {
+      "type": "linux",
+      "mode": "text",
+      "label": "OpenWrt 25.12 x86-64",
+      "description": "Système Linux léger orienté réseau, lancé ici en mode texte sur la console série. Le profil de démonstration désactive les cartes réseau ; la base RAW est issue de l’image disque officielle.",
+      "login": "Entrée puis root sans mot de passe",
+      "images": {
+        "raw": "images/openwrt.raw",
+        "vdi": "images/openwrt.vdi"
+      },
+      "qemu": {
+        "memory": 256,
+        "nic": "none"
+      },
+      "virtualbox": {
+        "memory": 256,
+        "nic": "none",
+        "osType": "Linux_64"
+      }
+    }
+  }
+}
