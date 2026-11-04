@@ -4,7 +4,7 @@ This is a draft implementation plan for migrating QemuNet's virtual networks to 
 
 ## Current `dev` prototype
 
-The first network slice is available in `dev`: create a VDE switch tab, start or stop its process, and send commands such as `help` or `port/allprint` through its management socket. Before a QEMU VM's first launch, add up to four Ethernet interfaces and select a running switch for each. Qemuweb assigns a distinct VDE port and MAC address and includes the corresponding `-netdev vde` and `-device e1000` arguments in the launch command. Stop and resume keep the same interface assignments. VM tabs without a selected switch have no network adapter; VirtualBox networking is disabled. No guest has an external connection.
+The first network slice is available in `dev`: create a VDE switch tab, start or stop its process, and send commands such as `help` or `port/allprint` through its management socket. Before a QEMU VM's first launch, add up to four Ethernet interfaces and select a running switch for each. Qemuweb assigns a distinct VDE port and MAC address and includes the corresponding `-netdev vde` and `-device virtio-net-pci` arguments in the launch command. Stop and resume keep the same interface assignments. VM tabs without a selected switch have no network adapter; VirtualBox networking is disabled. No guest has an external connection.
 
 This slice uses independent switch and VM tabs. The next network milestone is a reproducible two-host LAN with guest IP configuration and a whole-network start/stop action. Live attachment of an already running VM is Stage 8; it needs QEMU monitor hotplug and guest-side verification. Switch, VM and disk state still live only for the current server process.
 

@@ -141,7 +141,7 @@ Open <http://127.0.0.1:3002>. The turquoise **+** creates a **New VM** tab. Choo
 
 ### Local VDE LAN prototype
 
-Click **+ Switch** to create a switch tab, then **Play** to start `vde_switch`. Its command panel accepts VDE management commands such as `help` and `port/allprint`. In a new QEMU VM tab, click **+ Interface** before the first launch and select a running switch. Up to four interfaces can be added; Qemuweb assigns each one a VDE port and a MAC address. Start two VM tabs against the same switch to make a LAN. Configure IP addresses inside the guests to test communication. **Settings** shows the resulting QEMU launch arguments.
+Click **+ Switch** to create a switch tab, then **Play** to start `vde_switch`. Its command panel accepts VDE management commands such as `help` and `port/allprint`. In a new QEMU VM tab, click **+ Interface** before the first launch and select a running switch. Up to four interfaces can be added; Qemuweb assigns each one a VDE port and a MAC address. The guest chooses its own interface name: Debian 13 may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two VM tabs against the same switch to make a LAN. Configure IP addresses inside the guests to test communication. **Settings** shows the resulting QEMU launch arguments.
 
 An interface assignment remains fixed across Stop and Resume. Stop connected VMs before stopping their switch; remove their tabs before deleting the switch. Hot attachment to a VM that is already running is planned in the [roadmap](docs/ROADMAP.md). VMs without a selected switch have no network adapter, and VirtualBox has no network adapter. This prototype creates no external network connection.
 

@@ -229,7 +229,7 @@ function qemuArgs(session, image, overlay) {
     const sw = sessions.get(nic.switchId);
     const id = `lan${index}`;
     args.push('-netdev', `vde,id=${id},sock=${sw.socketDir},port=${nic.port}`,
-      '-device', `e1000,netdev=${id},mac=${nic.mac}`);
+      '-device', `virtio-net-pci,netdev=${id},mac=${nic.mac}`);
   }
   return args;
 }
@@ -447,7 +447,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     ];
     for (const key of qemuFields) rows.push(['qemu.' + key, String(options ? options[key] : ({...readConfig().qemu.defaults, ...image.qemu})[key]), isQemu ? qemuMappings[key] : 'Not used by VirtualBox']);
     for (const [key, value] of Object.entries(image.virtualbox)) rows.push(['virtualbox.' + key, String(value), isQemu ? 'Not used by QEMU' : ({memory: '--memory (MiB)', nic: '--nic1', osType: '--ostype'})[key] || 'Not used']);
-    for (const [index, nic] of session.networkInterfaces.entries()) rows.push([`ethernet.${index}`, `${sessions.get(nic.switchId)?.hostname || nic.switchId}: port ${nic.port}, MAC ${nic.mac}`, '-netdev vde / -device e1000']);
+    for (const [index, nic] of session.networkInterfaces.entries()) rows.push([`ethernet.${index}`, `${sessions.get(nic.switchId)?.hostname || nic.switchId}: port ${nic.port}, MAC ${nic.mac}`, '-netdev vde / -device virtio-net-pci']);
     if (isQemu) rows.push(['Server: acceleration', session.qemuAcceleration, '-accel (KVM/TCG selection)'], ['Server: disk', 'QCOW2 working disk, format=qcow2, media=disk', '-drive'], ['Server: serial console', session.socketPath, '-serial unix:…,server=on,wait=off'], ['Server: monitor', session.monitorPath, '-monitor unix:…,server=on,wait=off'], ['QEMU: firmware and other devices', 'Selected machine defaults', 'Options not specified on the command line']);
     else rows.push(['Server: disk', 'VDI working disk, SATA controller', 'createmedium / storagectl / storageattach'], ['Server: CPU and boot', '1 CPU; disk, DVD', '--cpus 1 / --boot1 disk / --boot2 dvd'], ['Server: serial console', session.socketPath, '--uart1 0x3F8 4 / --uartmode1 server'], ['Server: display', 'Headless', 'startvm --type headless'], ['VirtualBox: other settings', 'VirtualBox defaults', 'Options not specified by the server']);
     const launchCommands = isQemu

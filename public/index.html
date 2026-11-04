@@ -105,7 +105,7 @@
   </header>
   <p id="status-error" role="alert" hidden></p>
   <p class="note" id="image-info">Loading systems from config.json…</p>
-  <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces"><strong>Ethernet:</strong><span id="nic-list"></span><button id="add-nic" type="button">+ Interface</button><small>Connect to a running VDE switch before starting QEMU.</small></section>
+  <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces"><strong>Ethernet:</strong><span id="nic-list"></span><button id="add-nic" type="button">+ Interface</button><small>Connect to a running VDE switch before starting QEMU. Guest names may differ (for example, enp0s2).</small></section>
   <section class="logs" id="logs-panel" aria-label="Launch log" hidden><div class="logs-title">Launch log</div><pre id="launch-logs">Launch commands will appear here.</pre></section>
   <section class="monitor" id="monitor-panel" aria-label="QEMU monitor" hidden>
     <p>QEMU commands (not a Linux shell) : <code>help</code>, <code>info status</code>, <code>info block</code>. Some commands change or stop the VM.</p>
@@ -343,7 +343,7 @@
         select.onchange = () => { machine.interfaces[index] = select.value; renderQemuOptions(); };
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index + 1}`; remove.disabled = locked;
         remove.onclick = () => { machine.interfaces.splice(index, 1); renderNicControls(machine); renderQemuOptions(); };
-        row.append(document.createTextNode(`eth${index} → `), select, remove); nicList.append(row);
+        row.append(document.createTextNode(`NIC ${index + 1} → `), select, remove); nicList.append(row);
       }
     }
     function addMachine() {
