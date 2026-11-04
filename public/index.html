@@ -18,11 +18,12 @@
     .icon-button svg { width: 22px; height: 22px; display: block; }
     .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
-    #start { color: #57dc91; } #stop { color: #ff777d; } #reboot { color: #70b9ff; }
-    #reset { color: #ffc36b; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #new-machine { color: #5adbd1; }
+    #start { color: #57dc91; } #stop { color: #ffaf76; } #reboot { color: #70b9ff; }
+    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #new-machine { color: #5adbd1; }
     button:disabled { opacity: .45; cursor: default; }
     #status { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 104px; margin-left: auto; padding: 8px 11px; border: 1px solid #506176; border-radius: 6px; background: #25303e; color: #c6d2e0; font-size: 12px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
     #status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+    #status[data-state="new"] { color: #9fc5ef; background: #233348; border-color: #49678a; }
     #status[data-state="running"] { color: #7ae4a3; background: #18392c; border-color: #347450; }
     #status[data-state="starting"], #status[data-state="stopping"], #status[data-state="rebooting"], #status[data-state="resetting"] { color: #ffd17c; background: #403420; border-color: #806333; }
     #status[data-state="error"] { color: #ff9b9e; background: #44282d; border-color: #95505b; }
@@ -34,7 +35,8 @@
     .machine-tab { display: inline-flex; align-items: center; gap: 6px; padding: 5px 7px 5px 10px; white-space: nowrap; background: #1b2531; }
     .machine-tab[aria-selected="true"] { background: #355177; border-color: #70a8ff; }
     .machine-tab .machine-name { border: 0; padding: 2px; background: transparent; text-align: left; }
-    .machine-tab .machine-close { padding: 2px 6px; color: #bdc8d6; background: transparent; border: 0; }
+    .machine-tab .machine-close { display: inline-grid; place-items: center; padding: 2px 4px; color: #ff777d; background: transparent; border: 0; }
+    .machine-tab .machine-close svg { width: 16px; height: 16px; }
     #new-machine { flex: none; background: #1b2531; }
     #image-info { min-height: 18px; }
     .note { flex: none; max-height: 12vh; overflow: auto; margin: 9px 16px 0; color: #bdc8d6; font-size: 13px; }
@@ -80,16 +82,17 @@
     <select id="os-image" aria-label="System to start"></select>
     <label for="engine">Engine</label>
     <select id="engine" aria-label="Virtualization engine"><option value="qemu">QEMU · KVM auto</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
-    <!-- Lucide icons: play, square, rotate-cw, rotate-ccw, eraser, sliders-horizontal, plus. License: /icons/LICENSE-lucide.txt -->
-    <button id="start" class="icon-button" disabled title="Start VM" aria-label="Start VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
-    <button id="stop" class="icon-button" disabled title="Stop VM" aria-label="Stop VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></button>
-    <button id="reboot" class="icon-button" disabled title="Reboot: keep the current differential disk" aria-label="Reboot"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
-    <button id="reset" class="icon-button" disabled title="Reset: recreate the disk from its base image" aria-label="Reset"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
-    <button id="clear-console" class="icon-button" type="button" title="Clear the console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
-    <button id="show-qemu-options" class="icon-button" type="button" title="View launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg></button>
-    <label class="logs-toggle" for="show-logs"><input id="show-logs" type="checkbox"> Log</label>
-    <label class="logs-toggle" for="show-monitor"><input id="show-monitor" type="checkbox"> Monitor</label>
-    <span id="status" role="status" data-state="stopped">STOPPED</span>
+    <!-- Lucide icons: play, power, rotate-cw, rotate-ccw, x, eraser, sliders-horizontal, plus. License: /icons/LICENSE-lucide.txt -->
+    <button id="start" class="icon-button" disabled title="Start VM from the base image" aria-label="Start VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
+    <button id="stop" class="icon-button" disabled title="Stop VM and keep its current disk" aria-label="Stop VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
+    <button id="reboot" class="icon-button" disabled title="Reboot VM with its current disk (keep changes)" aria-label="Reboot VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button id="reset" class="icon-button" disabled title="Reset VM from the base image (discard changes)" aria-label="Reset VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+    <button id="exit" class="icon-button" type="button" title="Exit VM, delete its disk and close the tab" aria-label="Exit VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <button id="clear-console" class="icon-button" type="button" title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
+    <button id="show-qemu-options" class="icon-button" type="button" title="View VM launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg></button>
+    <label class="logs-toggle" for="show-logs" title="Show or hide VM logs"><input id="show-logs" type="checkbox"> Log</label>
+    <label class="logs-toggle" for="show-monitor" title="Show or hide the QEMU monitor"><input id="show-monitor" type="checkbox"> Monitor</label>
+    <span id="status" role="status" data-state="new">NEW</span>
   </header>
   <p id="status-error" role="alert" hidden></p>
   <p class="note" id="image-info">Loading systems from config.json…</p>
@@ -107,7 +110,7 @@
   </dialog>
   <main><div class="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Scroll console" title="Scroll console history"></div></main>
   <nav class="machines" id="machine-tabs" aria-label="Virtual machines">
-    <button id="new-machine" class="icon-button" type="button" title="New VM" aria-label="New VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+    <button id="new-machine" class="icon-button" type="button" title="Open a new VM tab" aria-label="New VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
@@ -133,6 +136,7 @@
     const socket = io({transports: ['websocket', 'polling']});
     const startButton = document.getElementById('start');
     const stopButton = document.getElementById('stop');
+    const exitButton = document.getElementById('exit');
     const rebootButton = document.getElementById('reboot');
     const resetButton = document.getElementById('reset');
     const status = document.getElementById('status');
@@ -240,9 +244,9 @@
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'machine-close';
-        close.textContent = '×';
-        close.title = 'Force stop and delete this session';
-        close.setAttribute('aria-label', `Force stop and delete ${machine.hostname} (${machine.osHint})`);
+        close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+        close.title = 'Exit VM, delete its disk and close the tab';
+        close.setAttribute('aria-label', `Exit ${machine.hostname} (${machine.osHint})`);
         close.onclick = () => closeMachine(machine.id);
         tab.append(select, close);
         tabs.append(tab);
@@ -253,13 +257,15 @@
       const running = !!(machine && machine.running);
       if (!machine) return;
       const busy = !!machine.busy;
-      const state = machine.error ? 'error' : busy ? (machine.operation || 'starting') : running ? 'running' : 'stopped';
+      const state = machine.error ? 'error' : busy ? (machine.operation || 'starting') : running ? 'running' : machine.hasLaunched ? 'stopped' : 'new';
       status.dataset.state = state;
       status.textContent = state.toUpperCase();
       status.title = machine.error || machine.message || '';
       statusError.textContent = machine.error || '';
       statusError.hidden = !machine.error;
-      startButton.disabled = running || machine.hasLaunched || busy || !images.length;
+      startButton.disabled = running || busy || !images.length;
+      startButton.title = machine.hasLaunched ? 'Resume VM from its current disk' : 'Start VM from the base image';
+      startButton.setAttribute('aria-label', machine.hasLaunched ? 'Resume VM' : 'Start VM');
       stopButton.disabled = !running || busy;
       rebootButton.disabled = !running || busy;
       resetButton.disabled = !machine.hasLaunched || busy;
@@ -490,7 +496,7 @@
       renderTabs();
     });
     socket.on('connect', () => { if (activeId) socket.emit('select-session', activeId, ++selectionToken); });
-    socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); } });
+    socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
     socket.on('session-error', showStatusError);
     socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
     terminal.onData(data => { if (!replaying) socket.emit('input', data); });
@@ -502,7 +508,7 @@
     });
     startButton.onclick = async () => {
       const machine = activeMachine();
-      if (!machine || machine.running || machine.hasLaunched) return;
+      if (!machine || machine.running || machine.busy) return;
       machine.busy = true;
       machine.operation = 'starting';
       machine.error = null;
@@ -517,7 +523,7 @@
       replaying = true;
       terminal.reset();
       syncConsoleScroll();
-      terminal.write(`Starting ${machine.imageId} (${machine.osHint})…\r\n`, syncConsoleScroll);
+      terminal.write(`${machine.hasLaunched ? 'Resuming' : 'Starting'} ${machine.imageId} (${machine.osHint})…\r\n`, syncConsoleScroll);
       try {
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
@@ -556,6 +562,7 @@
       } catch (error) { machine.message = error.message; machine.error = error.message; }
       finally { machine.busy = false; updateControls(); }
     };
+    exitButton.onclick = () => { if (activeId) closeMachine(activeId); };
     rebootButton.onclick = async () => {
       const machine = activeMachine();
       if (!machine || !machine.running || machine.busy) return;
@@ -574,8 +581,7 @@
     resetButton.onclick = async () => {
       const machine = activeMachine();
       if (!machine || !machine.hasLaunched || machine.busy) return;
-      const resetWarning = machine.hasDifferentialDisk ? ' Changes to its differential disk will be lost.' : '';
-      if (!window.confirm(`Reset ${machine.hostname} from its base image.${resetWarning}\n\nOnly this tab’s VM will be reset. Other VMs will not be affected.\n\nContinue?`)) return;
+      if (!window.confirm(`Reset ${machine.hostname}?\n\nThis VM will restart from its base image. Its current disk will be deleted, so all changes made in this VM will be lost.\n\nOther VMs will not be affected. Continue?`)) return;
       machine.busy = true;
       machine.operation = 'resetting';
       machine.error = null;

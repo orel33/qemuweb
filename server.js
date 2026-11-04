@@ -167,7 +167,7 @@ app.get('/api/sessions', (_req, res) => {
     engine: session.engine,
     imageId: session.selectedImage && session.selectedImage.id,
     hostname: session.hostname,
-    hasDifferentialDisk: !!session.selectedImage,
+    hasDifferentialDisk: !!session.runDisk && fs.existsSync(session.runDisk),
     message: stateMessage(session)
   })));
 });
@@ -207,7 +207,7 @@ function qemuArgs(session, image, overlay) {
     '-display', settings.display, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
     '-serial', `unix:${session.socketPath},server=on,wait=off`
   ];
-  // Notation de démarrage QEMU sur PC : c = premier disque dur.
+  // QEMU PC boot notation: c = first hard disk.
   return [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`, '-nic', settings.nic];
 }
 
@@ -230,7 +230,7 @@ function spawnQemu(session, image, reuseDisk = false) {
   session.qemuAcceleration = qemuAcceleration(session.engine);
   const overlay = reuseDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
   if (!overlay || !fs.existsSync(overlay)) {
-    if (reuseDisk) throw new Error('The differential disk to restart was not found.');
+    if (reuseDisk) throw new Error('The current VM disk was not found.');
     execLogged(session, 'qemu-img', qemuOverlayArgs(image, overlay), {stdio: 'pipe'});
   }
   image.runFiles = [overlay];
@@ -244,20 +244,17 @@ function spawnQemu(session, image, reuseDisk = false) {
   child.once('error', error => {
     if (session.machine === child) {
       session.machine = null;
-      session.everStarted = false;
-      cleanupRunFiles(session, image);
+      session.everStarted = !!session.runDisk;
       try { fs.unlinkSync(session.socketPath); } catch (_) {}
       try { fs.unlinkSync(session.monitorPath); } catch (_) {}
       publishState(session, `QEMU error: ${error.message}`);
     }
   });
   child.once('exit', code => {
-    const preserveDisk = session.action === 'reboot';
-    if (!preserveDisk) cleanupRunFiles(session, image);
     try { fs.unlinkSync(session.socketPath); } catch (_) {}
     try { fs.unlinkSync(session.monitorPath); } catch (_) {}
     if (session.machine === child) session.machine = null;
-    if (session.stopping || preserveDisk) return;
+    if (session.stopping || session.action === 'reboot' || session.action === 'reset' || session.action === 'destroy') return;
     publishState(session, `QEMU stopped (${code})`);
   });
 }
@@ -318,8 +315,8 @@ app.get('/api/options/:sessionId', (req, res) => {
     ];
     for (const key of qemuFields) rows.push(['qemu.' + key, String(options ? options[key] : ({...readConfig().qemu.defaults, ...image.qemu})[key]), isQemu ? qemuMappings[key] : 'Not used by VirtualBox']);
     for (const [key, value] of Object.entries(image.virtualbox)) rows.push(['virtualbox.' + key, String(value), isQemu ? 'Not used by QEMU' : ({memory: '--memory (MiB)', nic: '--nic1', osType: '--ostype'})[key] || 'Not used']);
-    if (isQemu) rows.push(['Server: acceleration', session.qemuAcceleration, '-accel (KVM/TCG selection)'], ['Server: disk', 'QCOW2 differential disk, format=qcow2, media=disk', '-drive'], ['Server: serial console', session.socketPath, '-serial unix:…,server=on,wait=off'], ['Server: monitor', session.monitorPath, '-monitor unix:…,server=on,wait=off'], ['QEMU: firmware and other devices', 'Selected machine defaults', 'Options not specified on the command line']);
-    else rows.push(['Server: disk', 'VDI differential disk, SATA controller', 'createmedium / storagectl / storageattach'], ['Server: CPU and boot', '1 CPU; disk, DVD', '--cpus 1 / --boot1 disk / --boot2 dvd'], ['Server: serial console', session.socketPath, '--uart1 0x3F8 4 / --uartmode1 server'], ['Server: display', 'Headless', 'startvm --type headless'], ['VirtualBox: other settings', 'VirtualBox defaults', 'Options not specified by the server']);
+    if (isQemu) rows.push(['Server: acceleration', session.qemuAcceleration, '-accel (KVM/TCG selection)'], ['Server: disk', 'QCOW2 working disk, format=qcow2, media=disk', '-drive'], ['Server: serial console', session.socketPath, '-serial unix:…,server=on,wait=off'], ['Server: monitor', session.monitorPath, '-monitor unix:…,server=on,wait=off'], ['QEMU: firmware and other devices', 'Selected machine defaults', 'Options not specified on the command line']);
+    else rows.push(['Server: disk', 'VDI working disk, SATA controller', 'createmedium / storagectl / storageattach'], ['Server: CPU and boot', '1 CPU; disk, DVD', '--cpus 1 / --boot1 disk / --boot2 dvd'], ['Server: serial console', session.socketPath, '--uart1 0x3F8 4 / --uartmode1 server'], ['Server: display', 'Headless', 'startvm --type headless'], ['VirtualBox: other settings', 'VirtualBox defaults', 'Options not specified by the server']);
     const commands = isQemu
       ? [['qemu-img', ...qemuOverlayArgs(image, overlay)], ['qemu-system-x86_64', ...qemuArgs(session, image, overlay)]]
       : virtualBoxCommands(session, image).map(args => ['VBoxManage', ...args]);
@@ -348,35 +345,40 @@ function spawnVirtualBox(session, image) {
 
 function start(sessionId, selectedEngine, imageId, options = {}) {
   const session = getSession(sessionId, true);
-  if (session.action && !options.reset) throw new Error('An action is already in progress for this VM.');
+  if (session.action && !options.reset && !(options.resume && session.action === 'reboot')) throw new Error('An action is already in progress for this VM.');
   if (session.machine) throw new Error('This VM is already running.');
-  if (session.everStarted && !options.reset) throw new Error('This tab already started a VM. Use Reboot or Reset, or create a new tab.');
+  const resume = session.everStarted && !options.reset;
+  if (resume && (selectedEngine !== session.engine || imageId !== session.selectedImage?.id)) throw new Error('Resume must use the original system and engine.');
+  if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current VM disk was not found.');
   if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
   if (selectedEngine === 'virtualbox') {
     const qemuWithKvm = [...sessions.values()].some(other => other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU VM uses KVM. Stop that VM, restart it with QEMU TCG, then start VirtualBox.');
   }
-  const image = imageById(imageId);
+  const image = resume ? session.selectedImage : imageById(imageId);
   if (!image) throw new Error('Unknown system in config.json.');
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash prepare.sh.`);
   if (selectedEngine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash prepare.sh.`);
-  const qemuOptions = selectedEngine.startsWith('qemu') ? (options.reset ? validateQemuOptions(options.qemuOptions) : qemuOptionsFor(image.id)) : null;
-  const displayName = options.reset ? session.hostname : allocateName(image.id);
+  const qemuOptions = selectedEngine.startsWith('qemu') ? (resume ? session.qemuOptions : options.reset ? validateQemuOptions(options.qemuOptions) : qemuOptionsFor(image.id)) : null;
+  const displayName = resume || options.reset ? session.hostname : allocateName(image.id);
   if (fs.existsSync(session.socketPath)) fs.unlinkSync(session.socketPath);
   session.stopping = false;
   session.generation += 1;
-  if (!options.reset) session.runLog = [];
+  if (!options.reset && !resume) session.runLog = [];
   session.serialBuffer = '';
   session.lastMessage = 'Starting…';
-  if (!options.reset) io.to(session.id).emit('logs-reset', {sessionId: session.id});
+  if (!options.reset && !resume) io.to(session.id).emit('logs-reset', {sessionId: session.id});
   io.to(session.id).emit('serial-reset', {sessionId: session.id});
-  appendLog(session, `${options.reset ? '# Reset from base image' : '# Starting'} · ${selectedEngine} · ${image.label}`);
+  appendLog(session, `${options.reset ? '# Reset from base image' : resume ? '# Resuming from current disk' : '# Starting'} · ${selectedEngine} · ${image.label}`);
   session.engine = selectedEngine;
   session.selectedImage = image;
   session.hostname = displayName;
   session.qemuOptions = qemuOptions;
-  if (selectedEngine.startsWith('qemu')) spawnQemu(session, image);
-  else if (selectedEngine === 'virtualbox') spawnVirtualBox(session, image);
+  if (selectedEngine.startsWith('qemu')) spawnQemu(session, image, resume);
+  else if (resume) {
+    vbox(session, ['startvm', session.vmName, '--type', 'headless']);
+    session.machine = {kind: 'virtualbox', vmDir: tempFile(session, 'vbox-vm')};
+  } else spawnVirtualBox(session, image);
   session.everStarted = true;
   publishState(session, selectedEngine === 'qemu' ? `QEMU/${session.qemuAcceleration.toUpperCase()} · ${image.label} starting…` : `VirtualBox · ${image.label} starting…`);
   connectSerial(session);
@@ -416,7 +418,7 @@ function sendMonitorCommand(session, command) {
 }
 
 function waitForQemuExit(child, timeoutMs = 30000) {
-  if (child.exitCode !== null) return Promise.resolve();
+  if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve, reject) => {
     const timeout = setTimeout(() => finish(new Error('The VM did not respond to the graceful shutdown request.')), timeoutMs);
     function finish(error) {
@@ -451,40 +453,21 @@ async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
 
 async function reboot(session) {
   if (!session || !session.everStarted) throw new Error('This machine has not started yet.');
-  if (!session.machine) throw new Error('The VM is stopped; use Reset to start from the base image.');
+  if (!session.machine) throw new Error('The VM is stopped; use Play to resume from its current disk.');
   if (session.action) throw new Error('An action is already in progress for this VM.');
   session.action = 'reboot';
   try {
-    const image = session.selectedImage;
-    const current = session.machine;
     publishState(session, 'Graceful shutdown before reboot…');
-    if (session.engine.startsWith('qemu')) {
-      appendLog(session, '$ QEMU monitor: system_powerdown');
-      await sendMonitorCommand(session, 'system_powerdown');
-      await waitForQemuExit(current);
-    } else {
-      vbox(session, ['controlvm', session.vmName, 'acpipowerbutton']);
-      await waitForVirtualBoxPowerOff(session);
-      session.machine = null;
-    }
+    await stop(session, {publish: false});
     if (session.action !== 'reboot' || !sessions.has(session.id)) throw new Error('The session was deleted during reboot.');
-    if (session.serial) { session.serial.destroy(); session.serial = null; }
-    session.generation += 1;
-    session.serialBuffer = '';
-    io.to(session.id).emit('serial-reset', {sessionId: session.id});
-    publishState(session, 'Restarting from the differential disk…');
-    if (session.engine.startsWith('qemu')) spawnQemu(session, image, true);
-    else {
-      vbox(session, ['startvm', session.vmName, '--type', 'headless']);
-      session.machine = current;
-    }
-    connectSerial(session);
-    publishState(session, `${stateMessage(session)} · rebooting`);
+    publishState(session, 'Restarting from the current disk…');
+    start(session.id, session.engine, session.selectedImage.id, {resume: true});
   } catch (error) {
     publishState(session, error.message);
     throw error;
   } finally {
     session.action = null;
+    if (session.machine) publishState(session);
   }
 }
 
@@ -497,44 +480,77 @@ async function reset(session) {
   const qemuOptions = session.qemuOptions;
   try {
     publishState(session, 'Resetting from the base image…');
-    if (session.machine) await stop(session);
+    if (session.machine) await stop(session, {publish: false});
     if (session.action !== 'reset' || !sessions.has(session.id)) throw new Error('The session was deleted during reset.');
+    discardSessionDisk(session);
     session.everStarted = false;
     start(session.id, engine, imageId, {reset: true, qemuOptions});
   } catch (error) {
-    session.everStarted = true;
+    session.everStarted = !!session.runDisk;
     publishState(session, error.message);
     throw error;
   } finally {
     session.action = null;
+    if (session.machine) publishState(session);
   }
 }
 
-async function stop(session) {
-  if (!session || !session.machine) return;
-  session.stopping = true;
-  if (session.serial) { session.serial.destroy(); session.serial = null; }
-  const current = session.machine;
+function discardSessionDisk(session) {
   const image = session.selectedImage;
-  session.machine = null;
-  if (current.kind === 'virtualbox') {
-    try { vbox(session, ['controlvm', session.vmName, 'acpipowerbutton']); } catch (_) {}
-    await new Promise(resolve => setTimeout(resolve, 3000));
-    try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {}
-    try { vbox(session, ['unregistervm', session.vmName]); } catch (error) { console.error(error.message); }
-    for (const file of image.runFiles || []) { try { vbox(session, ['closemedium', 'disk', file, '--delete']); } catch (error) { console.error(error.message); } }
-    if (current.vmDir) fs.rmSync(current.vmDir, {recursive: true, force: true});
-  } else {
-    appendLog(session, '$ signal sent to qemu-system-x86_64: SIGTERM');
-    current.kill('SIGTERM');
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    if (current.exitCode === null) current.kill('SIGKILL');
+  if (session.engine === 'virtualbox') {
+    vbox(session, ['unregistervm', session.vmName]);
+    for (const file of image.runFiles || []) {
+      try { vbox(session, ['closemedium', 'disk', file, '--delete']); }
+      catch (error) { appendLog(session, `# VirtualBox medium already unregistered: ${error.message}`); }
+    }
+    fs.rmSync(tempFile(session, 'vbox-vm'), {recursive: true, force: true});
   }
-  cleanupRunFiles(session, image || {});
-  try { fs.unlinkSync(session.socketPath); } catch (_) {}
-  try { fs.unlinkSync(session.monitorPath); } catch (_) {}
-  session.stopping = false;
-  publishState(session, 'VM stopped');
+  cleanupRunFiles(session, image);
+}
+
+async function stop(session, options = {}) {
+  if (!session || !session.machine) return;
+  const ownAction = !session.action;
+  if (ownAction) session.action = 'stop';
+  session.stopping = true;
+  const current = session.machine;
+  try {
+    if (current.kind === 'virtualbox') {
+      try {
+        vbox(session, ['controlvm', session.vmName, 'acpipowerbutton']);
+        await waitForVirtualBoxPowerOff(session, 10000);
+      } catch (error) {
+        const state = virtualBoxState(session);
+        if (!['poweroff', 'aborted', 'saved'].includes(state)) {
+          appendLog(session, `# Graceful VirtualBox shutdown failed: ${error.message}; forcing power off`);
+          vbox(session, ['controlvm', session.vmName, 'poweroff']);
+        }
+      }
+    } else {
+      try {
+        appendLog(session, '$ QEMU monitor: system_powerdown');
+        await sendMonitorCommand(session, 'system_powerdown');
+        await waitForQemuExit(current, 10000);
+      } catch (error) {
+        appendLog(session, `# Graceful QEMU shutdown failed: ${error.message}; sending SIGTERM`);
+        current.kill('SIGTERM');
+        try { await waitForQemuExit(current, 2000); }
+        catch (_) {
+          appendLog(session, '$ signal sent to qemu-system-x86_64: SIGKILL');
+          current.kill('SIGKILL');
+          await waitForQemuExit(current, 5000);
+        }
+      }
+    }
+    if (session.serial) { session.serial.destroy(); session.serial = null; }
+    if (session.machine === current) session.machine = null;
+    try { fs.unlinkSync(session.socketPath); } catch (_) {}
+    try { fs.unlinkSync(session.monitorPath); } catch (_) {}
+    if (options.publish !== false && session.action !== 'destroy') publishState(session, 'VM stopped; current disk kept');
+  } finally {
+    session.stopping = false;
+    if (ownAction && session.action === 'stop') session.action = null;
+  }
 }
 
 async function destroySession(session) {
@@ -546,13 +562,13 @@ async function destroySession(session) {
   const current = session.machine;
   const image = session.selectedImage || {};
   session.machine = null;
-  if (current && current.kind === 'virtualbox') {
-    try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {}
+  if (session.engine === 'virtualbox' && session.selectedImage) {
+    if (current) { try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {} }
     try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
     for (const file of image.runFiles || []) {
       try { vbox(session, ['closemedium', 'disk', file, '--delete']); } catch (_) {}
     }
-    if (current.vmDir) fs.rmSync(current.vmDir, {recursive: true, force: true});
+    fs.rmSync(tempFile(session, 'vbox-vm'), {recursive: true, force: true});
   } else if (current) {
     appendLog(session, '$ force kill qemu-system-x86_64: SIGKILL');
     current.kill('SIGKILL');
@@ -591,7 +607,11 @@ app.post('/api/stop/:sessionId', async (req, res) => {
     await stop(session);
     res.json({ok: true});
   }
-  catch (error) { console.error(error); res.status(500).json({error: error.message}); }
+  catch (error) {
+    console.error(error);
+    try { const session = getSession(req.params.sessionId); if (session) publishState(session, error.message); } catch (_) {}
+    res.status(500).json({error: error.message});
+  }
 });
 
 app.post('/api/reboot/:sessionId', async (req, res) => {
@@ -691,7 +711,7 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const forceExit = setTimeout(() => process.exit(1), 10000);
-  await Promise.all([...sessions.values()].map(session => stop(session).catch(error => console.error('VM shutdown:', error))));
+  await Promise.all([...sessions.values()].map(session => destroySession(session).catch(error => console.error('VM shutdown:', error))));
   io.close(() => {
     clearTimeout(forceExit);
     process.exit(0);

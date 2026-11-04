@@ -2,7 +2,7 @@
   "name": "qemunet-serial-console-demo",
   "version": "0.1.0",
   "private": true,
-  "description": "Console série xterm.js pour Alpine, Debian 13 et OpenWrt avec QEMU/KVM ou VirtualBox",
+  "description": "xterm.js serial-console demo for Alpine, Debian 13, and OpenWrt with QEMU/KVM or VirtualBox",
   "scripts": {
     "start": "node server.js"
   },

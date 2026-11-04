@@ -30,7 +30,7 @@ In the web toolbar, check **Monitor** to enter commands for the VM in the curren
 - **OpenWrt**: the script verifies and decompresses the official RAW image.
 - For **VirtualBox**, the script converts each RAW image into a read-only VDI base.
 
-At launch, the server performs no further system configuration: QEMU creates a differential QCOW2 based on the RAW image; VirtualBox creates a differential VDI based on the prepared VDI. Each instance has its own writes. They are retained by **Stop** and **Reboot**, then discarded by **Reset** or by closing the tab. The base files in `images/` are never modified.
+At launch, the server performs no further system configuration: QEMU creates a QCOW2 working disk based on the RAW image; VirtualBox creates a VDI working disk based on the prepared VDI. Each instance has its own writes. They are retained by **Stop**, **Play / Resume**, and **Reboot**, then discarded by **Reset**, **Exit**, or server shutdown. The base files in `images/` are never modified.
 
 `images/` contains only ready-to-run base images named after the system identifier: `alpine.raw` / `alpine.vdi`, `debian13.raw` / `debian13.vdi`, and `openwrt.raw` / `openwrt.vdi`. The `.raw` extension explicitly identifies the disk format. `sources/` keeps the official downloads and checksums needed for preparation; `runtime/` contains temporary files and VM differential disks. [config.json](config.json) describes the systems and their launch options; `prepare.sh` does not overwrite it or generate a catalog.
 
@@ -65,6 +65,8 @@ These scripts target the QEMU and Node processes and VirtualBox VMs associated w
 | VirtualBox | VDI converted from the same RAW image | Differential VDI |
 
 The RAW image remains the master source. `prepare.sh` produces an additional VDI base for VirtualBox, which uses additional disk space. Both engines use the same OS content, but each creates its own working disk. The bases are never modified.
+
+Technically, the **current disk** mentioned in the interface is a *differential disk*: a per-VM QCOW2 overlay for QEMU or a per-VM VDI differencing image for VirtualBox. It stores only the VM's writes and depends on its read-only base image. **Resume** and **Reboot** reopen that same disk; **Reset** replaces it with a new one.
 
 ### Conversions and commands
 
@@ -109,19 +111,52 @@ The script places downloaded ISOs, cloud images, archives, and checksums in `sou
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. Each tab represents a VM: **New machine** creates a new tab. Choose a system and an engine, then click **Start** once. A display name such as `debian13-00` is assigned at launch; double-click the tab to change it while the VM is running. This name does not change the Linux hostname inside the VM. Numbering advances from 00 to 99 for each system during the server's lifetime. VMs in other tabs continue to run in parallel. Serial output and logs belong to each machine; check **Log** to display QEMU or VirtualBox commands. The tab's close button immediately force-stops its VM and deletes the whole session: differential disk, sockets, logs, and VirtualBox registration. It also cancels an ongoing Reboot or Reset. Login details appear above the terminal:
+Open <http://127.0.0.1:3002>. Each tab represents a VM: the turquoise **+** creates a **New VM** tab. Choose a system and an engine, then click **Play**. A display name such as `debian13-00` is assigned at first launch; double-click the tab to change it. This name does not change the Linux hostname inside the VM. Numbering advances from 00 to 99 for each system during the server's lifetime. VMs in other tabs continue to run in parallel. Serial output and logs belong to each machine; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
 
 QEMU selects KVM when available. To run QEMU alongside VirtualBox, choose **QEMU · TCG** (slower software emulation) before starting QEMU. If VirtualBox is already running, **QEMU · KVM auto** automatically switches the new VM to TCG. VirtualBox cannot start while a QEMU VM uses KVM; the interface explains how to restart VMs in a compatible mode.
 
 By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exposes the CPU features that the host can provide to the VM. This avoids the `CPUID.80000001H:ECX.svm` warning that QEMU's default CPU model can produce on an Intel host: `svm` is the AMD virtualization feature and is not needed for these VMs. In TCG mode, the profile selects `-cpu qemu64`. This setting affects the virtual CPU, not the Debian image; VMs already running keep their configuration until their next launch.
 
-- **Alpine Linux 3.24**: `root` with an empty password, or `toto` / `toto`; ephemeral differential disk, restricted QEMU networking and VirtualBox NAT by default.
-- **Debian 13**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; ephemeral differential disk, restricted QEMU networking and VirtualBox NAT by default.
-- **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; ephemeral differential disk, networking disabled by default.
+- **Alpine Linux 3.24**: `root` with an empty password, or `toto` / `toto`; temporary working disk, restricted QEMU networking and VirtualBox NAT by default.
+- **Debian 13**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; temporary working disk, restricted QEMU networking and VirtualBox NAT by default.
+- **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; temporary working disk, networking disabled by default.
 
-**Reboot** requests a graceful system shutdown, then restarts the VM on the same differential disk: all changes written to it are retained. **Reset** displays a warning, stops only the VM in the current tab, deletes its differential disk, creates a new one from the base image, and restarts it; other VMs are unaffected. These commands keep the same tab and display name. After **Stop**, you can choose **Reset** to restart from the base; **Start** is reserved for the tab's first launch. Closing a tab stops and deletes its session. Stopping the server with Ctrl+C stops all VMs it manages.
+### VM actions
 
-**Clear** removes the current tab's console history while preserving its current line, such as the login or shell prompt. The VM keeps running and new output appears normally.
+The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). Each hint below is the text shown on hover. Actions apply only to the selected tab.
+
+| Icon / control | Action | Hint | Effect |
+|---|---|---|---|
+| Green `play` | **Start** | `Start VM from the base image` | Create a new working disk and boot the VM. |
+| Green `play` | **Resume** | `Resume VM from its current disk` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
+| Orange `power` | **Stop** | `Stop VM and keep its current disk` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
+| Blue `rotate-cw` | **Reboot** | `Reboot VM with its current disk (keep changes)` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
+| Amber `rotate-ccw` | **Reset** | `Reset VM from the base image (discard changes)` | After a warning, stop the VM, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
+| Red `x` | **Exit** | `Exit VM, delete its disk and close the tab` | Force-stop the VM, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** has the same effect and hint. |
+| Purple `eraser` | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
+| Gold `sliders-horizontal` | **Settings** | `View VM launch settings` | Show the selected system's configuration and launch commands in a read-only dialog. |
+| Turquoise `plus` | **New VM** | `Open a new VM tab` | Add an empty tab; the VM starts only after Start. |
+| **Log** checkbox | **Log** | `Show or hide VM logs` | Show or hide the log; commands and output are recorded even while hidden. |
+| **Monitor** checkbox | **Monitor** | `Show or hide the QEMU monitor` | Show or hide QEMU's command interface when a QEMU VM is running. |
+
+A forced Stop can leave the guest filesystem needing repair on the next boot. Only the selected VM is affected by these actions; other tabs keep running.
+
+### VM status
+
+The badge at the right of the toolbar describes the selected tab:
+
+| Status | Meaning |
+|---|---|
+| **NEW** | The tab has never started a VM; no current disk exists. |
+| **STARTING** | Play is creating or opening the disk and starting the VM. |
+| **RUNNING** | The VM process is running. |
+| **STOPPING** | Stop is waiting for graceful shutdown or applying its forced-stop fallback. |
+| **STOPPED** | The VM is off and its current disk is kept; Play resumes from that disk. |
+| **REBOOTING** | The VM is stopping and starting again on the same disk. |
+| **RESETTING** | The current disk is being replaced and the VM is starting from the base image. |
+| **ERROR** | An action failed or the VM ended with an error. The error message appears under the toolbar; the disk is retained when it still exists. |
+
+Exit removes the tab, so it has no persistent status. Stopping the server with Ctrl+C force-stops its VMs and removes their temporary sessions and working disks.
 
 If port 3002 is already in use, stop the old server or choose another port:
 
