@@ -7,7 +7,7 @@ DRY_RUN=0
 if [[ ${1:-} == --dry-run && $# == 1 ]]; then
   DRY_RUN=1
 elif (( $# != 0 )); then
-  echo "Usage : $0 [--dry-run]" >&2
+  echo "Usage: $0 [--dry-run]" >&2
   exit 2
 fi
 
@@ -48,8 +48,8 @@ signal_pids() {
   local signal="$1" kind="$2" pid
   while IFS= read -r pid; do
     [[ -n "$pid" ]] || continue
-    if (( DRY_RUN )); then echo "Simulation : signal $signal à $kind PID $pid"
-    else echo "Signal $signal : $kind PID $pid"; fi
+    if (( DRY_RUN )); then echo "Dry run: signal $signal to $kind PID $pid"
+    else echo "Signal $signal: $kind PID $pid"; fi
     if (( ! DRY_RUN )); then kill "-$signal" "$pid" 2>/dev/null || true; fi
   done < <(matching_pids "$kind")
 }
@@ -81,7 +81,7 @@ if command -v VBoxManage >/dev/null 2>&1; then
     vm="${BASH_REMATCH[1]}"
     info="$(VBoxManage showvminfo "$vm" --machinereadable 2>/dev/null || true)"
     [[ "$info" == *"$RUNTIME/"* ]] || continue
-    echo "VirtualBox : $vm"
+    echo "VirtualBox: $vm"
     if (( ! DRY_RUN )); then
       VBoxManage controlvm "$vm" poweroff >/dev/null 2>&1 || true
       VBoxManage unregistervm "$vm" >/dev/null
@@ -95,9 +95,9 @@ if command -v VBoxManage >/dev/null 2>&1; then
 fi
 
 if (( ! DRY_RUN )) && { [[ -n "$(matching_pids server)" ]] || [[ -n "$(matching_pids qemu)" ]]; }; then
-  echo 'Des processus de ce projet sont encore actifs ; nettoyage annulé.' >&2
+  echo 'Project processes are still running; cleanup cancelled.' >&2
   exit 1
 fi
 
-if (( DRY_RUN )); then echo 'Simulation terminée.'
-else echo 'Instances de ce projet arrêtées.'; fi
+if (( DRY_RUN )); then echo 'Dry run complete.'
+else echo 'Project instances stopped.'; fi

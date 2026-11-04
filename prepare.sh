@@ -80,7 +80,7 @@ fi
 
 if [[ ! -s "$IMAGES/$ALPINE_RAW" ]]; then
   for command in qemu-system-x86_64 qemu-img python3 base64; do
-    command -v "$command" >/dev/null || { echo "Outil requis pour préparer Alpine : $command" >&2; exit 1; }
+    command -v "$command" >/dev/null || { echo "Tool required to prepare Alpine: $command" >&2; exit 1; }
   done
 
   PREP_DIR="$(mktemp -d "$RUNTIME/.alpine-prepare.XXXXXX")"
@@ -151,7 +151,7 @@ ALPINE_PREPARE
     >"$PREP_DIR/qemu.stdout" 2>"$PREP_DIR/qemu.stderr" &
   PREP_QEMU_PID=$!
 
-  echo "Préparation Alpine $ALPINE_VERSION : installation de l’ISO officielle dans une base RAW…"
+  echo "Preparing Alpine $ALPINE_VERSION: installing the official ISO into a RAW base…"
   python3 - "$serial_socket" "$serial_log" "$guest_payload" <<'PY'
 import re
 import socket
@@ -163,7 +163,7 @@ deadline = time.monotonic() + 900
 
 while not __import__('os').path.exists(socket_path):
     if time.monotonic() >= deadline:
-        raise RuntimeError('socket série Alpine indisponible')
+        raise RuntimeError('Alpine serial socket unavailable')
     time.sleep(0.1)
 
 sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -181,14 +181,14 @@ def wait_for(patterns):
             except TimeoutError:
                 continue
             if not chunk:
-                raise RuntimeError('console série Alpine fermée prématurément')
+                raise RuntimeError('Alpine serial console closed unexpectedly')
             log.write(chunk)
             log.flush()
             buffer = (buffer + chunk)[-65536:]
             for index, pattern in enumerate(compiled):
                 if pattern.search(buffer):
                     return index
-    raise RuntimeError('expiration du délai de préparation Alpine')
+    raise RuntimeError('Alpine preparation timed out')
 
 wait_for([rb'login:\s*$'])
 sock.sendall(b'root\r')
@@ -197,7 +197,7 @@ command = f"echo {payload} | base64 -d >/tmp/qemunet-prepare.sh && sh /tmp/qemun
 sock.sendall(command.encode() + b'\r')
 result = wait_for([rb'QEMUNET_ALPINE_STATUS_0', rb'QEMUNET_ALPINE_STATUS_[1-9][0-9]*'])
 if result != 0:
-    raise RuntimeError('le script d’installation Alpine a échoué')
+    raise RuntimeError('Alpine installation script failed')
 sock.close()
 PY
   # L’image est synchronisée par le script invité. QEMU est arrêté côté hôte :
@@ -209,12 +209,12 @@ PY
   mv "$alpine_disk" "$IMAGES/$ALPINE_RAW"
   rm -rf "$PREP_DIR"
   PREP_DIR=""
-  echo "Base Alpine RAW prête en lecture seule : $IMAGES/$ALPINE_RAW"
+  echo "Alpine RAW base ready and read-only: $IMAGES/$ALPINE_RAW"
 fi
 
 if [[ ! -s "$IMAGES/$DEBIAN_RAW" ]]; then
   for command in qemu-system-x86_64 qemu-img genisoimage python3; do
-    command -v "$command" >/dev/null || { echo "Outil requis pour préparer Debian : $command" >&2; exit 1; }
+    command -v "$command" >/dev/null || { echo "Tool required to prepare Debian: $command" >&2; exit 1; }
   done
 
   PREP_DIR="$(mktemp -d "$RUNTIME/.debian-prepare.XXXXXX")"
@@ -287,7 +287,7 @@ NETWORK_CONFIG
     >"$PREP_DIR/qemu.stdout" 2>"$PREP_DIR/qemu.stderr" &
   PREP_QEMU_PID=$!
 
-  echo "Préparation Debian 13 : premier démarrage isolé pour intégrer le compte demo et la console série…"
+  echo "Preparing Debian 13: isolated first boot to configure the demo account and serial console…"
   prepared=0
   for _ in $(seq 1 300); do
     if grep -q 'QEMUNET_IMAGE_PREPARED' "$serial_log" 2>/dev/null && grep -q 'Cloud-init v.* finished at' "$serial_log" 2>/dev/null; then
@@ -298,7 +298,7 @@ NETWORK_CONFIG
     sleep 1
   done
   if [[ "$prepared" != 1 ]]; then
-    echo "Échec de la préparation cloud-init Debian. Dernière sortie série :" >&2
+    echo "Debian cloud-init preparation failed. Last serial output:" >&2
     tail -n 60 "$serial_log" 2>/dev/null || true
     cat "$PREP_DIR/qemu.stderr" >&2 || true
     exit 1
@@ -318,7 +318,7 @@ def receive_reply(command_id):
     while True:
         line = stream.readline()
         if not line:
-            raise RuntimeError('QMP fermé avant la réponse')
+            raise RuntimeError('QMP closed before the response')
         message = json.loads(line)
         if message.get('id') == command_id:
             if 'error' in message:
@@ -342,7 +342,7 @@ PY
   mv "$IMAGES/$DEBIAN_RAW.tmp" "$IMAGES/$DEBIAN_RAW"
   rm -rf "$PREP_DIR"
   PREP_DIR=""
-  echo "Base Debian RAW prête en lecture seule : $IMAGES/$DEBIAN_RAW"
+  echo "Debian RAW base ready and read-only: $IMAGES/$DEBIAN_RAW"
 fi
 
 if [[ ! -s "$IMAGES/$DEBIAN_VDI" ]]; then
@@ -373,10 +373,10 @@ const config = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'
 for (const [id, system] of Object.entries(config.systems)) {
   for (const format of ['raw', 'vdi']) {
     const file = path.resolve(root, system.images[format]);
-    if (!fs.existsSync(file)) throw new Error(`Image ${format} absente pour ${id} : ${file}`);
+    if (!fs.existsSync(file)) throw new Error(`Missing ${format} image for ${id}: ${file}`);
   }
 }
 NODE
 
-echo "Bases prêtes et en lecture seule dans $IMAGES."
-echo "QEMU utilisera des overlays QCOW2 ; VirtualBox des disques différentiels VDI."
+echo "Read-only base images ready in $IMAGES."
+echo "QEMU uses QCOW2 overlays; VirtualBox uses VDI differential disks."

@@ -17,8 +17,8 @@
       "type": "linux",
       "mode": "text",
       "label": "Alpine Linux 3.24",
-      "description": "Distribution Linux légère préparée pour une console série interactive sur ttyS0. Les comptes root et toto sont disponibles ; l’image RAW est conservée en lecture seule et chaque VM utilise son propre disque de travail.",
-      "login": "root sans mot de passe ; toto / toto",
+      "description": "Lightweight Linux distribution prepared for an interactive serial console on ttyS0. The root and toto accounts are available; the RAW image is read-only and each VM uses its own working disk.",
+      "login": "root with no password; toto / toto",
       "images": {
         "raw": "images/alpine.raw",
         "vdi": "images/alpine.vdi"
@@ -34,8 +34,8 @@
       "type": "linux",
       "mode": "text",
       "label": "Debian 13",
-      "description": "Debian 13 préparée hors ligne à partir de l’image cloud officielle. Elle démarre sur son disque avec GRUB, affiche le démarrage et le login sur ttyS0, et dispose des comptes root, toto et demo.",
-      "login": "root sans mot de passe ; toto / toto ; demo / serial-demo",
+      "description": "Debian 13 prepared offline from the official cloud image. It boots from disk with GRUB, displays boot output and login on ttyS0, and provides root, toto and demo accounts.",
+      "login": "root with no password; toto / toto; demo / serial-demo",
       "images": {
         "raw": "images/debian13.raw",
         "vdi": "images/debian13.vdi"
@@ -53,8 +53,8 @@
       "type": "linux",
       "mode": "text",
       "label": "OpenWrt 25.12 x86-64",
-      "description": "Système Linux léger orienté réseau, lancé ici en mode texte sur la console série. Le profil de démonstration désactive les cartes réseau ; la base RAW est issue de l’image disque officielle.",
-      "login": "Entrée puis root sans mot de passe",
+      "description": "Lightweight network-oriented Linux system running in text mode on the serial console. The demo profile disables network adapters; its RAW base comes from the official disk image.",
+      "login": "Press Enter, then root with no password",
       "images": {
         "raw": "images/openwrt.raw",
         "vdi": "images/openwrt.vdi"

@@ -14,7 +14,7 @@ for option in "$@"; do
     --dry-run) DRY_RUN=1 ;;
     --images) CLEAN_IMAGES=1 ;;
     --sources) CLEAN_SOURCES=1 ;;
-    *) echo "Usage : $0 [--dry-run] [--images] [--sources]" >&2; exit 2 ;;
+    *) echo "Usage: $0 [--dry-run] [--images] [--sources]" >&2; exit 2 ;;
   esac
 done
 
@@ -28,7 +28,7 @@ clean_directory() {
   local directory="$1" entry
   [[ -d "$directory" && ! -L "$directory" ]] || return 0
   while IFS= read -r -d '' entry; do
-    if (( DRY_RUN )); then echo "Suppression prévue : $entry"
+    if (( DRY_RUN )); then echo "Would remove: $entry"
     else rm -rf -- "$entry"; fi
   done < <(find "$directory" -mindepth 1 -maxdepth 1 ! -name .gitkeep -print0)
 }
@@ -37,6 +37,6 @@ clean_directory "$RUNTIME"
 if (( CLEAN_IMAGES )); then clean_directory "$IMAGES"; fi
 if (( CLEAN_SOURCES )); then clean_directory "$SOURCES"; fi
 
-if (( DRY_RUN )); then echo 'Simulation terminée : aucun fichier supprimé.'
-elif (( CLEAN_IMAGES || CLEAN_SOURCES )); then echo 'Fichiers temporaires et répertoires demandés nettoyés.'
-else echo 'Fichiers temporaires supprimés ; images préparées et sources conservées.'; fi
+if (( DRY_RUN )); then echo 'Dry run complete; no files removed.'
+elif (( CLEAN_IMAGES || CLEAN_SOURCES )); then echo 'Temporary files and selected directories cleaned.'
+else echo 'Temporary files removed; prepared images and sources retained.'; fi

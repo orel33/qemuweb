@@ -1,98 +1,98 @@
 # QemuWeb - beta
 
-Cette démo lance Alpine Linux, Debian 13 ou OpenWrt dans QEMU ou VirtualBox, et relaie la console série `ttyS0` vers xterm.js dans un serveur web local.
+This demo runs Alpine Linux, Debian 13, or OpenWrt in QEMU or VirtualBox and relays the `ttyS0` serial console to xterm.js through a local web server.
 
-## Console texte : xterm et navigateur
+## Text console: xterm and the browser
 
-Dans l’ancienne commande QemuNet, `-append '… console=ttyS0 …'` demande explicitement **au noyau Linux** d’écrire sur son premier port série. Avec `xterm -e qemu-system-x86_64 … -nographic`, QEMU masque la vidéo et, lorsqu’aucun `-serial` n’est indiqué, relie implicitement ce port série à son entrée/sortie standard, donc à xterm. QEMU partage aussi cette entrée/sortie avec son moniteur (`Ctrl+A`, puis `C`). Le terme `ttyS0` n’est donc pas implicite : c’est **son raccordement à xterm** qui l’est. Un service `getty` sur `ttyS0` reste nécessaire pour afficher un prompt `login:`.
+In the historical QemuNet command, `-append '… console=ttyS0 …'` explicitly tells the **Linux kernel** to write to its first serial port. With `xterm -e qemu-system-x86_64 … -nographic`, QEMU hides the video display and, when no `-serial` option is supplied, implicitly connects that serial port to its standard input and output, and therefore to xterm. QEMU also shares those streams with its monitor (`Ctrl+A`, then `C`). The name `ttyS0` is not implicit: its **connection to xterm** is. A `getty` service on `ttyS0` is still needed to display a `login:` prompt.
 
-Dans la démo web, `-display none` masque seulement la vidéo. `-serial unix:…` relie explicitement le port série à un socket ; le serveur transmet ensuite les caractères entre ce socket et xterm.js via WebSocket. `-monitor unix:…` ouvre un autre socket pour le moniteur QEMU. La console et le login série sont configurés dans les images pendant `prepare.sh`. La [comparaison détaillée des commandes](docs/commandes-qemu.pdf) illustre les deux trajets.
+In the web demo, `-display none` only hides the video display. `-serial unix:…` explicitly connects the serial port to a socket; the server then relays characters between that socket and xterm.js over WebSocket. `-monitor unix:…` opens a separate socket for the QEMU monitor. The serial console and login are configured in the images by `prepare.sh`. The [detailed command comparison](docs/commandes-qemu.pdf) illustrates both paths.
 
-### Console série et moniteur QEMU
+### Serial console and QEMU monitor
 
-Les deux options utilisent ici la même syntaxe courte, mais désignent deux interfaces distinctes :
-
-```sh
--serial unix:/chemin/console.sock,server=on,wait=off
--monitor unix:/chemin/monitor.sock,server=on,wait=off
-```
-
-`-serial` raccorde le premier port série virtuel (`ttyS0` dans Linux) au terminal interactif de l’invité : messages de démarrage, `login:`, puis shell. `-monitor` ouvre le moniteur texte HMP de **QEMU lui-même** : ses commandes pilotent l’émulateur, et ne sont pas des commandes du shell Linux. `server=on` fait écouter QEMU sur chaque socket Unix ; le serveur Node s’y connecte. `wait=off` laisse QEMU démarrer sans attendre cette connexion. La forme courte de `-serial` remplace ici l’ancien couple `-chardev socket,… -serial chardev:serial0`.
-
-Dans la barre web, coche **Moniteur QEMU** pour saisir une commande sur la VM de l’onglet courant. Par exemple, `help` liste les commandes, `info status` indique l’état de la VM et `info block` décrit les disques. Des commandes comme `system_reset` ou `quit` modifient ou arrêtent directement la VM : utilise-les en connaissance de cause. Le moniteur est disponible pour QEMU, pas pour VirtualBox. Ses commandes et réponses sont enregistrées dans les **Logs**, même si le panneau des logs est masqué.
-
-## Principe des images
-
-`prepare.sh` prépare les systèmes avant leur utilisation :
-
-- **Alpine** : le script télécharge et vérifie l’ISO `virt` officielle, l’installe de manière non interactive dans une image RAW, prépare les comptes `root` et `toto`, force le démarrage et le login sur `ttyS0`, puis produit la base VDI destinée à VirtualBox.
-- **Debian 13** : le script télécharge et vérifie l’image cloud officielle, la démarre une fois dans une VM QEMU temporaire isolée, prépare les comptes `root`, `toto` et `demo`, configure l’accès série et le réseau DHCP, désactive cloud-init pour les démarrages suivants, puis produit une image RAW en lecture seule.
-- **OpenWrt** : le script vérifie et décompresse l’image officielle RAW.
-- Pour **VirtualBox**, le script convertit chaque image RAW en VDI de base en lecture seule.
-
-Au lancement, le serveur ne configure plus aucun système : QEMU crée un QCOW2 différentiel basé sur le RAW ; VirtualBox crée un VDI différentiel basé sur le VDI préparé. Chaque instance a ses écritures à elle. Elles sont conservées par **Arrêter** et **Reboot**, puis supprimées par **Reset** ou par la fermeture de l’onglet. Les fichiers de base dans `images/` ne sont jamais modifiés.
-
-`images/` ne contient que les bases prêtes à lancer, nommées selon l’identifiant du système : `alpine.raw` / `alpine.vdi`, `debian13.raw` / `debian13.vdi`, `openwrt.raw` / `openwrt.vdi`. L’extension `.raw` indique explicitement le format du disque. `sources/` garde les téléchargements officiels et les sommes de contrôle nécessaires à la préparation ; `runtime/` contient les fichiers temporaires et les disques différentiels des VM. [config.json](config.json) décrit les systèmes et leurs options de lancement ; `prepare.sh` ne le remplace pas et ne génère plus de catalogue.
-
-### Configuration des systèmes
-
-Le fichier [config.json](config.json) reprend la logique de [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg) : chaque clé de `systems` (`alpine`, `debian13`, `openwrt`) identifie un système. Chaque entrée porte son type `linux`, son mode `text`, un libellé et une description longue, les identifiants de connexion, les chemins `images.raw` et `images.vdi`, les options QEMU propres à ce système et les paramètres VirtualBox. Les chemins peuvent être relatifs à la racine du projet ou absolus. Le lancement s’appuie uniquement sur ce fichier ; `server.js` ne contient aucune règle liée au nom d’un OS. Les fichiers ISO éventuellement utilisés par `prepare.sh` restent des sources de préparation, pas des systèmes lançables dans l’interface.
-
-`qemu.defaults` donne les valeurs communes. Le bloc `systems.<id>.qemu` ne contient que les différences : Debian 13 demande 1 024 Mio, OpenWrt 256 Mio et aucune carte réseau, tandis qu’Alpine hérite des défauts. `systems.<id>.virtualbox` fournit séparément sa mémoire, son réseau et son type VirtualBox. Pour ajouter un OS Linux en mode texte déjà préparé, ajoute une entrée complète dans `systems` avec les chemins de ses bases RAW/VDI ; aucun catalogue supplémentaire n’est nécessaire.
-
-Dans la page web, coche **Options QEMU**. Choisis **Défauts communs** pour modifier la base, ou **Système sélectionné** pour modifier les valeurs du système de l’onglet. **Enregistrer dans config.json** rend les réglages persistants ; **Démarrer** enregistre aussi les modifications encore en attente pour ce système. La mémoire, le nombre de CPU, le modèle de machine, le modèle CPU KVM/TCG, l’affichage, le bus du disque, l’ordre de boot et le réseau sont modifiables. Un réglage propre à un système n’écrase que les champs différents des défauts communs.
-
-Le choix **QEMU · KVM auto / TCG** reste dans le menu principal, car il dépend aussi de `/dev/kvm` et des VM VirtualBox en cours. Les chemins des disques, de la console série et du moniteur sont générés à chaque lancement ; le format QCOW2 du disque différentiel et ses sockets de contrôle restent liés au fonctionnement de la démo. Un changement de configuration s’applique aux **nouvelles sessions**. **Reboot** et **Reset** conservent les options prises au premier démarrage de leur onglet.
-
-### Arrêt et nettoyage
+Both options use the same short syntax here, but provide two distinct interfaces:
 
 ```sh
-./killall.sh                 # arrête tous les serveurs et VM de ce projet
-./cleanall.sh                # arrête les instances et vide runtime/ ; garde images/ et sources/
-./cleanall.sh --images       # vide aussi les bases de images/ ; garde les téléchargements dans sources/
-./cleanall.sh --sources      # vide aussi le cache de téléchargement sources/ ; garde les bases
-./cleanall.sh --images --sources  # efface les bases et le cache de préparation
-./cleanall.sh --dry-run      # affiche ce qui serait arrêté et supprimé
+-serial unix:/path/to/console.sock,server=on,wait=off
+-monitor unix:/path/to/monitor.sock,server=on,wait=off
 ```
 
-Ces scripts visent les processus QEMU/Node et les VM VirtualBox associés à ce répertoire. `cleanall.sh` conserve les fichiers `.gitkeep` et ne supprime ni le code ni `node_modules/`. Après `--images`, `prepare.sh` peut reconstruire les bases depuis `sources/` sans retélécharger ; après `--sources`, une préparation complète devra retélécharger les sources manquantes.
+`-serial` connects the first virtual serial port (`ttyS0` in Linux) to the guest's interactive terminal: boot messages, `login:`, and then a shell. `-monitor` opens the text-based HMP monitor of **QEMU itself**: its commands control the emulator and are not Linux shell commands. `server=on` makes QEMU listen on each Unix socket; the Node server connects to them. `wait=off` lets QEMU start without waiting for a connection. The short form of `-serial` replaces the earlier `-chardev socket,… -serial chardev:serial0` pair.
 
-### Formats utilisés
+In the web toolbar, check **Monitor** to enter commands for the VM in the current tab. For example, `help` lists commands, `info status` reports the VM's status, and `info block` describes its disks. Commands such as `system_reset` or `quit` directly change or stop the VM, so use them with care. The monitor is available for QEMU, not VirtualBox. Its commands and responses are recorded in the **Log**, even when the panel is hidden.
 
-| Moteur | Base en lecture seule | Disque différentiel de l’instance |
+## Image preparation
+
+`prepare.sh` prepares the systems before use:
+
+- **Alpine**: the script downloads and verifies the official `virt` ISO, installs it unattended into a RAW image, prepares the `root` and `toto` accounts, configures boot output and login on `ttyS0`, then produces the VDI base for VirtualBox.
+- **Debian 13**: the script downloads and verifies the official cloud image, boots it once in an isolated temporary QEMU VM, prepares the `root`, `toto`, and `demo` accounts, configures serial access and DHCP networking, disables cloud-init for subsequent boots, then produces a read-only RAW image.
+- **OpenWrt**: the script verifies and decompresses the official RAW image.
+- For **VirtualBox**, the script converts each RAW image into a read-only VDI base.
+
+At launch, the server performs no further system configuration: QEMU creates a differential QCOW2 based on the RAW image; VirtualBox creates a differential VDI based on the prepared VDI. Each instance has its own writes. They are retained by **Stop** and **Reboot**, then discarded by **Reset** or by closing the tab. The base files in `images/` are never modified.
+
+`images/` contains only ready-to-run base images named after the system identifier: `alpine.raw` / `alpine.vdi`, `debian13.raw` / `debian13.vdi`, and `openwrt.raw` / `openwrt.vdi`. The `.raw` extension explicitly identifies the disk format. `sources/` keeps the official downloads and checksums needed for preparation; `runtime/` contains temporary files and VM differential disks. [config.json](config.json) describes the systems and their launch options; `prepare.sh` does not overwrite it or generate a catalog.
+
+### System configuration
+
+[config.json](config.json) follows the same approach as [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg): each key under `systems` (`alpine`, `debian13`, `openwrt`) identifies a system. Each entry contains its `linux` type, `text` mode, label and long description, login details, `images.raw` and `images.vdi` paths, system-specific QEMU options, and VirtualBox settings. Paths can be relative to the project root or absolute. Launching relies on this file; `server.js` contains no rules tied to an OS name. Any ISO files used by `prepare.sh` remain preparation sources, not systems that can be launched from the interface.
+
+`qemu.defaults` supplies common values. The `systems.<id>.qemu` object contains only overrides: Debian 13 requests 1,024 MiB, OpenWrt requests 256 MiB and no network adapter, and Alpine inherits the defaults. `systems.<id>.virtualbox` separately supplies its memory, network, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
+
+In the web page, click **Settings** to view the system values and their corresponding QEMU or VirtualBox arguments. The dialog also shows settings added by the server and the disk creation and launch commands. Before launch, these are a preview; after launch, the session's settings are displayed. To change settings, edit `config.json` before starting a new VM. The interface and system descriptions are in English.
+
+The **QEMU · KVM auto / TCG** choice remains in the main toolbar because it also depends on `/dev/kvm` and any running VirtualBox VMs. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 differential disk format and control sockets are part of the demo's operation. Configuration changes apply to **new sessions**. **Reboot** and **Reset** retain the options selected when their tab first started.
+
+### Stopping and cleaning up
+
+```sh
+./killall.sh                 # stop all servers and VMs belonging to this project
+./cleanall.sh                # stop instances and empty runtime/; keep images/ and sources/
+./cleanall.sh --images       # also empty images/; keep downloads in sources/
+./cleanall.sh --sources      # also empty the sources/ download cache; keep the bases
+./cleanall.sh --images --sources  # remove both the bases and the preparation cache
+./cleanall.sh --dry-run      # show what would be stopped and removed
+```
+
+These scripts target the QEMU and Node processes and VirtualBox VMs associated with this directory. `cleanall.sh` keeps `.gitkeep` files and does not delete the code or `node_modules/`. After `--images`, `prepare.sh` can rebuild the bases from `sources/` without downloading them again; after `--sources`, a full preparation will need to download any missing sources.
+
+### Formats in use
+
+| Engine | Read-only base | Instance differential disk |
 |---|---|---|
 | QEMU | RAW | QCOW2 |
-| VirtualBox | VDI converti depuis la même RAW | VDI différentiel |
+| VirtualBox | VDI converted from the same RAW image | Differential VDI |
 
-La RAW reste la source maître. `prepare.sh` produit une base VDI supplémentaire pour VirtualBox ; elle prend donc de l’espace disque. Les deux moteurs utilisent le même contenu OS, mais chacun crée son propre disque de travail. Les bases ne sont jamais modifiées.
+The RAW image remains the master source. `prepare.sh` produces an additional VDI base for VirtualBox, which uses additional disk space. Both engines use the same OS content, but each creates its own working disk. The bases are never modified.
 
-### Conversions et commandes
+### Conversions and commands
 
-Les commandes équivalentes aux étapes exécutées par le projet sont :
+The following commands are equivalent to the steps performed by the project:
 
 ```sh
-# Conversion de la base RAW en VDI (préparation VirtualBox)
+# Convert the RAW base to VDI for VirtualBox
 qemu-img convert -f raw -O vdi base.raw base.vdi
 
-# Disque de travail QEMU basé sur la RAW
+# Create a QEMU working disk based on the RAW image
 qemu-img create -f qcow2 -F raw -b base.raw instance.qcow2
 
-# Disque différentiel VirtualBox basé sur la VDI
+# Create a VirtualBox differential disk based on the VDI
 VBoxManage createmedium disk --filename instance.vdi --diffparent base.vdi --format VDI
 ```
 
-VirtualBox peut aussi convertir la RAW en VDI avec `VBoxManage convertfromraw base.raw base.vdi --format VDI`. QEMU peut utiliser une VDI comme base d’un QCOW2 en remplaçant `-F raw` par `-F vdi` dans la commande de création d’overlay. Ces deux variantes ne sont pas utilisées par la démo.
+VirtualBox can also convert the RAW image to VDI with `VBoxManage convertfromraw base.raw base.vdi --format VDI`. QEMU can use a VDI as the base of a QCOW2 by replacing `-F raw` with `-F vdi` in the overlay creation command. Neither variant is used by the demo.
 
-La préparation télécharge les images manquantes depuis les dépôts officiels, puis les vérifie avec les sommes publiées. Une fois les images préparées, le démarrage et l’exécution des VM ne nécessitent aucun téléchargement ni service cloud.
+Preparation downloads missing images from official repositories and verifies them against the published checksums. Once the images are prepared, starting and running VMs requires no downloads or cloud service.
 
-## Prérequis
+## Prerequisites
 
-- Linux x86_64, Node.js 18 ou plus récent et npm.
-- `curl`, `sha256sum`, `sha512sum`, `gzip` et `qemu-img`. `qemu-img` sert à préparer les bases et à créer les overlays QEMU.
-- Pour préparer Alpine et Debian, `qemu-system-x86_64` et `python3` sont également requis ; Debian demande aussi `genisoimage`. KVM accélère la préparation si `/dev/kvm` est accessible en lecture et écriture ; sinon elle utilise TCG, plus lent. La préparation Alpine choisit également TCG lorsqu’une VM VirtualBox tourne déjà.
-- Pour lancer avec QEMU : `qemu-system-x86_64`. Pour lancer avec VirtualBox : VirtualBox et `VBoxManage`.
+- Linux x86_64, Node.js 18 or newer, and npm.
+- `curl`, `sha256sum`, `sha512sum`, `gzip`, and `qemu-img`. `qemu-img` prepares the bases and creates QEMU overlays.
+- Preparing Alpine and Debian also requires `qemu-system-x86_64` and `python3`; Debian additionally requires `genisoimage`. KVM speeds up preparation when `/dev/kvm` is readable and writable; otherwise preparation uses the slower TCG emulator. Alpine preparation also selects TCG when a VirtualBox VM is already running.
+- To run with QEMU: `qemu-system-x86_64`. To run with VirtualBox: VirtualBox and `VBoxManage`.
 
-## Installation et préparation
+## Installation and preparation
 
 ```sh
 git clone --branch main https://github.com/orel33/qemuweb.git
@@ -101,36 +101,36 @@ npm ci
 bash prepare.sh
 ```
 
-Le script place dans `sources/` les ISO, images cloud, archives et sommes de contrôle téléchargées, puis dans `images/` uniquement les bases finales `<id>.raw` et `<id>.vdi`. Il vérifie que les chemins déclarés dans `config.json` existent, mais ne réécrit pas ce fichier. Le menu de la page est alimenté directement par `config.json`. `runtime/` est réservé aux fichiers des VM en cours. Le contenu de ces trois répertoires est ignoré par Git, à l’exception des fichiers `.gitkeep` qui conservent leur structure.
+The script places downloaded ISOs, cloud images, archives, and checksums in `sources/`, then places only the final `<id>.raw` and `<id>.vdi` bases in `images/`. It checks that the paths declared in `config.json` exist but does not rewrite that file. The page's system menu is populated directly from `config.json`. `runtime/` is reserved for files belonging to running VMs. The contents of all three directories are ignored by Git, except for the `.gitkeep` files that preserve their structure.
 
-## Lancement
+## Running the demo
 
 ```sh
 npm start
 ```
 
-Ouvre <http://127.0.0.1:3002>. Chaque onglet représente une VM : **＋ Nouvelle machine** crée un nouvel onglet. Choisis un système et un moteur, puis clique une fois sur **Démarrer**. Un nom d’affichage comme `debian13-00` est attribué au lancement ; double-clique sur l’onglet pour le modifier à chaud. Ce nom ne modifie pas le hostname Linux dans la VM. La numérotation progresse de 00 à 99 pour chaque système, pendant la durée du serveur. Les VM des autres onglets continuent de tourner en parallèle. Les sorties série et les journaux sont propres à chaque machine ; coche **Logs** pour afficher les commandes QEMU ou VirtualBox. La croix de l’onglet force l’arrêt immédiat de sa VM et supprime toute la session : disque différentiel, sockets, logs et enregistrement VirtualBox. Elle annule également un Reboot ou Reset en cours. Les identifiants apparaissent au-dessus du terminal :
+Open <http://127.0.0.1:3002>. Each tab represents a VM: **New machine** creates a new tab. Choose a system and an engine, then click **Start** once. A display name such as `debian13-00` is assigned at launch; double-click the tab to change it while the VM is running. This name does not change the Linux hostname inside the VM. Numbering advances from 00 to 99 for each system during the server's lifetime. VMs in other tabs continue to run in parallel. Serial output and logs belong to each machine; check **Log** to display QEMU or VirtualBox commands. The tab's close button immediately force-stops its VM and deletes the whole session: differential disk, sockets, logs, and VirtualBox registration. It also cancels an ongoing Reboot or Reset. Login details appear above the terminal:
 
-QEMU sélectionne KVM quand il est disponible. Pour faire tourner QEMU en même temps que VirtualBox, choisis **QEMU · TCG** (émulation logicielle, plus lente) avant de démarrer QEMU. Si VirtualBox est déjà lancé, le choix **QEMU · KVM auto** bascule automatiquement cette nouvelle VM en TCG. VirtualBox ne peut pas démarrer tant qu’une VM QEMU utilise KVM ; l’interface affiche alors un message qui explique comment relancer les VM en mode compatible.
+QEMU selects KVM when available. To run QEMU alongside VirtualBox, choose **QEMU · TCG** (slower software emulation) before starting QEMU. If VirtualBox is already running, **QEMU · KVM auto** automatically switches the new VM to TCG. VirtualBox cannot start while a QEMU VM uses KVM; the interface explains how to restart VMs in a compatible mode.
 
-Par défaut, [config.json](config.json) choisit `-cpu host` en mode KVM : QEMU expose les fonctions CPU que l’hôte peut fournir à la VM. Cela évite notamment le warning `CPUID.80000001H:ECX.svm` que le modèle CPU QEMU par défaut peut produire sur un hôte Intel : `svm` désigne la virtualisation AMD, inutile pour ces VM. En mode TCG, le profil choisit `-cpu qemu64`. Ce réglage concerne le CPU virtuel, pas l’image Debian ; les VM déjà en cours gardent leur configuration jusqu’à leur prochain démarrage.
+By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exposes the CPU features that the host can provide to the VM. This avoids the `CPUID.80000001H:ECX.svm` warning that QEMU's default CPU model can produce on an Intel host: `svm` is the AMD virtualization feature and is not needed for these VMs. In TCG mode, the profile selects `-cpu qemu64`. This setting affects the virtual CPU, not the Debian image; VMs already running keep their configuration until their next launch.
 
-- **Alpine Linux 3.24** : `root`, mot de passe vide, ou `toto` / `toto` ; disque différentiel éphémère, réseau QEMU restreint et NAT VirtualBox par défaut.
-- **Debian 13** : `root` sans mot de passe ; `toto` / `toto` ou `demo` / `serial-demo` ; disque différentiel éphémère, réseau QEMU restreint et NAT VirtualBox par défaut.
-- **OpenWrt 25.12 x86-64** : appuie sur Entrée pour ouvrir le shell `root` sans mot de passe ; disque différentiel éphémère, réseau désactivé par défaut.
+- **Alpine Linux 3.24**: `root` with an empty password, or `toto` / `toto`; ephemeral differential disk, restricted QEMU networking and VirtualBox NAT by default.
+- **Debian 13**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; ephemeral differential disk, restricted QEMU networking and VirtualBox NAT by default.
+- **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; ephemeral differential disk, networking disabled by default.
 
-**Reboot** demande un arrêt propre du système, puis relance la VM sur le même disque différentiel : toutes les modifications écrites dans ce disque sont conservées. **Reset** affiche un avertissement, arrête uniquement la VM de l’onglet courant, supprime son disque différentiel, en recrée un depuis l’image de base, puis la redémarre : les autres VM ne sont pas affectées. Ces commandes gardent le même onglet et le même hostname. Si tu utilises **Arrêter**, tu peux ensuite choisir **Reset** pour la redémarrer depuis sa base ; le bouton **Démarrer** reste réservé au premier lancement de l’onglet. Fermer un onglet arrête et supprime sa session. Quand tu arrêtes le serveur avec Ctrl+C, toutes les VM qu’il gère sont arrêtées.
+**Reboot** requests a graceful system shutdown, then restarts the VM on the same differential disk: all changes written to it are retained. **Reset** displays a warning, stops only the VM in the current tab, deletes its differential disk, creates a new one from the base image, and restarts it; other VMs are unaffected. These commands keep the same tab and display name. After **Stop**, you can choose **Reset** to restart from the base; **Start** is reserved for the tab's first launch. Closing a tab stops and deletes its session. Stopping the server with Ctrl+C stops all VMs it manages.
 
-**Clear** efface l’affichage et l’historique de la console de l’onglet courant ; la VM continue de fonctionner et les nouvelles sorties s’affichent normalement.
+**Clear** removes the current tab's console history while preserving its current line, such as the login or shell prompt. The VM keeps running and new output appears normally.
 
-Si le port 3002 est déjà pris, arrête l’ancien serveur ou choisis un autre port :
+If port 3002 is already in use, stop the old server or choose another port:
 
 ```sh
 PORT=3003 npm start
 ```
 
-## Images officielles
+## Official images
 
 - [Alpine Linux virt](https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/)
-- [Images cloud Debian](https://cloud.debian.org/images/cloud/)
-- [Images OpenWrt x86-64](https://downloads.openwrt.org/releases/25.12.6/targets/x86/64/)
+- [Debian cloud images](https://cloud.debian.org/images/cloud/)
+- [OpenWrt x86-64 images](https://downloads.openwrt.org/releases/25.12.6/targets/x86/64/)
