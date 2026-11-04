@@ -2,6 +2,8 @@
 
 QemuNet starts a network of QEMU virtual machines from a topology file. Its traditional text interface opens an xterm window for each machine. Qemuweb explores the same kind of interactive serial console in a browser, using xterm.js and a Node.js server. The current Qemuweb demo can run multiple independent VMs, but does not yet reproduce QemuNet's topology-driven VDE LAN.
 
+The proposed implementation sequence is in the [migration roadmap](ROADMAP.md).
+
 ## How QemuNet starts a LAN
 
 The example in [qemunet-lan.txt](qemunet-lan.txt) was started with:

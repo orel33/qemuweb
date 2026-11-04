@@ -36,6 +36,14 @@ At launch, the server performs no further system configuration: QEMU creates a Q
 
 ### System configuration
 
+Command paths live in `.env` (shared defaults) and `.env.local` (machine-specific overrides, ignored by Git), separate from [config.json](config.json). Both use `NAME=/absolute/path/to/executable`; leave a value empty to search `PATH`. A nonempty `.env.local` value takes priority over the process environment and `.env`. For example:
+
+```sh
+QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64
+```
+
+At startup, the server checks the configured commands, prints a green check or red cross for each, and exits if any check fails. It uses the resolved QEMU, `qemu-img`, and `VBoxManage` paths. `npm start` still launches Node from `PATH`; image preparation and cleanup scripts also still use `PATH`.
+
 [config.json](config.json) follows the same approach as [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg): each key under `systems` (`alpine`, `debian13`, `openwrt`) identifies a system. Each entry contains its `linux` type, `text` mode, label and long description, login details, `images.raw` and `images.vdi` paths, system-specific QEMU options, and VirtualBox settings. Paths can be relative to the project root or absolute. Launching relies on this file; `server.js` contains no rules tied to an OS name. Any ISO files used by `prepare.sh` remain preparation sources, not systems that can be launched from the interface.
 
 `qemu.defaults` supplies common values. The `systems.<id>.qemu` object contains only overrides: Debian 13 requests 1,024 MiB, OpenWrt requests 256 MiB and no network adapter, and Alpine inherits the defaults. `systems.<id>.virtualbox` separately supplies its memory, network, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
@@ -89,16 +97,30 @@ Preparation downloads missing images from official repositories and verifies the
 
 ## Prerequisites
 
-- Linux x86_64, Node.js 18 or newer, and npm.
-- `curl`, `sha256sum`, `sha512sum`, `gzip`, and `qemu-img`. `qemu-img` prepares the bases and creates QEMU overlays.
-- Preparing Alpine and Debian also requires `qemu-system-x86_64` and `python3`; Debian additionally requires `genisoimage`. KVM speeds up preparation when `/dev/kvm` is readable and writable; otherwise preparation uses the slower TCG emulator. Alpine preparation also selects TCG when a VirtualBox VM is already running.
-- To run with QEMU: `qemu-system-x86_64`. To run with VirtualBox: VirtualBox and `VBoxManage`.
+Linux x86_64 is required. The main dependencies on Debian/Ubuntu are:
 
-For a versioned QEMU build with VDE, run `./misc/install-qemu.sh /opt/`.
-See the [QEMU installer notes](misc/install-qemu.md) for the layout,
-dependencies, and verification steps.
+| Purpose | Package or installation |
+|---|---|
+| Web server | `nodejs` (Node.js 18+), `npm` |
+| QEMU virtual machines | `qemu-system-x86` or a custom QEMU build |
+| Image overlays and conversion | `qemu-utils` (`qemu-img`) |
+| Image preparation | `python3`; `genisoimage` for the Debian seed ISO |
+| VDE LAN | `vde2` (`vde_switch`) |
+| VirtualBox VMs | VirtualBox installation (`VBoxManage`) |
+
+KVM speeds up QEMU when `/dev/kvm` is accessible; otherwise TCG is available. The current startup check requires all seven configured commands, including tools for optional features.
+
+To compile QEMU with VDE support, run `./misc/install-qemu.sh /opt/`, then set its `bin/qemu-system-x86_64` path in `.env.local`. This build does not install `qemu-img`; use the separate `qemu-utils` package. See the [QEMU installer notes](misc/install-qemu.md) for the directory layout and build options.
 
 ## Installation and preparation
+
+Install the standard command-line tools and the packages used for preparation and VDE networking:
+
+```sh
+sudo apt install bash coreutils findutils grep gzip curl nodejs npm python3 qemu-utils genisoimage vde2
+```
+
+Provide `qemu-system-x86_64` from `qemu-system-x86` or a custom build, and install VirtualBox to provide `VBoxManage` for the current startup check.
 
 ```sh
 git clone --branch main https://github.com/orel33/qemuweb.git

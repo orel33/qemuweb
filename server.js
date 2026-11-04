@@ -7,8 +7,12 @@ const path = require('path');
 const {spawn, execFileSync} = require('child_process');
 const express = require('express');
 const socketIo = require('socket.io');
+const {resolveCommands} = require('./command-preflight');
 
 const root = __dirname;
+let commands;
+try { commands = resolveCommands(root); }
+catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
 const configPath = path.join(root, 'config.json');
 const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'diskInterface', 'bootDisk', 'nic'];
@@ -230,13 +234,13 @@ function spawnQemu(session, image, reuseDisk = false) {
   const overlay = reuseDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
   if (!overlay || !fs.existsSync(overlay)) {
     if (reuseDisk) throw new Error('The current VM disk was not found.');
-    execLogged(session, 'qemu-img', qemuOverlayArgs(image, overlay), {stdio: 'pipe'});
+    execLogged(session, commands['qemu-img'], qemuOverlayArgs(image, overlay), {stdio: 'pipe'});
   }
   image.runFiles = [overlay];
   session.runDisk = overlay;
   const args = qemuArgs(session, image, overlay);
-  appendLog(session, `$ ${['qemu-system-x86_64', ...args].map(shellQuote).join(' ')}`);
-  const child = spawn('qemu-system-x86_64', args, {stdio: ['ignore', 'pipe', 'pipe']});
+  appendLog(session, `$ ${[commands['qemu-system-x86_64'], ...args].map(shellQuote).join(' ')}`);
+  const child = spawn(commands['qemu-system-x86_64'], args, {stdio: ['ignore', 'pipe', 'pipe']});
   session.machine = child;
   child.stdout.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
   child.stderr.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
@@ -265,7 +269,7 @@ function cleanupRunFiles(session, image) {
 }
 
 function vbox(session, args) {
-  return execLogged(session, 'VBoxManage', args, {stdio: 'pipe'});
+  return execLogged(session, commands.VBoxManage, args, {stdio: 'pipe'});
 }
 
 function virtualBoxCommands(session, image) {
@@ -316,10 +320,10 @@ app.get('/api/options/:sessionId', (req, res) => {
     for (const [key, value] of Object.entries(image.virtualbox)) rows.push(['virtualbox.' + key, String(value), isQemu ? 'Not used by QEMU' : ({memory: '--memory (MiB)', nic: '--nic1', osType: '--ostype'})[key] || 'Not used']);
     if (isQemu) rows.push(['Server: acceleration', session.qemuAcceleration, '-accel (KVM/TCG selection)'], ['Server: disk', 'QCOW2 working disk, format=qcow2, media=disk', '-drive'], ['Server: serial console', session.socketPath, '-serial unix:…,server=on,wait=off'], ['Server: monitor', session.monitorPath, '-monitor unix:…,server=on,wait=off'], ['QEMU: firmware and other devices', 'Selected machine defaults', 'Options not specified on the command line']);
     else rows.push(['Server: disk', 'VDI working disk, SATA controller', 'createmedium / storagectl / storageattach'], ['Server: CPU and boot', '1 CPU; disk, DVD', '--cpus 1 / --boot1 disk / --boot2 dvd'], ['Server: serial console', session.socketPath, '--uart1 0x3F8 4 / --uartmode1 server'], ['Server: display', 'Headless', 'startvm --type headless'], ['VirtualBox: other settings', 'VirtualBox defaults', 'Options not specified by the server']);
-    const commands = isQemu
-      ? [['qemu-img', ...qemuOverlayArgs(image, overlay)], ['qemu-system-x86_64', ...qemuArgs(session, image, overlay)]]
-      : virtualBoxCommands(session, image).map(args => ['VBoxManage', ...args]);
-    res.json({launched, engine, rows, commands: commands.map(args => args.map(shellQuote).join(' '))});
+    const launchCommands = isQemu
+      ? [[commands['qemu-img'], ...qemuOverlayArgs(image, overlay)], [commands['qemu-system-x86_64'], ...qemuArgs(session, image, overlay)]]
+      : virtualBoxCommands(session, image).map(args => [commands.VBoxManage, ...args]);
+    res.json({launched, engine, rows, commands: launchCommands.map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -437,7 +441,7 @@ function waitForQemuExit(child, timeoutMs = 30000) {
 }
 
 function virtualBoxState(session) {
-  const output = execFileSync('VBoxManage', ['showvminfo', session.vmName, '--machinereadable'], {encoding: 'utf8'});
+  const output = execFileSync(commands.VBoxManage, ['showvminfo', session.vmName, '--machinereadable'], {encoding: 'utf8'});
   const match = output.match(/^VMState="([^"]+)"/m);
   return match ? match[1] : 'unknown';
 }
