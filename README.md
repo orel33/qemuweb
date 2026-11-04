@@ -1,4 +1,4 @@
-# QEMUWEB Beta
+# QemuWeb - beta
 
 Cette démo lance Alpine Linux, Debian 13 ou OpenWrt dans QEMU ou VirtualBox, et relaie la console série `ttyS0` vers xterm.js dans un serveur web local.
 
