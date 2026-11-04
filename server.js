@@ -120,7 +120,7 @@ function connectSerial(session, attempt = 0, generation = session.generation) {
     publishState(session);
     connection.on('data', data => {
       const text = data.toString('utf8');
-      session.serialBuffer = (session.serialBuffer + text).slice(-65536);
+      session.serialBuffer = (session.serialBuffer + text).slice(-262144);
       io.to(session.id).emit('serial', {sessionId: session.id, data: text});
     });
     connection.on('close', () => {
@@ -148,9 +148,11 @@ function makeRunVdi(session, image) {
 
 function qemuArgs(session, image, reuseDisk = false) {
   const common = [
-    '-machine', 'q35', '-accel', session.qemuAcceleration, '-m', String(image.memory), '-smp', '1',
+    '-machine', 'q35', '-accel', session.qemuAcceleration,
+    ...(session.qemuAcceleration === 'kvm' ? ['-cpu', 'host'] : []),
+    '-m', String(image.memory), '-smp', '1',
     '-display', 'none', '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
-    '-chardev', `socket,id=serial0,path=${session.socketPath},server=on,wait=off`, '-serial', 'chardev:serial0'
+    '-serial', `unix:${session.socketPath},server=on,wait=off`
   ];
   // Notation de démarrage QEMU sur PC : d = premier CD-ROM, c = premier disque dur.
   if (image.kind === 'iso') {
@@ -295,15 +297,19 @@ function sendMonitorCommand(session, command) {
       clearTimeout(timeout);
       monitor.destroy();
       if (error) reject(error);
-      else resolve();
+      else {
+        const reply = output.slice(output.indexOf('\n') + 1).replace(/(?:^|[\r\n])\(qemu\) ?$/, '').trim();
+        resolve(reply);
+      }
     }
     monitor.on('data', data => {
       output += data.toString('utf8');
+      if (output.length > 65536) return finish(new Error('Réponse du moniteur trop longue.'));
       if (!sent && output.includes('(qemu)')) {
         sent = true;
         output = '';
         monitor.write(`${command}\n`, error => { if (error) finish(error); });
-      } else if (sent && output.includes('(qemu)')) finish();
+      } else if (sent && output.includes('\n') && /(?:^|[\r\n])\(qemu\) ?$/.test(output.slice(output.indexOf('\n') + 1))) finish();
     });
     monitor.once('error', finish);
     monitor.once('close', () => { if (!settled) finish(new Error('Connexion au moniteur QEMU interrompue.')); });
@@ -508,6 +514,19 @@ app.post('/api/reboot/:sessionId', async (req, res) => {
 app.post('/api/reset/:sessionId', async (req, res) => {
   try { await reset(getSession(req.params.sessionId)); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
+});
+
+app.post('/api/monitor/:sessionId', async (req, res) => {
+  try {
+    const session = getSession(req.params.sessionId);
+    if (!session || !session.machine || !session.engine.startsWith('qemu') || session.action) throw new Error('Moniteur disponible uniquement pour une VM QEMU en cours.');
+    const command = req.body && req.body.command;
+    if (typeof command !== 'string' || !command.trim() || command.length > 256 || /[\r\n\x00-\x1f\x7f]/.test(command)) throw new Error('Saisir une commande QEMU sur une seule ligne (256 caractères maximum).');
+    appendLog(session, `$ monitor: ${command}`);
+    const output = await sendMonitorCommand(session, command);
+    appendLog(session, output || '(aucune sortie)');
+    res.json({ok: true, output});
+  } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.delete('/api/sessions/:sessionId', async (req, res) => {

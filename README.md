@@ -6,7 +6,20 @@ Cette démo lance Alpine Linux, Debian 13 ou OpenWrt dans QEMU ou VirtualBox, et
 
 Dans l’ancienne commande QemuNet, `-append '… console=ttyS0 …'` demande explicitement **au noyau Linux** d’écrire sur son premier port série. Avec `xterm -e qemu-system-x86_64 … -nographic`, QEMU masque la vidéo et, lorsqu’aucun `-serial` n’est indiqué, relie implicitement ce port série à son entrée/sortie standard, donc à xterm. QEMU partage aussi cette entrée/sortie avec son moniteur (`Ctrl+A`, puis `C`). Le terme `ttyS0` n’est donc pas implicite : c’est **son raccordement à xterm** qui l’est. Un service `getty` sur `ttyS0` reste nécessaire pour afficher un prompt `login:`.
 
-Dans la démo web, `-display none` masque seulement la vidéo. Le port série est relié explicitement à un socket par `-chardev socket,… -serial chardev:serial0` ; le serveur transmet ensuite les caractères entre ce socket et xterm.js via WebSocket. Le moniteur QEMU dispose d’un autre socket. La console et le login série sont configurés dans les images pendant `prepare.sh`. La [comparaison détaillée des commandes](docs/commandes-qemu.pdf) illustre les deux trajets.
+Dans la démo web, `-display none` masque seulement la vidéo. `-serial unix:…` relie explicitement le port série à un socket ; le serveur transmet ensuite les caractères entre ce socket et xterm.js via WebSocket. `-monitor unix:…` ouvre un autre socket pour le moniteur QEMU. La console et le login série sont configurés dans les images pendant `prepare.sh`. La [comparaison détaillée des commandes](docs/commandes-qemu.pdf) illustre les deux trajets.
+
+### Console série et moniteur QEMU
+
+Les deux options utilisent ici la même syntaxe courte, mais désignent deux interfaces distinctes :
+
+```sh
+-serial unix:/chemin/console.sock,server=on,wait=off
+-monitor unix:/chemin/monitor.sock,server=on,wait=off
+```
+
+`-serial` raccorde le premier port série virtuel (`ttyS0` dans Linux) au terminal interactif de l’invité : messages de démarrage, `login:`, puis shell. `-monitor` ouvre le moniteur texte HMP de **QEMU lui-même** : ses commandes pilotent l’émulateur, et ne sont pas des commandes du shell Linux. `server=on` fait écouter QEMU sur chaque socket Unix ; le serveur Node s’y connecte. `wait=off` laisse QEMU démarrer sans attendre cette connexion. La forme courte de `-serial` remplace ici l’ancien couple `-chardev socket,… -serial chardev:serial0`.
+
+Dans la barre web, coche **Moniteur QEMU** pour saisir une commande sur la VM de l’onglet courant. Par exemple, `help` liste les commandes, `info status` indique l’état de la VM et `info block` décrit les disques. Des commandes comme `system_reset` ou `quit` modifient ou arrêtent directement la VM : utilise-les en connaissance de cause. Le moniteur est disponible pour QEMU, pas pour VirtualBox. Ses commandes et réponses sont enregistrées dans les **Logs**, même si le panneau des logs est masqué.
 
 ## Principe des images
 
@@ -87,6 +100,8 @@ npm start
 Ouvre <http://127.0.0.1:3002>. Chaque onglet représente une VM : **＋ Nouvelle machine** crée un nouvel onglet. Choisis un système et un moteur, puis clique une fois sur **Démarrer**. Le nom de l’onglet est le hostname de l’image ; le nom de l’OS apparaît dans son infobulle. Les VM des autres onglets continuent de tourner en parallèle. Les sorties série et les journaux sont propres à chaque machine ; coche **Logs** pour afficher les commandes QEMU ou VirtualBox. La croix de l’onglet force l’arrêt immédiat de sa VM et supprime toute la session : disque différentiel, sockets, logs et enregistrement VirtualBox. Elle annule également un Reboot ou Reset en cours. Les identifiants apparaissent au-dessus du terminal :
 
 QEMU sélectionne KVM quand il est disponible. Pour faire tourner QEMU en même temps que VirtualBox, choisis **QEMU · TCG** (émulation logicielle, plus lente) avant de démarrer QEMU. Si VirtualBox est déjà lancé, le choix **QEMU · KVM auto** bascule automatiquement cette nouvelle VM en TCG. VirtualBox ne peut pas démarrer tant qu’une VM QEMU utilise KVM ; l’interface affiche alors un message qui explique comment relancer les VM en mode compatible.
+
+En mode KVM, le serveur ajoute `-cpu host` : QEMU expose les fonctions CPU que l’hôte peut fournir à la VM. Cela évite notamment le warning `CPUID.80000001H:ECX.svm` que le modèle CPU par défaut peut produire sur un hôte Intel : `svm` désigne la virtualisation AMD, inutile pour ces VM. En mode TCG, `-cpu host` n’est pas utilisé. Ce réglage concerne le CPU virtuel, pas l’image Debian ; les VM déjà en cours gardent leur configuration jusqu’à leur prochain démarrage.
 
 - **Alpine Linux 3.24** : `root`, mot de passe vide, ou `toto` / `toto` ; disque différentiel éphémère, DHCP restreint dans QEMU et NAT dans VirtualBox.
 - **Debian 13** : `root` sans mot de passe ; `toto` / `toto` ou `demo` / `serial-demo` ; disque différentiel éphémère, DHCP restreint dans QEMU et NAT dans VirtualBox.

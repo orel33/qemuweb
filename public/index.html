@@ -29,10 +29,23 @@
     .logs[hidden] { display: none; }
     .logs-title { padding: 7px 10px; color: #bdc8d6; border-bottom: 1px solid #35404c; }
     .logs pre { margin: 0; padding: 8px 10px; max-height: 20vh; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
+    .monitor { flex: none; margin: 0 16px 8px; padding: 8px 10px; border: 1px solid #35404c; border-radius: 6px; background: #10151c; }
+    .monitor[hidden] { display: none; }
+    .monitor p { margin: 0 0 7px; color: #bdc8d6; font-size: 12px; }
+    .monitor pre { min-height: 32px; max-height: 15vh; overflow: auto; margin: 0 0 8px; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 ui-monospace, monospace; }
+    .monitor form { display: flex; gap: 8px; }
+    .monitor input { flex: 1; min-width: 0; padding: 7px 9px; color: #e7edf5; background: #0b0f14; border: 1px solid #506176; border-radius: 6px; font: 13px ui-monospace, monospace; }
     main { display: flex; flex: 1; min-width: 0; min-height: 0; padding: 12px 16px 16px; }
-    #terminal { flex: 1; min-width: 0; min-height: 0; width: 100%; padding: 10px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
+    .terminal-frame { display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 10px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
+    #terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+    #terminal .xterm-viewport { overflow-x: hidden; overflow-y: scroll; scrollbar-width: none; }
+    #terminal .xterm-viewport::-webkit-scrollbar { display: none; }
+    #terminal-scroll { flex: none; width: 14px; height: 100%; margin: 0; appearance: none; writing-mode: vertical-lr; direction: ltr; border-radius: 8px; background: #243244; cursor: pointer; }
+    #terminal-scroll::-webkit-slider-thumb { width: 12px; height: 44px; appearance: none; border: 1px solid #a9bfd8; border-radius: 7px; background: #7894b1; }
+    #terminal-scroll::-moz-range-thumb { width: 12px; height: 44px; border: 1px solid #a9bfd8; border-radius: 7px; background: #7894b1; }
+    #terminal-scroll:disabled { cursor: default; opacity: .55; }
     @media (max-width: 900px) { header { flex-wrap: wrap; } h1 { width: 100%; } #status { flex: 1; } }
-    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .note { margin-inline: 10px; } .logs { margin-inline: 10px; } main { padding: 10px; } }
+    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .note { margin-inline: 10px; } .logs, .monitor { margin-inline: 10px; } main { padding: 10px; } }
   </style>
 </head>
 <body>
@@ -47,11 +60,17 @@
     <button id="reboot" disabled title="Arrêter proprement puis redémarrer sur le même disque différentiel">Reboot</button>
     <button id="reset" disabled title="Recréer le disque de travail depuis l’image de base">Reset</button>
     <label class="logs-toggle" for="show-logs"><input id="show-logs" type="checkbox"> Logs</label>
+    <label class="logs-toggle" for="show-monitor"><input id="show-monitor" type="checkbox"> Moniteur QEMU</label>
     <span id="status">Arrêtée</span>
   </header>
   <p class="note" id="image-info">Chargement du catalogue runtime…</p>
   <section class="logs" id="logs-panel" aria-label="Journal de lancement" hidden><div class="logs-title">Journal de lancement</div><pre id="launch-logs">Les commandes de lancement apparaîtront ici.</pre></section>
-  <main><div id="terminal"></div></main>
+  <section class="monitor" id="monitor-panel" aria-label="Moniteur QEMU" hidden>
+    <p>Commandes QEMU (pas un shell Linux) : <code>help</code>, <code>info status</code>, <code>info block</code>. Certaines commandes modifient ou arrêtent la VM.</p>
+    <pre id="monitor-output" aria-live="polite"></pre>
+    <form id="monitor-form"><input id="monitor-command" aria-label="Commande du moniteur QEMU" placeholder="info status" maxlength="256" autocomplete="off" spellcheck="false"><button id="monitor-send" type="submit">Envoyer</button></form>
+  </section>
+  <main><div class="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Défiler la console" title="Défiler l’historique de la console"></div></main>
   <nav class="machines" id="machine-tabs" aria-label="Machines virtuelles">
     <button id="new-machine" type="button">＋ Nouvelle machine</button>
   </nav>
@@ -59,13 +78,23 @@
   <script src="/vendor/lib/xterm.js"></script>
   <script src="/vendor-addon-fit/lib/xterm-addon-fit.js"></script>
   <script>
-    const terminal = new Terminal({cursorBlink: true, convertEol: true, theme: {background: '#0b0f14'}});
+    const terminal = new Terminal({cursorBlink: true, convertEol: true, scrollback: 5000, theme: {background: '#0b0f14'}});
     const fit = new FitAddon.FitAddon();
     terminal.loadAddon(fit);
     terminal.open(document.getElementById('terminal'));
-    fit.fit();
-    window.addEventListener('resize', () => fit.fit());
-    new ResizeObserver(() => fit.fit()).observe(document.querySelector('main'));
+    const terminalScroll = document.getElementById('terminal-scroll');
+    function syncConsoleScroll() {
+      const buffer = terminal.buffer.active;
+      terminalScroll.max = String(Math.max(0, buffer.baseY));
+      terminalScroll.value = String(buffer.viewportY);
+      terminalScroll.disabled = buffer.baseY === 0;
+    }
+    function fitTerminal() { fit.fit(); syncConsoleScroll(); }
+    terminal.onScroll(syncConsoleScroll);
+    terminalScroll.addEventListener('input', () => terminal.scrollToLine(Number(terminalScroll.value)));
+    fitTerminal();
+    window.addEventListener('resize', fitTerminal);
+    new ResizeObserver(fitTerminal).observe(document.querySelector('main'));
     const socket = io({transports: ['websocket', 'polling']});
     const startButton = document.getElementById('start');
     const stopButton = document.getElementById('stop');
@@ -79,6 +108,11 @@
     const showLogs = document.getElementById('show-logs');
     const logsPanel = document.getElementById('logs-panel');
     const launchLogs = document.getElementById('launch-logs');
+    const showMonitor = document.getElementById('show-monitor');
+    const monitorPanel = document.getElementById('monitor-panel');
+    const monitorOutput = document.getElementById('monitor-output');
+    const monitorCommand = document.getElementById('monitor-command');
+    const monitorSend = document.getElementById('monitor-send');
     const machines = new Map();
     let images = [];
     let activeId = null;
@@ -121,6 +155,9 @@
       stopButton.disabled = !running || busy;
       rebootButton.disabled = !running || busy;
       resetButton.disabled = !machine.hasLaunched || busy;
+      const monitorAvailable = running && machine.engine.startsWith('qemu') && !busy;
+      monitorCommand.disabled = !monitorAvailable || !!machine.monitorBusy;
+      monitorSend.disabled = !monitorAvailable || !!machine.monitorBusy;
       imageSelect.disabled = running || machine.hasLaunched || busy;
       engineSelect.disabled = running || machine.hasLaunched || busy;
       imageSelect.value = machine.imageId;
@@ -131,7 +168,7 @@
     function addMachine() {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const image = images.find(item => item.id === imageSelect.value);
-      const machine = {id, hostname: image?.hostname || image?.id || 'alpine', osHint: image?.label || 'Système', imageId: imageSelect.value || 'alpine', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Arrêtée', logs: [], serial: ''};
+      const machine = {id, hostname: image?.hostname || image?.id || 'alpine', osHint: image?.label || 'Système', imageId: imageSelect.value || 'alpine', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Arrêtée', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       renderTabs();
       selectMachine(id);
@@ -143,8 +180,10 @@
       renderTabs();
       updateControls();
       logsPanel.hidden = !showLogs.checked;
+      monitorPanel.hidden = !showMonitor.checked;
+      monitorOutput.textContent = machine.monitorOutput || 'Le moniteur est disponible quand cette VM QEMU fonctionne.';
       socket.emit('select-session', id);
-      requestAnimationFrame(() => fit.fit());
+      requestAnimationFrame(fitTerminal);
     }
     async function closeMachine(id) {
       const machine = machines.get(id);
@@ -189,7 +228,8 @@
           hasLaunched: session.hasLaunched,
           message: session.message,
           logs: [],
-          serial: ''
+          serial: '',
+          monitorOutput: ''
         });
       }
       if (!machines.size) addMachine();
@@ -219,7 +259,35 @@
     });
     showLogs.addEventListener('change', () => {
       logsPanel.hidden = !showLogs.checked;
-      requestAnimationFrame(() => fit.fit());
+      requestAnimationFrame(fitTerminal);
+    });
+    showMonitor.addEventListener('change', () => {
+      monitorPanel.hidden = !showMonitor.checked;
+      requestAnimationFrame(fitTerminal);
+    });
+    document.getElementById('monitor-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const machine = activeMachine();
+      const command = monitorCommand.value.trim();
+      if (!machine || !machine.running || !machine.engine.startsWith('qemu') || machine.busy || machine.monitorBusy || !command) return;
+      machine.monitorBusy = true;
+      monitorCommand.value = '';
+      updateControls();
+      try {
+        const response = await fetch(`/api/monitor/${encodeURIComponent(machine.id)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Commande refusée');
+        machine.monitorOutput = `${machine.monitorOutput || ''}> ${command}\n${body.output || '(aucune sortie)'}\n`;
+      } catch (error) { machine.monitorOutput = `${machine.monitorOutput || ''}> ${command}\nErreur : ${error.message}\n`; }
+      finally {
+        machine.monitorBusy = false;
+        if (machine.id === activeId) {
+          monitorOutput.textContent = machine.monitorOutput;
+          monitorOutput.scrollTop = monitorOutput.scrollHeight;
+          updateControls();
+          monitorCommand.focus();
+        }
+      }
     });
     socket.on('session-snapshot', snapshot => {
       const machine = machines.get(snapshot.sessionId);
@@ -231,10 +299,11 @@
       machine.serial = snapshot.serial || '';
       if (machine.id === activeId) {
         terminal.reset();
-        if (machine.serial) terminal.write(machine.serial);
+        syncConsoleScroll();
+        if (machine.serial) terminal.write(machine.serial, syncConsoleScroll);
         launchLogs.textContent = machine.logs.length ? `${machine.logs.join('\n')}\n` : 'Les commandes de lancement apparaîtront ici.';
         updateControls();
-        requestAnimationFrame(() => fit.fit());
+        requestAnimationFrame(fitTerminal);
       }
       renderTabs();
     });
@@ -242,13 +311,13 @@
       const machine = event && machines.get(event.sessionId);
       if (!machine) return;
       machine.serial = '';
-      if (machine.id === activeId) terminal.reset();
+      if (machine.id === activeId) { terminal.reset(); syncConsoleScroll(); }
     });
     socket.on('serial', event => {
       const machine = event && machines.get(event.sessionId);
       if (!machine) return;
-      machine.serial = (machine.serial + event.data).slice(-65536);
-      if (machine.id === activeId) terminal.write(event.data);
+      machine.serial = (machine.serial + event.data).slice(-262144);
+      if (machine.id === activeId) terminal.write(event.data, syncConsoleScroll);
     });
     socket.on('log', event => {
       const machine = event && machines.get(event.sessionId);
@@ -295,7 +364,8 @@
       updateControls();
       renderTabs();
       terminal.reset();
-      terminal.write(`Démarrage de ${machine.hostname} (${machine.osHint})…\r\n`);
+      syncConsoleScroll();
+      terminal.write(`Démarrage de ${machine.hostname} (${machine.osHint})…\r\n`, syncConsoleScroll);
       try {
         const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
         const body = await response.json();
