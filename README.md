@@ -36,7 +36,7 @@ At launch, the server performs no further system configuration: QEMU creates a Q
 
 ### System configuration
 
-Command paths live in `.env` (shared defaults) and `.env.local` (machine-specific overrides, ignored by Git), separate from [config.json](config.json). Both use `NAME=/absolute/path/to/executable`; leave a value empty to search `PATH`. A nonempty `.env.local` value takes priority over the process environment and `.env`. For example:
+Command paths live in [`.env`](.env) (the tracked defaults) and `.env.local` (machine-specific overrides, ignored by Git), separate from [config.json](config.json). `.env` gives each command its default executable name, searched in `PATH`, for example `QEMU_SYSTEM_X86_64=qemu-system-x86_64`. To override one, put `NAME=/absolute/path/to/executable` in `.env.local`. A nonempty `.env.local` value takes priority over the process environment and `.env`. For example:
 
 ```sh
 QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64

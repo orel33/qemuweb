@@ -4,15 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const commandNames = {
-  VBOXMANAGE: 'VBoxManage',
-  GENISOIMAGE: 'genisoimage',
-  NODE: 'node',
-  PYTHON3: 'python3',
-  QEMU_IMG: 'qemu-img',
-  QEMU_SYSTEM_X86_64: 'qemu-system-x86_64',
-  VDE_SWITCH: 'vde_switch'
-};
+const requiredKeys = ['VBOXMANAGE', 'GENISOIMAGE', 'NODE', 'PYTHON3', 'QEMU_IMG', 'QEMU_SYSTEM_X86_64', 'VDE_SWITCH'];
 
 function readEnvFile(file) {
   if (!fs.existsSync(file)) return {};
@@ -38,37 +30,40 @@ function executable(file) {
   catch (_) { return false; }
 }
 
-function findCommand(name, override) {
-  if (override) {
-    if (!path.isAbsolute(override)) throw new Error('override must be an absolute path');
-    if (!executable(override)) throw new Error(`not executable: ${override}`);
-    return override;
+function findCommand(value) {
+  if (!value) throw new Error('no command configured');
+  if (path.isAbsolute(value)) {
+    if (!executable(value)) throw new Error(`not executable: ${value}`);
+    return value;
   }
+  if (!/^[a-zA-Z0-9_.+-]+$/.test(value)) throw new Error('expected a command name in PATH or an absolute path');
   for (const directory of (process.env.PATH || '').split(path.delimiter)) {
     if (!directory) continue;
-    const candidate = path.join(directory, name);
+    const candidate = path.join(directory, value);
     if (executable(candidate)) return candidate;
   }
-  throw new Error(`not found in PATH: ${name}`);
+  throw new Error(`not found in PATH: ${value}`);
 }
 
 function resolveCommands(root) {
   const base = readEnvFile(path.join(root, '.env'));
   const local = readEnvFile(path.join(root, '.env.local'));
+  const missing = requiredKeys.filter(key => !Object.hasOwn(base, key));
+  if (missing.length) throw new Error(`Missing command defaults in .env: ${missing.join(', ')}`);
   const commands = {};
   const failures = [];
-  for (const [key, name] of Object.entries(commandNames)) {
+  for (const [key, defaultCommand] of Object.entries(base)) {
     try {
-      const configured = local[key] || process.env[key] || base[key] || '';
-      const resolved = findCommand(name, configured);
+      const configured = local[key] || process.env[key] || defaultCommand;
+      const resolved = findCommand(configured);
       const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
       if (result.error) throw result.error;
       if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);
-      commands[name] = resolved;
-      console.log(`\x1b[32m✓\x1b[0m ${name}: ${resolved}`);
+      commands[key] = resolved;
+      console.log(`\x1b[32m✓\x1b[0m ${key}: ${resolved}`);
     } catch (error) {
-      failures.push(name);
-      console.error(`\x1b[31m✗\x1b[0m ${name}: ${error.message}`);
+      failures.push(key);
+      console.error(`\x1b[31m✗\x1b[0m ${key}: ${error.message}`);
     }
   }
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);
