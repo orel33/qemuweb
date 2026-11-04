@@ -38,6 +38,15 @@
     .machine-tab .machine-close { display: inline-grid; place-items: center; padding: 2px 4px; color: #ff777d; background: transparent; border: 0; }
     .machine-tab .machine-close svg { width: 16px; height: 16px; }
     #new-machine { flex: none; background: #1b2531; }
+    #new-switch { flex: none; color: #9ee6b4; background: #1b2531; }
+    [hidden] { display: none !important; }
+    .network-controls { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 7px; margin: 6px 16px; color: #bdc8d6; font-size: 13px; }
+    .network-controls select { padding: 5px; }
+    .nic-row { display: inline-flex; align-items: center; gap: 5px; }
+    .switch-console { flex: 1; min-width: 0; min-height: 0; padding: 12px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
+    .switch-console pre { height: calc(100% - 52px); overflow: auto; white-space: pre-wrap; font: 13px/1.4 ui-monospace, monospace; }
+    .switch-console form { display: flex; gap: 8px; }
+    .switch-console input { flex: 1; padding: 8px; color: inherit; background: #141a22; border: 1px solid #506176; border-radius: 6px; font: 13px ui-monospace, monospace; }
     #image-info { min-height: 18px; }
     .note { flex: none; max-height: 12vh; overflow: auto; margin: 9px 16px 0; color: #bdc8d6; font-size: 13px; }
     .logs { flex: none; max-height: 24vh; overflow: auto; margin: 0 16px 8px; border: 1px solid #35404c; border-radius: 6px; background: #10151c; }
@@ -90,12 +99,13 @@
     <button id="exit" class="icon-button" type="button" title="Exit VM, delete its disk and close the tab" aria-label="Exit VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     <button id="clear-console" class="icon-button" type="button" title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
     <button id="show-qemu-options" class="icon-button" type="button" title="View VM launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg></button>
-    <label class="logs-toggle" for="show-logs" title="Show or hide VM logs"><input id="show-logs" type="checkbox"> Log</label>
+    <label class="logs-toggle" for="show-logs" title="Show or hide session logs"><input id="show-logs" type="checkbox"> Log</label>
     <label class="logs-toggle" for="show-monitor" title="Show or hide the QEMU monitor"><input id="show-monitor" type="checkbox"> Monitor</label>
     <span id="status" role="status" data-state="new">NEW</span>
   </header>
   <p id="status-error" role="alert" hidden></p>
   <p class="note" id="image-info">Loading systems from config.json…</p>
+  <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces"><strong>Ethernet:</strong><span id="nic-list"></span><button id="add-nic" type="button">+ Interface</button><small>Connect to a running VDE switch before starting QEMU.</small></section>
   <section class="logs" id="logs-panel" aria-label="Launch log" hidden><div class="logs-title">Launch log</div><pre id="launch-logs">Launch commands will appear here.</pre></section>
   <section class="monitor" id="monitor-panel" aria-label="QEMU monitor" hidden>
     <p>QEMU commands (not a Linux shell) : <code>help</code>, <code>info status</code>, <code>info block</code>. Some commands change or stop the VM.</p>
@@ -108,9 +118,10 @@
     <table><thead><tr><th>Configuration / source</th><th>Value</th><th>Option or purpose</th></tr></thead><tbody id="options-rows"></tbody></table>
     <p>Disk creation and launch commands:</p><pre id="options-commands"></pre>
   </dialog>
-  <main><div class="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Scroll console" title="Scroll console history"></div></main>
-  <nav class="machines" id="machine-tabs" aria-label="Virtual machines">
+  <main><div class="terminal-frame" id="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Scroll console" title="Scroll console history"></div><section class="switch-console" id="switch-panel" hidden><pre id="switch-output">Start the switch to use its management console.</pre><form id="switch-form"><input id="switch-command" aria-label="VDE switch command" placeholder="help" maxlength="256" autocomplete="off" spellcheck="false"><button id="switch-send" type="submit">Send</button></form></section></main>
+  <nav class="machines" id="machine-tabs" aria-label="Virtual machines and switches">
     <button id="new-machine" class="icon-button" type="button" title="Open a new VM tab" aria-label="New VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
+    <button id="new-switch" type="button" title="Add a VDE switch">+ Switch</button>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
@@ -127,7 +138,7 @@
       terminalScroll.value = String(buffer.viewportY);
       terminalScroll.disabled = buffer.baseY === 0;
     }
-    function fitTerminal() { fit.fit(); syncConsoleScroll(); }
+    function fitTerminal() { if (!document.getElementById('terminal-frame').hidden) { fit.fit(); syncConsoleScroll(); } }
     terminal.onScroll(syncConsoleScroll);
     terminalScroll.addEventListener('input', () => terminal.scrollToLine(Number(terminalScroll.value)));
     fitTerminal();
@@ -144,6 +155,14 @@
     const imageSelect = document.getElementById('os-image');
     const engineSelect = document.getElementById('engine');
     const imageInfo = document.getElementById('image-info');
+    const networkControls = document.getElementById('network-controls');
+    const nicList = document.getElementById('nic-list');
+    const addNic = document.getElementById('add-nic');
+    const terminalFrame = document.getElementById('terminal-frame');
+    const switchPanel = document.getElementById('switch-panel');
+    const switchOutput = document.getElementById('switch-output');
+    const switchCommand = document.getElementById('switch-command');
+    const switchSend = document.getElementById('switch-send');
     const tabs = document.getElementById('machine-tabs');
     const showLogs = document.getElementById('show-logs');
     const logsPanel = document.getElementById('logs-panel');
@@ -189,13 +208,13 @@
     }
     async function renderQemuOptions() {
       const machine = activeMachine();
-      if (!machine || !qemuOptionsPanel.open) return;
+      if (!machine || machine.kind === 'switch' || !qemuOptionsPanel.open) return;
       const request = ++optionsRequest;
       optionsStatus.textContent = 'Loading settings…';
       optionsRows.replaceChildren();
       optionsCommands.textContent = '';
       try {
-        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine});
+        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, switches: (machine.interfaces || []).join(',')});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
@@ -211,8 +230,7 @@
     }
     function describeImage(image) {
       if (!image) return 'No image available; run bash prepare.sh.';
-      const nic = qemuConfig ? ({...qemuConfig.defaults, ...(qemuConfig.systems[image.id] || {})}).nic : 'configuration unavailable';
-      return `${image.description} Login: ${image.login}. RAW : ${image.images.raw} ; VDI : ${image.images.vdi}. QEMU network: ${nic} ; VirtualBox : ${image.vboxNic || 'none'}.`;
+      return `${image.description} Login: ${image.login}. RAW: ${image.images.raw}; VDI: ${image.images.vdi}. Network: VDE only for QEMU; none for VirtualBox or without selected interfaces.`;
     }
     function updateImageInfo() {
       const image = images.find(item => item.id === imageSelect.value);
@@ -231,7 +249,7 @@
         select.title = machine.osHint;
         select.onclick = () => { if (machine.id !== activeId) selectMachine(machine.id); };
         select.ondblclick = async () => {
-          if (!machine.hasLaunched) return;
+          if (machine.kind === 'switch' || !machine.hasLaunched) return;
           const name = window.prompt('Display name for this VM:', machine.hostname);
           if (name === null || !name.trim()) return;
           try {
@@ -240,13 +258,13 @@
             if (!response.ok) throw new Error(body.error);
           } catch (error) { showStatusError(error.message); }
         };
-        select.title = machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New VM · ${machine.osHint}`;
+        select.title = machine.kind === 'switch' ? 'VDE switch management console' : machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New VM · ${machine.osHint}`;
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'machine-close';
         close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-        close.title = 'Exit VM, delete its disk and close the tab';
-        close.setAttribute('aria-label', `Exit ${machine.hostname} (${machine.osHint})`);
+        close.title = machine.kind === 'switch' ? 'Remove VDE switch' : 'Exit VM, delete its disk and close the tab';
+        close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Exit VM'} ${machine.hostname}`);
         close.onclick = () => closeMachine(machine.id);
         tab.append(select, close);
         tabs.append(tab);
@@ -263,10 +281,41 @@
       status.title = machine.error || machine.message || '';
       statusError.textContent = machine.error || '';
       statusError.hidden = !machine.error;
+      const isSwitch = machine.kind === 'switch';
+      exitButton.title = isSwitch ? 'Remove VDE switch' : 'Exit VM, delete its disk and close the tab';
+      exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : 'Exit VM');
+      terminalFrame.hidden = isSwitch;
+      switchPanel.hidden = !isSwitch;
+      networkControls.hidden = isSwitch || machine.engine === 'virtualbox';
+      showMonitor.parentElement.hidden = isSwitch;
+      monitorPanel.hidden = isSwitch || !showMonitor.checked;
+      showQemuOptions.disabled = isSwitch;
+      rebootButton.hidden = isSwitch;
+      resetButton.hidden = isSwitch;
+      document.getElementById('clear-console').hidden = isSwitch;
+      imageSelect.hidden = isSwitch;
+      engineSelect.hidden = isSwitch;
+      document.querySelector('label[for="os-image"]').hidden = isSwitch;
+      document.querySelector('label[for="engine"]').hidden = isSwitch;
+      if (isSwitch) {
+        startButton.disabled = running || busy;
+        startButton.title = 'Start VDE switch';
+        startButton.setAttribute('aria-label', 'Start VDE switch');
+        stopButton.disabled = !running || busy;
+        stopButton.title = 'Stop VDE switch';
+        stopButton.setAttribute('aria-label', 'Stop VDE switch');
+        switchCommand.disabled = !running || busy;
+        switchSend.disabled = !running || busy;
+        switchOutput.textContent = machine.switchOutput || 'Start the switch to use its management console.';
+        imageInfo.textContent = `VDE switch ${machine.hostname}. Connect QEMU Ethernet interfaces before starting their VMs.`;
+        return;
+      }
       startButton.disabled = running || busy || !images.length;
       startButton.title = machine.hasLaunched ? 'Resume VM from its current disk' : 'Start VM from the base image';
       startButton.setAttribute('aria-label', machine.hasLaunched ? 'Resume VM' : 'Start VM');
       stopButton.disabled = !running || busy;
+      stopButton.title = 'Stop VM and keep its current disk';
+      stopButton.setAttribute('aria-label', 'Stop VM');
       rebootButton.disabled = !running || busy;
       resetButton.disabled = !machine.hasLaunched || busy;
       const monitorAvailable = running && machine.engine.startsWith('qemu') && !busy;
@@ -278,14 +327,46 @@
       engineSelect.value = machine.engine;
       const image = images.find(item => item.id === machine.imageId);
       imageInfo.textContent = describeImage(image);
+      renderNicControls(machine);
+    }
+    function renderNicControls(machine) {
+      nicList.replaceChildren();
+      const locked = machine.hasLaunched || machine.busy || machine.engine === 'virtualbox';
+      addNic.disabled = locked || (machine.interfaces || []).length >= 4 || ![...machines.values()].some(item => item.kind === 'switch' && item.running);
+      for (const [index, selected] of (machine.interfaces || []).entries()) {
+        const row = document.createElement('span'); row.className = 'nic-row';
+        const select = document.createElement('select'); select.setAttribute('aria-label', `Ethernet interface ${index + 1} switch`); select.disabled = locked;
+        for (const sw of machines.values()) if (sw.kind === 'switch' && (sw.running || sw.id === selected)) {
+          const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
+        }
+        select.value = selected;
+        select.onchange = () => { machine.interfaces[index] = select.value; renderQemuOptions(); };
+        const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index + 1}`; remove.disabled = locked;
+        remove.onclick = () => { machine.interfaces.splice(index, 1); renderNicControls(machine); renderQemuOptions(); };
+        row.append(document.createTextNode(`eth${index} → `), select, remove); nicList.append(row);
+      }
     }
     function addMachine() {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const image = images.find(item => item.id === imageSelect.value);
-      const machine = {id, hostname: 'New VM', osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Stopped', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: 'New VM', osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', interfaces: [], running: false, hasLaunched: false, message: 'Stopped', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       renderTabs();
       selectMachine(id);
+    }
+    async function addSwitch() {
+      const names = new Set([...machines.values()].filter(item => item.kind === 'switch').map(item => item.hostname));
+      let number = 1;
+      while (names.has(`s${number}`)) number++;
+      const name = `s${number}`;
+      const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+      try {
+        const response = await fetch('/api/switches', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Cannot create switch');
+        machines.set(id, {id, kind: 'switch', hostname: name, osHint: 'VDE switch', interfaces: [], running: false, hasLaunched: false, message: 'VDE switch ready to start', logs: [], serial: '', switchOutput: ''});
+        selectMachine(id);
+      } catch (error) { showStatusError(error.message); }
     }
     function selectMachine(id) {
       const machine = machines.get(id);
@@ -297,7 +378,7 @@
       renderTabs();
       updateControls();
       logsPanel.hidden = !showLogs.checked;
-      monitorPanel.hidden = !showMonitor.checked;
+      monitorPanel.hidden = machine.kind === 'switch' || !showMonitor.checked;
       monitorOutput.textContent = machine.monitorOutput || 'The monitor is available when this QEMU VM is running.';
       renderQemuOptions();
       socket.emit('select-session', id, ++selectionToken);
@@ -340,17 +421,20 @@
         const image = images.find(item => item.id === session.imageId);
         machines.set(session.id, {
           id: session.id,
-          hostname: session.hostname || 'New VM',
-          osHint: image?.label || 'Unknown system',
+          kind: session.kind || 'vm',
+          hostname: session.hostname || (session.kind === 'switch' ? 'Switch' : 'New VM'),
+          osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
           imageId: image ? image.id : (images[0]?.id || ''),
           hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
           engine: session.engine || 'qemu',
+          interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
           running: session.running,
           hasLaunched: session.hasLaunched,
           message: session.message,
           logs: [],
           serial: '',
-          monitorOutput: ''
+          monitorOutput: '',
+          switchOutput: ''
         });
       }
       if (!machines.size) addMachine();
@@ -361,6 +445,15 @@
     }).catch(error => { imageInfo.textContent = `System list unavailable: ${error.message}`; });
 
     document.getElementById('new-machine').addEventListener('click', addMachine);
+    document.getElementById('new-switch').addEventListener('click', addSwitch);
+    addNic.addEventListener('click', () => {
+      const machine = activeMachine();
+      const sw = [...machines.values()].find(item => item.kind === 'switch' && item.running);
+      if (!machine || machine.kind !== 'vm' || machine.hasLaunched || machine.busy || !sw || machine.interfaces.length >= 4) return;
+      machine.interfaces.push(sw.id);
+      renderNicControls(machine);
+      renderQemuOptions();
+    });
     imageSelect.addEventListener('change', () => {
       const machine = activeMachine();
       if (!machine) return;
@@ -377,6 +470,7 @@
       const machine = activeMachine();
       if (!machine) return;
       machine.engine = engineSelect.value;
+      updateControls();
       renderQemuOptions();
       renderTabs();
     });
@@ -385,7 +479,7 @@
       requestAnimationFrame(fitTerminal);
     });
     showMonitor.addEventListener('change', () => {
-      monitorPanel.hidden = !showMonitor.checked;
+      monitorPanel.hidden = activeMachine()?.kind === 'switch' || !showMonitor.checked;
       requestAnimationFrame(fitTerminal);
     });
     showQemuOptions.addEventListener('click', () => {
@@ -417,6 +511,26 @@
         }
       }
     });
+    document.getElementById('switch-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const machine = activeMachine();
+      const command = switchCommand.value.trim();
+      if (!machine || machine.kind !== 'switch' || !machine.running || !command) return;
+      switchCommand.value = '';
+      switchSend.disabled = true;
+      try {
+        const response = await fetch(`/api/switches/${encodeURIComponent(machine.id)}/command`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'VDE command failed');
+        machine.switchOutput = `${machine.switchOutput || ''}> ${command}\n${body.output || '(no output)'}\n`;
+      } catch (error) { machine.switchOutput = `${machine.switchOutput || ''}> ${command}\nError: ${error.message}\n`; }
+      if (machine.id === activeId) {
+        switchOutput.textContent = machine.switchOutput;
+        updateControls();
+        switchOutput.scrollTop = switchOutput.scrollHeight;
+        switchCommand.focus();
+      }
+    });
     socket.on('session-snapshot', snapshot => {
       const machine = machines.get(snapshot.sessionId);
       if (!machine) return;
@@ -424,9 +538,10 @@
       machine.running = snapshot.state.running;
       machine.hasLaunched = snapshot.state.hasLaunched;
       machine.message = snapshot.state.message;
-      machine.error = /^QEMU error|^Serial console disconnected/.test(machine.message || '') ? machine.message : null;
+      machine.error = /^QEMU error|^VDE error|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(machine.message || '') ? machine.message : null;
       machine.logs = snapshot.logs || [];
       machine.serial = snapshot.serial || '';
+      if (machine.kind === 'switch') machine.switchOutput = machine.logs.filter(line => line.startsWith('> ')).join('\n');
       if (machine.id === activeId) {
         const generation = replayGeneration;
         const history = machine.serial;
@@ -482,7 +597,7 @@
       machine.running = event.running;
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
       machine.message = event.message;
-      machine.error = /^QEMU error|^Serial console disconnected|^QEMU stopped \((?!0\))/.test(event.message || '') ? event.message : null;
+      machine.error = /^QEMU error|^VDE error|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
       renderTabs();
       if (machine.id === activeId) updateControls();
     });
@@ -492,7 +607,7 @@
       machine.running = event.running;
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
       machine.message = event.message;
-      machine.error = /^QEMU error|^Serial console disconnected|^QEMU stopped \((?!0\))/.test(event.message || '') ? event.message : null;
+      machine.error = /^QEMU error|^VDE error|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
       renderTabs();
     });
     socket.on('connect', () => { if (activeId) socket.emit('select-session', activeId, ++selectionToken); });
@@ -509,6 +624,17 @@
     startButton.onclick = async () => {
       const machine = activeMachine();
       if (!machine || machine.running || machine.busy) return;
+      if (machine.kind === 'switch') {
+        machine.busy = true; machine.operation = 'starting'; machine.error = null; updateControls();
+        try {
+          const response = await fetch(`/api/switches/${encodeURIComponent(machine.id)}/start`, {method: 'POST'});
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.error || 'Cannot start switch');
+          machine.running = true; machine.hasLaunched = true;
+        } catch (error) { machine.error = error.message; machine.message = error.message; }
+        finally { machine.busy = false; updateControls(); renderTabs(); }
+        return;
+      }
       machine.busy = true;
       machine.operation = 'starting';
       machine.error = null;
@@ -529,7 +655,7 @@
           const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
           socket.emit('select-session', machine.id, ++selectionToken, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
         });
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
+        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId, interfaces: machine.interfaces})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to start');
         machine.hostname = body.name;
@@ -556,7 +682,8 @@
       machine.message = 'Stopping…';
       updateControls();
       try {
-        const response = await fetch(`/api/stop/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const route = machine.kind === 'switch' ? `/api/switches/${encodeURIComponent(machine.id)}/stop` : `/api/stop/${encodeURIComponent(machine.id)}`;
+        const response = await fetch(route, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to stop');
       } catch (error) { machine.message = error.message; machine.error = error.message; }

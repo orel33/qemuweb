@@ -46,7 +46,7 @@ At startup, the server checks the configured commands, prints a green check or r
 
 [config.json](config.json) follows the same approach as [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg): each key under `systems` (`alpine`, `debian13`, `openwrt`) identifies a system. Each entry contains its `linux` type, `text` mode, label and long description, login details, `images.raw` and `images.vdi` paths, system-specific QEMU options, and VirtualBox settings. Paths can be relative to the project root or absolute. Launching relies on this file; `server.js` contains no rules tied to an OS name. Any ISO files used by `prepare.sh` remain preparation sources, not systems that can be launched from the interface.
 
-`qemu.defaults` supplies common values. The `systems.<id>.qemu` object contains only overrides: Debian 13 requests 1,024 MiB, OpenWrt requests 256 MiB and no network adapter, and Alpine inherits the defaults. `systems.<id>.virtualbox` separately supplies its memory, network, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
+`qemu.defaults` supplies common values. The `systems.<id>.qemu` object contains only overrides: Debian 13 requests 1,024 MiB, OpenWrt requests 256 MiB, and Alpine inherits the defaults. All profiles have external networking disabled. `systems.<id>.virtualbox` separately supplies its memory, disabled network setting, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
 
 In the web page, click **Settings** to view the system values and their corresponding QEMU or VirtualBox arguments. The dialog also shows settings added by the server and the disk creation and launch commands. Before launch, these are a preview; after launch, the session's settings are displayed. To change settings, edit `config.json` before starting a new VM. The interface and system descriptions are in English.
 
@@ -137,15 +137,21 @@ The script places downloaded ISOs, cloud images, archives, and checksums in `sou
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. Each tab represents a VM: the turquoise **+** creates a **New VM** tab. Choose a system and an engine, then click **Play**. A display name such as `debian13-00` is assigned at first launch; double-click the tab to change it. This name does not change the Linux hostname inside the VM. Numbering advances from 00 to 99 for each system during the server's lifetime. VMs in other tabs continue to run in parallel. Serial output and logs belong to each machine; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
+Open <http://127.0.0.1:3002>. The turquoise **+** creates a **New VM** tab. Choose a system and an engine, then click **Play**. A display name such as `debian13-00` is assigned at first launch; double-click the tab to change it. This name does not change the Linux hostname inside the VM. Numbering advances from 00 to 99 for each system during the server's lifetime. VMs in other tabs continue to run in parallel. Serial output and logs belong to each machine; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
+
+### Local VDE LAN prototype
+
+Click **+ Switch** to create a switch tab, then **Play** to start `vde_switch`. Its command panel accepts VDE management commands such as `help` and `port/allprint`. In a new QEMU VM tab, click **+ Interface** before the first launch and select a running switch. Up to four interfaces can be added; Qemuweb assigns each one a VDE port and a MAC address. Start two VM tabs against the same switch to make a LAN. Configure IP addresses inside the guests to test communication. **Settings** shows the resulting QEMU launch arguments.
+
+An interface assignment remains fixed across Stop and Resume. Stop connected VMs before stopping their switch; remove their tabs before deleting the switch. Hot attachment to a VM that is already running is planned in the [roadmap](docs/ROADMAP.md). VMs without a selected switch have no network adapter, and VirtualBox has no network adapter. This prototype creates no external network connection.
 
 **QEMU · KVM** uses hardware acceleration and reports an error if `/dev/kvm` is missing or inaccessible, or if a VirtualBox VM is running. Choose **QEMU · TCG** explicitly to use slower software emulation or to run QEMU alongside VirtualBox. VirtualBox cannot start while a QEMU VM uses KVM; stop that VM or start it with TCG first.
 
 By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exposes the CPU features that the host can provide to the VM. This avoids the `CPUID.80000001H:ECX.svm` warning that QEMU's default CPU model can produce on an Intel host: `svm` is the AMD virtualization feature and is not needed for these VMs. In TCG mode, the profile selects `-cpu qemu64`. This setting affects the virtual CPU, not the Debian image; VMs already running keep their configuration until their next launch.
 
-- **Alpine Linux 3.24**: `root` with an empty password, or `toto` / `toto`; temporary working disk, restricted QEMU networking and VirtualBox NAT by default.
-- **Debian 13**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; temporary working disk, restricted QEMU networking and VirtualBox NAT by default.
-- **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; temporary working disk, networking disabled by default.
+- **Alpine Linux 3.24**: `root` with an empty password, or `toto` / `toto`; temporary working disk.
+- **Debian 13**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; temporary working disk.
+- **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; temporary working disk.
 
 ### VM actions
 
