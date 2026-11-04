@@ -11,7 +11,7 @@
     body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; margin: 0; background: #141a22; color: #e7edf5; font: 15px system-ui, sans-serif; }
     header { display: flex; align-items: center; gap: 9px; padding: 12px 16px; border-bottom: 1px solid #35404c; }
     h1 { display: inline-flex; align-items: center; gap: 8px; margin: 0 auto 0 0; font-size: 18px; white-space: nowrap; }
-    .beta-badge { padding: 3px 6px; border: 1px solid #6487b5; border-radius: 5px; background: #263b58; color: #b8d7ff; font-size: 10px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; }
+    .beta-badge { align-self: flex-start; margin-top: 1px; color: #9dbbdf; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
     button, select { padding: 8px 11px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
     button { cursor: pointer; }
     .icon-button { display: inline-grid; place-items: center; flex: none; width: 40px; height: 38px; padding: 7px; border-color: #405166; background: #202c3a; transition: background .15s, border-color .15s, transform .15s; }
@@ -19,7 +19,7 @@
     .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     #start { color: #57dc91; } #stop { color: #ff777d; } #reboot { color: #70b9ff; }
-    #reset { color: #ffc36b; } #clear-console { color: #c49aff; } #new-machine { color: #5adbd1; }
+    #reset { color: #ffc36b; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #new-machine { color: #5adbd1; }
     button:disabled { opacity: .45; cursor: default; }
     #status { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 104px; margin-left: auto; padding: 8px 11px; border: 1px solid #506176; border-radius: 6px; background: #25303e; color: #c6d2e0; font-size: 12px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
     #status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -75,19 +75,20 @@
 </head>
 <body>
   <header>
-    <h1>QemuWeb <span class="beta-badge" aria-label="Beta version">β beta</span></h1>
+    <h1>QemuWeb <span class="beta-badge" aria-label="Beta version">BETA</span></h1>
     <label for="os-image">System</label>
     <select id="os-image" aria-label="System to start"></select>
     <label for="engine">Engine</label>
     <select id="engine" aria-label="Virtualization engine"><option value="qemu">QEMU · KVM auto</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
-    <button id="start" class="icon-button" disabled title="Start VM" aria-label="Start VM"><svg viewBox="0 0 24 24" aria-hidden="true"><path fill="currentColor" d="M7 4.8a1 1 0 0 1 1.5-.86l10.3 6.2a2.15 2.15 0 0 1 0 3.72l-10.3 6.2A1 1 0 0 1 7 19.2z"/></svg></button>
-    <button id="stop" class="icon-button" disabled title="Stop VM" aria-label="Stop VM"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="3" fill="currentColor"/></svg></button>
-    <button id="reboot" class="icon-button" disabled title="Reboot: keep the current differential disk" aria-label="Reboot"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M20 7v5h-5"/><path d="M19.2 12a7.2 7.2 0 1 1-2-5"/></svg></button>
-    <button id="reset" class="icon-button" disabled title="Reset: recreate the disk from its base image" aria-label="Reset"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7v5h5"/><path d="M4.8 12a7.2 7.2 0 1 0 2-5"/><path d="M10 10h4v4h-4z" fill="currentColor" stroke="none"/></svg></button>
-    <button id="clear-console" class="icon-button" type="button" title="Clear the console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4l6 6-8.5 8.5-6-6zM5.5 12.5c-2 2-2.5 4-2.5 6.5 2.5 0 4.5-.5 6.5-2.5M14 4l2-2 6 6-2 2"/></svg></button>
+    <!-- Lucide icons: play, square, rotate-cw, rotate-ccw, eraser, sliders-horizontal, plus. License: /icons/LICENSE-lucide.txt -->
+    <button id="start" class="icon-button" disabled title="Start VM" aria-label="Start VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
+    <button id="stop" class="icon-button" disabled title="Stop VM" aria-label="Stop VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="18" height="18" x="3" y="3" rx="2"/></svg></button>
+    <button id="reboot" class="icon-button" disabled title="Reboot: keep the current differential disk" aria-label="Reboot"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button id="reset" class="icon-button" disabled title="Reset: recreate the disk from its base image" aria-label="Reset"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+    <button id="clear-console" class="icon-button" type="button" title="Clear the console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
+    <button id="show-qemu-options" class="icon-button" type="button" title="View launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg></button>
     <label class="logs-toggle" for="show-logs"><input id="show-logs" type="checkbox"> Log</label>
     <label class="logs-toggle" for="show-monitor"><input id="show-monitor" type="checkbox"> Monitor</label>
-    <button id="show-qemu-options" type="button" title="View launch settings">Settings</button>
     <span id="status" role="status" data-state="stopped">STOPPED</span>
   </header>
   <p id="status-error" role="alert" hidden></p>
@@ -106,7 +107,7 @@
   </dialog>
   <main><div class="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Scroll console" title="Scroll console history"></div></main>
   <nav class="machines" id="machine-tabs" aria-label="Virtual machines">
-    <button id="new-machine" class="icon-button" type="button" title="New machine" aria-label="New machine"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="13" rx="2"/><path d="M8 21h8M12 17v4M12 7v7M8.5 10.5h7"/></svg></button>
+    <button id="new-machine" class="icon-button" type="button" title="New VM" aria-label="New VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="M12 5v14"/></svg></button>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
@@ -235,7 +236,7 @@
             if (!response.ok) throw new Error(body.error);
           } catch (error) { showStatusError(error.message); }
         };
-        select.title = `${machine.osHint} · double-click to rename`;
+        select.title = machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New VM · ${machine.osHint}`;
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'machine-close';
@@ -244,7 +245,7 @@
         close.setAttribute('aria-label', `Force stop and delete ${machine.hostname} (${machine.osHint})`);
         close.onclick = () => closeMachine(machine.id);
         tab.append(select, close);
-        tabs.insertBefore(tab, document.getElementById('new-machine'));
+        tabs.append(tab);
       }
     }
     function updateControls() {
@@ -275,7 +276,7 @@
     function addMachine() {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const image = images.find(item => item.id === imageSelect.value);
-      const machine = {id, hostname: image?.id || 'machine', osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Stopped', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, hostname: 'New VM', osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', running: false, hasLaunched: false, message: 'Stopped', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       renderTabs();
       selectMachine(id);
@@ -333,7 +334,7 @@
         const image = images.find(item => item.id === session.imageId);
         machines.set(session.id, {
           id: session.id,
-          hostname: session.hostname || image?.id || `machine-${machines.size + 1}`,
+          hostname: session.hostname || 'New VM',
           osHint: image?.label || 'Unknown system',
           imageId: image ? image.id : (images[0]?.id || ''),
           hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
@@ -359,7 +360,7 @@
       if (!machine) return;
       machine.imageId = imageSelect.value;
       const image = images.find(item => item.id === machine.imageId);
-      machine.hostname = image?.id || 'machine';
+      machine.hostname = 'New VM';
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       updateControls();
@@ -508,7 +509,6 @@
       machine.imageId = imageSelect.value;
       machine.engine = engineSelect.value;
       const image = images.find(item => item.id === machine.imageId);
-      machine.hostname = image?.id || 'machine';
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       machine.message = 'Starting…';
@@ -517,7 +517,7 @@
       replaying = true;
       terminal.reset();
       syncConsoleScroll();
-      terminal.write(`Starting ${machine.hostname} (${machine.osHint})…\r\n`, syncConsoleScroll);
+      terminal.write(`Starting ${machine.imageId} (${machine.osHint})…\r\n`, syncConsoleScroll);
       try {
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
