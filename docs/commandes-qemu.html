@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <title>QemuNet — comparaison des commandes QEMU</title>
 <style>
-@page { size: A4 landscape; margin: 15mm 16mm 14mm; }
+@page { size: A4 landscape; margin: 12mm 14mm 12mm; }
 * { box-sizing: border-box; }
 body { margin: 0; color: #182332; font: 10.5pt/1.35 Arial, sans-serif; }
 section { break-after: page; }
@@ -17,8 +17,11 @@ p { margin: 0 0 4mm; }
 table { border-collapse: collapse; width: 100%; table-layout: fixed; }
 th { text-align: left; padding: 2.5mm 2.7mm; background: #173a60; color: white; font-size: 9pt; }
 td { padding: 2.3mm 2.7mm; border-bottom: 1px solid #dce4eb; vertical-align: top; font-size: 9pt; }
+.dense td { padding: 0.85mm 2.4mm; font-size: 8pt; line-height: 1.15; }
+.dense code { font-size: 7.4pt; line-height: 1.15; }
 tr:nth-child(even) td { background: #f4f7fa; }
 tr { break-inside: avoid; }
+.category td { background: #dfeaf3 !important; color: #173a60; font-weight: bold; padding-top: 1.4mm; padding-bottom: 1.4mm; }
 code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; overflow-wrap: anywhere; }
 .w-command { width: 59%; }
 .w-comment { width: 41%; }
@@ -32,26 +35,31 @@ code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; ove
 <body>
 <section>
   <h1>Commandes QEMU : QemuNet historique et démo web</h1>
-  <p class="sub">Commande fournie par Orel · VM « grave » · Debian 10 · une option par ligne logique</p>
-  <div class="cmd">qemu-system-x86_64 \</div>
-  <table>
+  <p class="sub">Commande complète fournie par Orel · xterm + QEMU · VM « grave » · Debian 10</p>
+  <div class="cmd">xterm \</div>
+  <table class="dense">
     <colgroup><col class="w-command"><col class="w-comment"></colgroup>
     <thead><tr><th>Option de la commande historique</th><th>Fonction / remarque</th></tr></thead>
     <tbody>
+      <tr><td><code>-fg white \</code></td><td>Texte blanc dans xterm.</td></tr>
+      <tr><td><code>-bg black \</code></td><td>Fond noir dans xterm.</td></tr>
+      <tr><td><code>-T grave \</code></td><td>Titre de la fenêtre xterm.</td></tr>
+      <tr><td><code>-e qemu-system-x86_64 \</code></td><td>Lance QEMU comme programme interactif dans le pseudo-terminal d’xterm.</td></tr>
       <tr><td><code>-name grave \</code></td><td>Nom de la VM dans QEMU ; ne change pas le hostname de l’invité.</td></tr>
       <tr><td><code>-rtc base=localtime \</code></td><td>Initialise l’horloge matérielle virtuelle à l’heure locale.</td></tr>
-      <tr><td><code>-k fr \</code></td><td>Disposition du clavier pour l’entrée graphique QEMU.</td></tr>
+      <tr><td><code>-k fr \</code></td><td>Clavier graphique QEMU ; n’agit normalement pas sur cette console série dans xterm.</td></tr>
       <tr><td><code>-M accel=kvm \</code></td><td>Accélération KVM ; modèle de machine laissé au défaut de QEMU.</td></tr>
       <tr><td><code>-m 200 \</code></td><td>200 Mio de mémoire vive.</td></tr>
-      <tr><td><code>-drive file=/tmp/qemunet-orel-aSZ1nL/grave.qcow2,format=qcow2,index=0,media=disk \</code></td><td>Disque QCOW2 de la VM ; index 0. Aucun bus n’est explicitement précisé.</td></tr>
-      <tr><td><code>-fsdev local,id=share0,path=/tmp/qemunet-orel-aSZ1nL/grave,security_model=mapped \</code></td><td>Déclare le répertoire partagé côté hôte et son modèle de permissions.</td></tr>
+      <tr><td><code>-drive file=/tmp/qemunet-orel-OgwDNU/grave.qcow2,format=qcow2,index=0,media=disk \</code></td><td>Premier disque QCOW2 ; bus IDE implicite sur ce PC QEMU.</td></tr>
+      <tr><td><code>-fsdev local,id=share0,path=/tmp/qemunet-orel-OgwDNU/grave,security_model=mapped \</code></td><td>Déclare le répertoire partagé côté hôte et son modèle de permissions.</td></tr>
       <tr><td><code>-device virtio-9p-pci,fsdev=share0,mount_tag=host \</code></td><td>Expose ce répertoire à l’invité via virtio-9p, sous le tag « host ».</td></tr>
-      <tr><td><code>-netdev vde,sock=/tmp/qemunet-orel-aSZ1nL/switch/s1,port=4,id=s1 \</code></td><td>Connecte la VM au port 4 du switch VDE « s1 ».</td></tr>
+      <tr><td><code>-netdev vde,sock=/tmp/qemunet-orel-OgwDNU/switch/s1,port=4,id=s1 \</code></td><td>Connecte la VM au port 4 du switch VDE « s1 ».</td></tr>
       <tr><td><code>-device e1000,netdev=s1,mac=AA:AA:AA:AA:03:00 \</code></td><td>Carte réseau e1000 liée à s1 ; adresse MAC fixée.</td></tr>
       <tr><td><code>-kernel /home/orel/Documents/projet-qemunet/qemunet/images/debian10.vmlinuz \</code></td><td>Charge directement ce noyau Linux, sans passer par le chargeur du disque.</td></tr>
       <tr><td><code>-initrd /home/orel/Documents/projet-qemunet/qemunet/images/debian10.initrd \</code></td><td>Charge l’initrd correspondant au noyau.</td></tr>
-      <tr><td><code>-append 'root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0 user=orel ' \</code></td><td>Paramètres du noyau : racine, écriture, noms réseau, consoles et paramètre invité « user ».</td></tr>
-      <tr><td><code>-pidfile /tmp/qemunet-orel-aSZ1nL/grave.pid</code></td><td>Enregistre le PID du processus QEMU dans un fichier.</td></tr>
+      <tr><td><code>-append 'root=/dev/sda1 rw net.ifnames=0 console=ttyS0 console=tty0 user=orel ' \</code></td><td>Racine sur sda1 en écriture ; noms réseau classiques ; consoles série et vidéo ; « user=orel » dépend de l’image.</td></tr>
+      <tr><td><code>-pidfile /tmp/qemunet-orel-OgwDNU/grave.pid \</code></td><td>Enregistre le PID du processus QEMU dans un fichier.</td></tr>
+      <tr><td><code>-nographic</code></td><td>Masque la vidéo QEMU et relie par défaut le port série et le moniteur à stdin/stdout d’xterm. La vidéo tty0 n’est pas visible ici.</td></tr>
     </tbody>
   </table>
 </section>
@@ -68,37 +76,50 @@ code { font: 8.1pt/1.4 'DejaVu Sans Mono', monospace; white-space: pre-wrap; ove
       <tr><td><code>-accel kvm \</code></td><td>KVM si disponible ; TCG lorsque choisi ou nécessaire.</td></tr>
       <tr><td><code>-m 1024 \</code></td><td>1024 Mio pour l’image Debian 13.</td></tr>
       <tr><td><code>-smp 1 \</code></td><td>Un processeur virtuel.</td></tr>
-      <tr><td><code>-display none \</code></td><td>Pas de fenêtre graphique QEMU ; interface dans le navigateur.</td></tr>
+      <tr><td><code>-display none \</code></td><td>Masque uniquement l’image vidéo QEMU ; ne redirige pas le port série.</td></tr>
       <tr><td><code>-monitor unix:/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION.monitor.sock,server=on,wait=off \</code></td><td>Socket de contrôle QEMU utilisé par le serveur.</td></tr>
-      <tr><td><code>-chardev socket,id=serial0,path=/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION.sock,server=on,wait=off \</code></td><td>Socket recevant les données de la console série virtuelle.</td></tr>
-      <tr><td><code>-serial chardev:serial0 \</code></td><td>Branche le port série de la VM au socket relayé vers xterm.js.</td></tr>
+      <tr><td><code>-chardev socket,id=serial0,path=/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION.sock,server=on,wait=off \</code></td><td>Socket Unix utilisé comme canal de caractères côté hôte.</td></tr>
+      <tr><td><code>-serial chardev:serial0 \</code></td><td>Relie ttyS0 au socket ; Node relaie les octets via WebSocket vers xterm.js.</td></tr>
       <tr><td><code>-drive file=/home/orel/Documents/projet-qemunet/qemuweb/runtime/qemuweb-PID-SESSION-debian13-overlay.qcow2,if=virtio,format=qcow2,media=disk \</code></td><td>Disque différentiel QCOW2 sur bus virtio ; « disk » explicite ; base RAW préparée.</td></tr>
       <tr><td><code>-boot order=c \</code></td><td>Démarre sur le disque, qui charge son propre noyau.</td></tr>
       <tr><td><code>-nic user,restrict=on</code></td><td>Réseau QEMU en mode utilisateur restreint ; pas de switch VDE.</td></tr>
     </tbody>
   </table>
-  <p class="note">Avant ce lancement, <code>qemu-img create -f qcow2 -F raw -b images/debian-13-qemunet-v2-amd64.raw runtime/qemuweb-PID-SESSION-debian13-overlay.qcow2</code> crée le différentiel. La console <code>ttyS0</code> et les comptes ont été configurés à l’avance dans la base RAW par <code>prepare.sh</code>.</p>
+  <p class="note">Avant ce lancement, <code>qemu-img create -f qcow2 -F raw -b images/debian-13-qemunet-v2-amd64.raw runtime/qemuweb-PID-SESSION-debian13-overlay.qcow2</code> crée le différentiel. La console <code>ttyS0</code> et le service de login série sont préparés dans la base RAW. Le navigateur envoie les caractères saisis à Node, qui les transmet au socket QEMU ; la sortie suit le trajet inverse.</p>
 </section>
 
 <section>
   <h2>Synthèse comparative</h2>
-  <p class="sub">Options équivalentes ou liées placées sur une même ligne.</p>
-  <table>
+  <p class="sub">Même console série côté invité ; raccordements différents côté hôte. Comparaison par thème.</p>
+  <table class="dense">
     <colgroup><col class="w-a"><col class="w-b"><col class="w-c"></colgroup>
     <thead><tr><th>Commande historique</th><th>Démo web</th><th>Différence pratique</th></tr></thead>
     <tbody>
+      <tr class="category"><td colspan="3">Options générales</td></tr>
+      <tr><td><code>xterm -T grave</code> ; <code>QEMU -name grave</code></td><td>Onglet nommé dans l’interface</td><td>xterm nomme sa fenêtre ; QEMU nomme la VM ; la démo nomme l’onglet.</td></tr>
       <tr><td><code>-M accel=kvm</code></td><td><code>-machine q35 -accel kvm</code></td><td>KVM dans les deux ; q35 fixé dans la démo, TCG possible.</td></tr>
       <tr><td><code>-m 200</code></td><td><code>-m 1024 -smp 1</code></td><td>Mémoire différente ; CPU explicite dans la démo.</td></tr>
+      <tr><td><code>-rtc base=localtime</code></td><td>RTC par défaut</td><td>Heure locale dans l’ancienne commande ; UTC par défaut dans la démo.</td></tr>
+
+      <tr class="category"><td colspan="3">Gestion du disque et séquence de boot</td></tr>
       <tr><td><code>-drive …grave.qcow2,media=disk</code></td><td><code>-drive …overlay.qcow2,if=virtio,media=disk</code></td><td>QCOW2 et support disque dans les deux ; différentiel sur RAW et bus virtio dans la démo.</td></tr>
-      <tr><td><code>-kernel -initrd -append</code></td><td><code>-boot order=c</code></td><td>Noyau et paramètres fournis au lancement contre démarrage autonome du disque préparé.</td></tr>
-      <tr><td><code>console=ttyS0</code> dans <code>-append</code></td><td><code>-serial chardev:serial0</code></td><td>Le premier dirige le noyau vers le port série ; le second relie ce port à l’hôte. Dans la démo, <code>ttyS0</code> est configuré dans l’image.</td></tr>
+      <tr><td><code>-kernel -initrd -append</code></td><td><code>-boot order=c</code></td><td>Noyau, initrd et root=/dev/sda1 fournis par l’hôte ; la démo démarre sur le disque, puis GRUB fournit noyau, initramfs et root=PARTUUID.</td></tr>
+
+      <tr class="category"><td colspan="3">Entrées/sorties standard en mode texte : clavier et écran</td></tr>
+      <tr><td><code>xterm … -e qemu… -nographic</code></td><td><code>-display none</code></td><td>xterm fournit le terminal hôte ; -nographic y redirige la série et le moniteur. -display none cache seulement la vidéo.</td></tr>
+      <tr><td><code>console=ttyS0 console=tty0</code></td><td><code>console=ttyS0,115200</code> préparé</td><td>Les deux utilisent ttyS0 pour le texte interactif ; tty0 reste la sortie vidéo, masquée dans les deux cas.</td></tr>
+      <tr><td>Série/moniteur sur stdin/stdout</td><td><code>-chardev socket -serial … -monitor unix:…</code></td><td>Flux série vers xterm d’un côté ; socket vers Node/WebSocket/xterm.js de l’autre. Moniteur séparé dans la démo.</td></tr>
+      <tr><td><code>-k fr</code></td><td>Aucun <code>-k</code></td><td>Réglage QEMU du clavier graphique normalement sans effet sur la saisie série ; xterm ou navigateur gère les touches côté hôte.</td></tr>
+
+      <tr class="category"><td colspan="3">Gestion du réseau</td></tr>
       <tr><td><code>-netdev vde + -device e1000</code></td><td><code>-nic user,restrict=on</code></td><td>Switch VDE, port et MAC fixés contre réseau utilisateur QEMU.</td></tr>
+
+      <tr class="category"><td colspan="3">Le reste</td></tr>
       <tr><td><code>-fsdev + virtio-9p-pci</code></td><td>—</td><td>Partage de dossier présent seulement dans la commande historique.</td></tr>
-      <tr><td><code>-pidfile</code></td><td><code>-monitor unix:…</code></td><td>PID écrit dans un fichier contre pilotage par Node et socket moniteur.</td></tr>
-      <tr><td><code>-k fr -rtc base=localtime</code></td><td><code>-display none</code></td><td>Clavier graphique et horloge locale contre console web et RTC UTC par défaut.</td></tr>
+      <tr><td><code>-pidfile</code></td><td>Processus suivi par Node</td><td>PID dans un fichier contre référence du processus en mémoire.</td></tr>
     </tbody>
   </table>
-  <p class="note">Point central : l’ancien QemuNet force le noyau et sa console au lancement. La démo web prépare le système hors ligne, puis relie sa console série au navigateur lors de l’exécution.</p>
+  <p class="note">Point central : les deux méthodes aboutissent à une session sur <code>ttyS0</code>. L’ancienne lance le noyau depuis l’hôte et relie la série à stdin/stdout d’xterm ; la démo boote sur le disque préparé et relie la série au navigateur par socket et WebSocket.</p>
   <p class="foot">Sources : commandes fournies par Orel et server.js du projet qemuweb ; documentation QEMU : qemu.org/docs/master/system/qemu-manpage.html et qemu.org/docs/master/system/linuxboot.html.</p>
 </section>
 </body>
