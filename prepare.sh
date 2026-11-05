@@ -2,6 +2,8 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")" && pwd)"
+# Use the system IDs from config.json so each configured OS has one matching
+# preparation script, named scripts/prepare/<system-id>.sh.
 mapfile -t system_ids < <(node - "$ROOT/config.json" <<'NODE'
 const fs = require('fs');
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
@@ -18,6 +20,8 @@ for id in "${system_ids[@]}"; do
   "$script"
 done
 
+# Fail early if a preparation script did not produce both image formats
+# expected by the application configuration.
 node - "$ROOT/config.json" "$ROOT" <<'NODE'
 const fs = require('fs');
 const path = require('path');

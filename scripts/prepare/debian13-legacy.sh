@@ -3,6 +3,8 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 
 id=debian13-legacy
+# This profile installs Debian from the netinst ISO, rather than using a cloud
+# image, so its disk and NIC can retain the legacy IDE + e1000 hardware model.
 source_dir="$SOURCES/$id"
 raw="$IMAGES/$id.raw"
 vdi="$IMAGES/$id.vdi"
@@ -13,6 +15,8 @@ base_url=https://cdimage.debian.org/debian-cd/current/amd64/iso-cd
 mkdir -p "$source_dir"
 
 if [[ ! -s "$raw" ]]; then
+  # Verify the installer media before extracting its kernel and initrd for an
+  # unattended serial-console installation.
   require_commands curl sha512sum isoinfo python3 qemu-system-x86_64 qemu-img
   fetch_file "$base_url/$iso_name" "$iso"
   fetch_file "$base_url/SHA512SUMS" "$sums"
@@ -23,6 +27,8 @@ if [[ ! -s "$raw" ]]; then
   isoinfo -i "$iso" -x '/INSTALL.AMD/VMLINUZ.;1' > "$temp_dir/vmlinuz"
   isoinfo -i "$iso" -x '/INSTALL.AMD/INITRD.GZ;1' > "$temp_dir/initrd.gz"
   cat > "$temp_dir/preseed.cfg" <<'PRESEED'
+# Preseed fixes installer language, disk layout, root login, packages, and the
+# late command that applies QemuWeb-specific guest settings.
 d-i debian-installer/locale string en_US.UTF-8
 d-i keyboard-configuration/xkb-keymap select us
 d-i netcfg/choose_interface select auto
@@ -61,12 +67,16 @@ PRESEED
   cat > "$temp_dir/legacy-setup.sh" <<'SETUP'
 #!/bin/sh
 set -eu
+# Keep the image convenient for console-based lab use; these credentials are
+# intended for this disposable teaching image, not a production VM.
 passwd -d root
 useradd -m -s /bin/bash -G sudo demo || true
 printf 'demo:serial-demo\n' | chpasswd
 useradd -m -s /bin/bash -G sudo toto || true
 printf 'toto:toto\n' | chpasswd
 mkdir -p /etc/default/grub.d /etc/systemd/network
+# Keep both local and serial consoles available after boot, and use the legacy
+# IDE disk's first partition as root instead of relying on UUID discovery.
 cat > /etc/default/grub.d/99-qemunet-legacy.cfg <<'GRUB'
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=1
@@ -78,6 +88,8 @@ GRUB_TERMINAL="console serial"
 GRUB_SERIAL_COMMAND="serial --speed=115200 --unit=0 --word=8 --parity=no --stop=1"
 GRUB
 cat > /etc/systemd/network/20-qemunet.network <<'NETWORK'
+# systemd-networkd requests DHCP on Ethernet interfaces. This is client-side
+# configuration; the VDE switch does not run a DHCP server.
 [Match]
 Name=en*
 
@@ -85,6 +97,7 @@ Name=en*
 DHCP=yes
 NETWORK
 systemctl enable serial-getty@ttyS0.service getty@tty1.service systemd-networkd.service
+# Refresh boot artifacts after changing GRUB and console/kernel settings.
 update-grub
 update-initramfs -u -k all
 echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0 || true
@@ -112,6 +125,7 @@ out += b'\0' * (-len(out) % 4)
 PY
   cat "$temp_dir/addon.cpio.gz" >> "$temp_dir/initrd.gz"
   rm -f "$raw.tmp"
+  # The installer sees an IDE disk and e1000 NIC to match the legacy profile.
   qemu-img create -f raw "$raw.tmp" 8G
   qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 2048 -smp 2 \
     -display none -monitor none -serial "file:$temp_dir/serial.log" -no-reboot \

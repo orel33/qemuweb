@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
+# Alpine's inputs and outputs live under its own ID, while older files are
+# moved into this layout to preserve existing downloads and prepared images.
 source_dir="$SOURCES/alpine"
 raw="$IMAGES/alpine.raw"
 vdi="$IMAGES/alpine.vdi"
@@ -14,6 +16,7 @@ move_if_present "$IMAGES/alpine-$version-qemunet-x86_64.raw" "$raw"
 move_if_present "$IMAGES/alpine-$version-qemunet-x86_64.vdi" "$vdi"
 fetch_file "$url/$iso" "$source_dir/$iso"
 fetch_file "$url/$iso.sha256" "$source_dir/$iso.sha256"
+# Do not build from an ISO unless its publisher-provided checksum matches.
 (cd "$source_dir" && sha256sum -c "$iso.sha256")
 
 if [[ ! -s "$raw" ]]; then
@@ -23,6 +26,8 @@ if [[ ! -s "$raw" ]]; then
   serial_socket="$temp_dir/alpine-serial.sock"
   serial_log="$temp_dir/alpine-serial.log"
   guest_script="$temp_dir/alpine-prepare.sh"
+  # This script runs inside the temporary Alpine VM: install to a virtio disk,
+  # create lab accounts, and make the serial console usable on every boot.
   cat > "$guest_script" <<'ALPINE_PREPARE'
 #!/bin/sh
 set -eu
@@ -59,6 +64,8 @@ sync
 echo QEMUNET_ALPINE_PREPARED
 ALPINE_PREPARE
   payload="$(base64 -w 0 "$guest_script")"
+  # Boot the installer with a temporary user-mode NIC for package/repository
+  # access; this is only for image preparation, not the resulting LAN topology.
   qemu-img create -f raw "$disk" 2G
   qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 768 -smp 1 \
     -display none -monitor none -serial "unix:$serial_socket,server=on,wait=off" -no-reboot \
@@ -101,6 +108,7 @@ PY
   kill -TERM "$qemu_pid"
   wait "$qemu_pid" || true
   chmod 444 "$disk"
+  # Publish the completed disk only after the guest preparation has succeeded.
   mv "$disk" "$raw"
   rm -rf "$temp_dir"
 fi
