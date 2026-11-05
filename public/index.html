@@ -70,6 +70,15 @@
     .qemu-options pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
     .qemu-options p { margin: 7px 0 0; color: #bdc8d6; font-size: 12px; }
     #qemu-config-status { align-self: center; color: #bdc8d6; font-size: 12px; }
+    .confirm-dialog { width: min(440px, 94vw); max-width: 94vw; padding: 22px; border: 1px solid #806333; border-radius: 10px; color: #e7edf5; background: #10151c; box-shadow: 0 16px 60px #000a; }
+    .confirm-dialog::backdrop { background: #000a; }
+    .confirm-heading { display: flex; align-items: center; gap: 10px; }
+    .confirm-heading svg { flex: none; width: 26px; height: 26px; color: #ffc36b; }
+    .confirm-heading h2 { margin: 0; font-size: 18px; }
+    .confirm-dialog p { margin: 16px 0 20px; color: #d7e1ee; line-height: 1.5; white-space: pre-line; }
+    .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
+    #confirm-accept { border-color: #a65058; background: #613039; color: #fff; }
+    #confirm-accept:hover { background: #803943; }
     main { display: flex; flex: 1; min-width: 0; min-height: 0; padding: 12px 16px 16px; }
     .terminal-frame { display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 10px; border: 1px solid #35404c; border-radius: 7px; background: #0b0f14; }
     #terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
@@ -105,7 +114,7 @@
   </header>
   <p id="status-error" role="alert" hidden></p>
   <p class="note" id="image-info">Loading systems from config.json…</p>
-  <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces"><strong>Ethernet:</strong><span id="nic-list"></span><button id="add-nic" type="button">+ Interface</button><small>Connect to a running VDE switch before starting QEMU. Guest names may differ (for example, enp0s2).</small></section>
+  <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces"><strong>Ethernet:</strong><span id="nic-list"></span><button id="add-nic" type="button">+ Interface</button><small>Add Ethernet cards before starting QEMU; leave them disconnected or select a running VDE switch. Guest names may differ (for example, enp0s2).</small></section>
   <section class="logs" id="logs-panel" aria-label="Launch log" hidden><div class="logs-title">Launch log</div><pre id="launch-logs">Launch commands will appear here.</pre></section>
   <section class="monitor" id="monitor-panel" aria-label="QEMU monitor" hidden>
     <p>QEMU commands (not a Linux shell) : <code>help</code>, <code>info status</code>, <code>info block</code>. Some commands change or stop the VM.</p>
@@ -117,6 +126,11 @@
     <p id="options-status">Choose a system and an engine.</p>
     <table><thead><tr><th>Configuration / source</th><th>Value</th><th>Option or purpose</th></tr></thead><tbody id="options-rows"></tbody></table>
     <p>Disk creation and launch commands:</p><pre id="options-commands"></pre>
+  </dialog>
+  <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+    <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
+    <p id="confirm-message"></p>
+    <form method="dialog" class="confirm-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-accept" value="confirm">Continue</button></form>
   </dialog>
   <main><div class="terminal-frame" id="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Scroll console" title="Scroll console history"></div><section class="switch-console" id="switch-panel" hidden><pre id="switch-output">Start the switch to use its management console.</pre><form id="switch-form"><input id="switch-command" aria-label="VDE switch command" placeholder="help" maxlength="256" autocomplete="off" spellcheck="false"><button id="switch-send" type="submit">Send</button></form></section></main>
   <nav class="machines" id="machine-tabs" aria-label="Virtual machines and switches">
@@ -174,6 +188,10 @@
     const monitorSend = document.getElementById('monitor-send');
     const showQemuOptions = document.getElementById('show-qemu-options');
     const qemuOptionsPanel = document.getElementById('qemu-options-panel');
+    const confirmDialog = document.getElementById('confirm-dialog');
+    const confirmTitle = document.getElementById('confirm-title');
+    const confirmMessage = document.getElementById('confirm-message');
+    const confirmAccept = document.getElementById('confirm-accept');
     const optionsStatus = document.getElementById('options-status');
     const optionsRows = document.getElementById('options-rows');
     const optionsCommands = document.getElementById('options-commands');
@@ -214,7 +232,7 @@
       optionsRows.replaceChildren();
       optionsCommands.textContent = '';
       try {
-        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, switches: (machine.interfaces || []).join(',')});
+        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || [])});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
@@ -332,15 +350,16 @@
     function renderNicControls(machine) {
       nicList.replaceChildren();
       const locked = machine.hasLaunched || machine.busy || machine.engine === 'virtualbox';
-      addNic.disabled = locked || (machine.interfaces || []).length >= 4 || ![...machines.values()].some(item => item.kind === 'switch' && item.running);
+      addNic.disabled = locked || (machine.interfaces || []).length >= 4;
       for (const [index, selected] of (machine.interfaces || []).entries()) {
         const row = document.createElement('span'); row.className = 'nic-row';
         const select = document.createElement('select'); select.setAttribute('aria-label', `Ethernet interface ${index + 1} switch`); select.disabled = locked;
+        const disconnected = document.createElement('option'); disconnected.value = ''; disconnected.textContent = 'Disconnected'; select.append(disconnected);
         for (const sw of machines.values()) if (sw.kind === 'switch' && (sw.running || sw.id === selected)) {
           const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
         }
-        select.value = selected;
-        select.onchange = () => { machine.interfaces[index] = select.value; renderQemuOptions(); };
+        select.value = selected || '';
+        select.onchange = () => { machine.interfaces[index] = select.value || null; renderQemuOptions(); };
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index + 1}`; remove.disabled = locked;
         remove.onclick = () => { machine.interfaces.splice(index, 1); renderNicControls(machine); renderQemuOptions(); };
         row.append(document.createTextNode(`NIC ${index + 1} → `), select, remove); nicList.append(row);
@@ -349,7 +368,7 @@
     function addMachine() {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const image = images.find(item => item.id === imageSelect.value);
-      const machine = {id, kind: 'vm', hostname: 'New VM', osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', interfaces: [], running: false, hasLaunched: false, message: 'Stopped', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: 'New VM', osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', interfaces: engineSelect.value === 'virtualbox' ? [] : [null], running: false, hasLaunched: false, message: 'Stopped', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       renderTabs();
       selectMachine(id);
@@ -384,9 +403,28 @@
       socket.emit('select-session', id, ++selectionToken);
       requestAnimationFrame(fitTerminal);
     }
+    function confirmAction(title, message, action) {
+      if (confirmDialog.open) return Promise.resolve(false);
+      confirmTitle.textContent = `QemuWeb · ${title}`;
+      confirmMessage.textContent = message;
+      confirmAccept.textContent = action;
+      confirmDialog.returnValue = '';
+      return new Promise(resolve => {
+        confirmDialog.addEventListener('close', () => resolve(confirmDialog.returnValue === 'confirm'), {once: true});
+        confirmDialog.showModal();
+      });
+    }
     async function closeMachine(id) {
       const machine = machines.get(id);
-      if (!machine) return;
+      if (!machine || machine.busy) return;
+      const title = machine.kind === 'switch' ? 'Remove switch' : 'Close VM';
+      const message = machine.kind === 'switch'
+        ? `Remove ${machine.hostname}? The switch will stop and its tab will close. Connected VM tabs must be closed first.`
+        : machine.hasLaunched
+          ? `Close ${machine.hostname}? This VM will stop, its current disk will be deleted, and all changes made in this VM will be lost.`
+          : `Close this new VM tab?`;
+      if (!await confirmAction(title, message, machine.kind === 'switch' ? 'Remove switch' : 'Close VM')) return;
+      if (machines.get(id) !== machine || machine.busy) return;
       try {
         const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {method: 'DELETE'});
         const body = await response.json();
@@ -448,9 +486,8 @@
     document.getElementById('new-switch').addEventListener('click', addSwitch);
     addNic.addEventListener('click', () => {
       const machine = activeMachine();
-      const sw = [...machines.values()].find(item => item.kind === 'switch' && item.running);
-      if (!machine || machine.kind !== 'vm' || machine.hasLaunched || machine.busy || !sw || machine.interfaces.length >= 4) return;
-      machine.interfaces.push(sw.id);
+      if (!machine || machine.kind !== 'vm' || machine.hasLaunched || machine.busy || machine.engine === 'virtualbox' || machine.interfaces.length >= 4) return;
+      machine.interfaces.push(null);
       renderNicControls(machine);
       renderQemuOptions();
     });
@@ -469,6 +506,8 @@
     engineSelect.addEventListener('change', () => {
       const machine = activeMachine();
       if (!machine) return;
+      if (engineSelect.value === 'virtualbox') machine.interfaces = [];
+      else if (machine.engine === 'virtualbox') machine.interfaces = [null];
       machine.engine = engineSelect.value;
       updateControls();
       renderQemuOptions();
@@ -708,7 +747,8 @@
     resetButton.onclick = async () => {
       const machine = activeMachine();
       if (!machine || !machine.hasLaunched || machine.busy) return;
-      if (!window.confirm(`Reset ${machine.hostname}?\n\nThis VM will restart from its base image. Its current disk will be deleted, so all changes made in this VM will be lost.\n\nOther VMs will not be affected. Continue?`)) return;
+      if (!await confirmAction('Reset VM', `Reset ${machine.hostname}?\n\nThis VM will restart from its base image. Its current disk will be deleted, so all changes made in this VM will be lost.\n\nOther VMs will not be affected.`, 'Reset VM')) return;
+      if (machines.get(machine.id) !== machine || machine.busy) return;
       machine.busy = true;
       machine.operation = 'resetting';
       machine.error = null;

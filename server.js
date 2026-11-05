@@ -3,6 +3,7 @@
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
+const {StringDecoder} = require('string_decoder');
 const path = require('path');
 const crypto = require('crypto');
 const {spawn, execFileSync} = require('child_process');
@@ -16,7 +17,7 @@ try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
 const configPath = path.join(root, 'config.json');
-const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'diskInterface', 'bootDisk', 'nic'];
+const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
 const port = Number(process.env.PORT || 3002);
 const app = express();
 const server = http.createServer(app);
@@ -122,6 +123,7 @@ function validateQemuOptions(options, partial = false) {
     }
   }
   if (options.diskInterface && !['virtio', 'ide'].includes(options.diskInterface)) throw new Error('QEMU disk bus must be virtio or ide.');
+  if (options.networkModel && !['virtio-net-pci', 'e1000'].includes(options.networkModel)) throw new Error('QEMU network model must be virtio-net-pci or e1000.');
   for (const key of ['bootDisk']) {
     if (options[key] && !/^[a-dn]{1,5}$/.test(options[key])) throw new Error(`Invalid QEMU boot order: ${key}.`);
   }
@@ -191,14 +193,18 @@ function connectSerial(session, attempt = 0, generation = session.generation) {
   if (!session.machine || session.stopping || generation !== session.generation || attempt > 100) return;
   const connection = net.createConnection(session.socketPath);
   connection.once('connect', () => {
-    session.serial = connection;
-    publishState(session);
-    connection.on('data', data => {
-      const text = data.toString('utf8');
+    // Serial socket chunks can split a UTF-8 character across reads.
+    const decoder = new StringDecoder('utf8');
+    const publishSerial = text => {
+      if (!text) return;
       session.serialBuffer = (session.serialBuffer + text).slice(-262144);
       io.to(session.id).emit('serial', {sessionId: session.id, data: text});
-    });
+    };
+    session.serial = connection;
+    publishState(session);
+    connection.on('data', data => publishSerial(decoder.write(data)));
     connection.on('close', () => {
+      publishSerial(decoder.end());
       if (session.serial === connection) session.serial = null;
       if (!session.stopping && session.action !== 'reboot' && session.machine) publishState(session, 'Serial console disconnected');
     });
@@ -224,20 +230,26 @@ function qemuArgs(session, image, overlay) {
   ];
   // QEMU PC boot notation: c = first hard disk.
   const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
-  if (!session.networkInterfaces.length) return [...args, '-nic', 'none'];
+  // Disable QEMU's implicit user-network NIC; explicit -device NICs below remain enabled.
+  args.push('-nic', 'none');
   for (const [index, nic] of session.networkInterfaces.entries()) {
+    if (nic.switchId === null) {
+      args.push('-device', `${settings.networkModel},mac=${nic.mac}`);
+      continue;
+    }
     const sw = sessions.get(nic.switchId);
     const id = `lan${index}`;
     args.push('-netdev', `vde,id=${id},sock=${sw.socketDir},port=${nic.port}`,
-      '-device', `virtio-net-pci,netdev=${id},mac=${nic.mac}`);
+      '-device', `${settings.networkModel},netdev=${id},mac=${nic.mac}`);
   }
   return args;
 }
 
 function validateNetworkInterfaces(value, engine) {
-  if (value === undefined) return [];
+  if (value === undefined) value = engine.startsWith('qemu') ? [null] : [];
   if (!Array.isArray(value) || value.length > 4 || (value.length && !engine.startsWith('qemu'))) throw new Error('Ethernet interfaces require QEMU (maximum four).');
   return value.map((switchId, index) => {
+    if (switchId === null) return null;
     const sw = getSession(switchId);
     if (!sw || sw.kind !== 'switch' || !sw.machine) throw new Error(`Interface ${index + 1}: start its VDE switch first.`);
     return sw;
@@ -247,13 +259,17 @@ function validateNetworkInterfaces(value, engine) {
 function assignNetworkInterfaces(session, switches) {
   const planned = [];
   for (const [index, sw] of switches.entries()) {
+    const digest = crypto.createHash('sha256').update(`${session.id}:${index}`).digest();
+    const mac = `02:${[...digest.subarray(0, 5)].map(byte => byte.toString(16).padStart(2, '0')).join(':')}`;
+    if (sw === null) {
+      planned.push({switchId: null, port: null, mac});
+      continue;
+    }
     const used = new Set([...sessions.values()].filter(other => other.id !== session.id).flatMap(other => other.networkInterfaces || [])
       .filter(nic => nic.switchId === sw.id).map(nic => nic.port));
     for (const nic of planned) if (nic.switchId === sw.id) used.add(nic.port);
     const port = Array.from({length: 32}, (_, n) => n + 1).find(n => !used.has(n));
     if (!port) throw new Error(`No free port on ${sw.hostname}.`);
-    const digest = crypto.createHash('sha256').update(`${session.id}:${index}`).digest();
-    const mac = `02:${[...digest.subarray(0, 5)].map(byte => byte.toString(16).padStart(2, '0')).join(':')}`;
     planned.push({switchId: sw.id, port, mac});
   }
   return planned;
@@ -428,7 +444,7 @@ app.get('/api/options/:sessionId', (req, res) => {
       monitorPath: path.join(runtime, `qemuweb-${process.pid}-${id}.monitor.sock`),
       engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
       qemuOptions: engine.startsWith('qemu') ? qemuOptionsFor(image.id) : null,
-      networkInterfaces: assignNetworkInterfaces({id}, validateNetworkInterfaces(req.query.switches ? String(req.query.switches).split(',') : [], engine))
+      networkInterfaces: assignNetworkInterfaces({id}, validateNetworkInterfaces(req.query.interfaces !== undefined ? JSON.parse(req.query.interfaces) : req.query.switches ? String(req.query.switches).split(',') : undefined, engine))
     };
     const isQemu = engine.startsWith('qemu');
     const options = isQemu ? session.qemuOptions : qemuOptionsFor(image.id);
@@ -436,8 +452,8 @@ app.get('/api/options/:sessionId', (req, res) => {
     const qemuMappings = {
       machine: '-machine', cpuKvm: session.qemuAcceleration === 'kvm' ? '-cpu' : 'inactive with this engine',
       cpuTcg: session.qemuAcceleration === 'tcg' ? '-cpu' : 'inactive with this engine', memory: '-m (MiB)',
-      smp: '-smp', display: '-display', diskInterface: '-drive if=', bootDisk: '-boot order=',
-      nic: session.networkInterfaces.length ? 'No external NIC; selected VDE interfaces below' : '-nic none'
+      smp: '-smp', display: '-display', diskInterface: '-drive if=', networkModel: '-device', bootDisk: '-boot order=',
+      nic: 'Disable the implicit QEMU NIC; explicit Ethernet devices are listed below'
     };
     const rows = [
       ['systems.' + image.id + '.type / mode', `${image.type} / ${image.mode}`, 'System profile; no command-line argument'],
@@ -447,7 +463,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     ];
     for (const key of qemuFields) rows.push(['qemu.' + key, String(options ? options[key] : ({...readConfig().qemu.defaults, ...image.qemu})[key]), isQemu ? qemuMappings[key] : 'Not used by VirtualBox']);
     for (const [key, value] of Object.entries(image.virtualbox)) rows.push(['virtualbox.' + key, String(value), isQemu ? 'Not used by QEMU' : ({memory: '--memory (MiB)', nic: '--nic1', osType: '--ostype'})[key] || 'Not used']);
-    for (const [index, nic] of session.networkInterfaces.entries()) rows.push([`ethernet.${index}`, `${sessions.get(nic.switchId)?.hostname || nic.switchId}: port ${nic.port}, MAC ${nic.mac}`, '-netdev vde / -device virtio-net-pci']);
+    for (const [index, nic] of session.networkInterfaces.entries()) rows.push([`ethernet.${index}`, nic.switchId === null ? `Disconnected, MAC ${nic.mac}` : `${sessions.get(nic.switchId)?.hostname || nic.switchId}: port ${nic.port}, MAC ${nic.mac}`, `${nic.switchId === null ? '' : '-netdev vde / '}-device ${options?.networkModel || 'virtio-net-pci'}`]);
     if (isQemu) rows.push(['Server: acceleration', session.qemuAcceleration, '-accel (KVM/TCG selection)'], ['Server: disk', 'QCOW2 working disk, format=qcow2, media=disk', '-drive'], ['Server: serial console', session.socketPath, '-serial unix:…,server=on,wait=off'], ['Server: monitor', session.monitorPath, '-monitor unix:…,server=on,wait=off'], ['QEMU: firmware and other devices', 'Selected machine defaults', 'Options not specified on the command line']);
     else rows.push(['Server: disk', 'VDI working disk, SATA controller', 'createmedium / storagectl / storageattach'], ['Server: CPU and boot', '1 CPU; disk, DVD', '--cpus 1 / --boot1 disk / --boot2 dvd'], ['Server: serial console', session.socketPath, '--uart1 0x3F8 4 / --uartmode1 server'], ['Server: display', 'Headless', 'startvm --type headless'], ['VirtualBox: other settings', 'VirtualBox defaults', 'Options not specified by the server']);
     const launchCommands = isQemu

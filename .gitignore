@@ -4,6 +4,9 @@ images/*
 !images/.gitkeep
 sources/*
 !sources/.gitkeep
+!sources/*/
+sources/*/*
+!sources/*/.gitkeep
 runtime/*
 !runtime/.gitkeep
 dist/

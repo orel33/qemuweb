@@ -23,16 +23,17 @@ In the web toolbar, check **Monitor** to enter commands for the VM in the curren
 
 ## Image preparation
 
-`prepare.sh` prepares the systems before use:
+`prepare.sh` reads the IDs under `systems` in `config.json` and invokes the matching `scripts/prepare/<id>.sh`. Shared helpers are alongside these scripts. Each target keeps its downloads and checksums in `sources/<id>/`:
 
 - **Alpine**: the script downloads and verifies the official `virt` ISO, installs it unattended into a RAW image, prepares the `root` and `toto` accounts, configures boot output and login on `ttyS0`, then produces the VDI base for VirtualBox.
 - **Debian 13**: the script downloads and verifies the official cloud image, boots it once in an isolated temporary QEMU VM, prepares the `root`, `toto`, and `demo` accounts, configures serial access and DHCP networking, disables cloud-init for subsequent boots, then produces a read-only RAW image.
+- **Debian 13 Legacy**: a separate image installs the general Debian kernel plus `iproute2`, `tcpdump`, `iputils-ping`, `bash`, `net-tools`, `procps`, and `vim-tiny`. It boots from IDE with `root=/dev/sda1`, presents an `e1000` NIC, and enables consoles on `tty0` and `ttyS0`.
 - **OpenWrt**: the script verifies and decompresses the official RAW image.
 - For **VirtualBox**, the script converts each RAW image into a read-only VDI base.
 
 At launch, the server performs no further system configuration: QEMU creates a QCOW2 working disk based on the RAW image; VirtualBox creates a VDI working disk based on the prepared VDI. Each instance has its own writes. They are retained by **Stop**, **Play / Resume**, and **Reboot**, then discarded by **Reset**, **Exit**, or server shutdown. The base files in `images/` are never modified.
 
-`images/` contains only ready-to-run base images named after the system identifier: `alpine.raw` / `alpine.vdi`, `debian13.raw` / `debian13.vdi`, and `openwrt.raw` / `openwrt.vdi`. The `.raw` extension explicitly identifies the disk format. `sources/` keeps the official downloads and checksums needed for preparation; `runtime/` contains temporary files and VM differential disks. [config.json](config.json) describes the systems and their launch options; `prepare.sh` does not overwrite it or generate a catalog.
+`images/` contains ready-to-run base images named after the system identifier: `alpine.raw` / `alpine.vdi`, `debian13.raw` / `debian13.vdi`, `debian13-legacy.raw` / `debian13-legacy.vdi`, and `openwrt.raw` / `openwrt.vdi`. The `.raw` extension explicitly identifies the disk format. `sources/<id>/` keeps each target's downloads and checksums; `runtime/` contains temporary files and VM differential disks. [config.json](config.json) describes the systems and their launch options; preparation scripts read it but do not overwrite it.
 
 ### System configuration
 
@@ -44,7 +45,7 @@ QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64
 
 At startup, the server checks the configured commands, prints a green check or red cross for each, and exits if any check fails. It uses the resolved QEMU, `qemu-img`, and `VBoxManage` paths. `npm start` still launches Node from `PATH`; image preparation and cleanup scripts also still use `PATH`.
 
-[config.json](config.json) follows the same approach as [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg): each key under `systems` (`alpine`, `debian13`, `openwrt`) identifies a system. Each entry contains its `linux` type, `text` mode, label and long description, login details, `images.raw` and `images.vdi` paths, system-specific QEMU options, and VirtualBox settings. Paths can be relative to the project root or absolute. Launching relies on this file; `server.js` contains no rules tied to an OS name. Any ISO files used by `prepare.sh` remain preparation sources, not systems that can be launched from the interface.
+[config.json](config.json) follows the same approach as [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg): each key under `systems` (`alpine`, `debian13`, `debian13-legacy`, `openwrt`) identifies a system and its `scripts/prepare/<id>.sh` script. Each entry contains its `linux` type, `text` mode, label and long description, login details, `images.raw` and `images.vdi` paths, system-specific QEMU options, and VirtualBox settings. Paths can be relative to the project root or absolute. Launching relies on this file; `server.js` contains no rules tied to an OS name.
 
 `qemu.defaults` supplies common values. The `systems.<id>.qemu` object contains only overrides: Debian 13 requests 1,024 MiB, OpenWrt requests 256 MiB, and Alpine inherits the defaults. All profiles have external networking disabled. `systems.<id>.virtualbox` separately supplies its memory, disabled network setting, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
 
@@ -129,7 +130,7 @@ npm ci
 bash prepare.sh
 ```
 
-The script places downloaded ISOs, cloud images, archives, and checksums in `sources/`, then places only the final `<id>.raw` and `<id>.vdi` bases in `images/`. It checks that the paths declared in `config.json` exist but does not rewrite that file. The page's system menu is populated directly from `config.json`. `runtime/` is reserved for files belonging to running VMs. The contents of all three directories are ignored by Git, except for the `.gitkeep` files that preserve their structure.
+Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sources/<id>/` and its final `<id>.raw` and `<id>.vdi` bases in `images/`. The orchestrator checks that every path declared in `config.json` exists but does not rewrite the file. The page's system menu is populated directly from `config.json`. `runtime/` is reserved for temporary preparation and VM files. These directories are ignored by Git, except for their `.gitkeep` files.
 
 ## Running the demo
 
@@ -141,9 +142,13 @@ Open <http://127.0.0.1:3002>. The turquoise **+** creates a **New VM** tab. Choo
 
 ### Local VDE LAN prototype
 
-Click **+ Switch** to create a switch tab, then **Play** to start `vde_switch`. Its command panel accepts VDE management commands such as `help` and `port/allprint`. In a new QEMU VM tab, click **+ Interface** before the first launch and select a running switch. Up to four interfaces can be added; Qemuweb assigns each one a VDE port and a MAC address. The guest chooses its own interface name: Debian 13 may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two VM tabs against the same switch to make a LAN. Configure IP addresses inside the guests to test communication. **Settings** shows the resulting QEMU launch arguments.
+New QEMU VM tabs start with one disconnected Ethernet card. Before the first launch, use **+ Interface** to add up to four cards, remove unwanted cards, or select a running VDE switch for each card. Click **+ Switch**, then **Play** to start `vde_switch`; its command panel accepts `help` and `port/allprint`. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian cloud uses `virtio-net-pci`. The guest chooses its own interface name: Debian may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two VM tabs against the same switch to make a LAN and configure IP addresses inside the guests. **Settings** shows the resulting QEMU launch arguments.
 
-An interface assignment remains fixed across Stop and Resume. Stop connected VMs before stopping their switch; remove their tabs before deleting the switch. Hot attachment to a VM that is already running is planned in the [roadmap](docs/ROADMAP.md). VMs without a selected switch have no network adapter, and VirtualBox has no network adapter. This prototype creates no external network connection.
+For the guest kernel and image requirements behind the disk and NIC choices, see [QEMU guest buses and drivers](docs/qemu-guest-bus-and-drivers.md).
+
+The Debian 13 cloud profile uses a VirtIO disk and VirtIO network cards. **Debian 13 Legacy** is the separate IDE + `e1000` target, with `tty0`, `ttyS0`, and `root=/dev/sda1` configured by default.
+
+An interface assignment remains fixed across Stop and Resume. Stop connected VMs before stopping their switch; remove their tabs before deleting the switch. Hot attachment to a VM that is already running is planned in the [roadmap](docs/ROADMAP.md). Disconnected cards remain visible inside the guest but cannot exchange traffic. Removing every card creates a VM without Ethernet; VirtualBox also has no network adapter. QEMU's `-nic none` disables its implicit network adapter; the explicit `-device e1000` or `-device virtio-net-pci` options still create the selected cards. This prototype creates no external network connection.
 
 **QEMU · KVM** uses hardware acceleration and reports an error if `/dev/kvm` is missing or inaccessible, or if a VirtualBox VM is running. Choose **QEMU · TCG** explicitly to use slower software emulation or to run QEMU alongside VirtualBox. VirtualBox cannot start while a QEMU VM uses KVM; stop that VM or start it with TCG first.
 
@@ -163,8 +168,8 @@ The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is
 | ![Play icon](docs/icons/play.svg) | **Resume** | `Resume VM from its current disk` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
 | ![Power icon](docs/icons/power.svg) | **Stop** | `Stop VM and keep its current disk` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
 | ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot VM with its current disk (keep changes)` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
-| ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset VM from the base image (discard changes)` | After a warning, stop the VM, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
-| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit VM, delete its disk and close the tab` | Force-stop the VM, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** has the same effect and hint. |
+| ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset VM from the base image (discard changes)` | After a QemuWeb warning dialog, stop the VM, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
+| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit VM, delete its disk and close the tab` | After a QemuWeb warning dialog, force-stop the VM, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** asks for the same confirmation. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **Settings** | `View VM launch settings` | Show the selected system's configuration and launch commands in a read-only dialog. |
 | ![New VM icon](docs/icons/plus.svg) | **New VM** | `Open a new VM tab` | Add an empty tab; the VM starts only after Start. |

@@ -8,6 +8,7 @@
       "smp": 1,
       "display": "none",
       "diskInterface": "virtio",
+      "networkModel": "virtio-net-pci",
       "bootDisk": "c",
       "nic": "none"
     }
@@ -41,7 +42,30 @@
         "vdi": "images/debian13.vdi"
       },
       "qemu": {
-        "memory": 1024
+        "memory": 1024,
+        "diskInterface": "virtio",
+        "networkModel": "virtio-net-pci"
+      },
+      "virtualbox": {
+        "memory": 1024,
+        "nic": "none",
+        "osType": "Linux_64"
+      }
+    },
+    "debian13-legacy": {
+      "type": "linux",
+      "mode": "text",
+      "label": "Debian 13 Legacy (IDE + e1000)",
+      "description": "Debian 13 prepared for legacy QEMU hardware: IDE system disk, e1000 Ethernet, and boot/login consoles on tty0 and ttyS0.",
+      "login": "root with no password; toto / toto; demo / serial-demo",
+      "images": {
+        "raw": "images/debian13-legacy.raw",
+        "vdi": "images/debian13-legacy.vdi"
+      },
+      "qemu": {
+        "memory": 1024,
+        "diskInterface": "ide",
+        "networkModel": "e1000"
       },
       "virtualbox": {
         "memory": 1024,
