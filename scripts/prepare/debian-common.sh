@@ -24,22 +24,17 @@ prepare_debian_image() {
     local overlay="$temp_dir/debian-bootstrap.qcow2" seed="$temp_dir/debian-seed.iso"
     local serial_log="$temp_dir/debian-serial.log" qmp_socket="$temp_dir/debian-qmp.sock"
     local user_data="$temp_dir/user-data" meta_data="$temp_dir/meta-data" network_config="$temp_dir/network-config"
-    # Cloud-init creates the demo accounts, enables both consoles, and configures
+    # Cloud-init creates the lab account, enables both consoles, and configures
     # the guest NIC for DHCP. The VDE switch itself does not provide DHCP.
     cat > "$user_data" <<CLOUD_CONFIG
 #cloud-config
-hostname: qemunet-demo
+hostname: qemuweb
 manage_etc_hosts: true
 ssh_pwauth: true
 disable_root: false
 package_update: true
 packages: []
 users:
-  - default
-  - name: demo
-    groups: [sudo]
-    shell: /bin/bash
-    lock_passwd: false
   - name: toto
     groups: [sudo]
     shell: /bin/bash
@@ -47,7 +42,6 @@ users:
 chpasswd:
   expire: false
   users:
-    - {name: demo, password: serial-demo, type: text}
     - {name: toto, password: toto, type: text}
 write_files:
   - path: /etc/systemd/network/20-qemunet.network
@@ -66,8 +60,8 @@ runcmd:
   - [sh, -c, 'echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0']
 CLOUD_CONFIG
     cat > "$meta_data" <<EOF_META
-instance-id: qemunet-$id-$(date +%s)
-local-hostname: qemunet-demo
+instance-id: qemuweb-$id-$(date +%s)
+local-hostname: qemuweb
 EOF_META
     cat > "$network_config" <<'NETWORK_CONFIG'
 # Cloud-init's NoCloud seed also supplies DHCP configuration for matching NICs.

@@ -6,7 +6,7 @@ QEMU presents virtual hardware to the guest. The guest kernel needs a matching d
 
 The `debian13-cloud` VM uses VirtIO for both its system disk and LAN NIC. The prepared image boots with the VirtIO block driver; a test boot with `virtio-net-pci` showed its interface as `enp0s2`. The profile sets `diskInterface: virtio` and `networkModel: virtio-net-pci` explicitly.
 
-The separate `debian13-legacy` profile is installed from the official Debian 13 netinst ISO, not from a cloud image. Its preparation installs `linux-image-amd64` and the basic network/debug tools, and configures the boot command line with `root=/dev/sda1 console=tty0 console=ttyS0,115200`. It also enables the GRUB console on serial and VGA. The built image was boot-checked with an IDE disk and `e1000`: Debian mounted `/dev/sda1`, loaded the Intel driver, and reached the serial login prompt. Linux named the NIC `enp0s2` in that test.
+The separate `debian13-legacy` profile is installed from the official Debian 13 netinst ISO, not from a cloud image. Its preparation installs `linux-image-amd64` and the network/debug toolkit, and configures the boot command line with `root=/dev/sda1 console=tty0 console=ttyS0,115200 net.ifnames=0`. It also enables the GRUB console on serial and VGA. The profile uses an IDE disk and `e1000`; Debian mounts `/dev/sda1`, loads the Intel driver, reaches the serial login prompt, and names its cards `eth0`, `eth1`, and so on.
 
 ## Disk: VirtIO or IDE
 

@@ -131,9 +131,9 @@ In the web toolbar, check **Monitor** to enter commands for the VM in the curren
 `prepare.sh` reads the IDs under `systems` in `config.json` and invokes the matching `scripts/prepare/<id>.sh`. Shared helpers are alongside these scripts. Each target keeps its downloads and checksums in `sources/<id>/`:
 
 - **Alpine**: the script downloads and verifies the official `virt` ISO, installs it unattended into a RAW image, prepares the `root` and `toto` accounts, configures boot output and login on `ttyS0`, then produces the VDI base for VirtualBox.
-- **Debian 13 Cloud**: the script downloads and verifies the official cloud image, boots it once in an isolated temporary QEMU VM, prepares the `root`, `toto`, and `demo` accounts, configures serial access and DHCP networking, disables cloud-init for subsequent boots, then produces a read-only RAW image.
-- **Debian 13 Legacy**: a separate image installs the general Debian kernel plus `iproute2`, `tcpdump`, `iputils-ping`, `bash`, `net-tools`, `procps`, and `vim-tiny`. It boots from IDE with `root=/dev/sda1`, presents an `e1000` NIC, and enables consoles on `tty0` and `ttyS0`.
-- **OpenWrt**: the script verifies and decompresses the official RAW image.
+- **Debian 13 Cloud**: the script downloads and verifies the official cloud image, boots it once in an isolated temporary QEMU VM, prepares the `root` and `toto` accounts, configures serial access and DHCP networking, disables cloud-init for subsequent boots, then produces a read-only RAW image.
+- **Debian 13 Legacy**: a separate, compact teaching image installs the historical QemuNet network toolkit: IP, bridge, VLAN and firewall administration; DNS and DHCP clients/servers; capture, scanning and security tools including Scapy; SSH, Telnet, FTP and OpenVPN; Apache 2; Python and Expect; and small console utilities including `nano`. It boots from IDE with `root=/dev/sda1`, presents an `e1000` NIC, and enables consoles on `tty0` and `ttyS0`. Package recommendations are disabled so Scapy does not pull in IPython or graphical plotting tools. PHP, GCC, Emacs, TeX and TShark/Wireshark are intentionally omitted. Its complete construction and runtime contract is documented in the [Debian 13 Legacy image profile](docs/debian13-legacy.md).
+- **OpenWrt**: the script verifies and decompresses the official RAW image, boots it once to create the `toto` account and persist the common hostname, then publishes the customized base.
 - For **VirtualBox**, the script converts each RAW image into a read-only VDI base.
 
 At launch, the server performs no further system configuration: QEMU creates a QCOW2 working disk based on the RAW image; VirtualBox creates a VDI working disk based on the prepared VDI. Each instance has its own writes. They are retained by **Stop**, **Play / Resume**, and **Reboot**, then discarded by **Reset**, **Exit**, or server shutdown. The base files in `images/` are never modified.
@@ -157,6 +157,8 @@ At startup, the server checks the configured commands, prints a green check or r
 In the web page, click **Settings** to view the system values and their corresponding QEMU or VirtualBox arguments. The dialog also shows settings added by the server and the disk creation and launch commands. Before launch, these are a preview; after launch, the session's settings are displayed. To change settings, edit `config.json` before starting a new VM. The interface and system descriptions are in English.
 
 The **QEMU · KVM / TCG** choice remains in the main toolbar. **QEMU · KVM** requires accessible `/dev/kvm` and fails with an error if KVM is unavailable or a VirtualBox VM is running. Select **QEMU · TCG** explicitly to use software emulation. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 working disk format and control sockets are part of the application's operation. Configuration changes apply to **new sessions**. **Reboot** and **Reset** retain the options selected when their tab first started.
+
+Every prepared image uses the internal hostname `qemuweb` and provides the same lab credentials: `root` with no password and `toto` / `toto`. The per-tab names (`h1`, `h2`, …, or a user-edited display name) identify concurrent instances in the web interface and do not alter this internal guest hostname.
 
 ### Stopping and cleaning up
 
@@ -260,8 +262,9 @@ An interface assignment remains fixed across Stop and Resume. Stop connected hos
 By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exposes the CPU features that the host can provide to the VM. This avoids the `CPUID.80000001H:ECX.svm` warning that QEMU's default CPU model can produce on an Intel host: `svm` is the AMD virtualization feature and is not needed for these VMs. In TCG mode, the profile selects `-cpu qemu64`. This setting affects the virtual CPU, not the Debian image; VMs already running keep their configuration until their next launch.
 
 - **Alpine Linux 3.24**: `root` with an empty password, or `toto` / `toto`; temporary working disk.
-- **Debian 13 Cloud**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; temporary working disk.
-- **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; temporary working disk.
+- **Debian 13 Cloud**: `root` with no password, or `toto` / `toto`; temporary working disk.
+- **Debian 13 Legacy**: `root` with no password, or `toto` / `toto`; temporary working disk.
+- **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; the secondary account is `toto` / `toto`; temporary working disk.
 
 ### Host actions
 

@@ -39,14 +39,14 @@ grep -qxF ttyS0 /etc/securetty || echo ttyS0 >> /etc/securetty
 grep -q '^ttyS0::respawn:' /etc/inittab || echo 'ttyS0::respawn:/sbin/getty -L ttyS0 115200 vt100' >> /etc/inittab
 cat > /tmp/qemunet-answers <<'ANSWERS'
 KEYMAPOPTS=none
-HOSTNAMEOPTS=alpine
+HOSTNAMEOPTS=qemuweb
 DEVDOPTS=mdev
 INTERFACESOPTS="auto lo
 iface lo inet loopback
 
 auto eth0
 iface eth0 inet dhcp
-hostname alpine
+hostname qemuweb
 "
 TIMEZONEOPTS="UTC"
 PROXYOPTS=none

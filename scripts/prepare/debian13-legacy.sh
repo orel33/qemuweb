@@ -32,7 +32,7 @@ if [[ ! -s "$raw" ]]; then
 d-i debian-installer/locale string en_US.UTF-8
 d-i keyboard-configuration/xkb-keymap select us
 d-i netcfg/choose_interface select auto
-d-i netcfg/get_hostname string qemunet-legacy
+d-i netcfg/get_hostname string qemuweb
 d-i netcfg/get_domain string local
 d-i mirror/country string manual
 d-i mirror/http/hostname string deb.debian.org
@@ -52,10 +52,16 @@ d-i partman/confirm boolean true
 d-i partman/confirm_nooverwrite boolean true
 d-i partman/confirm_write_new_label boolean true
 d-i partman/mount_style select traditional
-d-i base-installer/install-recommends boolean true
+# Keep this teaching image compact. Explicit packages below are installed with
+# their required dependencies, but optional Recommends are not pulled in.
+d-i base-installer/install-recommends boolean false
 d-i apt-setup/use_mirror boolean true
 d-i pkgsel/upgrade select none
-d-i pkgsel/include string linux-image-amd64 iproute2 tcpdump iputils-ping bash net-tools procps vim-tiny sudo
+# QemuNet teaching toolkit: network administration, DNS/DHCP, capture and
+# security, remote/legacy services, Apache, automation, and text-mode tools.
+# Deliberately excluded: PHP, GCC, Emacs, TeX, TShark/Wireshark, IPython,
+# Matplotlib, and graphical utilities. Scapy and Apache are retained.
+d-i pkgsel/include string linux-image-amd64 bash sudo procps nano bash-completion curl wget unzip moreutils rsyslog iproute2 net-tools iputils-ping traceroute netcat-openbsd tcpdump bridge-utils vlan iptables dnsutils dnsmasq dnsmasq-utils isc-dhcp-client isc-dhcp-server nmap dsniff python3-scapy openssl gnutls-bin openvpn openssh-client openssh-server inetutils-telnet inetutils-telnetd tnftp inetutils-ftpd apache2 lynx python3 expect
 tasksel tasksel/first multiselect standard
 popularity-contest popularity-contest/participate boolean false
 d-i grub-installer/only_debian boolean true
@@ -70,10 +76,9 @@ set -eu
 # Keep the image convenient for console-based lab use; these credentials are
 # intended for this disposable teaching image, not a production VM.
 passwd -d root
-useradd -m -s /bin/bash -G sudo demo || true
-printf 'demo:serial-demo\n' | chpasswd
 useradd -m -s /bin/bash -G sudo toto || true
 printf 'toto:toto\n' | chpasswd
+printf 'qemuweb\n' > /etc/hostname
 mkdir -p /etc/default/grub.d /etc/systemd/network
 # Keep both local and serial consoles available after boot, and use the legacy
 # IDE disk's first partition as root instead of relying on UUID discovery.
@@ -81,7 +86,7 @@ cat > /etc/default/grub.d/99-qemunet-legacy.cfg <<'GRUB'
 GRUB_DEFAULT=0
 GRUB_TIMEOUT=1
 GRUB_TIMEOUT_STYLE=menu
-GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0,115200"
+GRUB_CMDLINE_LINUX_DEFAULT="console=tty0 console=ttyS0,115200 net.ifnames=0"
 GRUB_CMDLINE_LINUX="root=/dev/sda1"
 GRUB_DISABLE_LINUX_UUID=true
 GRUB_TERMINAL="console serial"
@@ -91,7 +96,7 @@ cat > /etc/systemd/network/20-qemunet.network <<'NETWORK'
 # systemd-networkd requests DHCP on Ethernet interfaces. This is client-side
 # configuration; the VDE switch does not run a DHCP server.
 [Match]
-Name=en*
+Name=eth*
 
 [Network]
 DHCP=yes
@@ -115,7 +120,9 @@ for name, mode in files:
     n = name.encode() + b'\0'
     fields = [ino, mode, 0, 0, 1, 0, len(data), 0, 0, 0, 0, len(n), 0]
     out += b'070701' + b''.join(f'{v:08x}'.encode() for v in fields) + n
-    out += b'\0' * (-len(out) % 4) + data + b'\0' * (-len(out) % 4)
+    out += b'\0' * (-len(out) % 4)
+    out += data
+    out += b'\0' * (-len(out) % 4)
     ino += 1
 name = b'TRAILER!!!\0'
 fields = [ino, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, len(name), 0]
@@ -126,7 +133,9 @@ PY
   cat "$temp_dir/addon.cpio.gz" >> "$temp_dir/initrd.gz"
   rm -f "$raw.tmp"
   # The installer sees an IDE disk and e1000 NIC to match the legacy profile.
-  qemu-img create -f raw "$raw.tmp" 8G
+  # Four GiB leaves enough room for the compact teaching system, its swap,
+  # lab files, logs, and routine package updates without bloating both bases.
+  qemu-img create -f raw "$raw.tmp" 4G
   qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 2048 -smp 2 \
     -display none -monitor none -serial "file:$temp_dir/serial.log" -no-reboot \
     -kernel "$temp_dir/vmlinuz" -initrd "$temp_dir/initrd.gz" \

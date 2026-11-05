@@ -19,8 +19,8 @@
       "type": "linux",
       "mode": "text",
       "label": "Alpine Linux 3.24",
-      "description": "Lightweight Linux distribution prepared for an interactive serial console on ttyS0. The root and toto accounts are available; the RAW image is read-only and each VM uses its own working disk.",
-      "login": "root with no password; toto / toto",
+      "description": "Lightweight Alpine Linux, serial-ready.",
+      "login": "root (no password); toto / toto",
       "images": {
         "raw": "images/alpine.raw",
         "vdi": "images/alpine.vdi"
@@ -36,8 +36,8 @@
       "type": "linux",
       "mode": "text",
       "label": "Debian 13 Cloud",
-      "description": "Debian 13 prepared offline from the official cloud image. It boots from disk with GRUB, displays boot output and login on ttyS0, and provides root, toto and demo accounts.",
-      "login": "root with no password; toto / toto; demo / serial-demo",
+      "description": "Debian 13 cloud image with VirtIO hardware.",
+      "login": "root (no password); toto / toto",
       "images": {
         "raw": "images/debian13-cloud.raw",
         "vdi": "images/debian13-cloud.vdi"
@@ -56,9 +56,9 @@
     "debian13-legacy": {
       "type": "linux",
       "mode": "text",
-      "label": "Debian 13 Legacy (IDE + e1000)",
-      "description": "Debian 13 prepared for legacy QEMU hardware: IDE system disk, e1000 Ethernet, and boot/login consoles on tty0 and ttyS0.",
-      "login": "root with no password; toto / toto; demo / serial-demo",
+      "label": "Debian 13 Legacy",
+      "description": "Debian 13 networking labs (IDE, e1000, Scapy, Apache).",
+      "login": "root (no password); toto / toto",
       "images": {
         "raw": "images/debian13-legacy.raw",
         "vdi": "images/debian13-legacy.vdi"
@@ -78,8 +78,8 @@
       "type": "linux",
       "mode": "text",
       "label": "OpenWrt 25.12 x86-64",
-      "description": "Lightweight network-oriented Linux system running in text mode on the serial console. A VDE network adapter can be selected before launch; its RAW base comes from the official disk image.",
-      "login": "Press Enter, then root with no password",
+      "description": "Lightweight OpenWrt network appliance.",
+      "login": "Press Enter; root (no password); toto / toto",
       "images": {
         "raw": "images/openwrt.raw",
         "vdi": "images/openwrt.vdi"
