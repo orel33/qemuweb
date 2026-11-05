@@ -4,74 +4,62 @@ This demo runs Alpine Linux, Debian 13, or OpenWrt in QEMU or VirtualBox and rel
 
 ## Software architecture overview
 
-QemuWeb has three runtime layers: the browser interface, the Node.js server, and the local virtualization processes. The browser never connects directly to QEMU, VirtualBox, `vde_switch`, or a Unix socket. `server.js` owns the processes and runtime files, exposes the HTTP API, and relays interactive streams through Socket.IO.
+QemuWeb is divided into three parts. The browser never connects directly to QEMU, VirtualBox, `vde_switch`, or their Unix sockets; all interactions go through `server.js`.
+
+The two interactive terminal paths are the central architecture of the application. Components are separated by labelled links that show the transport used:
 
 ```text
-Browser: public/index.html
-  xterm.js, tabs, VM/switch controls, logs, QEMU monitor
-                         │
-               HTTP API │ Socket.IO
-                         ▼
-Node.js: server.js
-  Express API, session state, process lifecycle, stream relays
-          │                    │                    │
-          ▼                    ▼                    ▼
-  QEMU / VirtualBox       vde_switch          runtime files
-  virtual machines        + vdeterm           disks and sockets
+VM console:
+xterm.js ⇄[ Socket.IO over WS* ]⇄ server.js
+         ⇄[ Unix serial socket · Node net.Socket ]⇄ QEMU/VirtualBox UART
+         ⇄[ virtual serial port ]⇄ guest ttyS0
+
+Switch terminal:
+xterm.js ⇄[ Socket.IO over WS* ]⇄ server.js
+         ⇄[ pseudo-terminal · node-pty ]⇄ vdeterm
+         ⇄[ Unix management socket · -M ]⇄ vde_switch
+
+QEMU monitor:
+Monitor form ⇄[ HTTP/JSON ]⇄ Express/server.js
+             ⇄[ Unix monitor socket ]⇄ QEMU HMP
+
+Actions and configuration:
+Browser buttons ⇄[ HTTP/JSON ]⇄ Express/server.js
+                →[ child_process spawn/exec ]→ QEMU/VBoxManage/vde_switch
 ```
 
-The toolbar's **System** and **Engine** selections determine how a VM session enters this architecture:
+The same paths, grouped by software location, are detailed below:
 
 ```text
-Browser selection
-  System: Alpine / Debian 13 / Debian 13 Legacy / OpenWrt
-  Engine: QEMU · KVM / QEMU · TCG / VirtualBox
-                              │
-                              ▼
-                         config.json
-                 system profile + engine options
-                              │
-                 ┌────────────┴────────────┐
-                 ▼                         ▼
-          QEMU execution path       VirtualBox execution path
-          RAW → QCOW2 disk          VDI → differential VDI
-          KVM or TCG                VBoxManage
-          HMP monitor               no web monitor
-          VDE networking            networking disabled for now
-                 │                         │
-                 └────────────┬────────────┘
-                              ▼
-                    Unix serial socket
-                              ▼
-              server.js ↔ Socket.IO ↔ xterm.js
+┌─ BROWSER · public/index.html ─────────────────────────────────────────┐
+│ Host tab:   System · Engine · NICs · Play/Resume · Stop · Reboot     │
+│             Reset · Exit · Clear · Settings · Log · Monitor · Status │
+│ Switch tab: Play · Stop · Exit/Remove · Clear · Log · Status         │
+│ Shared interactive display: xterm.js                                 │
+└───────────────────────────────────────────────────────────────────────┘
+       │ HTTP/JSON: actions, configuration and QEMU monitor
+       ↕ Socket.IO (WS*): consoles, switch terminal, logs and status
+┌─ NODE.JS SERVER · server.js ──────────────────────────────────────────┐
+│ Express API · sessions · process lifecycle · runtime files · buffers │
+│ Host console:   Socket.IO ↔ serial relay using Node net.Socket       │
+│ QEMU monitor:   HTTP request ↔ monitor Unix socket                   │
+│ Switch console: Socket.IO ↔ terminal relay using node-pty            │
+└───────────────────────────────────────────────────────────────────────┘
+       │ child_process spawn/exec · Unix sockets · pseudo-terminal
+       ▼
+┌─ BACKEND · local external processes ──────────────────────────────────┐
+│ QEMU VM:       qemu-system-x86_64 (KVM/TCG) · RAW → QCOW2            │
+│                serial socket · HMP monitor · optional VDE NICs        │
+│ VirtualBox VM: VBoxManage / VirtualBox · VDI → differential VDI      │
+│                server-mode UART socket                               │
+│ VDE switch:    vdeterm ↔ management socket (-M) ↔ vde_switch         │
+│ VDE network:   QEMU NICs ↔ data socket (-s) ↔ vde_switch             │
+└───────────────────────────────────────────────────────────────────────┘
 ```
 
-The VDE switch is a first-class session parallel to a VM session. It has no **System** or **Engine** selector because it is neither a guest OS nor a virtual machine:
+\* Socket.IO uses WebSocket when available and can fall back to HTTP polling. It adds named events, session rooms and reconnection behavior on top of that transport.
 
-```text
-                         Browser switch tab
-              Play / Stop                 xterm.js
-                   │                         ↕
-              HTTP API                  Socket.IO
-                   │                         ↕
-                   └────── server.js switch session ──────┐
-                               │                           │
-                         process control              terminal relay
-                               │                           ↕
-                               │                        node-pty
-                               │                           ↕
-                               │                        vdeterm
-                               │                           ↕
-                               │             management Unix socket (-M)
-                               ▼                           ↕
-                         vde_switch ◀──────────────────────┘
-                               ↕
-                       VDE data socket (-s)
-                               ↕
-                    QEMU VDE NICs / guest LAN
-```
-
-The switch's HTTP path creates, starts, stops or removes the `vde_switch` process. Its Socket.IO path remains open for the interactive `vdeterm` terminal. The lower `-s` path is the Ethernet data plane shared by the QEMU NICs; it operates independently from the `-M` management console.
+`node-pty` is switch-specific. VM consoles already expose byte-oriented Unix serial sockets, so `server.js` relays them directly with Node's `net.Socket`; no pseudo-terminal is required. The VDE console instead runs `vdeterm`, a terminal application that needs the TTY semantics supplied by `node-pty` for prompts, editing, history, completion and resizing.
 
 The engine changes the virtualization backend, disk implementation and available control channels:
 
@@ -104,8 +92,6 @@ The interactive paths are deliberately different because each endpoint provides 
 | QEMU monitor | `Monitor form ↔ HTTP/JSON ↔ server.js ↔ Unix monitor socket ↔ QEMU HMP` | Send emulator commands such as `info status`; this controls QEMU and is not a guest shell. |
 | Start, Stop, Reboot, Reset and Exit | `Toolbar ↔ HTTP/JSON ↔ server.js ↔ process/VBoxManage control` | Manage one VM or switch session and its working files. |
 | Logs and status | `server.js ↔ Socket.IO ↔ selected browser tab` | Keep launch commands, process messages, console state and lifecycle state associated with the correct tab. |
-
-`node-pty` is required only on the switch path. A VM exposes a byte-oriented serial socket that Node can relay directly. `vdeterm`, by contrast, is a terminal application: the pseudo-terminal gives it the TTY behavior needed for prompts, arrow keys, command history, completion and terminal resizing.
 
 VDE uses two separate paths:
 
