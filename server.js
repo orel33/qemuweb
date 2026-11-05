@@ -3,6 +3,7 @@
 const fs = require('fs');
 const http = require('http');
 const net = require('net');
+const os = require('os');
 const {StringDecoder} = require('string_decoder');
 const path = require('path');
 const crypto = require('crypto');
@@ -19,6 +20,7 @@ console.log(`QemuWeb ${packageInfo.version}\n`);
 try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
+const vdeRuntime = path.join(os.tmpdir(), `qemuweb-${process.getuid()}-${crypto.createHash('sha256').update(root).digest('hex').slice(0, 12)}`);
 const configPath = path.join(root, 'config.json');
 const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'rtcBase', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
 const port = Number(process.env.PORT || 3002);
@@ -58,7 +60,7 @@ function getSession(id, create = false, kind = 'vm') {
       generation: 0,
       runDisk: null,
       networkInterfaces: [],
-      socketDir: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}-vde`) : null,
+      socketDir: kind === 'switch' ? path.join(vdeRuntime, `qemuweb-${process.pid}-${id}-vde`) : null,
       mgmtPath: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}.mgmt`) : null,
       mgmtAliasPath: null,
       switchTerminal: null,
@@ -328,6 +330,12 @@ function linkedTerminals(switchId) {
   return [...sessions.values()].filter(session => session.kind === 'terminal' && session.terminalSwitchId === switchId);
 }
 
+function cleanupSwitchSocketDir(session) {
+  if (!session.socketDir) return;
+  fs.rmSync(session.socketDir, {recursive: true, force: true});
+  try { fs.rmdirSync(vdeRuntime); } catch (_) {}
+}
+
 function reservedVdePorts(switchId, excludeSessionId) {
   const used = new Set();
   for (const session of sessions.values()) {
@@ -421,19 +429,54 @@ function startVdeTerminal(session, switchSession) {
     : Array.from({length: 32}, (_, index) => index + 1).find(candidate => !reservedPorts.has(candidate));
   if (!port) throw new Error(`No free VDE port on ${switchSession.hostname}.`);
   const vdeUrl = `vde://${switchSession.socketDir}[${port}]`;
-  const shell = fs.existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh';
-  const args = [vdeUrl, shell, '-l'];
-  appendLog(session, `$ ${[commands.VDENS, ...args].map(shellQuote).join(' ')}`);
+  const shell = '/bin/bash';
+  const bwrapArgs = [
+    'unshare', commands.BWRAP,
+    '--unshare-user', '--uid', '1', '--gid', '0',
+    '--unshare-pid', '--unshare-ipc', '--unshare-uts', '--unshare-net',
+    '--hostname', 'qemuweb-shell', '--new-session', '--die-with-parent',
+    '--dir', '/usr',
+    '--ro-bind', '/usr/bin', '/usr/bin',
+    '--ro-bind', '/usr/sbin', '/usr/sbin',
+    '--ro-bind', '/usr/lib', '/usr/lib',
+    '--ro-bind', '/usr/lib64', '/usr/lib64',
+    '--ro-bind', '/usr/libexec', '/usr/libexec',
+    '--ro-bind', '/usr/share', '/usr/share',
+    '--symlink', 'usr/bin', '/bin',
+    '--symlink', 'usr/sbin', '/sbin',
+    '--symlink', 'usr/lib', '/lib',
+    '--symlink', 'usr/lib64', '/lib64',
+    '--ro-bind', '/etc', '/etc',
+    '--dev', '/dev',
+    '--dev-bind-try', '/dev/net/tun', '/dev/net/tun',
+    '--proc', '/proc',
+    '--tmpfs', '/tmp',
+    '--tmpfs', '/home', '--dir', '/home/guest',
+    '--tmpfs', '/root',
+    '--tmpfs', '/run',
+    '--dir', switchSession.socketDir,
+    '--bind', switchSession.socketDir, switchSession.socketDir,
+    '--clearenv',
+    '--setenv', 'PATH', '/usr/bin:/bin:/usr/sbin:/sbin',
+    '--setenv', 'TERM', 'xterm-256color',
+    '--setenv', 'HOME', '/home/guest',
+    '--setenv', 'USER', 'guest',
+    '--setenv', 'LOGNAME', 'guest',
+    '--setenv', 'SHELL', shell,
+    '--chdir', '/home/guest',
+    '--', commands.VDENS, vdeUrl, shell, '-l'
+  ];
+  appendLog(session, `$ ${[commands.PODMAN, ...bwrapArgs].map(shellQuote).join(' ')}`);
   session.serialBuffer = '';
   io.to(session.id).emit('serial-reset', {sessionId: session.id, serial: ''});
   let terminal;
   try {
-    terminal = pty.spawn(commands.VDENS, args, {
+    terminal = pty.spawn(commands.PODMAN, bwrapArgs, {
       name: 'xterm-256color',
       cols: 80,
       rows: 24,
-      cwd: process.env.HOME || root,
-      env: {...process.env, TERM: 'xterm-256color'}
+      cwd: root,
+      env: process.env
     });
   } catch (error) {
     throw new Error(`Cannot start VDE shell: ${error.message}`);
@@ -481,7 +524,7 @@ async function startSwitch(session) {
   if (session.kind !== 'switch' || session.machine) throw new Error('Switch is already running.');
   fs.mkdirSync(session.socketDir, {recursive: true});
   try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-  const args = ['-s', session.socketDir, '-M', session.mgmtPath];
+  const args = ['-s', session.socketDir, '-M', session.mgmtPath, '-mod', '0660'];
   appendLog(session, `$ ${[commands.VDE_SWITCH, ...args].map(shellQuote).join(' ')}`);
   const child = spawn(commands.VDE_SWITCH, args, {stdio: ['pipe', 'pipe', 'pipe']});
   session.machine = child;
@@ -490,6 +533,7 @@ async function startSwitch(session) {
   child.stderr.on('data', data => appendLog(session, data.toString()));
   child.once('error', error => {
     stopSwitchTerminal(session);
+    cleanupSwitchSocketDir(session);
     session.lastMessage = `VDE error: ${error.message}`;
     if (session.machine === child) session.machine = null;
     publishState(session, session.lastMessage);
@@ -498,17 +542,20 @@ async function startSwitch(session) {
     stopSwitchTerminal(session);
     if (session.machine === child) session.machine = null;
     try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-    fs.rmSync(session.socketDir, {recursive: true, force: true});
+    cleanupSwitchSocketDir(session);
     if (!session.stopping) publishState(session, `VDE stopped (${code})`);
   });
   for (let attempt = 0; attempt < 60; attempt++) {
     if (fs.existsSync(session.mgmtPath)) {
-      try { startSwitchTerminal(session); }
+      try {
+        fs.chmodSync(session.socketDir, 0o2750);
+        startSwitchTerminal(session);
+      }
       catch (error) {
         child.kill('SIGTERM');
         session.machine = null;
         try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-        fs.rmSync(session.socketDir, {recursive: true, force: true});
+        cleanupSwitchSocketDir(session);
         throw new Error(`Cannot start VDE terminal: ${error.message}`);
       }
       session.everStarted = true;
@@ -535,7 +582,7 @@ async function stopSwitch(session, force = false) {
   }
   session.machine = null;
   try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-  fs.rmSync(session.socketDir, {recursive: true, force: true});
+  cleanupSwitchSocketDir(session);
   session.stopping = false;
   publishState(session, 'VDE switch stopped');
 }

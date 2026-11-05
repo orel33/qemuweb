@@ -3,6 +3,9 @@ set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
 RUNTIME="$ROOT/runtime"
+QEMUWEB_TMP_ROOT="${TMPDIR:-/tmp}"
+QEMUWEB_ROOT_HASH="$(printf '%s' "$ROOT" | sha256sum | cut -c1-12)"
+VDE_RUNTIME="$QEMUWEB_TMP_ROOT/qemuweb-$(id -u)-$QEMUWEB_ROOT_HASH"
 DRY_RUN=0
 if [[ ${1:-} == --dry-run && $# == 1 ]]; then
   DRY_RUN=1
@@ -32,6 +35,14 @@ matching_pids() {
         fi
       done
       (( matched )) && printf '%s\n' "$pid"
+    elif [[ "$kind" == vde ]]; then
+      [[ "${exe##*/}" == vde_switch ]] || continue
+      for arg in "${args[@]:1}"; do
+        if [[ "$arg" == "$VDE_RUNTIME/"* ]]; then
+          printf '%s\n' "$pid"
+          break
+        fi
+      done
     else
       [[ "${exe##*/}" == qemu-system-x86_64 ]] || continue
       for arg in "${args[@]:1}"; do
@@ -74,6 +85,16 @@ if (( ! DRY_RUN )); then
   signal_pids KILL qemu
 fi
 
+# Nettoie les switches VDE orphelins propres à ce checkout.
+signal_pids TERM vde
+if (( ! DRY_RUN )); then
+  for _ in {1..3}; do
+    [[ -z "$(matching_pids vde)" ]] && break
+    sleep 1
+  done
+  signal_pids KILL vde
+fi
+
 # Une VM VirtualBox peut survivre au serveur qui l'a créée.
 if command -v VBoxManage >/dev/null 2>&1; then
   while IFS= read -r entry; do
@@ -94,9 +115,14 @@ if command -v VBoxManage >/dev/null 2>&1; then
   fi
 fi
 
-if (( ! DRY_RUN )) && { [[ -n "$(matching_pids server)" ]] || [[ -n "$(matching_pids qemu)" ]]; }; then
+if (( ! DRY_RUN )) && { [[ -n "$(matching_pids server)" ]] || [[ -n "$(matching_pids qemu)" ]] || [[ -n "$(matching_pids vde)" ]]; }; then
   echo 'Project processes are still running; cleanup cancelled.' >&2
   exit 1
+fi
+
+if [[ -d "$VDE_RUNTIME" ]]; then
+  if (( DRY_RUN )); then echo "Would remove stale VDE runtime: $VDE_RUNTIME"
+  else rm -rf -- "$VDE_RUNTIME"; fi
 fi
 
 if (( DRY_RUN )); then echo 'Dry run complete.'

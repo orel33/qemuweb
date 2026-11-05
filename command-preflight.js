@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VBOXMANAGE', 'VDE_SWITCH', 'VDETERM', 'VDENS', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VBOXMANAGE', 'VDE_SWITCH', 'VDETERM', 'VDENS', 'PODMAN', 'BWRAP', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU',
   QEMU_IMG: 'QEMU disk tools',
@@ -12,6 +12,8 @@ const commandLabels = {
   VDE_SWITCH: 'VDE switch',
   VDETERM: 'VDE terminal',
   VDENS: 'VDE shell',
+  PODMAN: 'Rootless namespace helper',
+  BWRAP: 'Filesystem sandbox',
   GENISOIMAGE: 'ISO image tool',
   NODE: 'Node.js',
   PYTHON3: 'Python 3'
