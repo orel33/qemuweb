@@ -2,6 +2,18 @@
 
 This is a draft implementation plan for migrating QemuNet's virtual networks to the browser. The existing single-VM QEMU and VirtualBox demo remains usable throughout. The first network release targets local QEMU on Linux and text-mode Linux guests. Production at CREMI also requires OpenID Connect authentication, isolated sessions for concurrent users, and execution on a remote Linux server. VirtualBox network parity and graphical guests remain later decisions.
 
+## Engine roadmap — project direction
+
+This is the primary engine roadmap for QemuWeb. Keep the execution layer extensible, while implementing and maintaining engines in this order:
+
+1. **QEMU/KVM — primary target.** This is the preferred engine for Linux VMs and VDE-connected LANs. Require KVM when the user selects this mode; report an error if it is unavailable rather than silently changing acceleration.
+2. **QEMU/TCG — fallback mode.** Keep it available as an explicit software-emulation fallback for hosts where KVM cannot be used. It is not the preferred routine engine.
+3. **VirtualBox — first alternative engine.** Maintain its existing VM support as well as practical, including compatibility with the prepared OS images and lifecycle controls. Keep in mind that its ability to run concurrently with QEMU/KVM depends on host hypervisor constraints.
+4. **VMware — future hypervisor.** Preserve room for a future adapter, disk conversion/profile and console integration; do not make it a current implementation target.
+5. **Docker / Podman — lightweight VDE terminals, to investigate.** Explore whether a container built from a Dockerfile can act as a lightweight host on a VDE network, alongside full VMs. This is a distinct execution type, not a VM engine: containers share the host kernel and do not boot the Linux kernel stored in our RAW images. The investigation must establish a safe way to connect a container interface to a VDE switch, define how its terminal and lifecycle appear in QemuWeb, and document networking/privilege requirements before implementation.
+
+The Docker/Podman idea is specifically for small command-line/networking terminals useful in practical labs. It should let a topology mix full QEMU/VirtualBox VMs and container-based terminals on the same VDE switch, if the host-side networking integration proves practical. It does not replace the RAW image preparation workflow for VM systems.
+
 ## Current `dev` prototype
 
 The first network slice is available in `dev`: create a VDE switch tab, start or stop its process, and use its interactive management terminal. Qemuweb launches `vdeterm` in a server-side pseudo-terminal and relays it through Socket.IO to the tab's xterm.js, reproducing QemuNet's `xterm -e vdeterm <management-socket>` workflow in the browser. A new QEMU VM has one disconnected Ethernet card by default; before its first launch, it can have up to four cards, each left disconnected or assigned to a running switch. Qemuweb gives every card a MAC address and every connected card a distinct VDE port. Connected cards use `-netdev vde` and `-device` at launch; the selected model is `e1000` for Debian 13 Legacy and `virtio-net-pci` for Debian 13 Cloud. Stop and resume keep the same assignments. VirtualBox networking is disabled. No guest has an external connection.
