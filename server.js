@@ -18,7 +18,7 @@ try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
 const configPath = path.join(root, 'config.json');
-const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
+const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'rtcBase', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
 const port = Number(process.env.PORT || 3002);
 const app = express();
 const server = http.createServer(app);
@@ -124,6 +124,7 @@ function validateQemuOptions(options, partial = false) {
       throw new Error(`Invalid value for ${key}.`);
     }
   }
+  if (options.rtcBase && !['utc', 'localtime'].includes(options.rtcBase)) throw new Error('QEMU RTC base must be utc or localtime.');
   if (options.diskInterface && !['virtio', 'ide'].includes(options.diskInterface)) throw new Error('QEMU disk bus must be virtio or ide.');
   if (options.networkModel && !['virtio-net-pci', 'e1000'].includes(options.networkModel)) throw new Error('QEMU network model must be virtio-net-pci or e1000.');
   for (const key of ['bootDisk']) {
@@ -227,7 +228,7 @@ function qemuArgs(session, image, overlay) {
     '-machine', settings.machine, '-accel', session.qemuAcceleration,
     '-cpu', session.qemuAcceleration === 'kvm' ? settings.cpuKvm : settings.cpuTcg,
     '-m', String(settings.memory), '-smp', String(settings.smp),
-    '-display', settings.display, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
+    '-display', settings.display, '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
     '-serial', `unix:${session.socketPath},server=on,wait=off`
   ];
   // QEMU PC boot notation: c = first hard disk.
@@ -470,7 +471,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     const qemuMappings = {
       machine: '-machine', cpuKvm: session.qemuAcceleration === 'kvm' ? '-cpu' : 'inactive with this engine',
       cpuTcg: session.qemuAcceleration === 'tcg' ? '-cpu' : 'inactive with this engine', memory: '-m (MiB)',
-      smp: '-smp', display: '-display', diskInterface: '-drive if=', networkModel: '-device', bootDisk: '-boot order=',
+      smp: '-smp', display: '-display', rtcBase: '-rtc base=', diskInterface: '-drive if=', networkModel: '-device', bootDisk: '-boot order=',
       nic: 'Disable the implicit QEMU NIC; explicit Ethernet devices are listed below'
     };
     const rows = [
