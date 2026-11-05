@@ -4,7 +4,17 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const requiredKeys = ['VBOXMANAGE', 'GENISOIMAGE', 'NODE', 'PYTHON3', 'QEMU_IMG', 'QEMU_SYSTEM_X86_64', 'VDE_SWITCH', 'VDETERM'];
+const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VBOXMANAGE', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const commandLabels = {
+  QEMU_SYSTEM_X86_64: 'QEMU',
+  QEMU_IMG: 'QEMU disk tools',
+  VBOXMANAGE: 'VirtualBox',
+  VDE_SWITCH: 'VDE switch',
+  VDETERM: 'VDE terminal',
+  GENISOIMAGE: 'ISO image tool',
+  NODE: 'Node.js',
+  PYTHON3: 'Python 3'
+};
 
 function readEnvFile(file) {
   if (!fs.existsSync(file)) return {};
@@ -52,7 +62,11 @@ function resolveCommands(root) {
   if (missing.length) throw new Error(`Missing command defaults in .env: ${missing.join(', ')}`);
   const commands = {};
   const failures = [];
-  for (const [key, defaultCommand] of Object.entries(base)) {
+  const labelWidth = Math.max(...requiredKeys.map(key => commandLabels[key].length));
+  console.log('Checking dependencies…');
+  for (const key of requiredKeys) {
+    const defaultCommand = base[key];
+    const label = commandLabels[key].padEnd(labelWidth);
     try {
       const configured = local[key] || process.env[key] || defaultCommand;
       const resolved = findCommand(configured);
@@ -63,10 +77,10 @@ function resolveCommands(root) {
         if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);
       }
       commands[key] = resolved;
-      console.log(`\x1b[32m✓\x1b[0m ${key}: ${resolved}`);
+      console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}`);
     } catch (error) {
       failures.push(key);
-      console.error(`\x1b[31m✗\x1b[0m ${key}: ${error.message}`);
+      console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
     }
   }
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);

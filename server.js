@@ -11,9 +11,11 @@ const express = require('express');
 const socketIo = require('socket.io');
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
+const packageInfo = require('./package.json');
 
 const root = __dirname;
 let commands;
+console.log(`QemuWeb ${packageInfo.version}\n`);
 try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
@@ -24,7 +26,6 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const sessions = new Map();
-const nameCounters = new Map();
 fs.mkdirSync(runtime, {recursive: true});
 
 function shellQuote(value) {
@@ -33,7 +34,7 @@ function shellQuote(value) {
 }
 
 function getSession(id, create = false, kind = 'vm') {
-  if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error('Invalid machine ID.');
+  if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error('Invalid session ID.');
   if (!sessions.has(id) && create) {
     sessions.set(id, {
       id,
@@ -58,6 +59,7 @@ function getSession(id, create = false, kind = 'vm') {
       networkInterfaces: [],
       socketDir: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}-vde`) : null,
       mgmtPath: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}.mgmt`) : null,
+      mgmtAliasPath: null,
       switchTerminal: null
     });
   }
@@ -94,6 +96,10 @@ function execLogged(session, command, args, options = {stdio: 'pipe'}) {
 app.use(express.json());
 app.use('/vendor', express.static(path.join(root, 'node_modules/xterm')));
 app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/xterm-addon-fit')));
+app.use((req, res, next) => {
+  if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');
+  next();
+});
 app.use(express.static(path.join(root, 'public')));
 
 function imageById(id) {
@@ -101,13 +107,13 @@ function imageById(id) {
   return system ? {id, ...system} : null;
 }
 
-function allocateName(id) {
+function allocateName(prefix) {
   const used = new Set([...sessions.values()].map(session => session.hostname).filter(Boolean));
-  for (let n = nameCounters.get(id) || 0; n < 100; n++) {
-    const name = `${id}-${String(n).padStart(2, '0')}`;
-    if (!used.has(name)) { nameCounters.set(id, n + 1); return name; }
+  for (let n = 1; n <= 99; n++) {
+    const name = `${prefix}${n}`;
+    if (!used.has(name)) return name;
   }
-  throw new Error(`All 100 names for ${id} have been used.`);
+  throw new Error(`All 99 ${prefix === 'h' ? 'host' : 'switch'} names have been used.`);
 }
 
 function validateQemuOptions(options, partial = false) {
@@ -283,26 +289,48 @@ function linkedHosts(switchId) {
     session.networkInterfaces.some(nic => nic.switchId === switchId));
 }
 
+function removeSwitchTerminalAlias(session) {
+  const aliasPath = session.mgmtAliasPath;
+  session.mgmtAliasPath = null;
+  if (!aliasPath) return;
+  try { fs.unlinkSync(aliasPath); } catch (_) {}
+  try { fs.rmdirSync(path.dirname(aliasPath)); } catch (_) {}
+}
+
 function stopSwitchTerminal(session) {
   const terminal = session.switchTerminal;
   session.switchTerminal = null;
   if (terminal) {
     try { terminal.kill('SIGTERM'); } catch (_) {}
   }
+  removeSwitchTerminalAlias(session);
 }
 
 function startSwitchTerminal(session) {
   stopSwitchTerminal(session);
   session.serialBuffer = '';
   io.to(session.id).emit('serial-reset', {sessionId: session.id, serial: ''});
-  appendLog(session, `$ ${[commands.VDETERM, session.mgmtPath].map(shellQuote).join(' ')}`);
-  const terminal = pty.spawn(commands.VDETERM, [session.mgmtPath], {
-    name: 'xterm-256color',
-    cols: 80,
-    rows: 24,
-    cwd: root,
-    env: {...process.env, TERM: 'xterm-256color'}
-  });
+  const aliasDir = path.join(runtime, `qemuweb-${process.pid}-vdeterm`);
+  const aliasName = session.hostname;
+  const aliasPath = path.join(aliasDir, aliasName);
+  fs.mkdirSync(aliasDir, {recursive: true});
+  try { fs.unlinkSync(aliasPath); } catch (_) {}
+  fs.symlinkSync(session.mgmtPath, aliasPath);
+  session.mgmtAliasPath = aliasPath;
+  appendLog(session, `$ ${[commands.VDETERM, aliasName].map(shellQuote).join(' ')}  # cwd=${shellQuote(aliasDir)}`);
+  let terminal;
+  try {
+    terminal = pty.spawn(commands.VDETERM, [aliasName], {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      cwd: aliasDir,
+      env: {...process.env, TERM: 'xterm-256color'}
+    });
+  } catch (error) {
+    removeSwitchTerminalAlias(session);
+    throw error;
+  }
   session.switchTerminal = terminal;
   terminal.onData(data => {
     session.serialBuffer = (session.serialBuffer + data).slice(-262144);
@@ -311,6 +339,7 @@ function startSwitchTerminal(session) {
   terminal.onExit(({exitCode}) => {
     if (session.switchTerminal !== terminal) return;
     session.switchTerminal = null;
+    removeSwitchTerminalAlias(session);
     if (!session.stopping && session.machine) publishState(session, `VDE terminal stopped (${exitCode})`);
   });
 }
@@ -361,7 +390,7 @@ async function startSwitch(session) {
 }
 
 async function stopSwitch(session, force = false) {
-  if (!force && linkedHosts(session.id).some(host => host.machine)) throw new Error('Stop connected VMs before stopping this switch.');
+  if (!force && linkedHosts(session.id).some(host => host.machine)) throw new Error('Stop connected hosts before stopping this switch.');
   const child = session.machine;
   session.stopping = true;
   stopSwitchTerminal(session);
@@ -382,7 +411,7 @@ function qemuAcceleration(engine, checkAvailability = true) {
   if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
   if (!checkAvailability) return 'kvm';
   const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'virtualbox');
-  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox VM is running. Stop VirtualBox or select QEMU · TCG.');
+  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host or select QEMU · TCG.');
   try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
   catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Choose QEMU · TCG or enable KVM.'); }
   return 'kvm';
@@ -395,7 +424,7 @@ function qemuOverlayArgs(image, overlay) {
 function spawnQemu(session, image, reuseDisk = false) {
   const overlay = reuseDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
   if (!overlay || !fs.existsSync(overlay)) {
-    if (reuseDisk) throw new Error('The current VM disk was not found.');
+    if (reuseDisk) throw new Error('The current host disk was not found.');
     execLogged(session, commands.QEMU_IMG, qemuOverlayArgs(image, overlay), {stdio: 'pipe'});
   }
   image.runFiles = [overlay];
@@ -451,7 +480,7 @@ function virtualBoxCommands(session, image) {
 app.get('/api/options/:sessionId', (req, res) => {
   try {
     const id = req.params.sessionId;
-    if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error('Invalid machine ID.');
+    if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error('Invalid session ID.');
     const existing = getSession(id);
     const launched = !!(existing && existing.everStarted && existing.selectedImage);
     const image = launched ? existing.selectedImage : imageById(req.query.system);
@@ -514,16 +543,16 @@ function spawnVirtualBox(session, image) {
 function start(sessionId, selectedEngine, imageId, options = {}) {
   const session = getSession(sessionId, true);
   if (session.kind !== 'vm') throw new Error('This tab is a VDE switch.');
-  if (session.action && !options.reset && !(options.resume && session.action === 'reboot')) throw new Error('An action is already in progress for this VM.');
-  if (session.machine) throw new Error('This VM is already running.');
+  if (session.action && !options.reset && !(options.resume && session.action === 'reboot')) throw new Error('An action is already in progress for this host.');
+  if (session.machine) throw new Error('This host is already running.');
   const resume = session.everStarted && !options.reset;
   if (resume && (selectedEngine !== session.engine || imageId !== session.selectedImage?.id)) throw new Error('Resume must use the original system and engine.');
-  if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current VM disk was not found.');
+  if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current host disk was not found.');
   if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
   const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
   if (selectedEngine === 'virtualbox') {
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
-    if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU VM uses KVM. Stop that VM, restart it with QEMU TCG, then start VirtualBox.');
+    if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU host uses KVM. Stop that host, restart it with QEMU TCG, then start VirtualBox.');
   }
   const image = resume ? session.selectedImage : imageById(imageId);
   if (!image) throw new Error('Unknown system in config.json.');
@@ -535,7 +564,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   } else {
     session.networkInterfaces = assignNetworkInterfaces(session, validateNetworkInterfaces(options.interfaces, selectedEngine));
   }
-  const displayName = resume || options.reset ? session.hostname : allocateName(image.id);
+  const displayName = session.hostname || allocateName('h');
   if (fs.existsSync(session.socketPath)) fs.unlinkSync(session.socketPath);
   session.stopping = false;
   session.generation += 1;
@@ -596,7 +625,7 @@ function sendMonitorCommand(session, command) {
 function waitForQemuExit(child, timeoutMs = 30000) {
   if (child.exitCode !== null || child.signalCode !== null) return Promise.resolve();
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => finish(new Error('The VM did not respond to the graceful shutdown request.')), timeoutMs);
+    const timeout = setTimeout(() => finish(new Error('The host did not respond to the graceful shutdown request.')), timeoutMs);
     function finish(error) {
       clearTimeout(timeout);
       child.removeListener('exit', onExit);
@@ -624,14 +653,14 @@ async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
     if (state === 'poweroff' || state === 'aborted' || state === 'saved') return;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
-  throw new Error('The VM did not respond to the graceful shutdown request.');
+  throw new Error('The host did not respond to the graceful shutdown request.');
 }
 
 async function reboot(session) {
-  if (session?.kind === 'switch') throw new Error('Reboot applies only to VMs.');
-  if (!session || !session.everStarted) throw new Error('This machine has not started yet.');
-  if (!session.machine) throw new Error('The VM is stopped; use Play to resume from its current disk.');
-  if (session.action) throw new Error('An action is already in progress for this VM.');
+  if (session?.kind === 'switch') throw new Error('Reboot applies only to hosts.');
+  if (!session || !session.everStarted) throw new Error('This host has not started yet.');
+  if (!session.machine) throw new Error('The host is stopped; use Play to resume from its current disk.');
+  if (session.action) throw new Error('An action is already in progress for this host.');
   session.action = 'reboot';
   try {
     publishState(session, 'Graceful shutdown before reboot…');
@@ -649,9 +678,9 @@ async function reboot(session) {
 }
 
 async function reset(session) {
-  if (session?.kind === 'switch') throw new Error('Reset applies only to VMs.');
-  if (!session || !session.everStarted || !session.selectedImage) throw new Error('This machine has not started yet.');
-  if (session.action) throw new Error('An action is already in progress for this VM.');
+  if (session?.kind === 'switch') throw new Error('Reset applies only to hosts.');
+  if (!session || !session.everStarted || !session.selectedImage) throw new Error('This host has not started yet.');
+  if (session.action) throw new Error('An action is already in progress for this host.');
   session.action = 'reset';
   const engine = session.engine;
   const imageId = session.selectedImage.id;
@@ -724,7 +753,7 @@ async function stop(session, options = {}) {
     if (session.machine === current) session.machine = null;
     try { fs.unlinkSync(session.socketPath); } catch (_) {}
     try { fs.unlinkSync(session.monitorPath); } catch (_) {}
-    if (options.publish !== false && session.action !== 'destroy') publishState(session, 'VM stopped; current disk kept');
+    if (options.publish !== false && session.action !== 'destroy') publishState(session, 'Host stopped; current disk kept');
   } finally {
     session.stopping = false;
     if (ownAction && session.action === 'stop') session.action = null;
@@ -734,7 +763,7 @@ async function stop(session, options = {}) {
 async function destroySession(session) {
   if (!session) return;
   if (session.kind === 'switch') {
-    if (linkedHosts(session.id).length) throw new Error('Remove connected VM tabs before deleting this switch.');
+    if (linkedHosts(session.id).length) throw new Error('Remove connected host tabs before deleting this switch.');
     await stopSwitch(session, true);
     sessions.delete(session.id);
     return;
@@ -784,6 +813,17 @@ app.post('/api/start', (req, res) => {
   }
 });
 
+app.post('/api/hosts', (req, res) => {
+  try {
+    const {id} = req.body || {};
+    if (sessions.has(id)) throw new Error('Host ID already exists.');
+    const session = getSession(id, true, 'vm');
+    session.hostname = allocateName('h');
+    session.lastMessage = 'Host ready to start';
+    res.json({id, name: session.hostname});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
 app.post('/api/switches', (req, res) => {
   try {
     const {id, name} = req.body || {};
@@ -818,7 +858,7 @@ app.post('/api/stop/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     if (session && session.kind !== 'vm') throw new Error('Use the switch stop action.');
-    if (session && session.action) throw new Error('An action is already in progress for this VM.');
+    if (session && session.action) throw new Error('An action is already in progress for this host.');
     await stop(session);
     res.json({ok: true});
   }
@@ -842,7 +882,7 @@ app.post('/api/reset/:sessionId', async (req, res) => {
 app.post('/api/monitor/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm' || !session.machine || !session.engine.startsWith('qemu') || session.action) throw new Error('Monitor is available only for a running QEMU VM.');
+    if (!session || session.kind !== 'vm' || !session.machine || !session.engine.startsWith('qemu') || session.action) throw new Error('Monitor is available only for a running QEMU host.');
     const command = req.body && req.body.command;
     if (typeof command !== 'string' || !command.trim() || command.length > 256 || /[\r\n\x00-\x1f\x7f]/.test(command)) throw new Error('Enter a single-line QEMU command (maximum 256 characters).');
     appendLog(session, `$ monitor: ${command}`);
@@ -856,7 +896,7 @@ app.patch('/api/sessions/:sessionId', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     const name = req.body && req.body.name;
-    if (!session || session.kind !== 'vm' || !session.everStarted) throw new Error('This VM has not started yet.');
+    if (!session || session.kind !== 'vm' || !session.everStarted) throw new Error('This host has not started yet.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
     session.hostname = name.trim();
     io.emit('session-renamed', {sessionId: session.id, name: session.hostname});
@@ -876,7 +916,8 @@ io.on('connection', socket => {
   let selectionQueue = Promise.resolve();
   socket.on('select-session', (id, token, acknowledge) => {
     selectionQueue = selectionQueue.then(async () => {
-      const session = getSession(id, true);
+      const session = getSession(id);
+      if (!session) throw new Error('Unknown session.');
       if (socket.sessionId && socket.sessionId !== id) {
         await new Promise((resolve, reject) => socket.leave(socket.sessionId, error => error ? reject(error) : resolve()));
       }
@@ -930,7 +971,11 @@ server.on('error', error => {
   console.error('Server error:', error);
   process.exitCode = 1;
 });
-server.listen(port, '127.0.0.1', () => console.log(`Test console: http://127.0.0.1:${port}`));
+server.listen(port, '127.0.0.1', () => {
+  console.log('\nQemuWeb is ready.');
+  console.log(`  Web interface  http://127.0.0.1:${port}`);
+  console.log('  Stop           Ctrl+C\n');
+});
 
 let shuttingDown = false;
 async function shutdown() {

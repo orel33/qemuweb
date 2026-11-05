@@ -1,8 +1,8 @@
 {
-  "name": "qemunet-serial-console-demo",
+  "name": "qemuweb",
   "version": "0.1.0",
   "private": true,
-  "description": "xterm.js serial-console demo for Alpine, Debian 13, and OpenWrt with QEMU/KVM or VirtualBox",
+  "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
     "start": "node server.js"
   },

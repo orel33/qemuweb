@@ -19,7 +19,7 @@
     .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     #start { color: #57dc91; } #stop { color: #ffaf76; } #reboot { color: #70b9ff; }
-    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #new-machine { color: #5adbd1; }
+    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #new-host { color: #5adbd1; }
     button:disabled { opacity: .45; cursor: default; }
     #status { display: inline-flex; align-items: center; justify-content: center; gap: 7px; min-width: 104px; margin-left: auto; padding: 8px 11px; border: 1px solid #506176; border-radius: 6px; background: #25303e; color: #c6d2e0; font-size: 12px; font-weight: 700; letter-spacing: .04em; white-space: nowrap; }
     #status::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -37,7 +37,7 @@
     .machine-tab .machine-name { border: 0; padding: 2px; background: transparent; text-align: left; }
     .machine-tab .machine-close { display: inline-grid; place-items: center; padding: 2px 4px; color: #ff777d; background: transparent; border: 0; }
     .machine-tab .machine-close svg { width: 16px; height: 16px; }
-    #new-machine { flex: none; background: #1b2531; }
+    #new-host { flex: none; background: #1b2531; }
     #new-switch { flex: none; color: #9ee6b4; background: #1b2531; }
     [hidden] { display: none !important; }
     .network-controls { display: flex; flex: none; align-items: center; flex-wrap: wrap; gap: 7px; margin: 6px 16px; color: #bdc8d6; font-size: 13px; }
@@ -93,19 +93,19 @@
   <header>
     <h1>QemuWeb <span class="beta-badge" aria-label="Beta version">BETA</span></h1>
     <label for="os-image">System</label>
-    <select id="os-image" aria-label="System to start"></select>
+    <select id="os-image" aria-label="System to start" disabled></select>
     <label for="engine">Engine</label>
-    <select id="engine" aria-label="Virtualization engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
+    <select id="engine" aria-label="Virtualization engine" disabled><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select>
     <!-- Lucide-style inline icons: play, power, rotate-cw, rotate-ccw, x, eraser, sliders-horizontal, monitor-plus, network-plus. License: /icons/LICENSE-lucide.txt -->
-    <button id="start" class="icon-button" disabled title="Start VM from the base image" aria-label="Start VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
-    <button id="stop" class="icon-button" disabled title="Stop VM and keep its current disk" aria-label="Stop VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
-    <button id="reboot" class="icon-button" disabled title="Reboot VM with its current disk (keep changes)" aria-label="Reboot VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
-    <button id="reset" class="icon-button" disabled title="Reset VM from the base image (discard changes)" aria-label="Reset VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
-    <button id="exit" class="icon-button" type="button" title="Exit VM, delete its disk and close the tab" aria-label="Exit VM"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-    <button id="clear-console" class="icon-button" type="button" title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
-    <button id="show-qemu-options" class="icon-button" type="button" title="View VM launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg></button>
-    <label class="logs-toggle" for="show-logs" title="Show or hide session logs"><input id="show-logs" type="checkbox"> Log</label>
-    <label class="logs-toggle" for="show-monitor" title="Show or hide the QEMU monitor"><input id="show-monitor" type="checkbox"> Monitor</label>
+    <button id="start" class="icon-button" disabled title="Start host from the base image" aria-label="Start host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5a2 2 0 0 1 3.008-1.728l11.997 6.998a2 2 0 0 1 .003 3.458l-12 7A2 2 0 0 1 5 19z"/></svg></button>
+    <button id="stop" class="icon-button" disabled title="Stop host and keep its current disk" aria-label="Stop host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
+    <button id="reboot" class="icon-button" disabled title="Reboot host with its current disk (keep changes)" aria-label="Reboot host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
+    <button id="reset" class="icon-button" disabled title="Reset host from the base image (discard changes)" aria-label="Reset host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
+    <button id="exit" class="icon-button" type="button" disabled title="Exit host, delete its disk and close the tab" aria-label="Exit host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
+    <button id="clear-console" class="icon-button" type="button" disabled title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
+    <button id="show-qemu-options" class="icon-button" type="button" disabled title="View host launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg></button>
+    <label class="logs-toggle" for="show-logs" title="Show or hide session logs"><input id="show-logs" type="checkbox" disabled> Log</label>
+    <label class="logs-toggle" for="show-monitor" title="Show or hide the QEMU monitor"><input id="show-monitor" type="checkbox" disabled> Monitor</label>
     <span id="status" role="status" data-state="new">NEW</span>
   </header>
   <p id="status-error" role="alert" hidden></p>
@@ -113,7 +113,7 @@
   <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces"><strong>Ethernet:</strong><span id="nic-list"></span><button id="add-nic" type="button">+ Interface</button><small>Add Ethernet cards before starting QEMU; leave them disconnected or select a running VDE switch. Guest names may differ (for example, enp0s2).</small></section>
   <section class="logs" id="logs-panel" aria-label="Launch log" hidden><div class="logs-title">Launch log</div><pre id="launch-logs">Launch commands will appear here.</pre></section>
   <section class="monitor" id="monitor-panel" aria-label="QEMU monitor" hidden>
-    <p>QEMU commands (not a Linux shell) : <code>help</code>, <code>info status</code>, <code>info block</code>. Some commands change or stop the VM.</p>
+    <p>QEMU commands (not a Linux shell) : <code>help</code>, <code>info status</code>, <code>info block</code>. Some commands change or stop the host.</p>
     <pre id="monitor-output" aria-live="polite"></pre>
     <form id="monitor-form"><input id="monitor-command" aria-label="QEMU monitor command" placeholder="info status" maxlength="256" autocomplete="off" spellcheck="false"><button id="monitor-send" type="submit">Send</button></form>
   </section>
@@ -129,9 +129,9 @@
     <form method="dialog" class="confirm-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-accept" value="confirm">Continue</button></form>
   </dialog>
   <main><div class="terminal-frame" id="terminal-frame"><div id="terminal"></div><input id="terminal-scroll" type="range" min="0" max="0" value="0" aria-label="Scroll console" title="Scroll console history"></div></main>
-  <nav class="machines" id="machine-tabs" aria-label="Virtual machines and switches">
-    <button id="new-machine" class="icon-button" type="button" title="Add a VM host" aria-label="Add VM host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20 4v6M17 7h6"/></svg></button>
-    <button id="new-switch" class="icon-button" type="button" title="Add a VDE switch" aria-label="Add VDE switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20 4v6M17 7h6"/></svg></button>
+  <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
+    <button id="new-host" class="icon-button" type="button" title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20 4v6M17 7h6"/></svg></button>
+    <button id="new-switch" class="icon-button" type="button" title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20 4v6M17 7h6"/></svg></button>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
@@ -264,7 +264,7 @@
         select.onclick = () => { if (machine.id !== activeId) selectMachine(machine.id); };
         select.ondblclick = async () => {
           if (machine.kind === 'switch' || !machine.hasLaunched) return;
-          const name = window.prompt('Display name for this VM:', machine.hostname);
+          const name = window.prompt('Display name for this host:', machine.hostname);
           if (name === null || !name.trim()) return;
           try {
             const response = await fetch(`/api/sessions/${encodeURIComponent(machine.id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
@@ -272,13 +272,13 @@
             if (!response.ok) throw new Error(body.error);
           } catch (error) { showStatusError(error.message); }
         };
-        select.title = machine.kind === 'switch' ? 'VDE switch management console' : machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New VM · ${machine.osHint}`;
+        select.title = machine.kind === 'switch' ? 'VDE switch management console' : machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New host · ${machine.osHint}`;
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'machine-close';
         close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-        close.title = machine.kind === 'switch' ? 'Remove VDE switch' : 'Exit VM, delete its disk and close the tab';
-        close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Exit VM'} ${machine.hostname}`);
+        close.title = machine.kind === 'switch' ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
+        close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Exit host'} ${machine.hostname}`);
         close.onclick = () => closeMachine(machine.id);
         tab.append(select, close);
         tabs.append(tab);
@@ -287,7 +287,35 @@
     function updateControls() {
       const machine = activeMachine();
       const running = !!(machine && machine.running);
-      if (!machine) return;
+      const clearConsole = document.getElementById('clear-console');
+      if (!machine) {
+        status.dataset.state = 'new';
+        status.textContent = 'READY';
+        status.title = 'Add a host or switch to begin';
+        statusError.textContent = '';
+        statusError.hidden = true;
+        startButton.disabled = true;
+        stopButton.disabled = true;
+        exitButton.disabled = true;
+        rebootButton.disabled = true;
+        resetButton.disabled = true;
+        showQemuOptions.disabled = true;
+        clearConsole.disabled = true;
+        showLogs.disabled = true;
+        showMonitor.disabled = true;
+        showMonitor.parentElement.hidden = true;
+        imageSelect.disabled = true;
+        engineSelect.disabled = true;
+        imageSelect.hidden = true;
+        engineSelect.hidden = true;
+        document.querySelector('label[for="os-image"]').hidden = true;
+        document.querySelector('label[for="engine"]').hidden = true;
+        networkControls.hidden = true;
+        logsPanel.hidden = true;
+        monitorPanel.hidden = true;
+        imageInfo.textContent = 'Add a host or switch to begin.';
+        return;
+      }
       const busy = !!machine.busy;
       const state = machine.error ? 'error' : busy ? (machine.operation || 'starting') : running ? 'running' : machine.hasLaunched ? 'stopped' : 'new';
       status.dataset.state = state;
@@ -296,15 +324,19 @@
       statusError.textContent = machine.error || '';
       statusError.hidden = !machine.error;
       const isSwitch = machine.kind === 'switch';
-      exitButton.title = isSwitch ? 'Remove VDE switch' : 'Exit VM, delete its disk and close the tab';
-      exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : 'Exit VM');
+      exitButton.disabled = busy;
+      exitButton.title = isSwitch ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
+      exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : 'Exit host');
       networkControls.hidden = isSwitch || machine.engine === 'virtualbox';
+      showLogs.disabled = false;
+      showMonitor.disabled = isSwitch;
       showMonitor.parentElement.hidden = isSwitch;
       monitorPanel.hidden = isSwitch || !showMonitor.checked;
       showQemuOptions.disabled = isSwitch;
       rebootButton.hidden = isSwitch;
       resetButton.hidden = isSwitch;
-      document.getElementById('clear-console').hidden = false;
+      clearConsole.hidden = false;
+      clearConsole.disabled = false;
       imageSelect.hidden = isSwitch;
       engineSelect.hidden = isSwitch;
       document.querySelector('label[for="os-image"]').hidden = isSwitch;
@@ -316,15 +348,15 @@
         stopButton.disabled = !running || busy;
         stopButton.title = 'Stop VDE switch';
         stopButton.setAttribute('aria-label', 'Stop VDE switch');
-        imageInfo.textContent = `VDE switch ${machine.hostname}. Start it to use the interactive vdeterm console, then connect QEMU Ethernet interfaces before starting their VMs.`;
+        imageInfo.textContent = `VDE switch ${machine.hostname}. Start it to use the interactive vdeterm console, then connect QEMU Ethernet interfaces before starting their hosts.`;
         return;
       }
       startButton.disabled = running || busy || !images.length;
-      startButton.title = machine.hasLaunched ? 'Resume VM from its current disk' : 'Start VM from the base image';
-      startButton.setAttribute('aria-label', machine.hasLaunched ? 'Resume VM' : 'Start VM');
+      startButton.title = machine.hasLaunched ? 'Resume host from its current disk' : 'Start host from the base image';
+      startButton.setAttribute('aria-label', machine.hasLaunched ? 'Resume host' : 'Start host');
       stopButton.disabled = !running || busy;
-      stopButton.title = 'Stop VM and keep its current disk';
-      stopButton.setAttribute('aria-label', 'Stop VM');
+      stopButton.title = 'Stop host and keep its current disk';
+      stopButton.setAttribute('aria-label', 'Stop host');
       rebootButton.disabled = !running || busy;
       resetButton.disabled = !machine.hasLaunched || busy;
       const monitorAvailable = running && machine.engine.startsWith('qemu') && !busy;
@@ -356,13 +388,17 @@
         row.append(document.createTextNode(`NIC ${index + 1} → `), select, remove); nicList.append(row);
       }
     }
-    function addMachine() {
+    async function addHost() {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const image = images.find(item => item.id === imageSelect.value);
-      const machine = {id, kind: 'vm', hostname: 'New VM', osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', interfaces: engineSelect.value === 'virtualbox' ? [] : [null], running: false, hasLaunched: false, message: 'Stopped', logs: [], serial: '', monitorOutput: ''};
-      machines.set(id, machine);
-      renderTabs();
-      selectMachine(id);
+      try {
+        const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Cannot create host');
+        const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: imageSelect.value || images[0]?.id || '', hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: engineSelect.value || 'qemu', interfaces: engineSelect.value === 'virtualbox' ? [] : [null], running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+        machines.set(id, machine);
+        selectMachine(id);
+      } catch (error) { showStatusError(error.message); }
     }
     async function addSwitch() {
       const names = new Set([...machines.values()].filter(item => item.kind === 'switch').map(item => item.hostname));
@@ -389,7 +425,7 @@
       updateControls();
       logsPanel.hidden = !showLogs.checked;
       monitorPanel.hidden = machine.kind === 'switch' || !showMonitor.checked;
-      monitorOutput.textContent = machine.monitorOutput || 'The monitor is available when this QEMU VM is running.';
+      monitorOutput.textContent = machine.monitorOutput || 'The monitor is available when this QEMU host is running.';
       renderQemuOptions();
       socket.emit('select-session', id, ++selectionToken);
       requestAnimationFrame(fitTerminal);
@@ -408,13 +444,13 @@
     async function closeMachine(id) {
       const machine = machines.get(id);
       if (!machine || machine.busy) return;
-      const title = machine.kind === 'switch' ? 'Remove switch' : 'Close VM';
+      const title = machine.kind === 'switch' ? 'Remove switch' : 'Exit host';
       const message = machine.kind === 'switch'
-        ? `Remove ${machine.hostname}? The switch will stop and its tab will close. Connected VM tabs must be closed first.`
+        ? `Remove ${machine.hostname}? The switch will stop and its tab will close. Connected host tabs must be closed first.`
         : machine.hasLaunched
-          ? `Close ${machine.hostname}? This VM will stop, its current disk will be deleted, and all changes made in this VM will be lost.`
-          : `Close this new VM tab?`;
-      if (!await confirmAction(title, message, machine.kind === 'switch' ? 'Remove switch' : 'Close VM')) return;
+          ? `Exit ${machine.hostname}? This host will stop, its current disk will be deleted, and all changes made in this host will be lost.`
+          : `Close this new host tab?`;
+      if (!await confirmAction(title, message, machine.kind === 'switch' ? 'Remove switch' : 'Exit host')) return;
       if (machines.get(id) !== machine || machine.busy) return;
       try {
         const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {method: 'DELETE'});
@@ -422,8 +458,12 @@
         if (!response.ok) throw new Error(body.error || 'Failed to close session');
         machines.delete(id);
         if (activeId === id) activeId = null;
-        if (!machines.size) addMachine();
-        else if (activeId === null) selectMachine(machines.keys().next().value);
+        if (activeId === null && machines.size) selectMachine(machines.keys().next().value);
+        else if (!machines.size) {
+          terminal.reset();
+          launchLogs.textContent = 'Launch commands will appear here.';
+          monitorOutput.textContent = '';
+        }
         renderTabs();
         updateControls();
       } catch (error) { showStatusError(`Cannot close session: ${error.message}`); }
@@ -447,11 +487,12 @@
       qemuConfig = config;
       imageSelect.replaceChildren(...items.map(image => { const option = document.createElement('option'); option.value = image.id; option.textContent = image.label; return option; }));
       for (const session of existing) {
+        if (!session.hostname) continue;
         const image = images.find(item => item.id === session.imageId);
         machines.set(session.id, {
           id: session.id,
           kind: session.kind || 'vm',
-          hostname: session.hostname || (session.kind === 'switch' ? 'Switch' : 'New VM'),
+          hostname: session.hostname,
           osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
           imageId: image ? image.id : (images[0]?.id || ''),
           hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
@@ -465,14 +506,16 @@
           monitorOutput: ''
         });
       }
-      if (!machines.size) addMachine();
-      else {
+      if (!machines.size) {
+        renderTabs();
+        updateControls();
+      } else {
         renderTabs();
         selectMachine(machines.keys().next().value);
       }
     }).catch(error => { imageInfo.textContent = `System list unavailable: ${error.message}`; });
 
-    document.getElementById('new-machine').addEventListener('click', addMachine);
+    document.getElementById('new-host').addEventListener('click', addHost);
     document.getElementById('new-switch').addEventListener('click', addSwitch);
     addNic.addEventListener('click', () => {
       const machine = activeMachine();
@@ -486,7 +529,6 @@
       if (!machine) return;
       machine.imageId = imageSelect.value;
       const image = images.find(item => item.id === machine.imageId);
-      machine.hostname = 'New VM';
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       updateControls();
@@ -618,7 +660,29 @@
       machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
       renderTabs();
     });
-    socket.on('connect', () => { if (activeId) socket.emit('select-session', activeId, ++selectionToken); });
+    socket.on('connect', async () => {
+      if (!activeId) return;
+      try {
+        const response = await fetch('/api/sessions', {cache: 'no-store'});
+        const current = await response.json();
+        if (!response.ok) throw new Error(current.error || 'Cannot refresh sessions');
+        const currentIds = new Set(current.map(session => session.id));
+        for (const id of machines.keys()) if (!currentIds.has(id)) machines.delete(id);
+        if (!machines.has(activeId)) activeId = null;
+        if (activeId) socket.emit('select-session', activeId, ++selectionToken);
+        else if (machines.size) selectMachine(machines.keys().next().value);
+        else {
+          replayGeneration++;
+          replaying = false;
+          replayPending = '';
+          terminal.reset();
+          launchLogs.textContent = 'Launch commands will appear here.';
+          monitorOutput.textContent = '';
+          renderTabs();
+          updateControls();
+        }
+      } catch (error) { showStatusError(error.message); }
+    });
     socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
     socket.on('session-error', showStatusError);
     socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
@@ -718,7 +782,7 @@
     resetButton.onclick = async () => {
       const machine = activeMachine();
       if (!machine || !machine.hasLaunched || machine.busy) return;
-      if (!await confirmAction('Reset VM', `Reset ${machine.hostname}?\n\nThis VM will restart from its base image. Its current disk will be deleted, so all changes made in this VM will be lost.\n\nOther VMs will not be affected.`, 'Reset VM')) return;
+      if (!await confirmAction('Reset host', `Reset ${machine.hostname}?\n\nThis host will restart from its base image. Its current disk will be deleted, so all changes made in this host will be lost.\n\nOther hosts will not be affected.`, 'Reset host')) return;
       if (machines.get(machine.id) !== machine || machine.busy) return;
       machine.busy = true;
       machine.operation = 'resetting';

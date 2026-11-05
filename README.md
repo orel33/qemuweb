@@ -1,6 +1,6 @@
 # QemuWeb - beta
 
-This demo runs Alpine Linux, Debian 13, or OpenWrt in QEMU or VirtualBox and relays the `ttyS0` serial console to xterm.js through a local web server.
+QemuWeb runs Alpine Linux, Debian 13, or OpenWrt in QEMU or VirtualBox and relays the `ttyS0` serial console to xterm.js through a local web server.
 
 ## Software architecture overview
 
@@ -111,7 +111,7 @@ Offline image preparation is separate from runtime execution. `prepare.sh` and `
 
 In the historical QemuNet command, `-append '… console=ttyS0 …'` explicitly tells the **Linux kernel** to write to its first serial port. With `xterm -e qemu-system-x86_64 … -nographic`, QEMU hides the video display and, when no `-serial` option is supplied, implicitly connects that serial port to its standard input and output, and therefore to xterm. QEMU also shares those streams with its monitor (`Ctrl+A`, then `C`). The name `ttyS0` is not implicit: its **connection to xterm** is. A `getty` service on `ttyS0` is still needed to display a `login:` prompt.
 
-In the web demo, `-display none` only hides the video display. `-serial unix:…` explicitly connects the serial port to a socket; the server then relays characters between that socket and xterm.js over WebSocket. `-monitor unix:…` opens a separate socket for the QEMU monitor. The serial console and login are configured in the images by `prepare.sh`. [From QemuNet to Qemuweb](docs/qemunet-to-qemuweb.md) describes both paths and the LAN migration.
+In QemuWeb, `-display none` only hides the video display. `-serial unix:…` explicitly connects the serial port to a socket; the server then relays characters between that socket and xterm.js over WebSocket. `-monitor unix:…` opens a separate socket for the QEMU monitor. The serial console and login are configured in the images by `prepare.sh`. [The migration notes](docs/qemunet-to-qemuweb.md) describe both paths and the LAN migration.
 
 ### Serial console and QEMU monitor
 
@@ -156,7 +156,7 @@ At startup, the server checks the configured commands, prints a green check or r
 
 In the web page, click **Settings** to view the system values and their corresponding QEMU or VirtualBox arguments. The dialog also shows settings added by the server and the disk creation and launch commands. Before launch, these are a preview; after launch, the session's settings are displayed. To change settings, edit `config.json` before starting a new VM. The interface and system descriptions are in English.
 
-The **QEMU · KVM / TCG** choice remains in the main toolbar. **QEMU · KVM** requires accessible `/dev/kvm` and fails with an error if KVM is unavailable or a VirtualBox VM is running. Select **QEMU · TCG** explicitly to use software emulation. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 working disk format and control sockets are part of the demo's operation. Configuration changes apply to **new sessions**. **Reboot** and **Reset** retain the options selected when their tab first started.
+The **QEMU · KVM / TCG** choice remains in the main toolbar. **QEMU · KVM** requires accessible `/dev/kvm` and fails with an error if KVM is unavailable or a VirtualBox VM is running. Select **QEMU · TCG** explicitly to use software emulation. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 working disk format and control sockets are part of the application's operation. Configuration changes apply to **new sessions**. **Reboot** and **Reset** retain the options selected when their tab first started.
 
 ### Stopping and cleaning up
 
@@ -197,7 +197,7 @@ qemu-img create -f qcow2 -F raw -b base.raw instance.qcow2
 VBoxManage createmedium disk --filename instance.vdi --diffparent base.vdi --format VDI
 ```
 
-VirtualBox can also convert the RAW image to VDI with `VBoxManage convertfromraw base.raw base.vdi --format VDI`. QEMU can use a VDI as the base of a QCOW2 by replacing `-F raw` with `-F vdi` in the overlay creation command. Neither variant is used by the demo.
+VirtualBox can also convert the RAW image to VDI with `VBoxManage convertfromraw base.raw base.vdi --format VDI`. QEMU can use a VDI as the base of a QCOW2 by replacing `-F raw` with `-F vdi` in the overlay creation command. Neither variant is used by the application.
 
 Preparation downloads missing images from official repositories and verifies them against the published checksums. Once the images are prepared, starting and running VMs requires no downloads or cloud service.
 
@@ -237,25 +237,25 @@ bash prepare.sh
 
 Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sources/<id>/` and its final `<id>.raw` and `<id>.vdi` bases in `images/`. The orchestrator checks that every path declared in `config.json` exists but does not rewrite the file. The page's system menu is populated directly from `config.json`. `runtime/` is reserved for temporary preparation and VM files. These directories are ignored by Git, except for their `.gitkeep` files.
 
-## Running the demo
+## Running QemuWeb
 
 ```sh
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. The turquoise **+** creates a **New VM** tab. Choose a system and an engine, then click **Play**. A display name such as `debian13-00` is assigned at first launch; double-click the tab to change it. This name does not change the Linux hostname inside the VM. Numbering advances from 00 to 99 for each system during the server's lifetime. VMs in other tabs continue to run in parallel. Serial output and logs belong to each machine; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
+Open <http://127.0.0.1:3002>. No tab is opened automatically. Use the two buttons at the bottom to add a host or a switch; tabs are named `h1`, `h2`, … and `s1`, `s2`, …. Choose a system and an engine for a host, then click **Play**. Double-click a running host tab to change its display name; this does not change the Linux hostname inside the guest. Hosts in other tabs continue to run in parallel. Serial output and logs belong to each host; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
 
 ### Local VDE LAN prototype
 
-New QEMU VM tabs start with one disconnected Ethernet card. Before the first launch, use **+ Interface** to add up to four cards, remove unwanted cards, or select a running VDE switch for each card. Click **+ Switch**, then **Play** to start `vde_switch` and its interactive `vdeterm` console in xterm.js. Commands such as `help` and `port/allprint`, command history, completion and asynchronous VDE messages use the persistent terminal session. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian cloud uses `virtio-net-pci`. The guest chooses its own interface name: Debian may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two VM tabs against the same switch to make a LAN and configure IP addresses inside the guests. **Settings** shows the resulting QEMU launch arguments.
+New QEMU host tabs start with one disconnected Ethernet card. Before the first launch, use **+ Interface** to add up to four cards, remove unwanted cards, or select a running VDE switch for each card. Add a switch, then click **Play** to start `vde_switch` and its interactive `vdeterm` console in xterm.js. Commands such as `help` and `port/allprint`, command history, completion and asynchronous VDE messages use the persistent terminal session. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian cloud uses `virtio-net-pci`. The guest chooses its own interface name: Debian may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two host tabs against the same switch to make a LAN and configure IP addresses inside the guests. **Settings** shows the resulting QEMU launch arguments.
 
 For the guest kernel and image requirements behind the disk and NIC choices, see [QEMU guest buses and drivers](docs/qemu-guest-bus-and-drivers.md).
 
 The Debian 13 cloud profile uses a VirtIO disk and VirtIO network cards. **Debian 13 Legacy** is the separate IDE + `e1000` target, with `tty0`, `ttyS0`, and `root=/dev/sda1` configured by default.
 
-An interface assignment remains fixed across Stop and Resume. Stop connected VMs before stopping their switch; remove their tabs before deleting the switch. Hot attachment to a VM that is already running is planned in the [roadmap](docs/ROADMAP.md). Disconnected cards remain visible inside the guest but cannot exchange traffic. Removing every card creates a VM without Ethernet; VirtualBox also has no network adapter. QEMU's `-nic none` disables its implicit network adapter; the explicit `-device e1000` or `-device virtio-net-pci` options still create the selected cards. This prototype creates no external network connection.
+An interface assignment remains fixed across Stop and Resume. Stop connected hosts before stopping their switch; remove their tabs before deleting the switch. Hot attachment to a host that is already running is planned in the [roadmap](docs/ROADMAP.md). Disconnected cards remain visible inside the guest but cannot exchange traffic. Removing every card creates a host without Ethernet; VirtualBox also has no network adapter. QEMU's `-nic none` disables its implicit network adapter; the explicit `-device e1000` or `-device virtio-net-pci` options still create the selected cards. This prototype creates no external network connection.
 
-**QEMU · KVM** uses hardware acceleration and reports an error if `/dev/kvm` is missing or inaccessible, or if a VirtualBox VM is running. Choose **QEMU · TCG** explicitly to use slower software emulation or to run QEMU alongside VirtualBox. VirtualBox cannot start while a QEMU VM uses KVM; stop that VM or start it with TCG first.
+**QEMU · KVM** uses hardware acceleration and reports an error if `/dev/kvm` is missing or inaccessible, or if a VirtualBox host is running. Choose **QEMU · TCG** explicitly to use slower software emulation or to run QEMU alongside VirtualBox. VirtualBox cannot start while a QEMU host uses KVM; stop that host or start it with TCG first.
 
 By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exposes the CPU features that the host can provide to the VM. This avoids the `CPUID.80000001H:ECX.svm` warning that QEMU's default CPU model can produce on an Intel host: `svm` is the AMD virtualization feature and is not needed for these VMs. In TCG mode, the profile selects `-cpu qemu64`. This setting affects the virtual CPU, not the Debian image; VMs already running keep their configuration until their next launch.
 
@@ -263,43 +263,43 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 - **Debian 13**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; temporary working disk.
 - **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; temporary working disk.
 
-### VM actions
+### Host actions
 
 The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Each hint below is the text shown on hover. Actions apply only to the selected tab.
 
 | Icon / control | Action | Hint | Effect |
 |---|---|---|---|
-| ![Play icon](docs/icons/play.svg) | **Start** | `Start VM from the base image` | Create a new working disk and boot the VM. |
-| ![Play icon](docs/icons/play.svg) | **Resume** | `Resume VM from its current disk` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
-| ![Power icon](docs/icons/power.svg) | **Stop** | `Stop VM and keep its current disk` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
-| ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot VM with its current disk (keep changes)` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
-| ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset VM from the base image (discard changes)` | After a QemuWeb warning dialog, stop the VM, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
-| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit VM, delete its disk and close the tab` | After a QemuWeb warning dialog, force-stop the VM, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** asks for the same confirmation. |
+| ![Play icon](docs/icons/play.svg) | **Start** | `Start host from the base image` | Create a new working disk and boot the host. |
+| ![Play icon](docs/icons/play.svg) | **Resume** | `Resume host from its current disk` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
+| ![Power icon](docs/icons/power.svg) | **Stop** | `Stop host and keep its current disk` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
+| ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot host with its current disk (keep changes)` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
+| ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset host from the base image (discard changes)` | After a QemuWeb warning dialog, stop the host, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
+| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit host, delete its disk and close the tab` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** asks for the same confirmation. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
-| ![Settings icon](docs/icons/sliders-horizontal.svg) | **Settings** | `View VM launch settings` | Show the selected system's configuration and launch commands in a read-only dialog. |
-| ![New host icon](docs/icons/plus.svg) | **New host** | `Add a VM host` | Add a VM tab. The VM starts only after Start. |
-| ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a VDE switch` | Add a VDE switch tab; start its switch process from that tab. |
-| **Log** checkbox | **Log** | `Show or hide VM logs` | Show or hide the log; commands and output are recorded even while hidden. |
-| **Monitor** checkbox | **Monitor** | `Show or hide the QEMU monitor` | Show or hide QEMU's command interface when a QEMU VM is running. |
+| ![Settings icon](docs/icons/sliders-horizontal.svg) | **Settings** | `View host launch settings` | Show the selected system's configuration and launch commands in a read-only dialog. |
+| ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Add a host tab. The host starts only after Start. |
+| ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Add a VDE switch tab; start its switch process from that tab. |
+| **Log** checkbox | **Log** | `Show or hide session logs` | Show or hide the log; commands and output are recorded even while hidden. |
+| **Monitor** checkbox | **Monitor** | `Show or hide the QEMU monitor` | Show or hide QEMU's command interface when a QEMU host is running. |
 
-A forced Stop can leave the guest filesystem needing repair on the next boot. Only the selected VM is affected by these actions; other tabs keep running.
+A forced Stop can leave the guest filesystem needing repair on the next boot. Only the selected host is affected by these actions; other tabs keep running.
 
-### VM status
+### Host status
 
 The badge at the right of the toolbar describes the selected tab:
 
 | Status | Meaning |
 |---|---|
-| **NEW** | The tab has never started a VM; no current disk exists. |
-| **STARTING** | Play is creating or opening the disk and starting the VM. |
-| **RUNNING** | The VM process is running. |
+| **NEW** | The tab has never started a host; no current disk exists. |
+| **STARTING** | Play is creating or opening the disk and starting the host. |
+| **RUNNING** | The host process is running. |
 | **STOPPING** | Stop is waiting for graceful shutdown or applying its forced-stop fallback. |
-| **STOPPED** | The VM is off and its current disk is kept; Play resumes from that disk. |
-| **REBOOTING** | The VM is stopping and starting again on the same disk. |
-| **RESETTING** | The current disk is being replaced and the VM is starting from the base image. |
-| **ERROR** | An action failed or the VM ended with an error. The error message appears under the toolbar; the disk is retained when it still exists. |
+| **STOPPED** | The host is off and its current disk is kept; Play resumes from that disk. |
+| **REBOOTING** | The host is stopping and starting again on the same disk. |
+| **RESETTING** | The current disk is being replaced and the host is starting from the base image. |
+| **ERROR** | An action failed or the host ended with an error. The error message appears under the toolbar; the disk is retained when it still exists. |
 
-Exit removes the tab, so it has no persistent status. Stopping the server with Ctrl+C force-stops its VMs and removes their temporary sessions and working disks.
+Exit removes the tab, so it has no persistent status. Stopping the server with Ctrl+C force-stops its hosts and removes their temporary sessions and working disks.
 
 If port 3002 is already in use, stop the old server or choose another port:
 
