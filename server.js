@@ -61,7 +61,9 @@ function getSession(id, create = false, kind = 'vm') {
       socketDir: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}-vde`) : null,
       mgmtPath: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}.mgmt`) : null,
       mgmtAliasPath: null,
-      switchTerminal: null
+      switchTerminal: null,
+      vdeTerminal: null,
+      terminalSwitchId: null
     });
   }
   return sessions.get(id);
@@ -70,13 +72,15 @@ function getSession(id, create = false, kind = 'vm') {
 function stateMessage(session) {
   if (!session.machine) return session.lastMessage || 'Stopped';
   if (session.kind === 'switch') return `VDE switch · ${session.hostname}`;
+  if (session.kind === 'terminal') return `VDE terminal · ${session.hostname} · ${sessions.get(session.terminalSwitchId)?.hostname || 'no switch'}`;
   if (session.engine.startsWith('qemu')) return `QEMU/${session.qemuAcceleration.toUpperCase()} · ${session.selectedImage.label}`;
   return `VirtualBox · ${session.selectedImage.label}`;
 }
 
 function publishState(session, message = stateMessage(session)) {
   session.lastMessage = message;
-  const state = {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, message};
+  const state = {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, message,
+    terminalSwitchId: session.terminalSwitchId, vdePort: session.vdePort};
   io.to(session.id).emit('state', state);
   io.emit('sessions-changed', state);
 }
@@ -114,7 +118,8 @@ function allocateName(prefix) {
     const name = `${prefix}${n}`;
     if (!used.has(name)) return name;
   }
-  throw new Error(`All 99 ${prefix === 'h' ? 'host' : 'switch'} names have been used.`);
+  const label = {h: 'host', s: 'switch', t: 'terminal'}[prefix] || 'session';
+  throw new Error(`All 99 ${label} names have been used.`);
 }
 
 function validateQemuOptions(options, partial = false) {
@@ -221,6 +226,8 @@ app.get('/api/sessions', (_req, res) => {
     imageId: session.selectedImage && session.selectedImage.id,
     settings: session.launchSettings,
     hostname: session.hostname,
+    terminalSwitchId: session.terminalSwitchId,
+    vdePort: session.vdePort,
     networkInterfaces: session.networkInterfaces,
     hasDifferentialDisk: !!session.runDisk && fs.existsSync(session.runDisk),
     message: stateMessage(session)
@@ -303,8 +310,7 @@ function assignNetworkInterfaces(session, switches) {
       planned.push({switchId: null, port: null, mac});
       continue;
     }
-    const used = new Set([...sessions.values()].filter(other => other.id !== session.id).flatMap(other => other.networkInterfaces || [])
-      .filter(nic => nic.switchId === sw.id).map(nic => nic.port));
+    const used = reservedVdePorts(sw.id, session.id);
     for (const nic of planned) if (nic.switchId === sw.id) used.add(nic.port);
     const port = Array.from({length: 32}, (_, n) => n + 1).find(n => !used.has(n));
     if (!port) throw new Error(`No free port on ${sw.hostname}.`);
@@ -316,6 +322,24 @@ function assignNetworkInterfaces(session, switches) {
 function linkedHosts(switchId) {
   return [...sessions.values()].filter(session => session.kind === 'vm' &&
     session.networkInterfaces.some(nic => nic.switchId === switchId));
+}
+
+function linkedTerminals(switchId) {
+  return [...sessions.values()].filter(session => session.kind === 'terminal' && session.terminalSwitchId === switchId);
+}
+
+function reservedVdePorts(switchId, excludeSessionId) {
+  const used = new Set();
+  for (const session of sessions.values()) {
+    if (session.id === excludeSessionId) continue;
+    for (const nic of session.networkInterfaces || []) {
+      if (nic.switchId === switchId && Number.isInteger(nic.port)) used.add(nic.port);
+    }
+    if (session.kind === 'terminal' && session.terminalSwitchId === switchId && Number.isInteger(session.vdePort)) {
+      used.add(session.vdePort);
+    }
+  }
+  return used;
 }
 
 function removeSwitchTerminalAlias(session) {
@@ -373,6 +397,86 @@ function startSwitchTerminal(session) {
   });
 }
 
+function waitForPtyExit(terminal, timeoutMs) {
+  return new Promise((resolve, reject) => {
+    let subscription;
+    const timer = setTimeout(() => {
+      subscription?.dispose();
+      reject(new Error('Terminal did not stop in time.'));
+    }, timeoutMs);
+    subscription = terminal.onExit(event => {
+      clearTimeout(timer);
+      subscription?.dispose();
+      resolve(event);
+    });
+  });
+}
+
+function startVdeTerminal(session, switchSession) {
+  if (session.kind !== 'terminal' || session.machine) throw new Error('VDE terminal is already running.');
+  if (!switchSession || switchSession.kind !== 'switch' || !switchSession.machine) throw new Error('Start a VDE switch before starting this terminal.');
+  const reservedPorts = reservedVdePorts(switchSession.id, session.id);
+  const port = Number.isInteger(session.vdePort) && !reservedPorts.has(session.vdePort)
+    ? session.vdePort
+    : Array.from({length: 32}, (_, index) => index + 1).find(candidate => !reservedPorts.has(candidate));
+  if (!port) throw new Error(`No free VDE port on ${switchSession.hostname}.`);
+  const vdeUrl = `vde://${switchSession.socketDir}[${port}]`;
+  const shell = fs.existsSync('/bin/bash') ? '/bin/bash' : '/bin/sh';
+  const args = [vdeUrl, shell, '-l'];
+  appendLog(session, `$ ${[commands.VDENS, ...args].map(shellQuote).join(' ')}`);
+  session.serialBuffer = '';
+  io.to(session.id).emit('serial-reset', {sessionId: session.id, serial: ''});
+  let terminal;
+  try {
+    terminal = pty.spawn(commands.VDENS, args, {
+      name: 'xterm-256color',
+      cols: 80,
+      rows: 24,
+      cwd: process.env.HOME || root,
+      env: {...process.env, TERM: 'xterm-256color'}
+    });
+  } catch (error) {
+    throw new Error(`Cannot start VDE shell: ${error.message}`);
+  }
+  session.terminalSwitchId = switchSession.id;
+  session.vdePort = port;
+  session.vdeTerminal = terminal;
+  session.machine = terminal;
+  session.stopping = false;
+  session.everStarted = true;
+  terminal.onData(data => {
+    if (session.vdeTerminal !== terminal) return;
+    session.serialBuffer = (session.serialBuffer + data).slice(-262144);
+    io.to(session.id).emit('serial', {sessionId: session.id, data});
+  });
+  terminal.onExit(({exitCode, signal}) => {
+    if (session.vdeTerminal !== terminal) return;
+    session.vdeTerminal = null;
+    if (session.machine === terminal) session.machine = null;
+    if (!session.stopping) publishState(session, `VDE terminal stopped (${signal || exitCode})`);
+  });
+}
+
+async function stopVdeTerminal(session) {
+  if (session.kind !== 'terminal') throw new Error('This tab is not a VDE terminal.');
+  const terminal = session.vdeTerminal;
+  session.stopping = true;
+  if (terminal) {
+    const gracefulExit = waitForPtyExit(terminal, 2000);
+    terminal.kill('SIGTERM');
+    try { await gracefulExit; }
+    catch (_) {
+      const forcedExit = waitForPtyExit(terminal, 2000);
+      terminal.kill('SIGKILL');
+      try { await forcedExit; } catch (_) {}
+    }
+  }
+  if (session.vdeTerminal === terminal) session.vdeTerminal = null;
+  if (session.machine === terminal) session.machine = null;
+  session.stopping = false;
+  publishState(session, 'VDE terminal stopped');
+}
+
 async function startSwitch(session) {
   if (session.kind !== 'switch' || session.machine) throw new Error('Switch is already running.');
   fs.mkdirSync(session.socketDir, {recursive: true});
@@ -420,6 +524,7 @@ async function startSwitch(session) {
 
 async function stopSwitch(session, force = false) {
   if (!force && linkedHosts(session.id).some(host => host.machine)) throw new Error('Stop connected hosts before stopping this switch.');
+  if (!force && linkedTerminals(session.id).some(terminal => terminal.machine)) throw new Error('Stop connected VDE terminals before stopping this switch.');
   const child = session.machine;
   session.stopping = true;
   stopSwitchTerminal(session);
@@ -805,8 +910,14 @@ async function stop(session, options = {}) {
 
 async function destroySession(session) {
   if (!session) return;
+  if (session.kind === 'terminal') {
+    await stopVdeTerminal(session);
+    sessions.delete(session.id);
+    return;
+  }
   if (session.kind === 'switch') {
     if (linkedHosts(session.id).length) throw new Error('Remove connected host tabs before deleting this switch.');
+    if (linkedTerminals(session.id).length) throw new Error('Remove connected VDE terminal tabs before deleting this switch.');
     await stopSwitch(session, true);
     sessions.delete(session.id);
     return;
@@ -917,6 +1028,46 @@ app.post('/api/switches/:id/stop', async (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
+app.post('/api/terminals', (req, res) => {
+  try {
+    const {id} = req.body || {};
+    if (sessions.has(id)) throw new Error('Terminal ID already exists.');
+    const session = getSession(id, true, 'terminal');
+    session.hostname = allocateName('t');
+    session.lastMessage = 'VDE terminal ready';
+    res.json({id, name: session.hostname});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
+app.post('/api/terminals/:id/start', (req, res) => {
+  try {
+    const session = getSession(req.params.id);
+    if (!session || session.kind !== 'terminal') throw new Error('Unknown VDE terminal.');
+    const switchId = req.body && req.body.switchId;
+    if (typeof switchId !== 'string' || !/^[a-zA-Z0-9_-]{1,32}$/.test(switchId)) throw new Error('Select a VDE switch.');
+    const switchSession = getSession(switchId);
+    if (!switchSession || switchSession.kind !== 'switch') throw new Error('Unknown VDE switch.');
+    startVdeTerminal(session, switchSession);
+    publishState(session);
+    res.json({ok: true, switchId, vdePort: session.vdePort});
+  } catch (error) {
+    try {
+      const session = getSession(req.params.id);
+      if (session) publishState(session, `VDE terminal error: ${error.message}`);
+    } catch (_) {}
+    res.status(400).json({error: error.message});
+  }
+});
+
+app.post('/api/terminals/:id/stop', async (req, res) => {
+  try {
+    const session = getSession(req.params.id);
+    if (!session || session.kind !== 'terminal') throw new Error('Unknown VDE terminal.');
+    await stopVdeTerminal(session);
+    res.json({ok: true});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
 app.post('/api/stop/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
@@ -990,7 +1141,8 @@ io.on('connection', socket => {
       socket.emit('session-snapshot', {
         sessionId: session.id,
         token,
-        state: {running: !!session.machine, message: stateMessage(session), hasLaunched: session.everStarted},
+        state: {running: !!session.machine, message: stateMessage(session), hasLaunched: session.everStarted,
+          terminalSwitchId: session.terminalSwitchId, vdePort: session.vdePort},
         logs: session.runLog,
         serial: session.serialBuffer
       });
@@ -1009,16 +1161,19 @@ io.on('connection', socket => {
     const session = socket.sessionId && sessions.get(socket.sessionId);
     if (!session || typeof data !== 'string' || data.length > 4096) return;
     if (session.kind === 'switch' && session.switchTerminal) session.switchTerminal.write(data);
+    else if (session.kind === 'terminal' && session.vdeTerminal) session.vdeTerminal.write(data);
     else if (session.serial) session.serial.write(data);
   });
   socket.on('terminal-resize', request => {
     if (!request || request.id !== socket.sessionId) return;
     const session = sessions.get(request.id);
-    if (!session || session.kind !== 'switch' || !session.switchTerminal) return;
+    if (!session || !['switch', 'terminal'].includes(session.kind)) return;
+    const terminal = session.kind === 'switch' ? session.switchTerminal : session.vdeTerminal;
+    if (!terminal) return;
     const cols = Number(request.cols);
     const rows = Number(request.rows);
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) return;
-    try { session.switchTerminal.resize(cols, rows); } catch (_) {}
+    try { terminal.resize(cols, rows); } catch (_) {}
   });
   socket.on('clear-console', request => {
     if (!request || request.id !== socket.sessionId) return;
@@ -1051,7 +1206,7 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const forceExit = setTimeout(() => process.exit(1), 10000);
-  for (const kind of ['vm', 'switch']) {
+  for (const kind of ['vm', 'terminal', 'switch']) {
     await Promise.all([...sessions.values()].filter(session => session.kind === kind)
       .map(session => destroySession(session).catch(error => console.error('Session shutdown:', error))));
   }

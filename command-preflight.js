@@ -4,13 +4,14 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VBOXMANAGE', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VBOXMANAGE', 'VDE_SWITCH', 'VDETERM', 'VDENS', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU',
   QEMU_IMG: 'QEMU disk tools',
   VBOXMANAGE: 'VirtualBox',
   VDE_SWITCH: 'VDE switch',
   VDETERM: 'VDE terminal',
+  VDENS: 'VDE shell',
   GENISOIMAGE: 'ISO image tool',
   NODE: 'Node.js',
   PYTHON3: 'Python 3'
@@ -71,7 +72,7 @@ function resolveCommands(root) {
       const configured = local[key] || process.env[key] || defaultCommand;
       const resolved = findCommand(configured);
       // vdeterm treats its first argument as a management socket and has no version flag.
-      if (key !== 'VDETERM') {
+      if (!['VDETERM', 'VDENS'].includes(key)) {
         const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
         if (result.error) throw result.error;
         if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);

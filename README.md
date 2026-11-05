@@ -6,7 +6,7 @@ QemuWeb runs Alpine Linux, Debian 13 Cloud, Debian 13 Legacy, or OpenWrt in QEMU
 
 QemuWeb is divided into three parts. The browser never connects directly to QEMU, VirtualBox, `vde_switch`, or their Unix sockets; all interactions go through `server.js`.
 
-The two interactive terminal paths are the central architecture of the application. Components are separated by labelled links that show the transport used:
+The interactive terminal paths are the central architecture of the application. Components are separated by labelled links that show the transport used:
 
 ```text
 VM console:
@@ -18,6 +18,11 @@ Switch terminal:
 xterm.js ⇄[ Socket.IO over WS* ]⇄ server.js
          ⇄[ pseudo-terminal · node-pty ]⇄ vdeterm
          ⇄[ Unix management socket · -M ]⇄ vde_switch
+
+VDE shell terminal:
+xterm.js ⇄[ Socket.IO over WS* ]⇄ server.js
+         ⇄[ pseudo-terminal · node-pty ]⇄ vdens + user shell
+         ⇄[ libvdeplug · VDE Unix socket ]⇄ vde_switch
 
 QEMU monitor:
 Monitor form ⇄[ HTTP/JSON ]⇄ Express/server.js
@@ -35,6 +40,7 @@ The same paths, grouped by software location, are detailed below:
 │ Host tab:   System · Engine · NICs · Play/Resume · Stop · Reboot     │
 │             Reset · Exit · Clear · Settings · Log · Monitor · Status │
 │ Switch tab: Play · Stop · Exit/Remove · Clear · Log · Status         │
+│ VDE shell:  switch · Play · Stop · Exit · Clear · Log · Status       │
 │ Shared interactive display: xterm.js                                 │
 └───────────────────────────────────────────────────────────────────────┘
        │ HTTP/JSON: actions, configuration and QEMU monitor
@@ -44,6 +50,7 @@ The same paths, grouped by software location, are detailed below:
 │ Host console:   Socket.IO ↔ serial relay using Node net.Socket       │
 │ QEMU monitor:   HTTP request ↔ monitor Unix socket                   │
 │ Switch console: Socket.IO ↔ terminal relay using node-pty            │
+│ VDE shell:     Socket.IO ↔ terminal relay using node-pty             │
 └───────────────────────────────────────────────────────────────────────┘
        │ child_process spawn/exec · Unix sockets · pseudo-terminal
        ▼
@@ -54,12 +61,13 @@ The same paths, grouped by software location, are detailed below:
 │                server-mode UART socket                               │
 │ VDE switch:    vdeterm ↔ management socket (-M) ↔ vde_switch         │
 │ VDE network:   QEMU NICs ↔ data socket (-s) ↔ vde_switch             │
+│ VDE shell:     vdens user/network namespace ↔ VDE Unix socket         │
 └───────────────────────────────────────────────────────────────────────┘
 ```
 
 \* Socket.IO uses WebSocket when available and can fall back to HTTP polling. It adds named events, session rooms and reconnection behavior on top of that transport.
 
-`node-pty` is switch-specific. VM consoles already expose byte-oriented Unix serial sockets, so `server.js` relays them directly with Node's `net.Socket`; no pseudo-terminal is required. The VDE console instead runs `vdeterm`, a terminal application that needs the TTY semantics supplied by `node-pty` for prompts, editing, history, completion and resizing.
+VM consoles already expose byte-oriented Unix serial sockets, so `server.js` relays them directly with Node's `net.Socket`; no pseudo-terminal is required. The switch console runs `vdeterm`, while the lightweight VDE terminal runs the user's shell under `vdens`; both use `node-pty` for an interactive TTY and resizing. `vdens` creates a private user/network namespace and connects its `vde0` interface to the selected switch through VDE. The shell uses the host's user account and filesystem; this is a network-isolated terminal, not a filesystem jail.
 
 The engine changes the virtualization backend, disk implementation and available control channels:
 
@@ -89,6 +97,7 @@ The interactive paths are deliberately different because each endpoint provides 
 | QEMU VM console | `xterm.js ↔ Socket.IO ↔ server.js ↔ Unix serial socket ↔ QEMU UART ↔ guest ttyS0` | Display kernel output and provide the guest's `login:` prompt and shell. |
 | VirtualBox VM console | `xterm.js ↔ Socket.IO ↔ server.js ↔ Unix serial socket ↔ VirtualBox UART ↔ guest ttyS0` | Provide the same guest console through VirtualBox's server-mode virtual UART. |
 | VDE switch terminal | `xterm.js ↔ Socket.IO ↔ server.js ↔ node-pty ↔ vdeterm ↔ VDE management socket ↔ vde_switch` | Provide the interactive VDE prompt, including line editing, history, completion and asynchronous switch messages. |
+| Lightweight VDE shell | `xterm.js ↔ Socket.IO ↔ server.js ↔ node-pty ↔ vdens + shell ↔ libvdeplug ↔ VDE Unix socket ↔ vde_switch` | Provide `ip`, `ping`, `tcpdump` and other host-installed commands in a private network namespace, without starting a VM or changing host networking. |
 | QEMU monitor | `Monitor form ↔ HTTP/JSON ↔ server.js ↔ Unix monitor socket ↔ QEMU HMP` | Send emulator commands such as `info status`; this controls QEMU and is not a guest shell. |
 | Start, Stop, Reboot, Reset and Exit | `Toolbar ↔ HTTP/JSON ↔ server.js ↔ process/VBoxManage control` | Manage one VM or switch session and its working files. |
 | Logs and status | `server.js ↔ Socket.IO ↔ selected browser tab` | Keep launch commands, process messages, console state and lifecycle state associated with the correct tab. |
@@ -213,10 +222,10 @@ Linux x86_64 is required. The main dependencies on Debian/Ubuntu are:
 | QEMU virtual machines | `qemu-system-x86` or a custom QEMU build |
 | Image overlays and conversion | `qemu-utils` (`qemu-img`) |
 | Image preparation | `python3`; `genisoimage` for the Debian seed ISO |
-| VDE LAN and interactive console | `vde2` (`vde_switch`, `vdeterm`); `node-pty` is installed by npm |
+| VDE LAN and interactive consoles | `vde2` (`vde_switch`, `vdeterm`), `vdens`; `node-pty` is installed by npm |
 | VirtualBox VMs | VirtualBox installation (`VBoxManage`) |
 
-KVM speeds up QEMU when `/dev/kvm` is accessible; otherwise TCG is available. The current startup check requires all eight configured commands, including `vde_switch` and `vdeterm` for VDE networking.
+KVM speeds up QEMU when `/dev/kvm` is accessible; otherwise TCG is available. The current startup check requires all nine configured commands, including `vde_switch`, `vdeterm` and `vdens` for VDE networking and shell terminals.
 
 To compile QEMU with VDE support, run `./misc/install-qemu.sh /opt/`, then set its `bin/qemu-system-x86_64` path in `.env.local`. This build does not install `qemu-img`; use the separate `qemu-utils` package. See the [QEMU installer notes](misc/install-qemu.md) for the directory layout and build options.
 
@@ -225,7 +234,7 @@ To compile QEMU with VDE support, run `./misc/install-qemu.sh /opt/`, then set i
 Install the standard command-line tools and the packages used for preparation and VDE networking:
 
 ```sh
-sudo apt install bash coreutils findutils grep gzip curl nodejs npm python3 qemu-utils genisoimage vde2
+sudo apt install bash coreutils findutils grep gzip curl nodejs npm python3 qemu-utils genisoimage vde2 vdens
 ```
 
 Provide `qemu-system-x86_64` from `qemu-system-x86` or a custom build, and install VirtualBox to provide `VBoxManage` for the current startup check.
@@ -245,11 +254,13 @@ Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sourc
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. No tab is opened automatically. Use the two buttons at the bottom to add a host or a switch; tabs are named `h1`, `h2`, … and `s1`, `s2`, …. Choose a system and an engine for a host, then click **Play**. Double-click a running host tab to change its display name; this does not change the Linux hostname inside the guest. Hosts in other tabs continue to run in parallel. Serial output and logs belong to each host; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
+Open <http://127.0.0.1:3002>. No tab is opened automatically. Use the buttons at the bottom to add a host, a switch or a lightweight VDE terminal; tabs are named `h1`, `h2`, …, `s1`, `s2`, … and `t1`, `t2`, …. Choose a system and an engine for a VM host, then click **Play**. For a VDE terminal, select a running switch and click **Play** to open a shell with a `vde0` interface. Double-click a running VM host tab to change its display name; this does not change the Linux hostname inside the guest. Hosts, switches and terminals have independent tabs. Logs belong to each session; check **Log** to display them. Login details appear above VM terminals:
 
 ### Local VDE LAN prototype
 
 New QEMU host tabs start with one disconnected Ethernet card. Before the first launch, use **+ Interface** to add up to four cards, remove unwanted cards, or select a running VDE switch for each card. Add a switch, then click **Play** to start `vde_switch` and its interactive `vdeterm` console in xterm.js. Commands such as `help` and `port/allprint`, command history, completion and asynchronous VDE messages use the persistent terminal session. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian cloud uses `virtio-net-pci`. The guest chooses its own interface name: Debian may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two host tabs against the same switch to make a LAN and configure IP addresses inside the guests. **Settings** shows the resulting QEMU launch arguments.
+
+For a lightweight endpoint, add a **VDE terminal**, select a running switch and press **Play**. Its `vdens` network namespace connects `vde0` directly to a unique VDE switch port, shared with the same port allocator as VM interfaces. VDE is an Ethernet switch and does not assign IP addresses, so configure `vde0` manually (for example, `ip link set vde0 up` then `ip addr add 192.168.10.10/24 dev vde0`). Commands such as `ip`, `ping` and `tcpdump` then work without a VM or host TAP/bridge configuration. The shell runs as the QemuWeb user and can access files that user can access; it is not a filesystem jail. On a switched network, `tcpdump` sees broadcasts and traffic for that terminal, not necessarily unicast traffic between other hosts.
 
 For the guest kernel and image requirements behind the disk and NIC choices, see [QEMU guest buses and drivers](docs/qemu-guest-bus-and-drivers.md).
 
