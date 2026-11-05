@@ -4,7 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const requiredKeys = ['VBOXMANAGE', 'GENISOIMAGE', 'NODE', 'PYTHON3', 'QEMU_IMG', 'QEMU_SYSTEM_X86_64', 'VDE_SWITCH'];
+const requiredKeys = ['VBOXMANAGE', 'GENISOIMAGE', 'NODE', 'PYTHON3', 'QEMU_IMG', 'QEMU_SYSTEM_X86_64', 'VDE_SWITCH', 'VDETERM'];
 
 function readEnvFile(file) {
   if (!fs.existsSync(file)) return {};
@@ -56,9 +56,12 @@ function resolveCommands(root) {
     try {
       const configured = local[key] || process.env[key] || defaultCommand;
       const resolved = findCommand(configured);
-      const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
-      if (result.error) throw result.error;
-      if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);
+      // vdeterm treats its first argument as a management socket and has no version flag.
+      if (key !== 'VDETERM') {
+        const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
+        if (result.error) throw result.error;
+        if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);
+      }
       commands[key] = resolved;
       console.log(`\x1b[32m✓\x1b[0m ${key}: ${resolved}`);
     } catch (error) {

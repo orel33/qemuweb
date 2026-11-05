@@ -9,6 +9,7 @@ const crypto = require('crypto');
 const {spawn, execFileSync} = require('child_process');
 const express = require('express');
 const socketIo = require('socket.io');
+const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 
 const root = __dirname;
@@ -56,7 +57,8 @@ function getSession(id, create = false, kind = 'vm') {
       runDisk: null,
       networkInterfaces: [],
       socketDir: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}-vde`) : null,
-      mgmtPath: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}.mgmt`) : null
+      mgmtPath: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}.mgmt`) : null,
+      switchTerminal: null
     });
   }
   return sessions.get(id);
@@ -280,6 +282,38 @@ function linkedHosts(switchId) {
     session.networkInterfaces.some(nic => nic.switchId === switchId));
 }
 
+function stopSwitchTerminal(session) {
+  const terminal = session.switchTerminal;
+  session.switchTerminal = null;
+  if (terminal) {
+    try { terminal.kill('SIGTERM'); } catch (_) {}
+  }
+}
+
+function startSwitchTerminal(session) {
+  stopSwitchTerminal(session);
+  session.serialBuffer = '';
+  io.to(session.id).emit('serial-reset', {sessionId: session.id, serial: ''});
+  appendLog(session, `$ ${[commands.VDETERM, session.mgmtPath].map(shellQuote).join(' ')}`);
+  const terminal = pty.spawn(commands.VDETERM, [session.mgmtPath], {
+    name: 'xterm-256color',
+    cols: 80,
+    rows: 24,
+    cwd: root,
+    env: {...process.env, TERM: 'xterm-256color'}
+  });
+  session.switchTerminal = terminal;
+  terminal.onData(data => {
+    session.serialBuffer = (session.serialBuffer + data).slice(-262144);
+    io.to(session.id).emit('serial', {sessionId: session.id, data});
+  });
+  terminal.onExit(({exitCode}) => {
+    if (session.switchTerminal !== terminal) return;
+    session.switchTerminal = null;
+    if (!session.stopping && session.machine) publishState(session, `VDE terminal stopped (${exitCode})`);
+  });
+}
+
 async function startSwitch(session) {
   if (session.kind !== 'switch' || session.machine) throw new Error('Switch is already running.');
   fs.mkdirSync(session.socketDir, {recursive: true});
@@ -292,11 +326,13 @@ async function startSwitch(session) {
   child.stdout.on('data', data => appendLog(session, data.toString()));
   child.stderr.on('data', data => appendLog(session, data.toString()));
   child.once('error', error => {
+    stopSwitchTerminal(session);
     session.lastMessage = `VDE error: ${error.message}`;
     if (session.machine === child) session.machine = null;
     publishState(session, session.lastMessage);
   });
   child.once('exit', code => {
+    stopSwitchTerminal(session);
     if (session.machine === child) session.machine = null;
     try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
     fs.rmSync(session.socketDir, {recursive: true, force: true});
@@ -304,6 +340,14 @@ async function startSwitch(session) {
   });
   for (let attempt = 0; attempt < 60; attempt++) {
     if (fs.existsSync(session.mgmtPath)) {
+      try { startSwitchTerminal(session); }
+      catch (error) {
+        child.kill('SIGTERM');
+        session.machine = null;
+        try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
+        fs.rmSync(session.socketDir, {recursive: true, force: true});
+        throw new Error(`Cannot start VDE terminal: ${error.message}`);
+      }
       session.everStarted = true;
       publishState(session);
       return;
@@ -319,6 +363,7 @@ async function stopSwitch(session, force = false) {
   if (!force && linkedHosts(session.id).some(host => host.machine)) throw new Error('Stop connected VMs before stopping this switch.');
   const child = session.machine;
   session.stopping = true;
+  stopSwitchTerminal(session);
   if (child) {
     child.kill('SIGTERM');
     try { await waitForQemuExit(child, 3000); }
@@ -329,33 +374,6 @@ async function stopSwitch(session, force = false) {
   fs.rmSync(session.socketDir, {recursive: true, force: true});
   session.stopping = false;
   publishState(session, 'VDE switch stopped');
-}
-
-function sendSwitchCommand(session, command) {
-  return new Promise((resolve, reject) => {
-    const socket = net.createConnection(session.mgmtPath);
-    let output = '';
-    let settled = false;
-    let idle;
-    const timeout = setTimeout(() => finish(new Error('VDE command timed out.')), 3000);
-    function finish(error) {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      clearTimeout(idle);
-      socket.destroy();
-      if (error) reject(error); else resolve(output.trim());
-    }
-    socket.on('connect', () => socket.write(`${command}\n`));
-    socket.on('data', data => {
-      output += data.toString();
-      if (output.length > 65536) return finish(new Error('VDE response too long.'));
-      clearTimeout(idle);
-      idle = setTimeout(() => finish(), 200);
-    });
-    socket.on('error', finish);
-    socket.on('close', () => finish());
-  });
 }
 
 function qemuAcceleration(engine, checkAvailability = true) {
@@ -795,18 +813,6 @@ app.post('/api/switches/:id/stop', async (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.post('/api/switches/:id/command', async (req, res) => {
-  try {
-    const session = getSession(req.params.id);
-    if (!session || session.kind !== 'switch' || !session.machine) throw new Error('Start the VDE switch first.');
-    const command = req.body && req.body.command;
-    if (typeof command !== 'string' || !command.trim() || command.length > 256 || /[\r\n\x00-\x1f\x7f]/.test(command)) throw new Error('Enter one VDE command (maximum 256 characters).');
-    const output = await sendSwitchCommand(session, command.trim());
-    appendLog(session, `> ${command.trim()}\n${output}`);
-    res.json({output});
-  } catch (error) { res.status(400).json({error: error.message}); }
-});
-
 app.post('/api/stop/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
@@ -890,7 +896,18 @@ io.on('connection', socket => {
   });
   socket.on('input', data => {
     const session = socket.sessionId && sessions.get(socket.sessionId);
-    if (session && session.serial && typeof data === 'string') session.serial.write(data);
+    if (!session || typeof data !== 'string' || data.length > 4096) return;
+    if (session.kind === 'switch' && session.switchTerminal) session.switchTerminal.write(data);
+    else if (session.serial) session.serial.write(data);
+  });
+  socket.on('terminal-resize', request => {
+    if (!request || request.id !== socket.sessionId) return;
+    const session = sessions.get(request.id);
+    if (!session || session.kind !== 'switch' || !session.switchTerminal) return;
+    const cols = Number(request.cols);
+    const rows = Number(request.rows);
+    if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) return;
+    try { session.switchTerminal.resize(cols, rows); } catch (_) {}
   });
   socket.on('clear-console', request => {
     if (!request || request.id !== socket.sessionId) return;
