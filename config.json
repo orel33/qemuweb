@@ -32,15 +32,15 @@
         "osType": "Linux_64"
       }
     },
-    "debian13": {
+    "debian13-cloud": {
       "type": "linux",
       "mode": "text",
-      "label": "Debian 13",
+      "label": "Debian 13 Cloud",
       "description": "Debian 13 prepared offline from the official cloud image. It boots from disk with GRUB, displays boot output and login on ttyS0, and provides root, toto and demo accounts.",
       "login": "root with no password; toto / toto; demo / serial-demo",
       "images": {
-        "raw": "images/debian13.raw",
-        "vdi": "images/debian13.vdi"
+        "raw": "images/debian13-cloud.raw",
+        "vdi": "images/debian13-cloud.vdi"
       },
       "qemu": {
         "memory": 1024,

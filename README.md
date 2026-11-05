@@ -1,6 +1,6 @@
 # QemuWeb - beta
 
-QemuWeb runs Alpine Linux, Debian 13, or OpenWrt in QEMU or VirtualBox and relays the `ttyS0` serial console to xterm.js through a local web server.
+QemuWeb runs Alpine Linux, Debian 13 Cloud, Debian 13 Legacy, or OpenWrt in QEMU or VirtualBox and relays the `ttyS0` serial console to xterm.js through a local web server.
 
 ## Software architecture overview
 
@@ -76,7 +76,7 @@ The system selection does not introduce another software layer. It selects a dec
 | System profile | QEMU disk bus | QEMU network model | Memory | Architectural requirement |
 |---|---|---|---:|---|
 | **Alpine Linux 3.24** | VirtIO | `virtio-net-pci` | 512 MiB | Prepared boot and login on `ttyS0` |
-| **Debian 13** | VirtIO | `virtio-net-pci` | 1024 MiB | Prepared GRUB boot and login on `ttyS0` |
+| **Debian 13 Cloud** | VirtIO | `virtio-net-pci` | 1024 MiB | Prepared GRUB boot and login on `ttyS0` |
 | **Debian 13 Legacy** | IDE | `e1000` | 1024 MiB | Legacy disk/NIC drivers; consoles on `tty0` and `ttyS0` |
 | **OpenWrt 25.12** | VirtIO | `virtio-net-pci` | 256 MiB | Text shell on `ttyS0` |
 
@@ -131,14 +131,14 @@ In the web toolbar, check **Monitor** to enter commands for the VM in the curren
 `prepare.sh` reads the IDs under `systems` in `config.json` and invokes the matching `scripts/prepare/<id>.sh`. Shared helpers are alongside these scripts. Each target keeps its downloads and checksums in `sources/<id>/`:
 
 - **Alpine**: the script downloads and verifies the official `virt` ISO, installs it unattended into a RAW image, prepares the `root` and `toto` accounts, configures boot output and login on `ttyS0`, then produces the VDI base for VirtualBox.
-- **Debian 13**: the script downloads and verifies the official cloud image, boots it once in an isolated temporary QEMU VM, prepares the `root`, `toto`, and `demo` accounts, configures serial access and DHCP networking, disables cloud-init for subsequent boots, then produces a read-only RAW image.
+- **Debian 13 Cloud**: the script downloads and verifies the official cloud image, boots it once in an isolated temporary QEMU VM, prepares the `root`, `toto`, and `demo` accounts, configures serial access and DHCP networking, disables cloud-init for subsequent boots, then produces a read-only RAW image.
 - **Debian 13 Legacy**: a separate image installs the general Debian kernel plus `iproute2`, `tcpdump`, `iputils-ping`, `bash`, `net-tools`, `procps`, and `vim-tiny`. It boots from IDE with `root=/dev/sda1`, presents an `e1000` NIC, and enables consoles on `tty0` and `ttyS0`.
 - **OpenWrt**: the script verifies and decompresses the official RAW image.
 - For **VirtualBox**, the script converts each RAW image into a read-only VDI base.
 
 At launch, the server performs no further system configuration: QEMU creates a QCOW2 working disk based on the RAW image; VirtualBox creates a VDI working disk based on the prepared VDI. Each instance has its own writes. They are retained by **Stop**, **Play / Resume**, and **Reboot**, then discarded by **Reset**, **Exit**, or server shutdown. The base files in `images/` are never modified.
 
-`images/` contains ready-to-run base images named after the system identifier: `alpine.raw` / `alpine.vdi`, `debian13.raw` / `debian13.vdi`, `debian13-legacy.raw` / `debian13-legacy.vdi`, and `openwrt.raw` / `openwrt.vdi`. The `.raw` extension explicitly identifies the disk format. `sources/<id>/` keeps each target's downloads and checksums; `runtime/` contains temporary files and VM differential disks. [config.json](config.json) describes the systems and their launch options; preparation scripts read it but do not overwrite it.
+`images/` contains ready-to-run base images named after the system identifier: `alpine.raw` / `alpine.vdi`, `debian13-cloud.raw` / `debian13-cloud.vdi`, `debian13-legacy.raw` / `debian13-legacy.vdi`, and `openwrt.raw` / `openwrt.vdi`. The `.raw` extension explicitly identifies the disk format. `sources/<id>/` keeps each target's downloads and checksums; `runtime/` contains temporary files and VM differential disks. [config.json](config.json) describes the systems and their launch options; preparation scripts read it but do not overwrite it.
 
 ### System configuration
 
@@ -150,9 +150,9 @@ QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64
 
 At startup, the server checks the configured commands, prints a green check or red cross for each, and exits if any check fails. It uses the resolved QEMU, `qemu-img`, and `VBoxManage` paths. `npm start` still launches Node from `PATH`; image preparation and cleanup scripts also still use `PATH`.
 
-[config.json](config.json) follows the same approach as [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg): each key under `systems` (`alpine`, `debian13`, `debian13-legacy`, `openwrt`) identifies a system and its `scripts/prepare/<id>.sh` script. Each entry contains its `linux` type, `text` mode, label and long description, login details, `images.raw` and `images.vdi` paths, system-specific QEMU options, and VirtualBox settings. Paths can be relative to the project root or absolute. Launching relies on this file; `server.js` contains no rules tied to an OS name.
+[config.json](config.json) follows the same approach as [qemunet.cfg](https://github.com/orel33/qemunet/blob/master/qemunet.cfg): each key under `systems` (`alpine`, `debian13-cloud`, `debian13-legacy`, `openwrt`) identifies a system and its `scripts/prepare/<id>.sh` script. Each entry contains its `linux` type, `text` mode, label and long description, login details, `images.raw` and `images.vdi` paths, system-specific QEMU options, and VirtualBox settings. Paths can be relative to the project root or absolute. Launching relies on this file; `server.js` contains no rules tied to an OS name.
 
-`qemu.defaults` supplies common values. The `rtcBase` value is either `utc` (the Linux-friendly default, emitted as `-rtc base=utc`) or `localtime` (emitted as `-rtc base=localtime`); a system can override it in `systems.<id>.qemu`. The `systems.<id>.qemu` object contains only overrides: Debian 13 requests 1,024 MiB, OpenWrt requests 256 MiB, and Alpine inherits the defaults. All profiles have external networking disabled. `systems.<id>.virtualbox` separately supplies its memory, disabled network setting, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
+`qemu.defaults` supplies common values. The `rtcBase` value is either `utc` (the Linux-friendly default, emitted as `-rtc base=utc`) or `localtime` (emitted as `-rtc base=localtime`); a system can override it in `systems.<id>.qemu`. The `systems.<id>.qemu` object contains only overrides: Debian 13 Cloud requests 1,024 MiB, OpenWrt requests 256 MiB, and Alpine inherits the defaults. All profiles have external networking disabled. `systems.<id>.virtualbox` separately supplies its memory, disabled network setting, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
 
 In the web page, click **Settings** to view the system values and their corresponding QEMU or VirtualBox arguments. The dialog also shows settings added by the server and the disk creation and launch commands. Before launch, these are a preview; after launch, the session's settings are displayed. To change settings, edit `config.json` before starting a new VM. The interface and system descriptions are in English.
 
@@ -251,7 +251,7 @@ New QEMU host tabs start with one disconnected Ethernet card. Before the first l
 
 For the guest kernel and image requirements behind the disk and NIC choices, see [QEMU guest buses and drivers](docs/qemu-guest-bus-and-drivers.md).
 
-The Debian 13 cloud profile uses a VirtIO disk and VirtIO network cards. **Debian 13 Legacy** is the separate IDE + `e1000` target, with `tty0`, `ttyS0`, and `root=/dev/sda1` configured by default.
+The **Debian 13 Cloud** profile uses a VirtIO disk and VirtIO network cards. **Debian 13 Legacy** is the separate IDE + `e1000` target, with `tty0`, `ttyS0`, and `root=/dev/sda1` configured by default.
 
 An interface assignment remains fixed across Stop and Resume. Stop connected hosts before stopping their switch; remove their tabs before deleting the switch. Hot attachment to a host that is already running is planned in the [roadmap](docs/ROADMAP.md). Disconnected cards remain visible inside the guest but cannot exchange traffic. Removing every card creates a host without Ethernet; VirtualBox also has no network adapter. QEMU's `-nic none` disables its implicit network adapter; the explicit `-device e1000` or `-device virtio-net-pci` options still create the selected cards. This prototype creates no external network connection.
 
@@ -260,7 +260,7 @@ An interface assignment remains fixed across Stop and Resume. Stop connected hos
 By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exposes the CPU features that the host can provide to the VM. This avoids the `CPUID.80000001H:ECX.svm` warning that QEMU's default CPU model can produce on an Intel host: `svm` is the AMD virtualization feature and is not needed for these VMs. In TCG mode, the profile selects `-cpu qemu64`. This setting affects the virtual CPU, not the Debian image; VMs already running keep their configuration until their next launch.
 
 - **Alpine Linux 3.24**: `root` with an empty password, or `toto` / `toto`; temporary working disk.
-- **Debian 13**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; temporary working disk.
+- **Debian 13 Cloud**: `root` with no password; `toto` / `toto` or `demo` / `serial-demo`; temporary working disk.
 - **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; temporary working disk.
 
 ### Host actions
