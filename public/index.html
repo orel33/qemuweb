@@ -239,7 +239,7 @@
     </section>
   </main>
   <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
-    <input id="topology-file" type="file" accept=".top,.topo,text/plain" hidden>
+    <input id="topology-file" type="file" accept=".topo" hidden>
     <button id="load-topology" class="icon-button" type="button" title="Load topology" aria-label="Load topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
     <button id="save-topology" class="icon-button" type="button" title="Save topology" aria-label="Save topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
     <button id="show-general-settings" class="icon-button" type="button" disabled title="General Settings" aria-label="General Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
@@ -1274,7 +1274,10 @@
       document.getElementById('topology-file-name').textContent = file.name;
       topologyMappings.replaceChildren(); topologyError.hidden = true; topologyConfirm.hidden = false;
       document.getElementById('cancel-topology').textContent = 'Cancel';
-      try { topologyText = await file.text(); }
+      try {
+        if (!/\.topo$/i.test(file.name)) throw new Error('Choose a .topo file.');
+        topologyText = await file.text();
+      }
       catch (error) { topologyText = ''; topologyError.textContent = `Cannot read file: ${error.message}`; topologyError.hidden = false; topologyConfirm.hidden = true; }
       topologyDialog.showModal();
     });

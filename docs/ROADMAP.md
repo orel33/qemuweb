@@ -23,7 +23,7 @@ A switch and two Debian 13 Legacy hosts have been validated by the repeatable `n
 
 ### Next topology checkpoint
 
-1. Load the adapted `topo/lan.top` or `topo/gw.top` file in the browser using QemuNet's `SWITCH` and `HOST` syntax. When importing an original QemuNet file, resolve old system names such as `debian` explicitly to system IDs declared in `config.json`.
+1. Load the adapted `topo/lan.topo` or `topo/gw.topo` file in the browser using QemuNet's `SWITCH` and `HOST` syntax. When importing an original QemuNet file, resolve old system names such as `debian` explicitly to system IDs declared in `config.json`.
 2. Validate the whole file before creating sessions, show its switches, hosts and ordered interfaces, and start or stop them as one network.
 3. Save the edited topology back to `.topo` and load it again with the same graph. Keep disk overlays and runtime state separate from the topology file.
 
@@ -33,7 +33,7 @@ A switch and two Debian 13 Legacy hosts have been validated by the repeatable `n
 2. See host A, switch `s1`, and host B in console panes. Each host has its serial console and QEMU monitor; the switch has its VDE management console. Follow network-level status and startup errors in one place.
 3. Configure guest interfaces, verify traffic between hosts, stop or resume the network, and explicitly discard or save its state. Another user's networks stay separate; one user can own several networks at once.
 
-The local two-host connectivity milestone is covered by the LAN2 integration test. The next milestone is a **two-host LAN managed as one network**: load or create its topology file, show the switch, hosts and links, and control their lifecycle from the browser. The adapted four-host `topo/lan.top` and two-switch `topo/gw.top` are the first examples; their original QemuNet `.topo` sources require an explicit `debian` system mapping. A switch alone does not configure guest IP addresses; the verification scenario must supply them explicitly or through guest startup scripts.
+The local two-host connectivity milestone is covered by the LAN2 integration test. The next milestone is a **two-host LAN managed as one network**: load or create its topology file, show the switch, hosts and links, and control their lifecycle from the browser. The adapted four-host `topo/lan.topo` and two-switch `topo/gw.topo` are the first examples; their original QemuNet `.topo` sources require an explicit `debian` system mapping. A switch alone does not configure guest IP addresses; the verification scenario must supply them explicitly or through guest startup scripts.
 
 The switch session represents the VDE process, not another VM. Its interactive terminal follows `xterm.js ↔ Socket.IO ↔ node-pty ↔ vdeterm ↔ vde_switch -M`, matching QemuNet's optional `-y` mode. It is separate from both a guest shell and the QEMU monitor. Changing the visible pane must not start or stop the switch or its hosts.
 
