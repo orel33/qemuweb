@@ -245,11 +245,11 @@ Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sourc
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. No tab is opened automatically. Use the two buttons at the bottom to add a host or a switch; tabs are named `h1`, `h2`, … and `s1`, `s2`, …. Choose a system and an engine for a host, then click **Play**. Double-click a running host tab to change its display name; this does not change the Linux hostname inside the guest. Hosts in other tabs continue to run in parallel. Serial output and logs belong to each host; check **Log** to display QEMU or VirtualBox commands. Login details appear above the terminal:
+Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. Their creation dialogs let you edit the proposed name and choose whether to start immediately; hosts also offer a system, engine and Ethernet interfaces. **General Settings** in the top toolbar sets the default engine for new hosts and the naming scheme for new hosts and switches: classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a console; the Log button opens that session's commands and output. Login details appear in the host's Settings dialog.
 
 ### Local VDE LAN prototype
 
-New QEMU host tabs start with one disconnected Ethernet card. Before the first launch, use **+ Interface** to add up to four cards, remove unwanted cards, or select a running VDE switch for each card. Add a switch, then click **Play** to start `vde_switch` and its interactive `vdeterm` console in xterm.js. Commands such as `help` and `port/allprint`, command history, completion and asynchronous VDE messages use the persistent terminal session. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian cloud uses `virtio-net-pci`. The guest chooses its own interface name: Debian may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two host tabs against the same switch to make a LAN and configure IP addresses inside the guests. **Settings** shows the resulting QEMU launch arguments.
+New QEMU hosts start with one disconnected Ethernet card. Before the first launch, use **+ Interface** to add up to four cards, remove unwanted cards, or select a running VDE switch for each card. A new switch starts by default; if Autostart is unchecked, click **Play** to start `vde_switch` and its interactive `vdeterm` console in xterm.js. Commands such as `help` and `port/allprint`, command history, completion and asynchronous VDE messages use the persistent terminal session. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian cloud uses `virtio-net-pci`. The guest chooses its own interface name: Debian may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two hosts against the same switch to make a LAN and configure IP addresses inside the guests. Settings shows the resulting QEMU launch arguments in Mode Expert.
 
 For the guest kernel and image requirements behind the disk and NIC choices, see [QEMU guest buses and drivers](docs/qemu-guest-bus-and-drivers.md).
 
@@ -279,11 +279,12 @@ The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is
 | ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset host from the base image (discard changes)` | After a QemuWeb warning dialog, stop the host, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
 | ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit host, delete its disk and close the tab` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** asks for the same confirmation. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
-| ![Settings icon](docs/icons/sliders-horizontal.svg) | **Settings** | `View host launch settings` | Show the selected system's configuration and launch commands in a read-only dialog. |
-| ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Add a host tab. The host starts only after Start. |
-| ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Add a VDE switch tab; start its switch process from that tab. |
-| **Log** checkbox | **Log** | `Show or hide session logs` | Show or hide the log; commands and output are recorded even while hidden. |
-| **Monitor** checkbox | **Monitor** | `Show or hide the QEMU monitor` | Show or hide QEMU's command interface when a QEMU host is running. |
+| ![Settings icon](docs/icons/sliders-horizontal.svg) | **Settings** | `View host launch settings` | Edit the selected host's available launch settings; Mode Expert reveals the full command and technical details. |
+| ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the default engine and automatic naming scheme for new sessions in this browser. |
+| ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open the creation dialog; Autostart is selected by default. |
+| ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Open the VDE switch creation dialog; Autostart is selected by default. |
+| **Log** button | **Log** | `View session log` | Open the selected session's log dialog. |
+| **Monitor** button | **Monitor** | `Open QEMU monitor` | Open QEMU's interactive command dialog for a QEMU host. |
 
 A forced Stop can leave the guest filesystem needing repair on the next boot. Only the selected host is affected by these actions; other tabs keep running.
 

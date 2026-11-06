@@ -19,7 +19,7 @@
     .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     #start { color: #57dc91; } #stop { color: #ffaf76; } #reboot { color: #70b9ff; }
-    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-host { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-network-options { color: #70b9ff; } #new-host { color: #5adbd1; }
+    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-host { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-general-settings { color: #9fc5ef; } #show-network-options { color: #70b9ff; } #new-host { color: #5adbd1; }
     #toggle-console-columns { color: #9fc5ef; } #show-logs { color: #b8d2ef; } #show-monitor { color: #c6adf5; }
     button:disabled { opacity: .45; cursor: default; }
     .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
@@ -132,6 +132,7 @@
     <button id="clear-console" class="icon-button" type="button" disabled title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
     <button id="show-network-options" class="icon-button" type="button" disabled title="Configure Ethernet interfaces" aria-label="Network interfaces"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-2a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2M12 12V8"/></svg></button>
     <button id="show-qemu-options" class="icon-button" type="button" disabled title="View host launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button id="show-general-settings" class="icon-button" type="button" disabled title="General Settings" aria-label="General Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
     <button id="show-logs" class="icon-button" type="button" disabled title="View session log" aria-label="Launch log"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button>
     <button id="show-monitor" class="icon-button" type="button" disabled title="Open QEMU monitor" aria-label="QEMU monitor"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 8 4 4-4 4M13 16h5"/></svg></button>
     <button id="toggle-console-columns" class="icon-button" type="button" title="Layout: 2 panes; click for 4" aria-label="Layout: 2 panes; click for 4"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg><span class="layout-count" id="layout-count">2</span></button>
@@ -153,6 +154,15 @@
       <p id="create-error" role="alert" hidden></p>
       <div class="create-actions"><button id="cancel-create" type="button">Cancel</button><button id="confirm-create" type="submit">OK</button></div>
     </form>
+  </dialog>
+  <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
+    <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
+    <div class="create-fields">
+      <label class="create-field">Default engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
+      <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
+    </div>
+    <p class="settings-description">The engine applies to new hosts; naming applies to hosts and switches. Existing sessions keep their settings.</p>
+    <p id="general-settings-error" role="alert" hidden></p>
   </dialog>
   <dialog class="qemu-options" id="logs-panel" aria-labelledby="logs-title">
     <div class="settings-heading"><h2 id="logs-title">Launch log</h2><button id="close-logs" type="button">Close</button></div>
@@ -209,7 +219,7 @@
   </main>
   <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
     <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20 4v6M17 7h6"/></svg></button>
-    <button id="new-switch" class="icon-button" type="button" title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20 4v6M17 7h6"/></svg></button>
+    <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20 4v6M17 7h6"/></svg></button>
     <div class="page-controls" aria-label="Console pages"><button id="previous-page" class="icon-button" type="button" disabled title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><span id="page-position">0 / 0</span><button id="next-page" class="icon-button" type="button" disabled title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
@@ -306,6 +316,11 @@
     const settingsTitle = document.getElementById('settings-title');
     const toggleExpertMode = document.getElementById('toggle-expert-mode');
     const expertSections = [...qemuOptionsPanel.querySelectorAll('[data-expert-section]')];
+    const showGeneralSettings = document.getElementById('show-general-settings');
+    const generalSettingsPanel = document.getElementById('general-settings-panel');
+    const defaultEngineSelect = document.getElementById('default-engine');
+    const namingSchemeSelect = document.getElementById('naming-scheme');
+    const generalSettingsError = document.getElementById('general-settings-error');
     const showNetworkOptions = document.getElementById('show-network-options');
     const networkOptionsPanel = document.getElementById('network-options-panel');
     const networkTitle = document.getElementById('network-title');
@@ -340,6 +355,17 @@
     let createDraft = null;
     let cloneSourceId = null;
     let expertMode = false;
+    let namingSchemes = null;
+    const generalSettingsKey = 'qemuweb.general-settings';
+    const generalSettings = {engine: 'qemu', namingScheme: 'classic'};
+    try {
+      const saved = JSON.parse(localStorage.getItem(generalSettingsKey) || '{}');
+      if (['qemu', 'qemu-tcg', 'virtualbox'].includes(saved?.engine)) generalSettings.engine = saved.engine;
+      if (typeof saved?.namingScheme === 'string') generalSettings.namingScheme = saved.namingScheme;
+    } catch (_) {}
+    function saveGeneralSettings() {
+      try { localStorage.setItem(generalSettingsKey, JSON.stringify(generalSettings)); } catch (_) {}
+    }
 
     function finishReplay(pane, generation, id) {
       if (generation !== pane.replayGeneration || id !== pane.machineId) return;
@@ -805,10 +831,22 @@
       }
     }
     function renderCreateNicControls() { renderNicControls(createDraft, createNicList, createAddNic, () => {}); }
-    function nextMachineName(prefix) {
-      const names = new Set([...machines.values()].map(machine => machine.hostname));
+    function nextMachineName(kind) {
+      const used = new Set([...machines.values()].map(machine => machine.hostname.toLowerCase()));
+      const scheme = namingSchemes?.[generalSettings.namingScheme];
+      if (Array.isArray(scheme?.names) && scheme.names.length) {
+        for (let round = 0; ; round++) {
+          for (const name of scheme.names) {
+            const base = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
+            if (!base) continue;
+            const candidate = `${base}${round ? round + 1 : ''}`;
+            if (!used.has(candidate)) return candidate;
+          }
+        }
+      }
+      const prefix = scheme?.prefixes?.[kind] || (kind === 'vm' ? 'h' : 's');
       let number = 1;
-      while (names.has(`${prefix}${number}`)) number++;
+      while (used.has(`${prefix}${number}`)) number++;
       return `${prefix}${number}`;
     }
     function openCreateDialog(kind) {
@@ -816,7 +854,7 @@
       cloneSourceId = null;
       const host = kind === 'vm';
       createTitle.textContent = host ? 'Add a new host' : 'Add a new switch';
-      createName.value = nextMachineName(host ? 'h' : 's');
+      createName.value = nextMachineName(kind);
       createName.maxLength = host ? 64 : 32;
       if (host) createName.removeAttribute('pattern');
       else createName.pattern = '[a-zA-Z][a-zA-Z0-9_-]{0,31}';
@@ -825,7 +863,7 @@
       imageSelect.required = host;
       const current = activeMachine();
       imageSelect.value = host && current?.kind === 'vm' ? current.imageId : (images[0]?.id || '');
-      engineSelect.value = host && current?.kind === 'vm' ? current.engine : 'qemu';
+      engineSelect.value = generalSettings.engine;
       createDraft = host ? {engine: engineSelect.value, interfaces: engineSelect.value === 'virtualbox' ? [] : [null], hasLaunched: false, busy: false} : null;
       createNetwork.hidden = !host || engineSelect.value === 'virtualbox';
       if (host) renderCreateNicControls();
@@ -923,10 +961,25 @@
     Promise.all([
       fetch('/api/systems').then(response => response.json()),
       fetch('/api/qemu-config').then(response => response.ok ? response.json() : null).catch(() => null),
-      fetch('/api/sessions').then(response => response.json())
-    ]).then(([items, config, existing]) => {
+      fetch('/api/sessions').then(response => response.json()),
+      fetch('/resources/naming-schemes.json').then(response => {
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return response.json();
+      }).catch(error => ({error: error.message}))
+    ]).then(([items, config, existing, schemes]) => {
       images = items;
       qemuConfig = config;
+      namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};
+      if (schemes?.error || !schemes?.classic?.prefixes) {
+        generalSettingsError.textContent = `Naming schemes unavailable: ${schemes?.error || 'invalid resource file'}. Classic naming is available.`;
+        generalSettingsError.hidden = false;
+      }
+      namingSchemeSelect.replaceChildren(...Object.entries(namingSchemes).map(([id, scheme]) => new Option(scheme.label, id)));
+      if (!namingSchemes[generalSettings.namingScheme]) generalSettings.namingScheme = 'classic';
+      namingSchemeSelect.value = generalSettings.namingScheme;
+      defaultEngineSelect.value = generalSettings.engine;
+      showGeneralSettings.disabled = false;
+      document.getElementById('new-switch').disabled = false;
       imageSelect.replaceChildren(...items.map(image => { const option = document.createElement('option'); option.value = image.id; option.textContent = image.label; return option; }));
       document.getElementById('new-host').disabled = !items.length;
       for (const session of existing) {
@@ -954,6 +1007,10 @@
       showPage();
     }).catch(error => { showStatusError(`System list unavailable: ${error.message}`); });
 
+    showGeneralSettings.addEventListener('click', () => generalSettingsPanel.showModal());
+    document.getElementById('close-general-settings').addEventListener('click', () => generalSettingsPanel.close());
+    defaultEngineSelect.addEventListener('change', () => { generalSettings.engine = defaultEngineSelect.value; saveGeneralSettings(); });
+    namingSchemeSelect.addEventListener('change', () => { generalSettings.namingScheme = namingSchemeSelect.value; saveGeneralSettings(); });
     document.getElementById('new-host').addEventListener('click', () => openCreateDialog('vm'));
     document.getElementById('new-switch').addEventListener('click', () => openCreateDialog('switch'));
     cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine?.kind === 'vm') openCloneDialog(machine); });

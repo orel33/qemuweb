@@ -1,0 +1,24 @@
+{
+  "classic": {
+    "label": "Classic (h1, s1, ...)",
+    "prefixes": {"vm": "h", "switch": "s"}
+  },
+  "women1900": {
+    "label": "French women's names (1900)",
+    "source": "https://www.insee.fr/fr/statistiques/8595130",
+    "names": [
+      "Marie", "Jeanne", "Marguerite", "Germaine", "Louise", "Yvonne", "Madeleine", "Suzanne", "Marthe", "Marcelle",
+      "Maria", "Anne", "Josephine", "Eugénie", "Berthe", "Henriette", "Alice", "Hélène", "Lucie", "Georgette",
+      "Lucienne", "Renée", "Juliette", "Gabrielle", "Anna", "Fernande", "Augustine", "Angèle", "Thérèse", "Catherine",
+      "Rose", "Andrée", "Blanche", "Léonie", "Antoinette", "Françoise", "Elise", "Pauline", "Cécile", "Raymonde",
+      "Mathilde", "Emilie", "Léontine", "Charlotte", "Julie", "Adrienne", "Denise", "Claire", "Emilienne", "Léa"
+    ]
+  },
+  "greek": {
+    "label": "Greek alphabet",
+    "names": [
+      "Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa", "Lambda", "Mu",
+      "Nu", "Xi", "Omicron", "Pi", "Rho", "Sigma", "Tau", "Upsilon", "Phi", "Chi", "Psi", "Omega"
+    ]
+  }
+}
