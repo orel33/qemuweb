@@ -17,7 +17,7 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 ## Hosts and settings
 
 - [ ] Generate unique default host names from women's first names common around 1900.
-- [ ] Keep Settings concise by default and reveal technical fields in an Expert mode.
+- [x] Keep Settings concise by default and reveal technical fields in an Expert mode.
 - [ ] Allow QEMU or VirtualBox to be selected in general Settings.
 - [ ] Explore user-editable guest startup scripts, with defaults supplied by `config.json` if useful.
 - [ ] Explore predefined host roles: lightweight terminal, web server, gateway, DNS server and DHCP server, plus a ready-made LAN with several hosts and a preset network address.

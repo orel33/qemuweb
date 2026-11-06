@@ -63,13 +63,16 @@
     #create-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
     .settings-heading { position: sticky; top: -18px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -18px -18px 0; padding: 18px; border-bottom: 1px solid #35404c; background: #10151c; }
     .settings-heading h2 { margin: 0; font-size: 18px; }
+    #qemu-options-panel .settings-heading { flex-wrap: wrap; }
+    .settings-heading-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+    #toggle-expert-mode[aria-pressed="true"] { border-color: #70a8ff; background: #355177; color: #fff; }
     .settings-description { margin: 10px 0 0; color: #bdc8d6; font-size: 13px; line-height: 1.5; }
-    .settings-login { margin: 2px 0 0; color: #bdc8d6; font-size: 13px; line-height: 1.5; }
     .settings-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #35404c; }
     .settings-section > summary { cursor: pointer; color: #9fc5ef; font-size: 14px; font-weight: 700; }
     .setting-row { display: grid; grid-template-columns: minmax(180px, 250px) minmax(0, 1fr); align-items: center; gap: 12px; padding: 5px 2px; }
-    .setting-row > label { color: #bdcddd; font-size: 13px; }
+    .setting-row > label, .setting-row > .setting-label { color: #bdcddd; font-size: 13px; }
     .setting-row input, .setting-row select { appearance: none; width: 100%; min-width: 0; max-width: 460px; height: 32px; padding: 0 10px; border: 1px solid #45586d; border-radius: 4px; background-color: #1a2633; color: #e7edf5; font: 13px system-ui, sans-serif; box-shadow: none; }
+    .setting-row .setting-value { box-sizing: border-box; width: 100%; max-width: 460px; min-height: 32px; padding: 6px 10px; border: 1px solid #46515d; border-radius: 4px; background: #303942; color: #aeb9c6; font: 13px system-ui, sans-serif; overflow-wrap: anywhere; }
     .setting-row input[type="number"] { appearance: textfield; max-width: 140px; }
     .setting-row input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
     .setting-row select { max-width: 340px; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, #a9bed4 50%), linear-gradient(135deg, #a9bed4 50%, transparent 50%); background-position: calc(100% - 18px) 13px, calc(100% - 12px) 13px; background-size: 6px 6px; background-repeat: no-repeat; }
@@ -162,17 +165,15 @@
     <form id="monitor-form"><input id="monitor-command" aria-label="QEMU monitor command" placeholder="info status" maxlength="256" autocomplete="off" spellcheck="false"><button id="monitor-send" type="submit">Send</button></form>
   </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
-    <div class="settings-heading"><h2 id="settings-title">Settings</h2><button id="close-settings" type="button">Close</button></div>
+    <div class="settings-heading"><h2 id="settings-title">Settings</h2><div class="settings-heading-actions"><button id="toggle-expert-mode" type="button" aria-pressed="false">Mode Expert</button><button id="close-settings" type="button">Close</button></div></div>
     <p id="options-status" role="alert" hidden></p>
-    <p class="settings-description" id="settings-description"></p>
-    <p class="settings-login" id="settings-login"></p>
     <details class="settings-section" open><summary>General</summary><div id="settings-fixed"></div></details>
     <details class="settings-section" open><summary>Resources and clock</summary><div id="settings-editable"></div></details>
-    <details class="settings-section"><summary>Hardware profile</summary><div id="settings-hardware"></div></details>
-    <details class="settings-section"><summary>Storage</summary><div id="settings-storage"></div></details>
-    <details class="settings-section"><summary>Network interfaces</summary><div id="settings-network"></div></details>
-    <details class="settings-section"><summary>Console</summary><div id="settings-console"></div></details>
-    <details class="settings-section settings-commands"><summary>Full launch commands</summary><pre id="options-commands"></pre></details>
+    <details class="settings-section" open><summary>Network interfaces</summary><div id="settings-network"></div></details>
+    <details class="settings-section" data-expert-section hidden><summary>Hardware profile</summary><div id="settings-hardware"></div></details>
+    <details class="settings-section" data-expert-section hidden><summary>Storage</summary><div id="settings-storage"></div></details>
+    <details class="settings-section" data-expert-section hidden><summary>Console</summary><div id="settings-console"></div></details>
+    <details class="settings-section settings-commands" data-expert-section hidden><summary>Full launch commands</summary><pre id="options-commands"></pre></details>
   </dialog>
   <dialog class="qemu-options" id="network-options-panel" aria-labelledby="network-title">
     <div class="settings-heading"><h2 id="network-title">Network interfaces</h2><button id="close-network-options" type="button">Close</button></div>
@@ -303,6 +304,8 @@
     const showQemuOptions = document.getElementById('show-qemu-options');
     const qemuOptionsPanel = document.getElementById('qemu-options-panel');
     const settingsTitle = document.getElementById('settings-title');
+    const toggleExpertMode = document.getElementById('toggle-expert-mode');
+    const expertSections = [...qemuOptionsPanel.querySelectorAll('[data-expert-section]')];
     const showNetworkOptions = document.getElementById('show-network-options');
     const networkOptionsPanel = document.getElementById('network-options-panel');
     const networkTitle = document.getElementById('network-title');
@@ -316,8 +319,6 @@
     const confirmMessage = document.getElementById('confirm-message');
     const confirmAccept = document.getElementById('confirm-accept');
     const optionsStatus = document.getElementById('options-status');
-    const settingsDescription = document.getElementById('settings-description');
-    const settingsLogin = document.getElementById('settings-login');
     const settingsEditable = document.getElementById('settings-editable');
     const settingsFixed = document.getElementById('settings-fixed');
     const settingsHardware = document.getElementById('settings-hardware');
@@ -338,6 +339,7 @@
     let createKind = null;
     let createDraft = null;
     let cloneSourceId = null;
+    let expertMode = false;
 
     function finishReplay(pane, generation, id) {
       if (generation !== pane.replayGeneration || id !== pane.machineId) return;
@@ -510,6 +512,18 @@
       container.append(row);
       return input;
     }
+    function addSettingTextRow(container, label, value) {
+      const row = document.createElement('div');
+      row.className = 'setting-row';
+      const title = document.createElement('span');
+      title.className = 'setting-label';
+      title.textContent = label;
+      const content = document.createElement('div');
+      content.className = 'setting-value';
+      content.textContent = value;
+      row.append(title, content);
+      container.append(row);
+    }
     function addSettingSelectRow(container, label, choices, value, disabled, onChange) {
       const row = document.createElement('div');
       row.className = 'setting-row';
@@ -539,8 +553,6 @@
       optionsStatus.textContent = '';
       const image = images.find(item => item.id === machine.imageId);
       settingsTitle.textContent = `Settings · ${machineDialogName(machine)}`;
-      settingsDescription.textContent = image ? `Description: ${image.description}` : 'Description: No image available; run bash prepare.sh.';
-      settingsLogin.textContent = image ? `Login: ${image.login}.` : 'Login: unavailable.';
       settingsEditable.replaceChildren();
       settingsFixed.replaceChildren();
       settingsHardware.replaceChildren();
@@ -623,6 +635,8 @@
           engineSelect.value = value;
           engineSelect.dispatchEvent(new Event('change'));
         });
+        addSettingTextRow(settingsFixed, 'Description', image?.description || 'No image available; run bash prepare.sh.');
+        addSettingTextRow(settingsFixed, 'Login', image?.login || 'Unavailable');
         const fixedLabels = {machine: 'Machine type', diskBus: 'Disk bus', networkCard: 'Network card', osType: 'Guest profile'};
         for (const [key, value] of Object.entries(body.fixed || {})) {
           if (key !== 'engine') addSettingRow(settingsHardware, fixedLabels[key] || key, value);
@@ -1052,6 +1066,14 @@
     showQemuOptions.addEventListener('click', () => {
       if (!qemuOptionsPanel.open) qemuOptionsPanel.showModal();
       renderQemuOptions();
+    });
+    toggleExpertMode.addEventListener('click', () => {
+      expertMode = !expertMode;
+      toggleExpertMode.setAttribute('aria-pressed', String(expertMode));
+      for (const section of expertSections) {
+        section.hidden = !expertMode;
+        if (expertMode) section.open = true;
+      }
     });
     document.getElementById('close-settings').addEventListener('click', () => qemuOptionsPanel.close());
     showNetworkOptions.addEventListener('click', () => {
