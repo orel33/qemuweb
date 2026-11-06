@@ -245,7 +245,7 @@ Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sourc
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. Their creation dialogs let you edit the proposed name and choose whether to start immediately; hosts also offer a system, engine and Ethernet interfaces. **General Settings** in the top toolbar sets the default engine for new hosts and the naming scheme for new hosts and switches: classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a console; the Log button opens that session's commands and output. Login details appear in the host's Settings dialog.
+Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. Their creation dialogs let you edit the proposed name and choose whether to start immediately; hosts also offer a system, engine and Ethernet interfaces. **General Settings** at the bottom left sets the default engine for new hosts and the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a console; the Log button opens that session's commands and output. Login details appear in the host's Settings dialog.
 
 ### Local VDE LAN prototype
 
@@ -268,7 +268,7 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 
 ### Host actions
 
-The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Each hint below is the text shown on hover. Actions apply only to the selected tab.
+The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Each hint below is the text shown on hover. Host and switch actions apply only to the selected session.
 
 | Icon / control | Action | Hint | Effect |
 |---|---|---|---|

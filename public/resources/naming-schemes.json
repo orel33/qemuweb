@@ -1,4 +1,9 @@
 {
+  "classicLong": {
+    "label": "Classic long (host01, switch01, ...)",
+    "prefixes": {"vm": "host", "switch": "switch"},
+    "numberWidth": 2
+  },
   "classic": {
     "label": "Classic (h1, s1, ...)",
     "prefixes": {"vm": "h", "switch": "s"}

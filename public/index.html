@@ -357,7 +357,7 @@
     let expertMode = false;
     let namingSchemes = null;
     const generalSettingsKey = 'qemuweb.general-settings';
-    const generalSettings = {engine: 'qemu', namingScheme: 'classic'};
+    const generalSettings = {engine: 'qemu', namingScheme: 'classicLong'};
     try {
       const saved = JSON.parse(localStorage.getItem(generalSettingsKey) || '{}');
       if (['qemu', 'qemu-tcg', 'virtualbox'].includes(saved?.engine)) generalSettings.engine = saved.engine;
@@ -845,9 +845,10 @@
         }
       }
       const prefix = scheme?.prefixes?.[kind] || (kind === 'vm' ? 'h' : 's');
+      const numberWidth = scheme?.numberWidth || 1;
       let number = 1;
-      while (used.has(`${prefix}${number}`)) number++;
-      return `${prefix}${number}`;
+      while (used.has(`${prefix}${String(number).padStart(numberWidth, '0')}`)) number++;
+      return `${prefix}${String(number).padStart(numberWidth, '0')}`;
     }
     function openCreateDialog(kind) {
       createKind = kind;
@@ -975,7 +976,7 @@
         generalSettingsError.hidden = false;
       }
       namingSchemeSelect.replaceChildren(...Object.entries(namingSchemes).map(([id, scheme]) => new Option(scheme.label, id)));
-      if (!namingSchemes[generalSettings.namingScheme]) generalSettings.namingScheme = 'classic';
+      if (!namingSchemes[generalSettings.namingScheme]) generalSettings.namingScheme = namingSchemes.classicLong ? 'classicLong' : 'classic';
       namingSchemeSelect.value = generalSettings.namingScheme;
       defaultEngineSelect.value = generalSettings.engine;
       showGeneralSettings.disabled = false;
