@@ -19,7 +19,7 @@
     .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     #start { color: #57dc91; } #stop { color: #ffaf76; } #reboot { color: #70b9ff; }
-    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-host { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-general-settings { color: #9fc5ef; } #new-host { color: #5adbd1; }
+    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-machine { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-general-settings { color: #9fc5ef; } #new-host { color: #5adbd1; }
     #toggle-console-columns { color: #9fc5ef; } #show-logs { color: #b8d2ef; } #show-monitor { color: #c6adf5; }
     button:disabled { opacity: .45; cursor: default; }
     .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
@@ -67,7 +67,7 @@
     .host-create-actions .create-autostart { margin-right: auto; }
     #host-settings-form { padding-bottom: 24px; }
     .create-network { margin-top: 0; }
-    #create-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
+    #create-error, #clone-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
     .settings-heading { position: sticky; top: -18px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -18px -18px 0; padding: 18px; border-bottom: 1px solid #35404c; background: #10151c; }
     .settings-heading h2 { margin: 0; font-size: 18px; }
     #qemu-options-panel .settings-heading { flex-wrap: wrap; }
@@ -139,7 +139,6 @@
     <button id="reboot" class="icon-button" disabled title="Reboot host with its current disk (keep changes)" aria-label="Reboot host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></svg></button>
     <button id="reset" class="icon-button" disabled title="Reset host from the base image (discard changes)" aria-label="Reset host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
     <button id="exit" class="icon-button" type="button" disabled title="Exit host, delete its disk and close the tab" aria-label="Exit host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
-    <button id="clone-host" class="icon-button" type="button" disabled title="Clone host from its base image" aria-label="Clone host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>
     <button id="clear-console" class="icon-button" type="button" disabled title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
     <button id="show-qemu-options" class="icon-button" type="button" disabled title="Host Settings" aria-label="Host Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <button id="show-logs" class="icon-button" type="button" disabled title="View session log" aria-label="Launch log"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button>
@@ -161,6 +160,18 @@
       </div>
       <p id="create-error" role="alert" hidden></p>
       <div class="create-actions"><button id="cancel-create" type="button">Cancel</button><button id="confirm-create" type="submit">OK</button></div>
+    </form>
+  </dialog>
+  <dialog class="qemu-options create-dialog" id="clone-dialog" aria-labelledby="clone-title">
+    <div class="settings-heading"><h2 id="clone-title">Clone</h2></div>
+    <form id="clone-form">
+      <div class="create-fields">
+        <label class="create-field">Name<input id="clone-name" required maxlength="64" autocomplete="off" spellcheck="false"></label>
+        <label class="create-autostart" id="clone-network-row" hidden><input id="clone-network" type="checkbox" checked>Copy network interfaces</label>
+        <label class="create-autostart"><input id="clone-autostart" type="checkbox" checked>Start automatically</label>
+      </div>
+      <p id="clone-error" role="alert" hidden></p>
+      <div class="create-actions"><button id="cancel-clone" type="button">Cancel</button><button id="confirm-clone" type="submit">OK</button></div>
     </form>
   </dialog>
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
@@ -232,6 +243,7 @@
     <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20.5 2v6M18 5h5"/></svg></button>
     <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20.5 2v6M18 5h5"/></svg></button>
     <div class="page-controls" aria-label="Console pages"><button id="previous-page" class="icon-button" type="button" disabled title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><span id="page-position">0 / 0</span><button id="next-page" class="icon-button" type="button" disabled title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div>
+    <button id="clone-machine" class="icon-button" type="button" disabled title="Clone selected host or switch" aria-label="Clone selected host or switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>
     <button id="toggle-console-columns" class="icon-button" type="button" title="Layout: 2 panes; click for 4" aria-label="Layout: 2 panes; click for 4"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg><span class="layout-count" id="layout-count">2</span></button>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
@@ -295,7 +307,7 @@
     const startButton = document.getElementById('start');
     const stopButton = document.getElementById('stop');
     const exitButton = document.getElementById('exit');
-    const cloneButton = document.getElementById('clone-host');
+    const cloneButton = document.getElementById('clone-machine');
     const rebootButton = document.getElementById('reboot');
     const resetButton = document.getElementById('reset');
     const imageSelect = document.getElementById('os-image');
@@ -307,6 +319,16 @@
     const createAutostart = document.getElementById('create-autostart');
     const createError = document.getElementById('create-error');
     const confirmCreate = document.getElementById('confirm-create');
+    const cloneDialog = document.getElementById('clone-dialog');
+    const cloneForm = document.getElementById('clone-form');
+    const cloneTitle = document.getElementById('clone-title');
+    const cloneName = document.getElementById('clone-name');
+    const cloneNetworkRow = document.getElementById('clone-network-row');
+    const cloneNetwork = document.getElementById('clone-network');
+    const cloneAutostart = document.getElementById('clone-autostart');
+    const cloneError = document.getElementById('clone-error');
+    const confirmClone = document.getElementById('confirm-clone');
+    const cancelClone = document.getElementById('cancel-clone');
     const createNetwork = document.getElementById('create-network');
     const createNicList = document.getElementById('create-nic-list');
     const createAddNic = document.getElementById('create-add-nic');
@@ -801,7 +823,6 @@
         stopButton.disabled = true;
         exitButton.disabled = true;
         cloneButton.disabled = true;
-        cloneButton.hidden = true;
         rebootButton.disabled = true;
         resetButton.disabled = true;
         showQemuOptions.disabled = true;
@@ -816,8 +837,9 @@
       const busy = !!machine.busy;
       const isSwitch = machine.kind === 'switch';
       exitButton.disabled = busy;
-      cloneButton.disabled = busy || machine.kind !== 'vm';
-      cloneButton.hidden = machine.kind !== 'vm';
+      cloneButton.disabled = busy;
+      cloneButton.title = isSwitch ? 'Clone selected switch' : 'Clone selected host from its base image';
+      cloneButton.setAttribute('aria-label', isSwitch ? 'Clone selected switch' : 'Clone selected host');
       exitButton.title = isSwitch ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
       exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : 'Exit host');
       showLogs.disabled = false;
@@ -925,7 +947,6 @@
     }
     function openCreateDialog(kind) {
       createKind = kind;
-      cloneSourceId = null;
       const host = kind === 'vm';
       createTitle.textContent = host ? 'Add a new host' : 'Add a new switch';
       createName.value = nextMachineName(kind);
@@ -950,14 +971,21 @@
       createName.select();
     }
     function openCloneDialog(source) {
-      openCreateDialog('vm');
-      createKind = 'clone';
       cloneSourceId = source.id;
-      createTitle.textContent = `Clone ${source.hostname}`;
-      document.getElementById('create-system-row').hidden = true;
-      engineSelect.value = generalSettings.engine;
-      createNetwork.hidden = true;
-      document.getElementById('create-autostart-row').hidden = false;
+      const isSwitch = source.kind === 'switch';
+      cloneTitle.textContent = `Clone ${isSwitch ? 'switch' : 'host'} · ${source.hostname}`;
+      cloneName.value = nextMachineName(source.kind);
+      cloneName.maxLength = isSwitch ? 32 : 64;
+      if (isSwitch) cloneName.pattern = '[a-zA-Z][a-zA-Z0-9_-]{0,31}';
+      else cloneName.removeAttribute('pattern');
+      cloneNetworkRow.hidden = isSwitch || generalSettings.engine === 'virtualbox' || !source.interfaces?.length;
+      cloneNetwork.checked = !cloneNetworkRow.hidden;
+      cloneAutostart.checked = true;
+      cloneError.hidden = true;
+      cloneError.textContent = '';
+      cloneDialog.showModal();
+      cloneName.focus();
+      cloneName.select();
     }
     async function addHost({id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`, name, imageId, engine, interfaces, settings, select = true}) {
       const image = images.find(item => item.id === imageId);
@@ -1087,7 +1115,38 @@
     namingSchemeSelect.addEventListener('change', () => { generalSettings.namingScheme = namingSchemeSelect.value; saveGeneralSettings(); });
     document.getElementById('new-host').addEventListener('click', openHostSettingsCreate);
     document.getElementById('new-switch').addEventListener('click', () => openCreateDialog('switch'));
-    cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine?.kind === 'vm') openCloneDialog(machine); });
+    cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine && !machine.busy) openCloneDialog(machine); });
+    cancelClone.addEventListener('click', () => cloneDialog.close());
+    cloneDialog.addEventListener('cancel', event => { if (confirmClone.disabled) event.preventDefault(); });
+    cloneDialog.addEventListener('close', () => { cloneSourceId = null; updateControls(); });
+    cloneForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (!cloneForm.reportValidity()) return;
+      confirmClone.disabled = true;
+      cancelClone.disabled = true;
+      cloneError.hidden = true;
+      let startHost = false;
+      try {
+        const source = machines.get(cloneSourceId);
+        if (!source) throw new Error('The source is no longer available.');
+        const autostart = cloneAutostart.checked;
+        if (source.kind === 'switch') {
+          await addSwitch({name: cloneName.value.trim(), autostart});
+        } else {
+          const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked ? [] : [...source.interfaces];
+          await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces, settings: getMachineSettings(source)});
+          startHost = autostart;
+        }
+        cloneDialog.close();
+      } catch (error) {
+        cloneError.textContent = error.message;
+        cloneError.hidden = false;
+      } finally {
+        confirmClone.disabled = false;
+        cancelClone.disabled = false;
+      }
+      if (startHost) await startButton.onclick();
+    });
     document.getElementById('cancel-create').addEventListener('click', () => createDialog.close());
     createDialog.addEventListener('cancel', event => { if (confirmCreate.disabled) event.preventDefault(); });
     createDialog.addEventListener('close', () => updateControls());
@@ -1102,14 +1161,9 @@
       let startHost = false;
       try {
         if (kind === 'vm') await addHost({name: createName.value.trim(), imageId: imageSelect.value, engine: generalSettings.engine, interfaces: [...createDraft.interfaces]});
-        else if (kind === 'clone') {
-          const source = machines.get(cloneSourceId);
-          if (!source || source.kind !== 'vm') throw new Error('Source host is no longer available.');
-          await addHost({name: createName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [...source.interfaces], settings: getMachineSettings(source)});
-        }
         else await addSwitch({name: createName.value.trim(), autostart});
         createDialog.close();
-        startHost = (kind === 'vm' || kind === 'clone') && autostart;
+        startHost = kind === 'vm' && autostart;
       } catch (error) {
         createError.textContent = error.message;
         createError.hidden = false;

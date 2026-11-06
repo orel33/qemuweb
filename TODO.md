@@ -23,7 +23,7 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
   - Keep the host settings button, rename it **Host Settings**, and use the same title for its dialog.
   - Remove the **Network Settings** button and move its dialog content into the **Network interfaces** section of **Host Settings**.
   - Make **Add a new host** open exactly the same **Host Settings** dialog, with Expert mode initially disabled.
-- [ ] **PUD84** — Simplify cloning around the currently selected host or switch:
+- [x] **PUD84** — Simplify cloning around the currently selected host or switch:
   - Move the **Clone** icon to the bottom-right action area and clone the currently selected item.
   - Show a minimal dialog containing only the proposed editable clone name and the **Autostart** checkbox.
   - For a host, add a checkbox before **Autostart** to optionally copy its network interfaces and reconnect them to the same switches, while always assigning new ports and MAC addresses.

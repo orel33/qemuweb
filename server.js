@@ -296,9 +296,18 @@ function validateNetworkInterfaces(value, engine, requireRunning = true) {
 
 function assignNetworkInterfaces(session, switches) {
   const planned = [];
+  const usedMacs = new Set([...sessions.values()]
+    .filter(other => other.id !== session.id)
+    .flatMap(other => other.networkInterfaces || [])
+    .map(nic => nic.mac));
   for (const [index, sw] of switches.entries()) {
-    const digest = crypto.createHash('sha256').update(`${session.id}:${index}`).digest();
-    const mac = `02:${[...digest.subarray(0, 5)].map(byte => byte.toString(16).padStart(2, '0')).join(':')}`;
+    let mac;
+    for (let salt = 0; ; salt++) {
+      const digest = crypto.createHash('sha256').update(`${session.id}:${index}${salt ? `:${salt}` : ''}`).digest();
+      mac = `02:${[...digest.subarray(0, 5)].map(byte => byte.toString(16).padStart(2, '0')).join(':')}`;
+      if (!usedMacs.has(mac)) break;
+    }
+    usedMacs.add(mac);
     if (sw === null) {
       planned.push({switchId: null, port: null, mac});
       continue;
