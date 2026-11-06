@@ -283,13 +283,13 @@ function qemuArgs(session, image, overlay) {
   return args;
 }
 
-function validateNetworkInterfaces(value, engine) {
+function validateNetworkInterfaces(value, engine, requireRunning = true) {
   if (value === undefined) value = engine.startsWith('qemu') ? [null] : [];
   if (!Array.isArray(value) || value.length > 4 || (value.length && !engine.startsWith('qemu'))) throw new Error('Ethernet interfaces require QEMU (maximum four).');
   return value.map((switchId, index) => {
     if (switchId === null) return null;
     const sw = getSession(switchId);
-    if (!sw || sw.kind !== 'switch' || !sw.machine) throw new Error(`Interface ${index + 1}: start its VDE switch first.`);
+    if (!sw || sw.kind !== 'switch' || (requireRunning && !sw.machine)) throw new Error(`Interface ${index + 1}: start its VDE switch first.`);
     return sw;
   });
 }
@@ -522,19 +522,27 @@ app.get('/api/options/:sessionId', (req, res) => {
       engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
       launchSettings: launchSettingsFor(image.id, req.query.settings ? JSON.parse(req.query.settings) : {}),
       qemuOptions: null,
-      networkInterfaces: assignNetworkInterfaces({id}, validateNetworkInterfaces(req.query.interfaces !== undefined ? JSON.parse(req.query.interfaces) : req.query.switches ? String(req.query.switches).split(',') : undefined, engine))
+      networkInterfaces: assignNetworkInterfaces({id}, validateNetworkInterfaces(req.query.interfaces !== undefined ? JSON.parse(req.query.interfaces) : req.query.switches ? String(req.query.switches).split(',') : undefined, engine, false))
     };
     const isQemu = engine.startsWith('qemu');
-    const userSettings = launched ? session.launchSettings : launchSettingsFor(image.id, req.query.settings ? JSON.parse(req.query.settings) : {});
-    const options = isQemu ? (launched ? session.qemuOptions : qemuOptionsFor(image.id, userSettings)) : null;
+    const draftSettings = req.query.settings ? JSON.parse(req.query.settings) : {};
+    const userSettings = launched
+      ? existing.machine || existing.action ? session.launchSettings : validateLaunchSettings({...session.launchSettings, ...draftSettings})
+      : launchSettingsFor(image.id, draftSettings);
+    const options = isQemu
+      ? launched ? {...session.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
+      : null;
     if (!launched && isQemu) session.qemuOptions = options;
+    const previewSession = {...session, launchSettings: userSettings, qemuOptions: options};
     const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
     const fixed = isQemu
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
       : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.nic};
     const launchCommands = isQemu
-      ? [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)], [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(session, image, overlay)]]
-      : virtualBoxCommands(session, image).map(args => [commands.VBOXMANAGE, ...args]);
+      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
+      : launched
+        ? [[commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off'], [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
+        : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
     const socketLabel = filePath => path.join('runtime', path.relative(runtime, filePath));
     const storage = isQemu
       ? [
@@ -586,8 +594,12 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (!image) throw new Error('Unknown system in config.json.');
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash prepare.sh.`);
   if (selectedEngine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash prepare.sh.`);
-    const launchSettings = resume ? session.launchSettings : launchSettingsFor(image.id, options.settings || {});
-    const qemuOptions = selectedEngine.startsWith('qemu') ? (resume ? session.qemuOptions : qemuOptionsFor(image.id, launchSettings)) : null;
+  const launchSettings = resume
+    ? validateLaunchSettings({...session.launchSettings, ...(options.settings || {})})
+    : launchSettingsFor(image.id, options.settings || {});
+  const qemuOptions = selectedEngine.startsWith('qemu')
+    ? resume ? {...session.qemuOptions, memory: launchSettings.memory, smp: launchSettings.cpus, rtcBase: launchSettings.clock} : qemuOptionsFor(image.id, launchSettings)
+    : null;
   if (resume || options.reset) {
     for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], selectedEngine);
   } else {
@@ -611,6 +623,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.launchSettings = launchSettings;
   if (selectedEngine.startsWith('qemu')) spawnQemu(session, image, resume);
   else if (resume) {
+    vbox(session, ['modifyvm', session.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off']);
     vbox(session, ['startvm', session.vmName, '--type', 'headless']);
     session.machine = {kind: 'virtualbox', vmDir: tempFile(session, 'vbox-vm')};
   } else spawnVirtualBox(session, image);
@@ -707,22 +720,21 @@ async function reboot(session) {
   }
 }
 
-async function reset(session) {
+async function reset(session, settings) {
   if (session?.kind === 'switch') throw new Error('Reset applies only to hosts.');
   if (!session || !session.everStarted || !session.selectedImage) throw new Error('This host has not started yet.');
   if (session.action) throw new Error('An action is already in progress for this host.');
   session.action = 'reset';
   const engine = session.engine;
   const imageId = session.selectedImage.id;
-  const qemuOptions = session.qemuOptions;
-  const launchSettings = session.launchSettings;
+  const launchSettings = settings ? validateLaunchSettings({...session.launchSettings, ...settings}) : session.launchSettings;
   try {
     publishState(session, 'Resetting from the base image…');
     if (session.machine) await stop(session, {publish: false});
     if (session.action !== 'reset' || !sessions.has(session.id)) throw new Error('The session was deleted during reset.');
     discardSessionDisk(session);
     session.everStarted = false;
-    start(session.id, engine, imageId, {reset: true, qemuOptions, settings: launchSettings});
+    start(session.id, engine, imageId, {reset: true, settings: launchSettings});
   } catch (error) {
     session.everStarted = !!session.runDisk;
     publishState(session, error.message);
@@ -806,7 +818,7 @@ async function destroySession(session) {
   const current = session.machine;
   const image = session.selectedImage || {};
   session.machine = null;
-  if (session.engine === 'virtualbox' && session.selectedImage) {
+  if (session.engine === 'virtualbox' && session.everStarted && session.selectedImage) {
     if (current) { try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {} }
     try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
     for (const file of image.runFiles || []) {
@@ -846,26 +858,38 @@ app.post('/api/start', (req, res) => {
 
 app.post('/api/hosts', (req, res) => {
   try {
-    const {id} = req.body || {};
+    const {id, name, imageId, engine = 'qemu', interfaces, settings} = req.body || {};
     if (sessions.has(id)) throw new Error('Host ID already exists.');
+    const image = imageById(imageId || Object.keys(readConfig().systems)[0]);
+    if (!image) throw new Error('Unknown system in config.json.');
+    if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
+    if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name))) throw new Error('Invalid host name (1 to 64 characters).');
+    const hostname = name === undefined ? allocateName('h') : name.trim();
+    if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
+    const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
+    const launchSettings = settings ? launchSettingsFor(image.id, settings) : null;
     const session = getSession(id, true, 'vm');
-    session.hostname = allocateName('h');
+    session.hostname = hostname;
+    session.selectedImage = image;
+    session.engine = engine;
+    session.networkInterfaces = networkInterfaces;
+    session.launchSettings = launchSettings;
     session.lastMessage = 'Host ready to start';
-    res.json({id, name: session.hostname});
+    res.json({id, name: hostname, imageId: image.id, engine, interfaces: networkInterfaces.map(nic => nic.switchId), settings: launchSettings});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.post('/api/switches', async (req, res) => {
   let session;
   try {
-    const {id, name} = req.body || {};
+    const {id, name, autostart = true} = req.body || {};
     if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)) throw new Error('Switch name must be 1–32 letters, digits, underscores or hyphens.');
     if (sessions.has(id) || [...sessions.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
     session = getSession(id, true, 'switch');
     session.hostname = name;
     session.lastMessage = 'VDE switch ready to start';
-    await startSwitch(session);
-    res.json({id, name, running: true, message: stateMessage(session)});
+    if (autostart) await startSwitch(session);
+    res.json({id, name, running: !!session.machine, message: stateMessage(session)});
   } catch (error) {
     if (session) {
       try { await destroySession(session); }
@@ -914,7 +938,7 @@ app.post('/api/reboot/:sessionId', async (req, res) => {
 });
 
 app.post('/api/reset/:sessionId', async (req, res) => {
-  try { await reset(getSession(req.params.sessionId)); res.json({ok: true}); }
+  try { await reset(getSession(req.params.sessionId), req.body?.settings); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
@@ -935,8 +959,9 @@ app.patch('/api/sessions/:sessionId', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     const name = req.body && req.body.name;
-    if (!session || session.kind !== 'vm' || !session.everStarted) throw new Error('This host has not started yet.');
+    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
+    if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
     session.hostname = name.trim();
     io.emit('session-renamed', {sessionId: session.id, name: session.hostname});
     res.json({name: session.hostname});
