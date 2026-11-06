@@ -13,6 +13,7 @@ const socketIo = require('socket.io');
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
+const {parseTopology, formatTopology} = require('./topology');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -937,6 +938,54 @@ app.post('/api/start', (req, res) => {
     } catch (_) {}
     res.status(500).json({error: message});
   }
+});
+
+app.post('/api/topology', (req, res) => {
+  const created = [];
+  try {
+    const {text, mapping = {}, engine = 'qemu'} = req.body || {};
+    if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
+    const topology = parseTopology(text, Object.keys(readConfig().systems), mapping);
+    if (engine === 'virtualbox' && topology.hosts.some(host => host.switches.length)) throw new Error('Connected interfaces require a QEMU engine.');
+    const used = new Set([...sessions.values()].map(session => session.hostname?.toLowerCase()));
+    for (const entry of [...topology.switches, ...topology.hosts]) if (used.has(entry.name.toLowerCase())) throw new Error(`Name already exists: ${entry.name}.`);
+    const switchIds = new Map();
+    for (const sw of topology.switches) {
+      const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+      const session = getSession(id, true, 'switch'); created.push(id);
+      session.hostname = sw.name; session.lastMessage = 'VDE switch ready to start';
+      switchIds.set(sw.name, id);
+    }
+    for (const host of topology.hosts) {
+      const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+      const interfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(host.switches.map(name => switchIds.get(name)), engine, false));
+      const session = getSession(id, true, 'vm'); created.push(id);
+      session.hostname = host.name; session.selectedImage = imageById(host.system); session.engine = engine;
+      session.networkInterfaces = interfaces; session.lastMessage = 'Host ready to start';
+    }
+    res.json({created: created.length});
+  } catch (error) {
+    for (const id of created) sessions.delete(id);
+    res.status(400).json({error: error.message, unknownSystems: error.unknownSystems || []});
+  }
+});
+
+app.get('/api/topology', (_req, res) => {
+  try {
+    const all = [...sessions.values()];
+    const switches = all.filter(session => session.kind === 'switch').map(session => ({name: session.hostname}));
+    const hosts = all.filter(session => session.kind === 'vm').map(session => ({
+      name: session.hostname, system: session.selectedImage?.id,
+      switches: session.networkInterfaces.map(nic => {
+        const sw = nic.switchId && sessions.get(nic.switchId);
+        if (!sw || sw.kind !== 'switch') throw new Error(`Host ${session.hostname} has a disconnected interface; .top cannot represent it.`);
+        return sw.hostname;
+      })
+    }));
+    const text = formatTopology({switches, hosts});
+    parseTopology(text, Object.keys(readConfig().systems));
+    res.type('text/plain').send(text);
+  } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.post('/api/hosts', (req, res) => {

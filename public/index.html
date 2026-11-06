@@ -63,7 +63,7 @@
     .host-create-actions .create-autostart { margin-right: auto; }
     #host-settings-form { padding-bottom: 24px; }
     .create-network { margin-top: 0; }
-    #create-error, #clone-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
+    #create-error, #clone-error, #topology-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
     .settings-heading { position: sticky; top: -18px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -18px -18px 0; padding: 18px; border-bottom: 1px solid #35404c; background: #10151c; }
     .settings-heading h2 { margin: 0; font-size: 18px; }
     #qemu-options-panel .settings-heading { flex-wrap: wrap; }
@@ -176,6 +176,14 @@
       <div class="create-actions"><button id="cancel-clone" type="button">Cancel</button><button id="confirm-clone" type="submit">OK</button></div>
     </form>
   </dialog>
+  <dialog class="qemu-options create-dialog" id="topology-dialog" aria-labelledby="topology-title">
+    <div class="settings-heading"><h2 id="topology-title">Load topology</h2></div>
+    <form id="topology-form">
+      <div class="create-fields"><span id="topology-file-name"></span><div id="topology-mappings"></div></div>
+      <p id="topology-error" role="alert" hidden></p>
+      <div class="create-actions"><button id="cancel-topology" type="button">Cancel</button><button id="confirm-topology" type="submit">Load</button></div>
+    </form>
+  </dialog>
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
     <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
     <div class="create-fields">
@@ -231,6 +239,9 @@
     </section>
   </main>
   <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
+    <input id="topology-file" type="file" accept=".top,.topo,text/plain" hidden>
+    <button id="load-topology" class="icon-button" type="button" title="Load topology" aria-label="Load topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
+    <button id="save-topology" class="icon-button" type="button" title="Save topology" aria-label="Save topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
     <button id="show-general-settings" class="icon-button" type="button" disabled title="General Settings" aria-label="General Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
     <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20.5 2v6M18 5h5"/></svg></button>
     <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20.5 2v6M18 5h5"/></svg></button>
@@ -1246,6 +1257,64 @@
       }
       showPage();
     }).catch(error => { showStatusError(`System list unavailable: ${error.message}`); });
+
+    const topologyFile = document.getElementById('topology-file');
+    const topologyDialog = document.getElementById('topology-dialog');
+    const topologyError = document.getElementById('topology-error');
+    const topologyMappings = document.getElementById('topology-mappings');
+    const topologyConfirm = document.getElementById('confirm-topology');
+    let topologyText = '';
+    document.getElementById('load-topology').addEventListener('click', () => topologyFile.click());
+    document.getElementById('cancel-topology').addEventListener('click', () => topologyDialog.close());
+    topologyFile.addEventListener('change', async () => {
+      const file = topologyFile.files[0];
+      if (!file) return;
+      topologyFile.value = '';
+      document.getElementById('topology-title').textContent = 'Load topology';
+      document.getElementById('topology-file-name').textContent = file.name;
+      topologyMappings.replaceChildren(); topologyError.hidden = true; topologyConfirm.hidden = false;
+      document.getElementById('cancel-topology').textContent = 'Cancel';
+      try { topologyText = await file.text(); }
+      catch (error) { topologyText = ''; topologyError.textContent = `Cannot read file: ${error.message}`; topologyError.hidden = false; topologyConfirm.hidden = true; }
+      topologyDialog.showModal();
+    });
+    document.getElementById('topology-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const mapping = Object.fromEntries([...topologyMappings.querySelectorAll('select')].map(select => [select.dataset.system, select.value]));
+      topologyConfirm.disabled = true;
+      try {
+        const response = await fetch('/api/topology', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: topologyText, mapping, engine: generalSettings.engine})});
+        const result = await response.json();
+        if (!response.ok) {
+          if (result.unknownSystems?.length) {
+            topologyMappings.replaceChildren();
+            for (const system of result.unknownSystems) {
+              const label = document.createElement('label'); label.className = 'create-field'; label.textContent = `Map ${system} to`;
+              const select = document.createElement('select'); select.dataset.system = system; select.required = true;
+              select.append(new Option('Choose a system', ''), ...images.map(image => new Option(image.label, image.id)));
+              label.append(select); topologyMappings.append(label);
+            }
+          }
+          throw new Error(result.error || 'Cannot load topology.');
+        }
+        location.reload();
+      } catch (error) { topologyError.textContent = error.message; topologyError.hidden = false; }
+      finally { topologyConfirm.disabled = false; }
+    });
+    document.getElementById('save-topology').addEventListener('click', async () => {
+      try {
+        const response = await fetch('/api/topology', {cache: 'no-store'});
+        if (!response.ok) { const result = await response.json(); throw new Error(result.error); }
+        const url = URL.createObjectURL(await response.blob());
+        const link = document.createElement('a'); link.href = url; link.download = 'network.topo'; link.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      } catch (error) {
+        document.getElementById('topology-title').textContent = 'Save topology';
+        document.getElementById('topology-file-name').textContent = '';
+        topologyMappings.replaceChildren(); topologyError.textContent = error.message; topologyError.hidden = false;
+        topologyConfirm.hidden = true; document.getElementById('cancel-topology').textContent = 'Close'; topologyDialog.showModal();
+      }
+    });
 
     showGeneralSettings.addEventListener('click', () => generalSettingsPanel.showModal());
     document.getElementById('close-general-settings').addEventListener('click', () => generalSettingsPanel.close());

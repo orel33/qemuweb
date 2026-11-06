@@ -6,13 +6,16 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 
 - [x] **FQJ27** — Record a repeatable two-host Debian 13 Legacy LAN check: switch ports, static IPs, bidirectional ping, and Stop/Resume.
 - [x] **KPT46** — Add the repeatable LAN2 integration test for Debian 13 Legacy, covering switch ports and MACs, serial login, bidirectional ping, and Stop/Resume.
-- [ ] **NVT64** — Define a network model and API for a switch and its hosts, including stable IDs, port assignments, and an isolated runtime directory.
-- [ ] **KRP13** — Group console pages by LAN and switch, instead of paging through individual sessions in creation order.
-- [ ] **ZMX82** — Allow a switch to appear in a LAN without displaying its management console.
-- [ ] **BHW45** — Save and load a network topology in JSON format.
-- [ ] **TCG09** — Add a graphical view of the network topology.
-- [ ] **YLD71** — Make the graphical topology interactive.
-- [ ] **PSA36** — Add whole-network Start and Stop actions with partial-start cleanup; extend the lifecycle to Resume, Reset and Delete in the durable-session stage.
+- [x] **BHW45** — Load and save supported network topologies in the Web app as `.topo` files, separate from `config.json` and referring to system IDs declared in `config.json`:
+  - Start with QemuNet's `SWITCH <name>` and `HOST <system-id> <name> [switch-name ...]` lines, plus comments and blank lines. The order of switches on a `HOST` line is the order of its Ethernet interfaces. Use the adapted local examples `topo/lan.top` and `topo/gw.top`, based on the sibling project's `demo/lan.topo` and `demo/gw.topo`.
+  - Validate the entire file before creating any sessions: syntax, duplicate names, known system IDs, existing switch references and interface limits. For old IDs such as `debian`, request an explicit mapping to a current system such as `debian13-legacy`. Reject unsupported legacy directives with a clear message; parse `.topo` as data, never as shell code.
+  - Save the current network back to a normalized `.topo` file and reload it with the same hosts, switches and ordered links. Keep image paths, executable settings, runtime state and disk overlays out of the topology file.
+  - [ ] **NVT64** — Define the network model and API for a switch and its hosts, with internal stable IDs, port assignments and an isolated runtime directory.
+  - [ ] **KRP13** — Group console pages by LAN and switch, instead of paging through individual sessions in creation order.
+  - [ ] **ZMX82** — Allow a switch to appear in a LAN without displaying its management console.
+  - [ ] **TCG09** — Show the loaded network as a graphical topology.
+  - [ ] **YLD71** — Make the graphical topology interactive so edits can be saved back to `.topo`.
+  - [ ] **PSA36** — Add whole-network Start and Stop with partial-start cleanup; extend the lifecycle to Resume, Reset and Delete in the durable-session stage.
 - [ ] **WEX58** — Prepare the topologies needed for TP6.
 
 ## Hosts and settings

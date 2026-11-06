@@ -1,0 +1,23 @@
+### GW
+
+#
+#                                    grave
+#                                      |
+#                                     [s1]
+#                                      |
+#                                   immortal
+#                                      |
+#                                     [s2]
+#                                     /  \
+#                                 opeth  syl
+#
+#
+#
+
+SWITCH s1
+SWITCH s2
+HOST debian13-legacy  immortal s1 s2
+HOST debian13-legacy  opeth    s2
+HOST debian13-legacy  syl      s2
+HOST debian13-legacy  grave    s1
+
