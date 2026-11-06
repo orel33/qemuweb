@@ -305,6 +305,8 @@ The badge at the right of the toolbar describes the selected tab:
 
 Exit removes the tab, so it has no persistent status. Stopping the server with Ctrl+C force-stops its hosts and removes their temporary sessions and working disks.
 
+Each host pane also shows **CPU** and **RAM** for its VM process on the server, refreshed about every two seconds. CPU uses one logical core as 100% and can exceed 100% for a multicore VM; RAM is the process's resident memory (RSS) in decimal MB. These are host-side consumption figures, not free memory or CPU load inside the guest. QEMU reads Linux `/proc`; VirtualBox uses `VBoxManage metrics`. A dash means the host is stopped, the first CPU sample is still pending, or a metric is unavailable. Switches have no VM metrics.
+
 If port 3002 is already in use, stop the old server or choose another port:
 
 ```sh

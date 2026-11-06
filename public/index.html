@@ -99,7 +99,7 @@
     main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex: 1; min-width: 0; min-height: 0; padding: 12px 16px 16px; }
     main[data-columns="1"] { grid-template-columns: minmax(0, 1fr); }
     main[data-columns="4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
-    .console-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid #35404c; border-radius: 7px; background: #10151c; overflow: hidden; }
+    .console-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid #35404c; border-radius: 7px; background: #10151c; overflow: hidden; container-type: inline-size; }
     .console-pane[hidden] { display: none; }
     .console-pane[data-active="true"] { border-color: #70a8ff; }
     .console-pane-header { display: flex; align-items: center; gap: 10px; flex: none; padding: 7px 10px; border-bottom: 1px solid #35404c; background: #17212c; }
@@ -118,6 +118,9 @@
     .console-pane-state[data-state="stopped"] { color: #ffd17c; }
     .console-pane-state[data-state="starting"], .console-pane-state[data-state="stopping"], .console-pane-state[data-state="rebooting"], .console-pane-state[data-state="resetting"] { color: #ffd17c; }
     .console-pane-state[data-state="error"] { color: #ff9b9e; }
+    .pane-metrics { flex: none; color: #b7c9db; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .pane-metrics[data-status="unavailable"] { color: #8899aa; }
+    @container (max-width: 550px) { .console-view-toggle button { min-width: 29px; padding: 0 6px; } .console-view-toggle button span { display: none; } .console-pane-header { gap: 6px; } }
     .terminal-frame { display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 8px; background: #0b0f14; }
     .terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
     .terminal .xterm-viewport { overflow-x: hidden; overflow-y: scroll; scrollbar-width: none; }
@@ -271,6 +274,10 @@
         replaying: false,
         replayPending: ''
       };
+      pane.metrics = document.createElement('span');
+      pane.metrics.className = 'pane-metrics';
+      pane.metrics.hidden = true;
+      pane.state.before(pane.metrics);
       terminal.onScroll(() => syncConsoleScroll(pane));
       terminal.onData(data => {
         if (pane.replaying || !pane.machineId) return;
@@ -372,6 +379,8 @@
     const optionsCommands = document.getElementById('options-commands');
     let optionsRequest = 0;
     const machines = new Map();
+    const resourceMetrics = new Map();
+    let resourceRequestPending = false;
     let images = [];
     let qemuConfig = null;
     let activeId = null;
@@ -540,8 +549,31 @@
         pane.state.dataset.state = state;
         pane.state.textContent = state === 'new' ? 'READY' : state === 'empty' ? 'No session' : state.toUpperCase();
         pane.state.title = machine ? (machine.error || machine.message || '') : (state === 'error' ? workspaceError : '');
+        pane.metrics.hidden = !machine || machine.kind !== 'vm';
+        if (!pane.metrics.hidden) {
+          const sample = machine.running ? resourceMetrics.get(machine.id) : null;
+          const cpu = Number.isFinite(sample?.cpuPercent) ? `${sample.cpuPercent.toFixed(1)}%` : '—';
+          const ram = Number.isFinite(sample?.ramBytes) ? `${Math.round(sample.ramBytes / 1e6)} MB` : '—';
+          pane.metrics.textContent = `CPU ${cpu} · RAM ${ram}`;
+          pane.metrics.dataset.status = sample?.status || 'unavailable';
+          pane.metrics.title = 'Host VM process: CPU (100% = one logical CPU), resident RAM (RSS). — means unavailable.';
+        }
       }
     }
+    async function refreshResourceMetrics() {
+      if (resourceRequestPending) return;
+      resourceRequestPending = true;
+      try {
+        const response = await fetch('/api/metrics', {cache: 'no-store'});
+        if (!response.ok) throw new Error(`Metrics HTTP ${response.status}`);
+        const samples = await response.json();
+        resourceMetrics.clear();
+        for (const [id, sample] of Object.entries(samples)) resourceMetrics.set(id, sample);
+      } catch (_) { resourceMetrics.clear(); }
+      finally { resourceRequestPending = false; updatePaneStates(); }
+    }
+    refreshResourceMetrics();
+    setInterval(refreshResourceMetrics, 2000);
     function renderPaneSelectors() {
       for (const pane of panes) {
         const current = pane.machineId || '';

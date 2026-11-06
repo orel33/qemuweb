@@ -6,11 +6,13 @@ const net = require('net');
 const {StringDecoder} = require('string_decoder');
 const path = require('path');
 const crypto = require('crypto');
-const {spawn, execFileSync} = require('child_process');
+const {spawn, execFileSync, execFile} = require('child_process');
+const {promisify} = require('util');
 const express = require('express');
 const socketIo = require('socket.io');
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
+const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -26,7 +28,69 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const sessions = new Map();
+const execFileAsync = promisify(execFile);
+const resourceSamples = new Map();
+const previousProcessSamples = new Map();
+const vboxMetricSetup = new Map();
+let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
+
+function resourceResult(cpuPercent, ramBytes) {
+  const available = [cpuPercent, ramBytes].filter(Number.isFinite).length;
+  return {status: available === 2 ? 'available' : available ? 'partial' : 'unavailable', cpuPercent, ramBytes};
+}
+
+async function vboxMetricCommand(args) {
+  const {stdout} = await execFileAsync(commands.VBOXMANAGE, ['metrics', ...args], {encoding: 'utf8', timeout: 2500, maxBuffer: 131072});
+  return stdout;
+}
+
+async function sampleResources() {
+  if (samplingResources) return;
+  samplingResources = true;
+  try {
+    const running = [...sessions.values()].filter(session => session.kind === 'vm' && session.machine);
+    const qemuRunning = running.some(session => session.engine?.startsWith('qemu'));
+    const hostCpu = qemuRunning ? parseHostCpu(await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '')) : null;
+    await Promise.all(running.map(async session => {
+      const machine = session.machine;
+      let result;
+      if (session.engine?.startsWith('qemu')) {
+        const pid = machine.pid;
+        const [stat, status] = Number.isInteger(pid) ? await Promise.all([
+          fs.promises.readFile(`/proc/${pid}/stat`, 'utf8').catch(() => ''),
+          fs.promises.readFile(`/proc/${pid}/status`, 'utf8').catch(() => '')
+        ]) : ['', ''];
+        const processCpu = parseProcessCpu(stat);
+        const previous = previousProcessSamples.get(session.id);
+        const cpuPercent = previous?.machine === machine ? processCpuPercent(previous, processCpu, hostCpu) : null;
+        const ramBytes = parseProcessRss(status);
+        if (processCpu && hostCpu) previousProcessSamples.set(session.id, {...processCpu, hostTicks: hostCpu.totalTicks, machine});
+        result = resourceResult(cpuPercent, ramBytes);
+      } else if (session.engine === 'virtualbox') {
+        try {
+          if (vboxMetricSetup.get(session.id) !== machine) {
+            await vboxMetricCommand(['setup', '--period', '2', '--samples', '1', session.vmName, 'CPU/Load,RAM/Usage']);
+            if (session.machine !== machine) return;
+            vboxMetricSetup.set(session.id, machine);
+          }
+          const values = parseVBoxMetrics(await vboxMetricCommand([
+            'query', session.vmName, 'CPU/Load/User,CPU/Load/Kernel,RAM/Usage/Used'
+          ]));
+          result = resourceResult(values.cpuPercent, values.ramBytes);
+        } catch (_) { result = resourceResult(null, null); }
+      }
+      if (result && session.machine === machine) resourceSamples.set(session.id, {machine, result});
+    }));
+    const runningIds = new Set(running.map(session => session.id));
+    for (const id of resourceSamples.keys()) if (!runningIds.has(id)) resourceSamples.delete(id);
+    for (const id of previousProcessSamples.keys()) if (!runningIds.has(id)) previousProcessSamples.delete(id);
+    for (const id of vboxMetricSetup.keys()) if (!runningIds.has(id)) vboxMetricSetup.delete(id);
+  } finally { samplingResources = false; }
+}
+
+const resourceTimer = setInterval(() => sampleResources().catch(error => console.error('Resource sampling:', error)), 2000);
+resourceTimer.unref();
 
 function shellQuote(value) {
   const text = String(value);
@@ -224,6 +288,16 @@ app.get('/api/sessions', (_req, res) => {
     networkInterfaces: session.networkInterfaces,
     hasDifferentialDisk: !!session.runDisk && fs.existsSync(session.runDisk),
     message: stateMessage(session)
+  })));
+});
+
+app.get('/api/metrics', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json(Object.fromEntries([...sessions.values()].filter(session => session.kind === 'vm').map(session => {
+    if (!session.machine) return [session.id, {status: 'stopped', cpuPercent: null, ramBytes: null}];
+    const sample = resourceSamples.get(session.id);
+    return [session.id, sample?.machine === session.machine
+      ? sample.result : {status: 'warming', cpuPercent: null, ramBytes: null}];
   })));
 });
 
@@ -1059,6 +1133,7 @@ let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
+  clearInterval(resourceTimer);
   const forceExit = setTimeout(() => process.exit(1), 10000);
   for (const kind of ['vm', 'switch']) {
     await Promise.all([...sessions.values()].filter(session => session.kind === kind)

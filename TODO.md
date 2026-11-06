@@ -46,7 +46,7 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 
 - [ ] **SXP84** — Capture traffic on network links as PCAP files.
 - [ ] **ADF29** — Investigate Wireshark or `tshark` integration for inspecting captures.
-- [ ] **MJL63** — Obtain per-VM CPU and RAM usage metrics and display them in the UI.
+- [x] **MJL63** — Obtain per-VM CPU and RAM usage metrics and display them in the UI.
 
 ## Server and deployment
 
