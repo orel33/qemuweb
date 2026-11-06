@@ -13,8 +13,11 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
   - [ ] **NVT64** — Define the network model and API for a switch and its hosts, with internal stable IDs, port assignments and an isolated runtime directory.
   - [ ] **KRP13** — Group console pages by LAN and switch, instead of paging through individual sessions in creation order.
   - [ ] **ZMX82** — Allow a switch to appear in a LAN without displaying its management console.
-  - [ ] **TCG09** — Show the loaded network as a graphical topology.
-  - [ ] **YLD71** — Make the graphical topology interactive so edits can be saved back to `.topo`.
+  - [ ] **TCG09** — **v0.3.0 graphical overview:** add a top-right button that switches between the current **Terminals** view and a new **Graphic** view without changing running sessions.
+    - Draw every host and switch as a named node, with one distinct SVG Bézier link for each connected Ethernet interface. Show useful status and interface/switch information, including multiple links between the same nodes.
+    - Clicking a node selects its session and opens its terminal view. Fit the loaded `topo/lan.topo` and `topo/gw.topo` examples, handle an empty network, and keep the graph in sync when sessions are added, removed, renamed or started/stopped.
+    - Use `backup/legacy-qemuweb-2026-11-03:frontend/src/components/Drawflow.vue`, its Host/Switch node components and `frontend/src/style.css` as visual references within the current Web app.
+  - [ ] **YLD71** — **After v0.3.0:** make the graphical topology editable: arrange nodes and change host-to-switch links through the graph, validate changes against the current interface rules, and save the resulting hosts, switches and ordered links back to the existing `.topo` format. Keep runtime-only state and disk overlays out of the file.
   - [ ] **PSA36** — Add whole-network Start and Stop with partial-start cleanup; extend the lifecycle to Resume, Reset and Delete in the durable-session stage.
 - [ ] **WEX58** — Prepare the topologies needed for TP6.
 
