@@ -35,6 +35,11 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 ## Console and monitor
 
 - [x] **VBR06** — Put the console/monitor toggle in the toolbar directly above the terminal, and render the QEMU monitor in that same terminal area so the user switches between the serial console and monitor in place.
+- [ ] **LWX29** — Integrate session logs as a third terminal view alongside Console and Monitor:
+  - Replace the global Log button and dialog with an in-place Log view in each console pane.
+  - Provide Console, Monitor and Log controls with distinct Lucide icons: **SquareTerminal**, **MonitorCog** and **FileText**.
+  - Offer Console and Log for switches and VirtualBox hosts; offer Console, Monitor and Log for QEMU hosts.
+  - Reuse the current xterm area for all views, keep Log read-only, and update it as new session log lines arrive.
 
 ## Traffic and resource diagnostics
 
