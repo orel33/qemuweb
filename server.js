@@ -855,16 +855,24 @@ app.post('/api/hosts', (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.post('/api/switches', (req, res) => {
+app.post('/api/switches', async (req, res) => {
+  let session;
   try {
     const {id, name} = req.body || {};
     if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)) throw new Error('Switch name must be 1–32 letters, digits, underscores or hyphens.');
     if (sessions.has(id) || [...sessions.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
-    const session = getSession(id, true, 'switch');
+    session = getSession(id, true, 'switch');
     session.hostname = name;
     session.lastMessage = 'VDE switch ready to start';
-    res.json({id, name});
-  } catch (error) { res.status(400).json({error: error.message}); }
+    await startSwitch(session);
+    res.json({id, name, running: true, message: stateMessage(session)});
+  } catch (error) {
+    if (session) {
+      try { await destroySession(session); }
+      catch (cleanupError) { console.error('Cannot clean up failed switch:', cleanupError); }
+    }
+    res.status(session ? 500 : 400).json({error: error.message});
+  }
 });
 
 app.post('/api/switches/:id/start', async (req, res) => {
@@ -966,6 +974,11 @@ io.on('connection', socket => {
       socket.emit('session-error', error.message);
       if (typeof acknowledge === 'function') acknowledge({error: error.message});
     });
+  });
+  socket.on('leave-session', id => {
+    if (id !== socket.sessionId) return;
+    socket.leave(id);
+    socket.sessionId = null;
   });
   socket.on('input', data => {
     const session = socket.sessionId && sessions.get(socket.sessionId);
