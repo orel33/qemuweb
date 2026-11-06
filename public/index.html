@@ -989,12 +989,12 @@
       const scheme = namingSchemes?.[generalSettings.namingScheme];
       if (Array.isArray(scheme?.names) && scheme.names.length) {
         for (let round = 0; ; round++) {
-          for (const name of scheme.names) {
-            const base = name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, '');
-            if (!base) continue;
-            const candidate = `${base}${round ? round + 1 : ''}`;
-            if (!used.has(candidate)) return candidate;
-          }
+          const available = scheme.names
+            .map(name => name.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]/g, ''))
+            .filter(Boolean)
+            .map(base => `${base}${round ? round + 1 : ''}`)
+            .filter(candidate => !used.has(candidate));
+          if (available.length) return available[Math.floor(Math.random() * available.length)];
         }
       }
       const prefix = scheme?.prefixes?.[kind] || (kind === 'vm' ? 'h' : 's');
@@ -1018,6 +1018,7 @@
       hostCreateActions.hidden = false;
       setExpertMode(false);
       toggleExpertMode.hidden = true;
+      closeHostSettings.hidden = true;
       settingsTitle.textContent = 'Add a new host';
       for (const section of qemuOptionsPanel.querySelectorAll('.settings-section:not([data-expert-section])')) section.open = true;
       qemuOptionsPanel.showModal();
@@ -1306,6 +1307,7 @@
       hostSettingsDraft = null;
       hostCreateActions.hidden = true;
       toggleExpertMode.hidden = false;
+      closeHostSettings.hidden = false;
       if (!qemuOptionsPanel.open) qemuOptionsPanel.showModal();
       renderQemuOptions();
     });
