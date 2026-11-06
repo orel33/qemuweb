@@ -416,9 +416,10 @@
       pane.replayPending = '';
       pane.replaying = false;
       pane.terminal.reset();
-      pane.terminal.write(SessionLog.terminalText(machine));
-      pane.terminal.scrollToBottom();
-      syncConsoleScroll(pane);
+      pane.terminal.write(SessionLog.terminalText(machine), () => {
+        pane.terminal.scrollToBottom();
+        syncConsoleScroll(pane);
+      });
     }
     function refreshLogViews(machine) {
       for (const pane of panes) if (pane.machineId === machine.id && pane.view === 'log') renderLogView(pane);
@@ -1135,9 +1136,10 @@
         if (pane.machineId !== machine.id || pane.view !== 'log') continue;
         if (truncated) renderLogView(pane);
         else {
-          pane.terminal.write(SessionLog.terminalEntry(line));
-          pane.terminal.scrollToBottom();
-          syncConsoleScroll(pane);
+          pane.terminal.write(SessionLog.terminalEntry(line), () => {
+            pane.terminal.scrollToBottom();
+            syncConsoleScroll(pane);
+          });
         }
       }
     }

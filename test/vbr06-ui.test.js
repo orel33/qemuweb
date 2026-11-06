@@ -59,6 +59,13 @@ test('Log is read-only and exposes Monitor only when the selected machine suppor
   assert.match(html, /SessionLog\.reset\(machine\);\s*refreshLogViews\(machine\)/);
 });
 
+test('Log view scroll position updates after xterm finishes each write', () => {
+  for (const output of ['SessionLog.terminalText(machine)', 'SessionLog.terminalEntry(line)']) {
+    const escaped = output.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(html, new RegExp(`pane\\.terminal\\.write\\(${escaped}, \\(\\) => \\{\\s*pane\\.terminal\\.scrollToBottom\\(\\);\\s*syncConsoleScroll\\(pane\\);\\s*\\}\\);`));
+  }
+});
+
 test('the inline browser program is valid JavaScript', () => {
   const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
     .map(match => match[1])
