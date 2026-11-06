@@ -33,9 +33,9 @@ The same paths, grouped by software location, are detailed below:
 ```text
 ┌─ BROWSER · public/index.html ─────────────────────────────────────────┐
 │ Host tab:   System · Engine · NICs · Play/Resume · Stop · Reboot     │
-│             Reset · Exit · Clear · Settings · Log · Status           │
-│ Pane bar:   Session · Console/Monitor view · Status                   │
-│ Switch tab: Play · Stop · Exit/Remove · Clear · Log · Status         │
+│             Reset · Exit · Clear · Settings · Status                  │
+│ Pane bar:   Session · Console/Monitor/Log view · Status                │
+│ Switch tab: Play · Stop · Exit/Remove · Clear · Status                │
 │ Shared interactive display: xterm.js                                 │
 └───────────────────────────────────────────────────────────────────────┘
        │ HTTP/JSON: actions, configuration and QEMU monitor
@@ -125,7 +125,7 @@ Both options use the same short syntax here, but provide two distinct interfaces
 
 `-serial` connects the first virtual serial port (`ttyS0` in Linux) to the guest's interactive terminal: boot messages, `login:`, and then a shell. `-monitor` opens the text-based HMP monitor of **QEMU itself**: its commands control the emulator and are not Linux shell commands. `server=on` makes QEMU listen on each Unix socket; the Node server connects to them. `wait=off` lets QEMU start without waiting for a connection. The short form of `-serial` replaces the earlier `-chardev socket,… -serial chardev:serial0` pair.
 
-In the bar directly above a QEMU host's terminal, choose **Monitor** to replace the serial-console view in place, then choose **Console** to return to the guest. For example, `help` lists commands, `info status` reports the VM's status, and `info block` describes its disks. Commands such as `system_reset` or `quit` directly change or stop the VM, so use them with care. The toggle is available for QEMU, not VirtualBox or VDE switches. Monitor commands and responses are recorded in the **Log** even while its view is hidden.
+In the bar directly above each terminal, choose **Console**, **Monitor**, or **Log** to reuse that pane's xterm area. QEMU hosts offer all three views; VirtualBox hosts and VDE switches offer Console and Log. The Log view is read-only, replays the session's existing history, and refreshes as new lines arrive or the server resets the log. In a QEMU host's **Monitor** view, for example, `help` lists commands, `info status` reports the VM's status, and `info block` describes its disks. Commands such as `system_reset` or `quit` directly change or stop the VM, so use them with care. Monitor commands and responses are recorded in the session Log even while that view is hidden.
 
 ## Image preparation
 
@@ -246,7 +246,7 @@ Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sourc
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. **Add a new host** opens the Host Settings dialog titled **Add a new host**, with name, system, resources, network interfaces and Autostart; Cancel leaves no host behind, and OK creates it. The switch uses its own creation dialog. The engine is shown read-only in Host Settings. **General Settings** at the bottom left is its only selector for new hosts, including clones; QEMU/KVM is the default. It also sets the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. Names from the French and Greek lists are selected at random without reusing an active name. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a console; the Log button opens that session's commands and output. Login details appear in Host Settings.
+Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. **Add a new host** opens the Host Settings dialog titled **Add a new host**, with name, system, resources, network interfaces and Autostart; Cancel leaves no host behind, and OK creates it. The switch uses its own creation dialog. The engine is shown read-only in Host Settings. **General Settings** at the bottom left is its only selector for new hosts, including clones; QEMU/KVM is the default. It also sets the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. Names from the French and Greek lists are selected at random without reusing an active name. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a session, then choose a view in the bar above that pane's terminal. Login details appear in Host Settings.
 
 ### Local VDE LAN prototype
 
@@ -284,8 +284,7 @@ The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the engine for every new host, including clones, and the automatic naming scheme in this browser. |
 | ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open Host Settings in creation mode, titled `Add a new host`; the Expert button is hidden and Autostart is selected by default. |
 | ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Open the VDE switch creation dialog; Autostart is selected by default. |
-| **Log** button | **Log** | `View session log` | Open the selected session's log dialog. |
-| **Console / Monitor** toggle | **Terminal view** | `Console` / `Monitor` | Switch a QEMU host's existing terminal pane in place between its serial console and QEMU monitor. The toggle is hidden for engines without a QEMU monitor. |
+| **Console / Monitor / Log** controls | **Terminal view** | `Console` / `Monitor` / `Log` | Reuse the same xterm area for the selected session's views. QEMU hosts provide all three; VirtualBox hosts and switches provide Console and read-only Log. New log lines and log resets update a visible Log view. |
 
 A forced Stop can leave the guest filesystem needing repair on the next boot. Only the selected host is affected by these actions; other tabs keep running.
 

@@ -30,10 +30,11 @@ test('monitor input handles commands, editing, cancellation, and escape sequence
   });
 });
 
-test('each console pane owns an in-place Console/Monitor toggle and one xterm area', () => {
+test('each console pane owns an in-place Console/Monitor/Log switch and one xterm area', () => {
   assert.equal((html.match(/class="console-view-toggle"/g) || []).length, 4);
   assert.equal((html.match(/data-view="console"/g) || []).length, 4);
   assert.equal((html.match(/data-view="monitor"/g) || []).length, 4);
+  assert.equal((html.match(/data-view="log"/g) || []).length, 4);
   assert.equal((html.match(/class="terminal" id="terminal-/g) || []).length, 4);
   for (let index = 0; index < 4; index++) {
     const pane = html.match(new RegExp(`<section class="console-pane" id="console-pane-${index}"[\\s\\S]*?</section>`));
@@ -41,6 +42,21 @@ test('each console pane owns an in-place Console/Monitor toggle and one xterm ar
     assert.match(pane[0], new RegExp(`id="console-view-${index}"[\\s\\S]*id="terminal-${index}"`));
   }
   assert.doesNotMatch(html, /id="monitor-panel"|id="show-monitor"/);
+  assert.doesNotMatch(html, /id="show-logs"|id="logs-panel"|id="launch-logs"/);
+  assert.match(html, /aria-label="Console" title="Console"/);
+  assert.match(html, /aria-label="Monitor" title="Monitor"/);
+  assert.match(html, /aria-label="Log" title="Log"/);
+  for (const icon of ['SquareTerminal', 'MonitorCog', 'FileText']) {
+    assert.equal((html.match(new RegExp(`data-icon="${icon}"`, 'g')) || []).length, 4);
+  }
+});
+
+test('Log is read-only and exposes Monitor only when the selected machine supports QEMU HMP', () => {
+  assert.match(html, /pane\.view === 'console'\) pane\.socket\.emit\('input', data\)/);
+  assert.match(html, /if \(view === 'monitor' && !MonitorTerminal\.isSupported\(machine\)\) return/);
+  assert.match(html, /button\.dataset\.view === 'monitor'\) button\.hidden = !monitorSupported/);
+  assert.match(html, /pane\.view === 'log'\) renderLogView\(pane\)/);
+  assert.match(html, /SessionLog\.reset\(machine\);\s*refreshLogViews\(machine\)/);
 });
 
 test('the inline browser program is valid JavaScript', () => {
