@@ -19,7 +19,7 @@
     .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     #start { color: #57dc91; } #stop { color: #ffaf76; } #reboot { color: #70b9ff; }
-    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-host { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-network-options { color: #70b9ff; } #new-host { color: #5adbd1; }
+    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-host { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-network-options { color: #70b9ff; } #new-host { color: #5adbd1; } #new-terminal { color: #b3a1ff; }
     #toggle-console-columns { color: #9fc5ef; } #show-logs { color: #b8d2ef; } #show-monitor { color: #c6adf5; }
     button:disabled { opacity: .45; cursor: default; }
     .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
@@ -30,6 +30,9 @@
     .machine-tab .machine-close svg { width: 16px; height: 16px; }
     #new-host { flex: none; background: #1b2531; }
     #new-switch { flex: none; color: #9ee6b4; background: #1b2531; }
+    #new-terminal { flex: none; background: #1b2531; }
+    .terminal-network-controls { display: flex; flex: none; align-items: center; gap: 8px; padding: 8px 16px; border-bottom: 1px solid #35404c; color: #bdc8d6; font-size: 13px; }
+    .terminal-network-controls select { min-width: 190px; }
     .page-controls { display: flex; align-items: center; gap: 7px; margin-left: auto; }
     #page-position { min-width: 48px; color: #bdc8d6; font-size: 12px; text-align: center; white-space: nowrap; }
     .layout-count { position: absolute; right: 2px; bottom: 1px; padding: 0 2px; border-radius: 3px; background: #202c3a; font-size: 10px; font-weight: 700; }
@@ -133,6 +136,7 @@
     <button id="show-monitor" class="icon-button" type="button" disabled title="Open QEMU monitor" aria-label="QEMU monitor"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 8 4 4-4 4M13 16h5"/></svg></button>
     <button id="toggle-console-columns" class="icon-button" type="button" title="Layout: 2 panes; click for 4" aria-label="Layout: 2 panes; click for 4"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg><span class="layout-count" id="layout-count">2</span></button>
   </header>
+  <section class="terminal-network-controls" id="terminal-controls" aria-label="VDE terminal network" hidden><strong>VDE network:</strong><label for="terminal-switch">Switch</label><select id="terminal-switch" disabled><option value="">Select a running switch</option></select><span>Configure vde0 manually; VDE provides no DHCP.</span></section>
   <dialog class="qemu-options create-dialog" id="create-dialog" aria-labelledby="create-title">
     <div class="settings-heading"><h2 id="create-title">Add a new host</h2></div>
     <form id="create-form">
@@ -206,9 +210,10 @@
       <div class="terminal-frame"><div class="terminal" id="terminal-3"></div><input class="terminal-scroll" id="terminal-scroll-3" type="range" min="0" max="0" value="0" aria-label="Scroll lower right console" title="Scroll console history"></div>
     </section>
   </main>
-  <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
+  <nav class="machines" id="machine-tabs" aria-label="Hosts, switches and terminals">
     <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20 4v6M17 7h6"/></svg></button>
     <button id="new-switch" class="icon-button" type="button" title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20 4v6M17 7h6"/></svg></button>
+    <button id="new-terminal" class="icon-button" type="button" title="Add a lightweight VDE terminal" aria-label="Add a lightweight VDE terminal"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button>
     <div class="page-controls" aria-label="Console pages"><button id="previous-page" class="icon-button" type="button" disabled title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><span id="page-position">0 / 0</span><button id="next-page" class="icon-button" type="button" disabled title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
@@ -261,7 +266,7 @@
       pane.fit.fit();
       syncConsoleScroll(pane);
       const machine = pane.machineId && machines?.get(pane.machineId);
-      if (machine?.kind === 'switch') pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
+      if (machine && ['switch', 'terminal'].includes(machine.kind)) pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
     }
     function fitTerminals() { panes.forEach(fitTerminal); }
     fitTerminals();
@@ -286,6 +291,8 @@
     const createNetwork = document.getElementById('create-network');
     const createNicList = document.getElementById('create-nic-list');
     const createAddNic = document.getElementById('create-add-nic');
+    const terminalControls = document.getElementById('terminal-controls');
+    const terminalSwitch = document.getElementById('terminal-switch');
     const networkControls = document.getElementById('network-controls');
     const nicList = document.getElementById('nic-list');
     const addNic = document.getElementById('add-nic');
@@ -377,13 +384,25 @@
         const current = pane.machineId || '';
         pane.select.replaceChildren(new Option('Select a session', ''));
         for (const machine of machines.values()) {
-          const option = new Option(`${machine.hostname} · ${machine.kind === 'switch' ? 'VDE switch' : machine.osHint}`, machine.id);
+          const type = machine.kind === 'switch' ? 'VDE switch' : machine.kind === 'terminal' ? 'VDE terminal' : machine.osHint;
+          const option = new Option(`${machine.hostname} · ${type}`, machine.id);
           pane.select.append(option);
         }
         pane.select.value = current;
         pane.element.dataset.active = String(pane.index === activePaneIndex);
       }
       updatePaneStates();
+    }
+    function renderTerminalSwitches(machine) {
+      const current = machine.switchId || '';
+      terminalSwitch.replaceChildren(new Option('Select a VDE switch', ''));
+      for (const item of machines.values()) {
+        if (item.kind !== 'switch') continue;
+        terminalSwitch.append(new Option(`${item.hostname}${item.running ? '' : ' (stopped)'}`, item.id));
+      }
+      terminalSwitch.value = current;
+      terminalSwitch.disabled = !!machine.running || !!machine.busy;
+      if (!current || ![...terminalSwitch.options].some(option => option.value === current)) machine.switchId = null;
     }
     function updateWorkspaceLayout() {
       workspace.dataset.columns = String(layoutSize);
@@ -533,7 +552,7 @@
     }
     async function renderQemuOptions() {
       const machine = activeMachine();
-      if (!machine || machine.kind === 'switch' || !qemuOptionsPanel.open) return;
+      if (!machine || machine.kind !== 'vm' || !qemuOptionsPanel.open) return;
       const request = ++optionsRequest;
       optionsStatus.hidden = true;
       optionsStatus.textContent = '';
@@ -679,7 +698,7 @@
         select.title = machine.osHint;
         select.onclick = () => { if (machine.id !== activeId) selectMachine(machine.id); };
         select.ondblclick = async () => {
-          if (machine.kind === 'switch' || !machine.hasLaunched) return;
+          if (machine.kind !== 'vm' || !machine.hasLaunched) return;
           const name = window.prompt('Display name for this host:', machine.hostname);
           if (name === null || !name.trim()) return;
           try {
@@ -688,13 +707,13 @@
             if (!response.ok) throw new Error(body.error);
           } catch (error) { showStatusError(error.message); }
         };
-        select.title = machine.kind === 'switch' ? 'VDE switch management console' : machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New host · ${machine.osHint}`;
+        select.title = machine.kind === 'switch' ? 'VDE switch management console' : machine.kind === 'terminal' ? `VDE terminal · ${machine.switchId ? machines.get(machine.switchId)?.hostname || 'switch unavailable' : 'no switch selected'}` : machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New host · ${machine.osHint}`;
         const close = document.createElement('button');
         close.type = 'button';
         close.className = 'machine-close';
         close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-        close.title = machine.kind === 'switch' ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
-        close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Exit host'} ${machine.hostname}`);
+        close.title = machine.kind === 'switch' ? 'Remove VDE switch' : machine.kind === 'terminal' ? 'Exit VDE terminal and close the tab' : 'Exit host, delete its disk and close the tab';
+        close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : machine.kind === 'terminal' ? 'Exit VDE terminal' : 'Exit host'} ${machine.hostname}`);
         close.onclick = () => closeMachine(machine.id);
         tab.append(select, close);
         tabs.append(tab);
@@ -722,27 +741,31 @@
         showNetworkOptions.disabled = true;
         if (networkOptionsPanel.open) networkOptionsPanel.close();
         networkControls.hidden = true;
+        terminalControls.hidden = true;
         if (logsPanel.open) logsPanel.close();
         if (monitorPanel.open) monitorPanel.close();
         return;
       }
       const busy = !!machine.busy;
       const isSwitch = machine.kind === 'switch';
+      const isTerminal = machine.kind === 'terminal';
+      terminalControls.hidden = !isTerminal;
+      if (isTerminal) renderTerminalSwitches(machine);
       exitButton.disabled = busy;
       cloneButton.disabled = busy || machine.kind !== 'vm';
       cloneButton.hidden = machine.kind !== 'vm';
-      exitButton.title = isSwitch ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
-      exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : 'Exit host');
-      networkControls.hidden = isSwitch || machine.engine === 'virtualbox';
-      showNetworkOptions.disabled = isSwitch || machine.engine === 'virtualbox';
+      exitButton.title = isSwitch ? 'Remove VDE switch' : isTerminal ? 'Exit VDE terminal and close the tab' : 'Exit host, delete its disk and close the tab';
+      exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : isTerminal ? 'Exit VDE terminal' : 'Exit host');
+      networkControls.hidden = isSwitch || isTerminal || machine.engine === 'virtualbox';
+      showNetworkOptions.disabled = isSwitch || isTerminal || machine.engine === 'virtualbox';
       if (showNetworkOptions.disabled && networkOptionsPanel.open) networkOptionsPanel.close();
       showLogs.disabled = false;
-      showMonitor.disabled = isSwitch || !machine.engine.startsWith('qemu');
+      showMonitor.disabled = isSwitch || isTerminal || !machine.engine?.startsWith('qemu');
       showMonitor.hidden = showMonitor.disabled;
       if (showMonitor.disabled && monitorPanel.open) monitorPanel.close();
-      showQemuOptions.disabled = isSwitch;
-      rebootButton.hidden = isSwitch;
-      resetButton.hidden = isSwitch;
+      showQemuOptions.disabled = isSwitch || isTerminal;
+      rebootButton.hidden = isSwitch || isTerminal;
+      resetButton.hidden = isSwitch || isTerminal;
       clearConsole.hidden = false;
       clearConsole.disabled = false;
       if (isSwitch) {
@@ -752,6 +775,16 @@
         stopButton.disabled = !running || busy;
         stopButton.title = 'Stop VDE switch';
         stopButton.setAttribute('aria-label', 'Stop VDE switch');
+        return;
+      }
+      if (isTerminal) {
+        const selectedSwitch = machines.get(machine.switchId);
+        startButton.disabled = running || busy || selectedSwitch?.kind !== 'switch' || !selectedSwitch.running;
+        startButton.title = running ? 'VDE terminal is already running' : 'Start shell in the selected VDE network';
+        startButton.setAttribute('aria-label', 'Start VDE terminal');
+        stopButton.disabled = !running || busy;
+        stopButton.title = 'Stop the shell and keep this terminal tab';
+        stopButton.setAttribute('aria-label', 'Stop VDE terminal');
         return;
       }
       startButton.disabled = running || busy || !images.length;
@@ -851,6 +884,15 @@
       machines.set(id, {id, kind: 'switch', hostname: body.name, osHint: 'VDE switch', interfaces: [], running: body.running, hasLaunched: body.running, message: body.message, logs: [], serial: ''});
       selectMachine(id);
     }
+    async function addTerminal() {
+      const id = `terminal-${crypto.randomUUID().replaceAll('-', '').slice(0, 20)}`;
+      const availableSwitch = [...machines.values()].find(machine => machine.kind === 'switch' && machine.running);
+      const response = await fetch('/api/terminals', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id})});
+      const body = await response.json();
+      if (!response.ok) throw new Error(body.error || 'Cannot create VDE terminal');
+      machines.set(id, {id, kind: 'terminal', hostname: body.name, osHint: 'Lightweight VDE terminal', switchId: availableSwitch?.id || null, vdePort: null, running: false, hasLaunched: false, message: 'VDE terminal ready', logs: [], serial: ''});
+      selectMachine(id);
+    }
     function selectMachine(id) {
       const index = [...machines.keys()].indexOf(id);
       if (index < 0) return;
@@ -876,13 +918,15 @@
     async function closeMachine(id) {
       const machine = machines.get(id);
       if (!machine || machine.busy) return;
-      const title = machine.kind === 'switch' ? 'Remove switch' : 'Exit host';
+      const title = machine.kind === 'switch' ? 'Remove switch' : machine.kind === 'terminal' ? 'Exit VDE terminal' : 'Exit host';
       const message = machine.kind === 'switch'
-        ? `Remove ${machine.hostname}? The switch will stop and its tab will close. Connected host tabs must be closed first.`
+        ? `Remove ${machine.hostname}? The switch will stop and its tab will close. Connected host and terminal tabs must be closed first.`
+        : machine.kind === 'terminal'
+          ? `Exit ${machine.hostname}? Its shell will stop and the terminal tab will close.`
         : machine.hasLaunched
           ? `Exit ${machine.hostname}? This host will stop, its current disk will be deleted, and all changes made in this host will be lost.`
           : `Close this new host tab?`;
-      if (!await confirmAction(title, message, machine.kind === 'switch' ? 'Remove switch' : 'Exit host')) return;
+      if (!await confirmAction(title, message, machine.kind === 'switch' ? 'Remove switch' : machine.kind === 'terminal' ? 'Exit terminal' : 'Exit host')) return;
       if (machines.get(id) !== machine || machine.busy) return;
       try {
         const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {method: 'DELETE'});
@@ -922,7 +966,9 @@
           id: session.id,
           kind: session.kind || 'vm',
           hostname: session.hostname,
-          osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
+          osHint: session.kind === 'switch' ? 'VDE switch' : session.kind === 'terminal' ? 'Lightweight VDE terminal' : (image?.label || 'Unknown system'),
+          switchId: session.terminalSwitchId || null,
+          vdePort: session.vdePort || null,
           imageId: image ? image.id : (images[0]?.id || ''),
           settings: session.settings || null,
           settingsLoaded: !!session.settings,
@@ -942,6 +988,14 @@
 
     document.getElementById('new-host').addEventListener('click', () => openCreateDialog('vm'));
     document.getElementById('new-switch').addEventListener('click', () => openCreateDialog('switch'));
+    document.getElementById('new-terminal').addEventListener('click', () => addTerminal().catch(error => showStatusError(error.message)));
+    terminalSwitch.addEventListener('change', () => {
+      const machine = activeMachine();
+      if (!machine || machine.kind !== 'terminal' || machine.running || machine.busy) return;
+      machine.switchId = terminalSwitch.value || null;
+      updateControls();
+      renderTabs();
+    });
     cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine?.kind === 'vm') openCloneDialog(machine); });
     document.getElementById('cancel-create').addEventListener('click', () => createDialog.close());
     createDialog.addEventListener('cancel', event => { if (confirmCreate.disabled) event.preventDefault(); });
@@ -1101,7 +1155,11 @@
         machine.running = snapshot.state.running;
         machine.hasLaunched = snapshot.state.hasLaunched;
         machine.message = snapshot.state.message;
-        machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
+        machine.error = /^QEMU error|^VDE error|^VDE terminal error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
+        if (machine.kind === 'terminal') {
+          if (snapshot.state.terminalSwitchId) machine.switchId = snapshot.state.terminalSwitchId;
+          machine.vdePort = snapshot.state.vdePort || null;
+        }
         machine.logs = snapshot.logs || [];
         machine.serial = snapshot.serial || '';
         const generation = ++pane.replayGeneration;
@@ -1157,7 +1215,9 @@
         machine.running = event.running;
         if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
         machine.message = event.message;
-        machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
+        machine.error = /^QEMU error|^VDE error|^VDE terminal error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
+        if (machine.kind === 'terminal' && event.terminalSwitchId) machine.switchId = event.terminalSwitchId;
+        if (machine.kind === 'terminal' && event.vdePort) machine.vdePort = event.vdePort;
         renderTabs();
         if (machine.id === activeId) updateControls();
       });
@@ -1171,8 +1231,12 @@
       machine.running = event.running;
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
       machine.message = event.message;
-      machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
+      machine.error = /^QEMU error|^VDE error|^VDE terminal error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
+      if (machine.kind === 'terminal' && event.terminalSwitchId) machine.switchId = event.terminalSwitchId;
+      if (machine.kind === 'terminal' && event.vdePort) machine.vdePort = event.vdePort;
       renderTabs();
+      const active = activeMachine();
+      if (active?.kind === 'terminal' && active.switchId === machine.id) updateControls();
     });
     socket.on('connect', async () => {
       try {
@@ -1207,6 +1271,31 @@
           const body = await response.json();
           if (!response.ok) throw new Error(body.error || 'Cannot start switch');
           machine.running = true; machine.hasLaunched = true;
+          pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
+          pane.terminal.focus();
+        } catch (error) { machine.error = error.message; machine.message = error.message; }
+        finally { machine.busy = false; updateControls(); renderTabs(); }
+        return;
+      }
+      if (machine.kind === 'terminal') {
+        const switchId = terminalSwitch.value || machine.switchId;
+        if (!switchId) { machine.error = 'Select a VDE switch first.'; updateControls(); return; }
+        machine.busy = true;
+        machine.operation = 'starting';
+        machine.error = null;
+        machine.message = 'Starting VDE terminal…';
+        machine.switchId = switchId;
+        updateControls();
+        renderTabs();
+        try {
+          const response = await fetch(`/api/terminals/${encodeURIComponent(machine.id)}/start`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({switchId})});
+          const body = await response.json();
+          if (!response.ok) throw new Error(body.error || 'Cannot start VDE terminal');
+          machine.running = true;
+          machine.hasLaunched = true;
+          machine.switchId = body.switchId;
+          machine.vdePort = body.vdePort;
+          machine.message = 'VDE terminal running';
           pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
           pane.terminal.focus();
         } catch (error) { machine.error = error.message; machine.message = error.message; }
@@ -1264,12 +1353,12 @@
       machine.message = 'Stopping…';
       updateControls();
       try {
-        const route = machine.kind === 'switch' ? `/api/switches/${encodeURIComponent(machine.id)}/stop` : `/api/stop/${encodeURIComponent(machine.id)}`;
+        const route = machine.kind === 'switch' ? `/api/switches/${encodeURIComponent(machine.id)}/stop` : machine.kind === 'terminal' ? `/api/terminals/${encodeURIComponent(machine.id)}/stop` : `/api/stop/${encodeURIComponent(machine.id)}`;
         const response = await fetch(route, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to stop');
         machine.running = false;
-        machine.message = machine.kind === 'switch' ? 'VDE switch stopped' : 'Host stopped; current disk kept';
+        machine.message = machine.kind === 'switch' ? 'VDE switch stopped' : machine.kind === 'terminal' ? 'VDE terminal stopped' : 'Host stopped; current disk kept';
       } catch (error) { machine.message = error.message; machine.error = error.message; }
       finally { machine.busy = false; updateControls(); }
     };

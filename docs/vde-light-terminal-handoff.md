@@ -4,14 +4,15 @@
 
 This note records the lightweight VDE terminal prototype on `feature/vde-light-terminal`, so work can resume later without relying on chat history.
 
-The branch adds a terminal tab that acts as a small Linux endpoint on a running VDE switch. It is intended for commands such as `ip`, `ping` and `tcpdump`, without booting a VM or creating a host TAP/bridge. The terminal gets a private VDE port from the allocator shared with VM interfaces.
+The branch adds a terminal session that acts as a small Linux endpoint on a running VDE switch. It is intended for commands such as `ip`, `ping` and `tcpdump`, without booting a VM or creating a host TAP/bridge. The terminal gets a private VDE port from the allocator shared with VM interfaces. It is integrated into the current multi-console interface: create a terminal from the bottom bar, select a switch in the terminal network controls, and use Play/Stop/Exit.
 
 Relevant commits:
 
-- `3d6b644 feat: add lightweight VDE terminal` — terminal tab, `vdens` attachment, port allocation and lifecycle.
-- `105880a Add filesystem isolation to VDE terminal` — rootless Bubblewrap filesystem view, Podman user namespace helper, VDE socket relocation and cleanup.
+- `a06ecd3 feat: add lightweight VDE terminal` — terminal API, `vdens` attachment, port allocation and lifecycle, rebased on current `main`.
+- `33aee6e Add filesystem isolation to VDE terminal` — rootless Bubblewrap filesystem view, Podman user namespace helper, VDE socket relocation and cleanup.
+- The current working tree also integrates terminal creation and lifecycle controls into the multi-console UI from `main`.
 
-At the time this note is written, `105880a` is local-only: `feature/vde-light-terminal` is one commit ahead of `origin/feature/vde-light-terminal`. The shared main checkout may be used by another task. Continue this work in the feature branch or a separate worktree; do not switch or commit these changes onto `main`.
+The feature branch has been rebased on `origin/main`. The shared main checkout may be used by another task. Continue this work in the feature branch or a separate worktree; do not switch or commit these changes onto `main`.
 
 ## Current implementation
 
@@ -33,9 +34,9 @@ The VDE runtime socket directory is stored under the operating system temporary 
 
 ## Is the prototype usable?
 
-**Yes, as a local developer prototype for manual network tests.** The feature has been exercised with a temporary QemuWeb server and a temporary switch. Two isolated terminal sessions attached to the same switch and exchanged ping packets successfully. The shell showed only its isolated home under `/home`, did not expose `/home/orel` or the project directory, and showed `lo` plus `vde0`. `bash`, `ip`, `ping` and `tcpdump` were available in the tested host environment. Temporary sessions and the test server were cleaned up afterward.
+**Yes, as a local developer prototype for manual network tests.** The feature has been exercised with a temporary QemuWeb server and a temporary switch. Two isolated terminal sessions attached to the same switch and exchanged ping packets successfully. The shell showed only its isolated home under `/home`, did not expose `/home/orel` or the project directory, and showed `lo` plus `vde0`. `bash`, `ip`, `ping` and `tcpdump` were available in the tested host environment. After rebasing, the server preflight, systems endpoint, static terminal controls and create/start/stop/delete API flow were exercised on a separate port; a Socket.IO client also sent a shell command and received its output. Temporary sessions and the test server were cleaned up afterward.
 
-The prototype is not yet a packaged or production-ready sandbox. In particular, the UI should be retested in a real browser after restarting the server, and rootless Podman/Bubblewrap setup must be available on every host running QemuWeb. Filesystem namespace isolation should not be treated as a complete security boundary for untrusted users or public multi-user deployment.
+The prototype is not yet a packaged or production-ready sandbox. The integrated UI should be retested in a real browser; the API lifecycle has been checked, but browser interaction and actual terminal input after the rebase still need confirmation. Rootless Podman/Bubblewrap setup must be available on every host running QemuWeb. Filesystem namespace isolation should not be treated as a complete security boundary for untrusted users or public multi-user deployment.
 
 ## Requirements
 
