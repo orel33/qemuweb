@@ -20,7 +20,7 @@
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     #start { color: #57dc91; } #stop { color: #ffaf76; } #reboot { color: #70b9ff; }
     #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-machine { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-general-settings { color: #9fc5ef; } #new-host { color: #5adbd1; }
-    #toggle-console-columns { color: #9fc5ef; } #show-logs { color: #b8d2ef; } #show-monitor { color: #c6adf5; }
+    #toggle-console-columns { color: #9fc5ef; } #show-logs { color: #b8d2ef; }
     button:disabled { opacity: .45; cursor: default; }
     .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
     .machine-tab { display: none; align-items: center; gap: 6px; padding: 5px 7px 5px 10px; white-space: nowrap; background: #1b2531; }
@@ -49,10 +49,6 @@
     #network-controls { gap: 10px; margin-top: 10px; padding: 0; border: 0; background: transparent; }
     #network-controls .network-controls-head { justify-content: flex-end; }
     #launch-logs { min-height: 180px; max-height: 62vh; overflow: auto; margin: 12px 0 0; padding: 12px; border: 1px solid #35404c; border-radius: 6px; background: #0b0f14; white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
-    .monitor-help { margin: 12px 0; color: #bdc8d6; font-size: 13px; }
-    #monitor-output { min-height: 180px; max-height: 52vh; overflow: auto; margin: 0 0 12px; padding: 12px; border: 1px solid #35404c; border-radius: 6px; background: #0b0f14; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 ui-monospace, monospace; }
-    #monitor-form { display: flex; gap: 8px; }
-    #monitor-command { flex: 1; min-width: 0; padding: 7px 9px; color: #e7edf5; background: #1a2633; border: 1px solid #506176; border-radius: 6px; font: 13px ui-monospace, monospace; }
     .qemu-options { width: min(1000px, 94vw); max-width: 94vw; max-height: 85vh; overflow: auto; padding: 18px; border: 1px solid #506176; border-radius: 10px; color: #e7edf5; background: #10151c; box-shadow: 0 16px 60px #000a; }
     .qemu-options::backdrop { background: #000a; }
     .create-dialog { width: min(520px, 94vw); }
@@ -110,7 +106,11 @@
     .pane-kind-icon { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .pane-kind-icon[data-kind="vm"] { color: #5adbd1; }
     .pane-kind-icon[data-kind="switch"] { color: #9ee6b4; }
-    .console-pane-header select { width: min(100%, 300px); height: 30px; padding: 0 28px 0 9px; appearance: none; border: 1px solid #45586d; border-radius: 4px; background-color: #1a2633; background-image: linear-gradient(45deg, transparent 50%, #a9bed4 50%), linear-gradient(135deg, #a9bed4 50%, transparent 50%); background-position: calc(100% - 17px) 12px, calc(100% - 11px) 12px; background-size: 6px 6px; background-repeat: no-repeat; color: #e7edf5; font: 13px system-ui, sans-serif; }
+    .console-pane-header select { flex: 1; width: min(100%, 300px); min-width: 90px; height: 30px; padding: 0 28px 0 9px; appearance: none; border: 1px solid #45586d; border-radius: 4px; background-color: #1a2633; background-image: linear-gradient(45deg, transparent 50%, #a9bed4 50%), linear-gradient(135deg, #a9bed4 50%, transparent 50%); background-position: calc(100% - 17px) 12px, calc(100% - 11px) 12px; background-size: 6px 6px; background-repeat: no-repeat; color: #e7edf5; font: 13px system-ui, sans-serif; }
+    .console-view-toggle { display: inline-flex; flex: none; padding: 2px; border: 1px solid #405166; border-radius: 5px; background: #101820; }
+    .console-view-toggle button { min-width: 64px; height: 24px; padding: 0 8px; border: 0; border-radius: 3px; background: transparent; color: #aebdcd; font-size: 11px; }
+    .console-view-toggle button[aria-pressed="true"] { background: #355177; color: #fff; }
+    .console-view-toggle button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 1px; }
     .console-pane-state { margin-left: auto; color: #bdc8d6; font-size: 11px; white-space: nowrap; }
     .console-pane-state[data-state="new"] { color: #9fc5ef; }
     .console-pane-state[data-state="running"] { color: #7ae4a3; }
@@ -142,7 +142,6 @@
     <button id="clear-console" class="icon-button" type="button" disabled title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
     <button id="show-qemu-options" class="icon-button" type="button" disabled title="Host Settings" aria-label="Host Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <button id="show-logs" class="icon-button" type="button" disabled title="View session log" aria-label="Launch log"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button>
-    <button id="show-monitor" class="icon-button" type="button" disabled title="Open QEMU monitor" aria-label="QEMU monitor"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 8 4 4-4 4M13 16h5"/></svg></button>
   </header>
   <dialog class="qemu-options create-dialog" id="create-dialog" aria-labelledby="create-title">
     <div class="settings-heading"><h2 id="create-title">Add a new host</h2></div>
@@ -186,12 +185,6 @@
     <div class="settings-heading"><h2 id="logs-title">Launch log</h2><button id="close-logs" type="button">Close</button></div>
     <pre id="launch-logs">Launch commands will appear here.</pre>
   </dialog>
-  <dialog class="qemu-options" id="monitor-panel" aria-labelledby="monitor-title">
-    <div class="settings-heading"><h2 id="monitor-title">QEMU monitor</h2><button id="close-monitor" type="button">Close</button></div>
-    <p class="monitor-help">QEMU commands (not a Linux shell): <code>help</code>, <code>info status</code>, <code>info block</code>. Some commands change or stop the host.</p>
-    <pre id="monitor-output" aria-live="polite"></pre>
-    <form id="monitor-form"><input id="monitor-command" aria-label="QEMU monitor command" placeholder="info status" maxlength="256" autocomplete="off" spellcheck="false"><button id="monitor-send" type="submit">Send</button></form>
-  </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
     <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="toggle-expert-mode" type="button" aria-pressed="false">Mode Expert</button><button id="close-settings" type="button">Close</button></div></div>
     <form id="host-settings-form">
@@ -222,19 +215,19 @@
   </svg>
   <main id="console-workspace" data-columns="1">
     <section class="console-pane" id="console-pane-0" data-active="true">
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-0" aria-label="Session in left console column"><option value="">Select a session</option></select><span id="console-state-0" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-0" aria-label="Session in left console column"><option value="">Select a session</option></select><div id="console-view-0" class="console-view-toggle" role="group" aria-label="Left terminal view" hidden><button type="button" data-view="console" aria-pressed="true">Console</button><button type="button" data-view="monitor" aria-pressed="false">Monitor</button></div><span id="console-state-0" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-0"></div><input class="terminal-scroll" id="terminal-scroll-0" type="range" min="0" max="0" value="0" aria-label="Scroll left console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-1" data-active="false" hidden>
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-1" aria-label="Session in right console column"><option value="">Select a session</option></select><span id="console-state-1" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-1" aria-label="Session in right console column"><option value="">Select a session</option></select><div id="console-view-1" class="console-view-toggle" role="group" aria-label="Right terminal view" hidden><button type="button" data-view="console" aria-pressed="true">Console</button><button type="button" data-view="monitor" aria-pressed="false">Monitor</button></div><span id="console-state-1" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-1"></div><input class="terminal-scroll" id="terminal-scroll-1" type="range" min="0" max="0" value="0" aria-label="Scroll right console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-2" data-active="false" hidden>
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-2" aria-label="Session in lower left console"><option value="">Select a session</option></select><span id="console-state-2" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-2" aria-label="Session in lower left console"><option value="">Select a session</option></select><div id="console-view-2" class="console-view-toggle" role="group" aria-label="Lower left terminal view" hidden><button type="button" data-view="console" aria-pressed="true">Console</button><button type="button" data-view="monitor" aria-pressed="false">Monitor</button></div><span id="console-state-2" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-2"></div><input class="terminal-scroll" id="terminal-scroll-2" type="range" min="0" max="0" value="0" aria-label="Scroll lower left console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-3" data-active="false" hidden>
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-3" aria-label="Session in lower right console"><option value="">Select a session</option></select><span id="console-state-3" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-3" aria-label="Session in lower right console"><option value="">Select a session</option></select><div id="console-view-3" class="console-view-toggle" role="group" aria-label="Lower right terminal view" hidden><button type="button" data-view="console" aria-pressed="true">Console</button><button type="button" data-view="monitor" aria-pressed="false">Monitor</button></div><span id="console-state-3" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-3"></div><input class="terminal-scroll" id="terminal-scroll-3" type="range" min="0" max="0" value="0" aria-label="Scroll lower right console" title="Scroll console history"></div>
     </section>
   </main>
@@ -249,6 +242,7 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
   <script src="/vendor-addon-fit/lib/xterm-addon-fit.js"></script>
+  <script src="/monitor-terminal.js"></script>
   <script>
     let socket = null;
     const workspace = document.getElementById('console-workspace');
@@ -262,11 +256,17 @@
         element: document.getElementById(`console-pane-${index}`),
         kindIcon: document.querySelector(`#console-pane-${index} .pane-kind-icon`),
         select: document.getElementById(`console-session-${index}`),
+        viewToggle: document.getElementById(`console-view-${index}`),
+        viewButtons: [...document.querySelectorAll(`#console-view-${index} [data-view]`)],
         state: document.getElementById(`console-state-${index}`),
         terminal,
         fit,
         opened: false,
         scroll: document.getElementById(`terminal-scroll-${index}`),
+        view: 'console',
+        monitorInput: '',
+        monitorRequest: 0,
+        monitorAvailable: false,
         machineId: null,
         token: 0,
         replayGeneration: 0,
@@ -275,8 +275,11 @@
       };
       terminal.onScroll(() => syncConsoleScroll(pane));
       terminal.onData(data => {
-        if (!pane.replaying && pane.machineId) pane.socket.emit('input', data);
+        if (pane.replaying || !pane.machineId) return;
+        if (pane.view === 'monitor') handleMonitorInput(pane, data);
+        else pane.socket.emit('input', data);
       });
+      pane.viewButtons.forEach(button => button.addEventListener('click', () => setPaneView(pane, button.dataset.view)));
       pane.scroll.addEventListener('input', () => terminal.scrollToLine(Number(pane.scroll.value)));
       pane.element.addEventListener('focusin', () => focusPane(index));
       pane.element.addEventListener('pointerdown', () => focusPane(index));
@@ -340,12 +343,6 @@
     const logsPanel = document.getElementById('logs-panel');
     const logsTitle = document.getElementById('logs-title');
     const launchLogs = document.getElementById('launch-logs');
-    const showMonitor = document.getElementById('show-monitor');
-    const monitorPanel = document.getElementById('monitor-panel');
-    const monitorTitle = document.getElementById('monitor-title');
-    const monitorOutput = document.getElementById('monitor-output');
-    const monitorCommand = document.getElementById('monitor-command');
-    const monitorSend = document.getElementById('monitor-send');
     const showQemuOptions = document.getElementById('show-qemu-options');
     const qemuOptionsPanel = document.getElementById('qemu-options-panel');
     const settingsTitle = document.getElementById('settings-title');
@@ -406,7 +403,7 @@
     }
 
     function finishReplay(pane, generation, id) {
-      if (generation !== pane.replayGeneration || id !== pane.machineId) return;
+      if (generation !== pane.replayGeneration || id !== pane.machineId || pane.view !== 'console') return;
       if (pane.replayPending) {
         const pending = pane.replayPending;
         pane.replayPending = '';
@@ -416,6 +413,95 @@
         pane.terminal.scrollToBottom();
         syncConsoleScroll(pane);
       }
+    }
+
+    function monitorIsAvailable(machine) {
+      return MonitorTerminal.isSupported(machine) && machine.running && !machine.busy;
+    }
+    function renderConsoleView(pane) {
+      const machine = pane.machineId && machines.get(pane.machineId);
+      const generation = ++pane.replayGeneration;
+      pane.replayPending = '';
+      pane.replaying = !!machine;
+      pane.terminal.write('', () => {
+        if (generation !== pane.replayGeneration || pane.view !== 'console' || pane.machineId !== (machine?.id || null)) return;
+        pane.terminal.reset();
+        syncConsoleScroll(pane);
+        if (!machine) { pane.replaying = false; return; }
+        pane.terminal.write(machine.serial || '', () => finishReplay(pane, generation, machine.id));
+      });
+    }
+    function renderMonitorView(pane) {
+      const machine = pane.machineId && machines.get(pane.machineId);
+      pane.replayGeneration++;
+      pane.replayPending = '';
+      pane.replaying = false;
+      pane.terminal.reset();
+      if (!MonitorTerminal.isSupported(machine)) return;
+      let content = 'QEMU monitor — commands control the emulator, not the guest OS.\r\nExamples: help, info status, info block\r\n\r\n';
+      if (machine.monitorOutput) content += MonitorTerminal.terminalText(machine.monitorOutput);
+      if (!monitorIsAvailable(machine)) content += 'The monitor is available while this QEMU host is running.\r\n';
+      else if (machine.monitorBusy) content += 'Command in progress…\r\n';
+      else content += `> ${pane.monitorInput}`;
+      pane.terminal.write(content, () => {
+        pane.terminal.scrollToBottom();
+        syncConsoleScroll(pane);
+      });
+    }
+    function setPaneView(pane, view) {
+      const machine = pane.machineId && machines.get(pane.machineId);
+      if (view !== 'console' && (view !== 'monitor' || !MonitorTerminal.isSupported(machine))) return;
+      if (pane.view === view) { pane.terminal.focus(); return; }
+      pane.view = view;
+      pane.monitorInput = '';
+      pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === view)));
+      if (view === 'monitor') renderMonitorView(pane);
+      else renderConsoleView(pane);
+      if (pane.index === activePaneIndex) updateControls();
+      requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
+    }
+    function updatePaneViewControls() {
+      for (const pane of panes) {
+        const machine = pane.machineId && machines.get(pane.machineId);
+        const supported = MonitorTerminal.isSupported(machine);
+        const available = monitorIsAvailable(machine);
+        pane.viewToggle.hidden = !supported;
+        if (!supported && pane.view === 'monitor') {
+          pane.view = 'console';
+          pane.monitorInput = '';
+          renderConsoleView(pane);
+        }
+        pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === pane.view)));
+        if (pane.view === 'monitor' && pane.monitorAvailable !== available) renderMonitorView(pane);
+        pane.monitorAvailable = available;
+      }
+    }
+    async function sendPaneMonitorCommand(pane, machine, command) {
+      machine.monitorBusy = true;
+      machine.monitorOutput = `${machine.monitorOutput || ''}> ${command}\n`;
+      const sessionId = machine.id;
+      const request = ++pane.monitorRequest;
+      let output;
+      try {
+        const response = await fetch(`/api/monitor/${encodeURIComponent(sessionId)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Command failed');
+        output = body.output || '(no output)';
+      } catch (error) { output = `Error: ${error.message}`; }
+      finally {
+        machine.monitorOutput += `${output}\n`;
+        machine.monitorBusy = false;
+        if (pane.monitorRequest === request && pane.machineId === sessionId && pane.view === 'monitor' && machines.get(sessionId) === machine) renderMonitorView(pane);
+      }
+    }
+    function handleMonitorInput(pane, data) {
+      const machine = pane.machineId && machines.get(pane.machineId);
+      if (!monitorIsAvailable(machine) || machine.monitorBusy) { pane.terminal.write('\x07'); return; }
+      const result = MonitorTerminal.consumeInput(pane.monitorInput, data);
+      pane.monitorInput = result.input;
+      if (result.echo) pane.terminal.write(result.echo, () => syncConsoleScroll(pane));
+      if (result.prompt) pane.terminal.write('> ');
+      if (result.command) sendPaneMonitorCommand(pane, machine, result.command);
     }
 
     function activeMachine() { return activeId ? machines.get(activeId) : null; }
@@ -455,6 +541,7 @@
         pane.select.value = current;
         pane.element.dataset.active = String(pane.index === activePaneIndex);
       }
+      updatePaneViewControls();
       updatePaneStates();
     }
     function updateWorkspaceLayout() {
@@ -476,6 +563,9 @@
       panes.forEach((pane, index) => { pane.machineId = ids[index] || null; });
       panes.forEach(pane => {
         if (before[pane.index] === pane.machineId) return;
+        pane.view = 'console';
+        pane.monitorInput = '';
+        pane.monitorAvailable = false;
         pane.replayGeneration++;
         pane.replayPending = '';
         pane.replaying = !!pane.machineId;
@@ -490,7 +580,6 @@
       const machine = activeMachine();
       if (machine) {
         showMachineLog(machine);
-        monitorOutput.textContent = machine.monitorOutput || 'The monitor is available when this QEMU host is running.';
         renderQemuOptions();
       }
       panes.forEach(pane => {
@@ -533,7 +622,6 @@
       const machine = activeMachine();
       if (machine) {
         showMachineLog(machine);
-        monitorOutput.textContent = machine.monitorOutput || 'The monitor is available when this QEMU host is running.';
         renderQemuOptions();
       }
       requestAnimationFrame(() => fitTerminal(pane));
@@ -818,6 +906,7 @@
       const running = !!(machine && machine.running);
       const clearConsole = document.getElementById('clear-console');
       updatePaneStates();
+      updatePaneViewControls();
       if (!machine) {
         startButton.disabled = true;
         stopButton.disabled = true;
@@ -828,10 +917,7 @@
         showQemuOptions.disabled = true;
         clearConsole.disabled = true;
         showLogs.disabled = true;
-        showMonitor.disabled = true;
-        showMonitor.hidden = true;
         if (logsPanel.open) logsPanel.close();
-        if (monitorPanel.open) monitorPanel.close();
         return;
       }
       const busy = !!machine.busy;
@@ -843,14 +929,11 @@
       exitButton.title = isSwitch ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
       exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : 'Exit host');
       showLogs.disabled = false;
-      showMonitor.disabled = isSwitch || !machine.engine.startsWith('qemu');
-      showMonitor.hidden = showMonitor.disabled;
-      if (showMonitor.disabled && monitorPanel.open) monitorPanel.close();
       showQemuOptions.disabled = isSwitch;
       rebootButton.hidden = isSwitch;
       resetButton.hidden = isSwitch;
       clearConsole.hidden = false;
-      clearConsole.disabled = false;
+      clearConsole.disabled = panes[activePaneIndex].view !== 'console';
       if (isSwitch) {
         startButton.disabled = running || busy;
         startButton.title = 'Start VDE switch';
@@ -868,9 +951,6 @@
       stopButton.setAttribute('aria-label', 'Stop host');
       rebootButton.disabled = !running || busy;
       resetButton.disabled = !machine.hasLaunched || busy;
-      const monitorAvailable = running && machine.engine.startsWith('qemu') && !busy;
-      monitorCommand.disabled = !monitorAvailable || !!machine.monitorBusy;
-      monitorSend.disabled = !monitorAvailable || !!machine.monitorBusy;
       if (!createDialog.open) {
         imageSelect.value = machine.imageId;
         engineSelect.value = machine.engine;
@@ -1045,7 +1125,6 @@
         machines.delete(id);
         if (!machines.size) {
           launchLogs.textContent = 'Launch commands will appear here.';
-          monitorOutput.textContent = '';
         }
         showPage(activeId !== id ? activeId : null);
       } catch (error) { showStatusError(`Cannot close session: ${error.message}`); }
@@ -1223,16 +1302,6 @@
       launchLogs.scrollTop = launchLogs.scrollHeight;
     });
     document.getElementById('close-logs').addEventListener('click', () => logsPanel.close());
-    showMonitor.addEventListener('click', () => {
-      const machine = activeMachine();
-      if (!machine || machine.kind !== 'vm' || !machine.engine.startsWith('qemu')) return;
-      monitorTitle.textContent = `QEMU monitor · ${machineDialogName(machine)}`;
-      monitorOutput.textContent = machine.monitorOutput || 'The monitor is available when this QEMU host is running.';
-      monitorPanel.showModal();
-      monitorOutput.scrollTop = monitorOutput.scrollHeight;
-      if (!monitorCommand.disabled) monitorCommand.focus();
-    });
-    document.getElementById('close-monitor').addEventListener('click', () => monitorPanel.close());
     showQemuOptions.addEventListener('click', () => {
       hostSettingsDraft = null;
       hostCreateActions.hidden = true;
@@ -1284,30 +1353,6 @@
         closeHostSettings.disabled = false;
       }
     });
-    document.getElementById('monitor-form').addEventListener('submit', async event => {
-      event.preventDefault();
-      const machine = activeMachine();
-      const command = monitorCommand.value.trim();
-      if (!machine || !machine.running || !machine.engine.startsWith('qemu') || machine.busy || machine.monitorBusy || !command) return;
-      machine.monitorBusy = true;
-      monitorCommand.value = '';
-      updateControls();
-      try {
-        const response = await fetch(`/api/monitor/${encodeURIComponent(machine.id)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
-        const body = await response.json();
-        if (!response.ok) throw new Error(body.error || 'Command failed');
-        machine.monitorOutput = `${machine.monitorOutput || ''}> ${command}\n${body.output || '(no output)'}\n`;
-      } catch (error) { machine.monitorOutput = `${machine.monitorOutput || ''}> ${command}\nError: ${error.message}\n`; }
-      finally {
-        machine.monitorBusy = false;
-        if (machine.id === activeId) {
-          monitorOutput.textContent = machine.monitorOutput;
-          monitorOutput.scrollTop = monitorOutput.scrollHeight;
-          updateControls();
-          if (monitorPanel.open) monitorCommand.focus();
-        }
-      }
-    });
     function attachPaneSocket(pane) {
       pane.socket.on('connect', () => {
         if (!pane.machineId) return;
@@ -1326,15 +1371,7 @@
         machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
         machine.logs = snapshot.logs || [];
         machine.serial = snapshot.serial || '';
-        const generation = ++pane.replayGeneration;
-        pane.replaying = true;
-        pane.replayPending = '';
-        pane.terminal.write('', () => {
-          if (generation !== pane.replayGeneration || machine.id !== pane.machineId) return;
-          pane.terminal.reset();
-          syncConsoleScroll(pane);
-          pane.terminal.write(machine.serial || '', () => finishReplay(pane, generation, machine.id));
-        });
+        if (pane.view === 'console') renderConsoleView(pane);
         if (machine.id === activeId) {
           launchLogs.textContent = machine.logs.length ? `${machine.logs.join('\n')}\n` : 'Launch commands will appear here.';
           updateControls();
@@ -1346,11 +1383,12 @@
         const machine = machines.get(event.sessionId);
         if (!machine || pane.machineId !== event.sessionId) return;
         machine.serial = event.serial || '';
+        if (pane.view !== 'console') return;
         const generation = ++pane.replayGeneration;
         pane.replaying = true;
         pane.replayPending = '';
         pane.terminal.write('', () => {
-          if (generation !== pane.replayGeneration || machine.id !== pane.machineId) return;
+          if (generation !== pane.replayGeneration || machine.id !== pane.machineId || pane.view !== 'console') return;
           if (event.preserveLine) pane.terminal.clear();
           else pane.terminal.reset();
           finishReplay(pane, generation, machine.id);
@@ -1360,6 +1398,7 @@
         const machine = machines.get(event.sessionId);
         if (!machine || pane.machineId !== event.sessionId) return;
         machine.serial = (machine.serial + event.data).slice(-262144);
+        if (pane.view !== 'console') return;
         if (pane.replaying) pane.replayPending += event.data;
         else pane.terminal.write(event.data, () => syncConsoleScroll(pane));
       });
@@ -1413,7 +1452,7 @@
     socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
     document.getElementById('clear-console').addEventListener('click', () => {
       const pane = panes[activePaneIndex];
-      if (!activeId || !pane.machineId) return;
+      if (!activeId || !pane.machineId || pane.view !== 'console') return;
       const buffer = pane.terminal.buffer.active;
       const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) || '';
       pane.socket.emit('clear-console', {id: activeId, line, column: buffer.cursorX});
@@ -1447,11 +1486,13 @@
       updateControls();
       renderQemuOptions();
       renderTabs();
-      pane.replaying = true;
-      pane.replayPending = '';
-      pane.terminal.reset();
-      syncConsoleScroll(pane);
-      pane.terminal.write(`${machine.hasLaunched ? 'Resuming' : 'Starting'} ${machine.imageId} (${machine.osHint})…\r\n`, () => syncConsoleScroll(pane));
+      if (pane.view === 'console') {
+        pane.replaying = true;
+        pane.replayPending = '';
+        pane.terminal.reset();
+        syncConsoleScroll(pane);
+        pane.terminal.write(`${machine.hasLaunched ? 'Resuming' : 'Starting'} ${machine.imageId} (${machine.osHint})…\r\n`, () => syncConsoleScroll(pane));
+      }
       try {
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
@@ -1466,7 +1507,7 @@
         machine.running = true;
         machine.settings = launchSettings;
         renderQemuOptions();
-        pane.terminal.focus();
+        if (pane.view === 'console') pane.terminal.focus();
       } catch (error) {
         machine.running = false;
         machine.message = error.message;

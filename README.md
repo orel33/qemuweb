@@ -20,8 +20,8 @@ xterm.js ⇄[ Socket.IO over WS* ]⇄ server.js
          ⇄[ Unix management socket · -M ]⇄ vde_switch
 
 QEMU monitor:
-Monitor form ⇄[ HTTP/JSON ]⇄ Express/server.js
-             ⇄[ Unix monitor socket ]⇄ QEMU HMP
+xterm.js monitor view ⇄[ HTTP/JSON ]⇄ Express/server.js
+                     ⇄[ Unix monitor socket ]⇄ QEMU HMP
 
 Actions and configuration:
 Browser buttons ⇄[ HTTP/JSON ]⇄ Express/server.js
@@ -33,7 +33,8 @@ The same paths, grouped by software location, are detailed below:
 ```text
 ┌─ BROWSER · public/index.html ─────────────────────────────────────────┐
 │ Host tab:   System · Engine · NICs · Play/Resume · Stop · Reboot     │
-│             Reset · Exit · Clear · Settings · Log · Monitor · Status │
+│             Reset · Exit · Clear · Settings · Log · Status           │
+│ Pane bar:   Session · Console/Monitor view · Status                   │
 │ Switch tab: Play · Stop · Exit/Remove · Clear · Log · Status         │
 │ Shared interactive display: xterm.js                                 │
 └───────────────────────────────────────────────────────────────────────┘
@@ -89,7 +90,7 @@ The interactive paths are deliberately different because each endpoint provides 
 | QEMU VM console | `xterm.js ↔ Socket.IO ↔ server.js ↔ Unix serial socket ↔ QEMU UART ↔ guest ttyS0` | Display kernel output and provide the guest's `login:` prompt and shell. |
 | VirtualBox VM console | `xterm.js ↔ Socket.IO ↔ server.js ↔ Unix serial socket ↔ VirtualBox UART ↔ guest ttyS0` | Provide the same guest console through VirtualBox's server-mode virtual UART. |
 | VDE switch terminal | `xterm.js ↔ Socket.IO ↔ server.js ↔ node-pty ↔ vdeterm ↔ VDE management socket ↔ vde_switch` | Provide the interactive VDE prompt, including line editing, history, completion and asynchronous switch messages. |
-| QEMU monitor | `Monitor form ↔ HTTP/JSON ↔ server.js ↔ Unix monitor socket ↔ QEMU HMP` | Send emulator commands such as `info status`; this controls QEMU and is not a guest shell. |
+| QEMU monitor | `xterm.js monitor view ↔ HTTP/JSON ↔ server.js ↔ Unix monitor socket ↔ QEMU HMP` | Send emulator commands such as `info status` in the same pane as the serial console; this controls QEMU and is not a guest shell. |
 | Start, Stop, Reboot, Reset and Exit | `Toolbar ↔ HTTP/JSON ↔ server.js ↔ process/VBoxManage control` | Manage one VM or switch session and its working files. |
 | Logs and status | `server.js ↔ Socket.IO ↔ selected browser tab` | Keep launch commands, process messages, console state and lifecycle state associated with the correct tab. |
 
@@ -124,7 +125,7 @@ Both options use the same short syntax here, but provide two distinct interfaces
 
 `-serial` connects the first virtual serial port (`ttyS0` in Linux) to the guest's interactive terminal: boot messages, `login:`, and then a shell. `-monitor` opens the text-based HMP monitor of **QEMU itself**: its commands control the emulator and are not Linux shell commands. `server=on` makes QEMU listen on each Unix socket; the Node server connects to them. `wait=off` lets QEMU start without waiting for a connection. The short form of `-serial` replaces the earlier `-chardev socket,… -serial chardev:serial0` pair.
 
-In the web toolbar, check **Monitor** to enter commands for the VM in the current tab. For example, `help` lists commands, `info status` reports the VM's status, and `info block` describes its disks. Commands such as `system_reset` or `quit` directly change or stop the VM, so use them with care. The monitor is available for QEMU, not VirtualBox. Its commands and responses are recorded in the **Log**, even when the panel is hidden.
+In the bar directly above a QEMU host's terminal, choose **Monitor** to replace the serial-console view in place, then choose **Console** to return to the guest. For example, `help` lists commands, `info status` reports the VM's status, and `info block` describes its disks. Commands such as `system_reset` or `quit` directly change or stop the VM, so use them with care. The toggle is available for QEMU, not VirtualBox or VDE switches. Monitor commands and responses are recorded in the **Log** even while its view is hidden.
 
 ## Image preparation
 
@@ -284,7 +285,7 @@ The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is
 | ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open Host Settings in creation mode, titled `Add a new host`; the Expert button is hidden and Autostart is selected by default. |
 | ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Open the VDE switch creation dialog; Autostart is selected by default. |
 | **Log** button | **Log** | `View session log` | Open the selected session's log dialog. |
-| **Monitor** button | **Monitor** | `Open QEMU monitor` | Open QEMU's interactive command dialog for a QEMU host. |
+| **Console / Monitor** toggle | **Terminal view** | `Console` / `Monitor` | Switch a QEMU host's existing terminal pane in place between its serial console and QEMU monitor. The toggle is hidden for engines without a QEMU monitor. |
 
 A forced Stop can leave the guest filesystem needing repair on the next boot. Only the selected host is affected by these actions; other tabs keep running.
 

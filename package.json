@@ -4,7 +4,8 @@
   "private": true,
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test"
   },
   "engines": {
     "node": ">=18"
