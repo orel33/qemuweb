@@ -925,6 +925,21 @@ async function destroySession(session) {
   sessions.delete(session.id);
 }
 
+async function exitAllSessions() {
+  const removed = [];
+  try {
+    for (const kind of ['vm', 'switch']) {
+      for (const session of [...sessions.values()].filter(item => item.kind === kind)) {
+        await destroySession(session);
+        removed.push(session.id);
+      }
+    }
+    return removed;
+  } finally {
+    if (removed.length) io.emit('sessions-removed', {ids: removed});
+  }
+}
+
 app.post('/api/start', (req, res) => {
   try {
     const session = start(req.body.sessionId, req.body.engine, req.body.imageId, {interfaces: req.body.interfaces, settings: req.body.settings});
@@ -940,15 +955,30 @@ app.post('/api/start', (req, res) => {
   }
 });
 
-app.post('/api/topology', (req, res) => {
+function validateTopologyRequest(body) {
+  const {text, engine = 'qemu'} = body || {};
+  if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
+  const topology = parseTopology(text, Object.keys(readConfig().systems));
+  if (engine === 'virtualbox' && topology.hosts.some(host => host.switches.length)) throw new Error('Connected interfaces require a QEMU engine.');
+  return {topology, engine};
+}
+
+app.post('/api/topology/preview', (req, res) => {
+  try {
+    const {topology} = validateTopologyRequest(req.body);
+    res.json({hosts: topology.hosts.length, switches: topology.switches.length});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
+app.post('/api/topology', async (req, res) => {
   const created = [];
   try {
-    const {text, engine = 'qemu'} = req.body || {};
-    if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
-    const topology = parseTopology(text, Object.keys(readConfig().systems));
-    if (engine === 'virtualbox' && topology.hosts.some(host => host.switches.length)) throw new Error('Connected interfaces require a QEMU engine.');
-    const used = new Set([...sessions.values()].map(session => session.hostname?.toLowerCase()));
+    const {topology, engine} = validateTopologyRequest(req.body);
+    const {autostart = false, closePrevious = false} = req.body || {};
+    if (typeof autostart !== 'boolean' || typeof closePrevious !== 'boolean') throw new Error('Invalid topology options.');
+    const used = new Set(closePrevious ? [] : [...sessions.values()].map(session => session.hostname?.toLowerCase()));
     for (const entry of [...topology.switches, ...topology.hosts]) if (used.has(entry.name.toLowerCase())) throw new Error(`Name already exists: ${entry.name}.`);
+    if (closePrevious) await exitAllSessions();
     const switchIds = new Map();
     for (const sw of topology.switches) {
       const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
@@ -963,7 +993,21 @@ app.post('/api/topology', (req, res) => {
       session.hostname = host.name; session.selectedImage = imageById(host.system); session.engine = engine;
       session.networkInterfaces = interfaces; session.lastMessage = 'Host ready to start';
     }
-    res.json({created: created.length});
+    const errors = [];
+    if (autostart) {
+      for (const id of created) {
+        const session = sessions.get(id);
+        try {
+          if (session.kind === 'switch') await startSwitch(session);
+          else start(id, engine, session.selectedImage.id, {interfaces: session.networkInterfaces.map(nic => nic.switchId)});
+        } catch (error) {
+          session.lastMessage = `Start failed: ${error.message}`;
+          errors.push(`${session.hostname}: ${error.message}`);
+          publishState(session, session.lastMessage);
+        }
+      }
+    }
+    res.json({created: created.length, errors});
   } catch (error) {
     for (const id of created) sessions.delete(id);
     res.status(400).json({error: error.message});
@@ -978,7 +1022,7 @@ app.get('/api/topology', (_req, res) => {
       name: session.hostname, system: session.selectedImage?.id,
       switches: session.networkInterfaces.map(nic => {
         const sw = nic.switchId && sessions.get(nic.switchId);
-        if (!sw || sw.kind !== 'switch') throw new Error(`Host ${session.hostname} has a disconnected interface; .top cannot represent it.`);
+        if (!sw || sw.kind !== 'switch') throw new Error(`Host ${session.hostname} has a disconnected interface; .topo cannot represent it.`);
         return sw.hostname;
       })
     }));
@@ -1098,6 +1142,11 @@ app.patch('/api/sessions/:sessionId', (req, res) => {
     io.emit('session-renamed', {sessionId: session.id, name: session.hostname});
     res.json({name: session.hostname});
   } catch (error) { res.status(400).json({error: error.message}); }
+});
+
+app.delete('/api/sessions', async (_req, res) => {
+  try { res.json({removed: await exitAllSessions()}); }
+  catch (error) { res.status(500).json({error: error.message}); }
 });
 
 app.delete('/api/sessions/:sessionId', async (req, res) => {

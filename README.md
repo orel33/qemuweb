@@ -250,7 +250,7 @@ Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a s
 
 ### Local VDE LAN prototype
 
-The **Load topology** and **Save topology** buttons import `.topo` files and export the current sessions. Files contain `SWITCH name` and `HOST system-id name switch...` lines; `#` starts a comment. Switch names on a host line specify Ethernet interfaces in order. See `topo/lan.topo` and `topo/gw.topo`. Import validates the entire file, rejects unknown system IDs, and creates stopped sessions using the engine in General Settings. Connected interfaces require QEMU. Export rejects disconnected interfaces because this format cannot preserve their positions. Disk contents and runtime state are not saved.
+The **Load topology** and **Save topology** buttons import `.topo` files and export the current sessions. Files contain `SWITCH name` and `HOST system-id name switch...` lines; `#` starts a comment. Switch names on a host line specify Ethernet interfaces in order. See `topo/lan.topo` and `topo/gw.topo`. Import validates the entire file, rejects unknown system IDs and displays the host and switch counts. Autostart is enabled by default and starts switches before hosts, using the engine in General Settings. The optional **Close previous sessions** deletes their working disks after validation. Connected interfaces require QEMU. Export rejects disconnected interfaces because this format cannot preserve their positions. Disk contents and runtime state are not saved.
 
 New QEMU hosts start with one disconnected Ethernet card. In the **Network interfaces** section of **Host Settings**, use **+ Interface** before the first launch to add up to four cards, remove unwanted cards, or select a running VDE switch for each card. A new switch starts by default; if Autostart is unchecked, click **Play** to start `vde_switch` and its interactive `vdeterm` console in xterm.js. Commands such as `help` and `port/allprint`, command history, completion and asynchronous VDE messages use the persistent terminal session. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian cloud uses `virtio-net-pci`. The guest chooses its own interface name: Debian may show `enp0s2` rather than `eth0` (`ip link show` lists it). Start two hosts against the same switch to make a LAN and configure IP addresses inside the guests. Host Settings shows the resulting QEMU launch arguments in Mode Expert.
 
@@ -269,30 +269,31 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 - **Debian 13 Legacy**: `root` with no password, or `toto` / `toto`; temporary working disk.
 - **OpenWrt 25.12 x86-64**: press Enter to open the `root` shell without a password; the secondary account is `toto` / `toto`; temporary working disk.
 
-### Host actions
+### Host and switch actions
 
-The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Each hint below is the text shown on hover. Host and switch actions apply only to the selected session.
+The icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Click the framed Host or Switch icon at the left of a terminal to open its action menu. Host Settings and Clear console sit beside that menu. The red X at the right exits that terminal's session. General Settings is the first button in the bottom bar, and Exit All is the last button before the page controls. Actions in a terminal apply to its own session.
 
-| Icon / control | Action | Hint | Effect |
+| Icon / control | Action | Menu label or hint | Effect |
 |---|---|---|---|
-| ![Play icon](docs/icons/play.svg) | **Start** | `Start host from the base image` | Create a new working disk and boot the host. |
-| ![Play icon](docs/icons/play.svg) | **Resume** | `Resume host from its current disk` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
-| ![Power icon](docs/icons/power.svg) | **Stop** | `Stop host and keep its current disk` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
-| ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot host with its current disk (keep changes)` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
-| ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset host from the base image (discard changes)` | After a QemuWeb warning dialog, stop the host, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
-| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit host, delete its disk and close the tab` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** asks for the same confirmation. |
-| ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
+| ![Play icon](docs/icons/play.svg) | **Play** | `Play` | Create a new working disk and boot the host. |
+| ![Play icon](docs/icons/play.svg) | **Resume** | `Resume` | After Stop or a guest shutdown, boot from the same disk with the original system, engine, settings, and display name. This is a cold boot, not a saved-memory restore. |
+| ![Power icon](docs/icons/power.svg) | **Stop** | `Stop` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
+| ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
+| ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset` | After a QemuWeb warning dialog, stop the host, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
+| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red X in the terminal header and on the tab asks for the same confirmation. |
+| **Exit All** | **Exit all** | `Exit all hosts and switches` | After confirmation, close every host and switch and delete their working disks. |
+| ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console` | Clear this tab's console history while preserving its current prompt or line. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **Host Settings** | `Host Settings` | Edit the selected host's available launch settings and network interfaces; Mode Expert reveals the full command and technical details. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the engine for every new host, including clones, and the automatic naming scheme in this browser. |
 | ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open Host Settings in creation mode, titled `Add a new host`; the Expert button is hidden and Autostart is selected by default. |
 | ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Open the VDE switch creation dialog; Autostart is selected by default. |
-| **Console / Monitor / Log** controls | **Terminal view** | `Console` / `Monitor` / `Log` | Reuse the same xterm area for the selected session's views. QEMU hosts provide all three; VirtualBox hosts and switches provide Console and read-only Log. New log lines and log resets update a visible Log view. |
+| **Console / Monitor / Log** icons | **Terminal view** | `Console` / `Monitor` / `Log` | Reuse the same xterm area for the selected session's views. QEMU hosts provide all three; VirtualBox hosts and switches provide Console and read-only Log. New log lines and log resets update a visible Log view. |
 
-A forced Stop can leave the guest filesystem needing repair on the next boot. Only the selected host is affected by these actions; other tabs keep running.
+A forced Stop can leave the guest filesystem needing repair on the next boot. Exit All affects every session.
 
 ### Host status
 
-The badge at the right of the toolbar describes the selected tab:
+The badge in each terminal header describes that session:
 
 | Status | Meaning |
 |---|---|

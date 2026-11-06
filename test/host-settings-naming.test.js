@@ -36,9 +36,11 @@ test('classic naming remains sequential', () => {
 test('Add a new host hides Close while Host Settings restores it', () => {
   const createStart = html.indexOf('async function openHostSettingsCreate()');
   const createEnd = html.indexOf('function openCreateDialog', createStart);
-  const settingsStart = html.indexOf("showQemuOptions.addEventListener('click'");
+  const settingsStart = html.indexOf('function openHostSettings()');
   const settingsEnd = html.indexOf('function setExpertMode', settingsStart);
 
+  assert.ok(createStart >= 0 && createEnd > createStart);
+  assert.ok(settingsStart >= 0 && settingsEnd > settingsStart);
   assert.match(html.slice(createStart, createEnd), /closeHostSettings\.hidden = true/);
   assert.match(html.slice(settingsStart, settingsEnd), /closeHostSettings\.hidden = false/);
 });
