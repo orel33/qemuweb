@@ -1,6 +1,6 @@
 'use strict';
 
-function parseTopology(text, systems, mapping = {}) {
+function parseTopology(text, systems) {
   if (typeof text !== 'string' || text.length > 262144) throw new Error('Topology must be text under 256 KB.');
   const known = new Set(systems);
   const names = new Set();
@@ -21,15 +21,12 @@ function parseTopology(text, systems, mapping = {}) {
     names.add(name.toLowerCase());
     if (type === 'SWITCH') switches.push({name});
     else {
-      const resolved = known.has(system) ? system : mapping[system];
-      if (!known.has(resolved)) unknown.add(system);
-      hosts.push({name, system: resolved || system, switches: words});
+      if (!known.has(system)) unknown.add(system);
+      hosts.push({name, system, switches: words});
     }
   }
   if (unknown.size) {
-    const error = new Error(`Unknown systems: ${[...unknown].join(', ')}. Choose a mapping.`);
-    error.unknownSystems = [...unknown];
-    throw error;
+    throw new Error(`Unknown system IDs: ${[...unknown].join(', ')}. Check config.json.`);
   }
   const switchNames = new Set(switches.map(sw => sw.name));
   const ports = new Map();

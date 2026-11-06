@@ -15,6 +15,6 @@ test('invalid links, duplicate names, unsupported directives and unresolved syst
   assert.throws(() => parseTopology('SWITCH s1\nHOST debian13-legacy h1 missing', systems), /unknown switch/);
   assert.throws(() => parseTopology('SWITCH s1\nSWITCH s1', systems), /duplicate/);
   assert.throws(() => parseTopology('EXEC rm -rf /', systems), /unsupported/);
-  assert.throws(() => parseTopology('HOST debian h1', systems), /Unknown systems/);
-  assert.equal(parseTopology('HOST debian h1', systems, {debian: 'debian13-legacy'}).hosts[0].system, 'debian13-legacy');
+  assert.throws(() => parseTopology('HOST debian h1', systems), /Unknown system IDs/);
+  assert.throws(() => parseTopology('HOST debian h1', systems, {debian: 'debian13-legacy'}), /Unknown system IDs/);
 });

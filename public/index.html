@@ -179,7 +179,7 @@
   <dialog class="qemu-options create-dialog" id="topology-dialog" aria-labelledby="topology-title">
     <div class="settings-heading"><h2 id="topology-title">Load topology</h2></div>
     <form id="topology-form">
-      <div class="create-fields"><span id="topology-file-name"></span><div id="topology-mappings"></div></div>
+      <div class="create-fields"><span id="topology-file-name"></span></div>
       <p id="topology-error" role="alert" hidden></p>
       <div class="create-actions"><button id="cancel-topology" type="button">Cancel</button><button id="confirm-topology" type="submit">Load</button></div>
     </form>
@@ -1261,7 +1261,6 @@
     const topologyFile = document.getElementById('topology-file');
     const topologyDialog = document.getElementById('topology-dialog');
     const topologyError = document.getElementById('topology-error');
-    const topologyMappings = document.getElementById('topology-mappings');
     const topologyConfirm = document.getElementById('confirm-topology');
     let topologyText = '';
     document.getElementById('load-topology').addEventListener('click', () => topologyFile.click());
@@ -1272,7 +1271,7 @@
       topologyFile.value = '';
       document.getElementById('topology-title').textContent = 'Load topology';
       document.getElementById('topology-file-name').textContent = file.name;
-      topologyMappings.replaceChildren(); topologyError.hidden = true; topologyConfirm.hidden = false;
+      topologyError.hidden = true; topologyConfirm.hidden = false;
       document.getElementById('cancel-topology').textContent = 'Cancel';
       try {
         if (!/\.topo$/i.test(file.name)) throw new Error('Choose a .topo file.');
@@ -1283,21 +1282,11 @@
     });
     document.getElementById('topology-form').addEventListener('submit', async event => {
       event.preventDefault();
-      const mapping = Object.fromEntries([...topologyMappings.querySelectorAll('select')].map(select => [select.dataset.system, select.value]));
       topologyConfirm.disabled = true;
       try {
-        const response = await fetch('/api/topology', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: topologyText, mapping, engine: generalSettings.engine})});
+        const response = await fetch('/api/topology', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({text: topologyText, engine: generalSettings.engine})});
         const result = await response.json();
         if (!response.ok) {
-          if (result.unknownSystems?.length) {
-            topologyMappings.replaceChildren();
-            for (const system of result.unknownSystems) {
-              const label = document.createElement('label'); label.className = 'create-field'; label.textContent = `Map ${system} to`;
-              const select = document.createElement('select'); select.dataset.system = system; select.required = true;
-              select.append(new Option('Choose a system', ''), ...images.map(image => new Option(image.label, image.id)));
-              label.append(select); topologyMappings.append(label);
-            }
-          }
           throw new Error(result.error || 'Cannot load topology.');
         }
         location.reload();
@@ -1314,7 +1303,7 @@
       } catch (error) {
         document.getElementById('topology-title').textContent = 'Save topology';
         document.getElementById('topology-file-name').textContent = '';
-        topologyMappings.replaceChildren(); topologyError.textContent = error.message; topologyError.hidden = false;
+        topologyError.textContent = error.message; topologyError.hidden = false;
         topologyConfirm.hidden = true; document.getElementById('cancel-topology').textContent = 'Close'; topologyDialog.showModal();
       }
     });

@@ -943,9 +943,9 @@ app.post('/api/start', (req, res) => {
 app.post('/api/topology', (req, res) => {
   const created = [];
   try {
-    const {text, mapping = {}, engine = 'qemu'} = req.body || {};
+    const {text, engine = 'qemu'} = req.body || {};
     if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
-    const topology = parseTopology(text, Object.keys(readConfig().systems), mapping);
+    const topology = parseTopology(text, Object.keys(readConfig().systems));
     if (engine === 'virtualbox' && topology.hosts.some(host => host.switches.length)) throw new Error('Connected interfaces require a QEMU engine.');
     const used = new Set([...sessions.values()].map(session => session.hostname?.toLowerCase()));
     for (const entry of [...topology.switches, ...topology.hosts]) if (used.has(entry.name.toLowerCase())) throw new Error(`Name already exists: ${entry.name}.`);
@@ -966,7 +966,7 @@ app.post('/api/topology', (req, res) => {
     res.json({created: created.length});
   } catch (error) {
     for (const id of created) sessions.delete(id);
-    res.status(400).json({error: error.message, unknownSystems: error.unknownSystems || []});
+    res.status(400).json({error: error.message});
   }
 });
 
