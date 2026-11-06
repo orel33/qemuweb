@@ -831,7 +831,7 @@
       document.getElementById('create-system-row').hidden = true;
       document.getElementById('create-engine-row').hidden = true;
       createNetwork.hidden = true;
-      document.getElementById('create-autostart-row').hidden = true;
+      document.getElementById('create-autostart-row').hidden = false;
     }
     async function addHost({name, imageId, engine, interfaces, settings}) {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
@@ -964,7 +964,7 @@
         }
         else await addSwitch({name: createName.value.trim(), autostart});
         createDialog.close();
-        startHost = kind === 'vm' && autostart;
+        startHost = (kind === 'vm' || kind === 'clone') && autostart;
       } catch (error) {
         createError.textContent = error.message;
         createError.hidden = false;
