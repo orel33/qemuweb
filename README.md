@@ -245,7 +245,7 @@ Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sourc
 npm start
 ```
 
-Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. Their creation dialogs let you edit the proposed name and choose whether to start immediately; hosts also offer a system, engine and Ethernet interfaces. **General Settings** at the bottom left sets the default engine for new hosts and the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a console; the Log button opens that session's commands and output. Login details appear in the host's Settings dialog.
+Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. Their creation dialogs let you edit the proposed name and choose whether to start immediately; hosts also offer a system and Ethernet interfaces. The engine is shown read-only in host creation and Settings. **General Settings** at the bottom left is its only selector for new hosts, including clones; QEMU/KVM is the default. It also sets the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a console; the Log button opens that session's commands and output. Login details appear in the host's Settings dialog.
 
 ### Local VDE LAN prototype
 
@@ -280,7 +280,7 @@ The toolbar icons come from [Lucide](https://lucide.dev/icons); their license is
 | ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit host, delete its disk and close the tab` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red **X on the tab** asks for the same confirmation. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console history and keep the current line` | Clear this tab's console history while preserving its current prompt or line. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **Settings** | `View host launch settings` | Edit the selected host's available launch settings; Mode Expert reveals the full command and technical details. |
-| ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the default engine and automatic naming scheme for new sessions in this browser. |
+| ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the engine for every new host, including clones, and the automatic naming scheme in this browser. |
 | ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open the creation dialog; Autostart is selected by default. |
 | ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Open the VDE switch creation dialog; Autostart is selected by default. |
 | **Log** button | **Log** | `View session log` | Open the selected session's log dialog. |

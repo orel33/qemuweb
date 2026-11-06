@@ -14,7 +14,7 @@ This is the primary engine roadmap for QemuWeb. Keep the execution layer extensi
 
 ## v0.1.0 baseline on `main`
 
-- Create QEMU or VirtualBox hosts and VDE switches from dialogs, optionally starting them immediately. Clone a host with its base system, engine, settings and interfaces; rename it in Settings. A stopped host's launch settings can be edited before its next start. The full launch command remains visible.
+- Create QEMU or VirtualBox hosts and VDE switches from dialogs, optionally starting them immediately. Select the engine only in General Settings for all new hosts, including clones; display it read-only in host dialogs. Clone a host with its base system, settings and compatible interfaces; rename it in Settings. A stopped host's launch settings can be edited before its next start. The full launch command remains visible.
 - Display one, two or four independent xterm.js console panes and navigate through pages of sessions. QEMU hosts also expose logs and an interactive monitor; a running switch exposes its `vdeterm` management terminal through Socket.IO and `node-pty`.
 - Give a new QEMU host one disconnected Ethernet card by default. Before first launch, configure up to four cards and connect them to a VDE switch. Each card gets a MAC address; each connected card gets a distinct VDE port. Debian 13 Legacy uses `e1000`, while Debian 13 Cloud uses `virtio-net-pci`. Stop and Resume preserve these assignments. VirtualBox networking and connections outside the VDE LAN are disabled.
 - Resolve configured executable paths from `.env.local` and `.env`, then check required commands at server startup. This is a strict availability check, not yet a per-engine capability report.

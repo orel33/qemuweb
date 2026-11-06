@@ -56,6 +56,7 @@
     .create-fields { display: grid; gap: 16px; padding-top: 18px; }
     .create-field { display: grid; gap: 7px; color: #bdc8d6; font-size: 13px; }
     .create-field input, .create-field select { width: 100%; height: 34px; padding: 6px 10px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 13px system-ui, sans-serif; }
+    .create-field select:disabled { opacity: 1; color: #aeb9c6; background: #303942; border-color: #46515d; cursor: default; -webkit-text-fill-color: #aeb9c6; }
     .create-autostart { display: flex; align-items: center; gap: 9px; color: #e7edf5; font-size: 13px; }
     .create-autostart input { width: 16px; height: 16px; accent-color: #70a8ff; }
     .create-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
@@ -141,7 +142,7 @@
       <div class="create-fields">
         <label class="create-field">Name<input id="create-name" required maxlength="64" autocomplete="off" spellcheck="false"></label>
         <label class="create-field" id="create-system-row">System<select id="os-image" required></select></label>
-        <label class="create-field" id="create-engine-row">Engine<select id="engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
+        <label class="create-field" id="create-engine-row">Engine<select id="engine" disabled><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
         <section class="network-controls create-network" id="create-network" aria-label="Ethernet interfaces for new host">
           <div class="network-controls-head"><strong>Ethernet interfaces</strong><button id="create-add-nic" type="button">+ Interface</button></div>
           <div id="create-nic-list"></div>
@@ -156,10 +157,10 @@
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
     <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
     <div class="create-fields">
-      <label class="create-field">Default engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
+      <label class="create-field">Engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
       <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
     </div>
-    <p class="settings-description">The engine applies to new hosts; naming applies to hosts and switches. Existing sessions keep their settings.</p>
+    <p class="settings-description">The engine applies to new hosts, including clones; naming applies to hosts and switches. Existing sessions keep their settings.</p>
     <p id="general-settings-error" role="alert" hidden></p>
   </dialog>
   <dialog class="qemu-options" id="logs-panel" aria-labelledby="logs-title">
@@ -567,7 +568,7 @@
         select.append(option);
       }
       select.value = value;
-      select.onchange = () => onChange(select.value);
+      if (onChange) select.onchange = () => onChange(select.value);
       row.append(title, select);
       container.append(row);
     }
@@ -657,10 +658,7 @@
           imageSelect.value = value;
           imageSelect.dispatchEvent(new Event('change'));
         });
-        addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, identityLocked, value => {
-          engineSelect.value = value;
-          engineSelect.dispatchEvent(new Event('change'));
-        });
+        addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, true);
         addSettingTextRow(settingsFixed, 'Description', image?.description || 'No image available; run bash prepare.sh.');
         addSettingTextRow(settingsFixed, 'Login', image?.login || 'Unavailable');
         const fixedLabels = {machine: 'Machine type', diskBus: 'Disk bus', networkCard: 'Network card', osType: 'Guest profile'};
@@ -865,8 +863,8 @@
       const current = activeMachine();
       imageSelect.value = host && current?.kind === 'vm' ? current.imageId : (images[0]?.id || '');
       engineSelect.value = generalSettings.engine;
-      createDraft = host ? {engine: engineSelect.value, interfaces: engineSelect.value === 'virtualbox' ? [] : [null], hasLaunched: false, busy: false} : null;
-      createNetwork.hidden = !host || engineSelect.value === 'virtualbox';
+      createDraft = host ? {engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null], hasLaunched: false, busy: false} : null;
+      createNetwork.hidden = !host || generalSettings.engine === 'virtualbox';
       if (host) renderCreateNicControls();
       createAutostart.checked = true;
       document.getElementById('create-autostart-row').hidden = false;
@@ -882,7 +880,7 @@
       cloneSourceId = source.id;
       createTitle.textContent = `Clone ${source.hostname}`;
       document.getElementById('create-system-row').hidden = true;
-      document.getElementById('create-engine-row').hidden = true;
+      engineSelect.value = generalSettings.engine;
       createNetwork.hidden = true;
       document.getElementById('create-autostart-row').hidden = false;
     }
@@ -1028,11 +1026,11 @@
       createError.hidden = true;
       let startHost = false;
       try {
-        if (kind === 'vm') await addHost({name: createName.value.trim(), imageId: imageSelect.value, engine: engineSelect.value, interfaces: [...createDraft.interfaces]});
+        if (kind === 'vm') await addHost({name: createName.value.trim(), imageId: imageSelect.value, engine: generalSettings.engine, interfaces: [...createDraft.interfaces]});
         else if (kind === 'clone') {
           const source = machines.get(cloneSourceId);
           if (!source || source.kind !== 'vm') throw new Error('Source host is no longer available.');
-          await addHost({name: createName.value.trim(), imageId: source.imageId, engine: source.engine, interfaces: [...source.interfaces], settings: getMachineSettings(source)});
+          await addHost({name: createName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [...source.interfaces], settings: getMachineSettings(source)});
         }
         else await addSwitch({name: createName.value.trim(), autostart});
         createDialog.close();
@@ -1078,26 +1076,6 @@
       const image = images.find(item => item.id === machine.imageId);
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
-      updateControls();
-      renderQemuOptions();
-      renderTabs();
-    });
-    engineSelect.addEventListener('change', () => {
-      if (createDialog.open) {
-        if (!createDraft) return;
-        const previous = createDraft.engine;
-        createDraft.engine = engineSelect.value;
-        if (engineSelect.value === 'virtualbox') createDraft.interfaces = [];
-        else if (previous === 'virtualbox') createDraft.interfaces = [null];
-        createNetwork.hidden = engineSelect.value === 'virtualbox';
-        renderCreateNicControls();
-        return;
-      }
-      const machine = activeMachine();
-      if (!machine) return;
-      if (engineSelect.value === 'virtualbox') machine.interfaces = [];
-      else if (machine.engine === 'virtualbox') machine.interfaces = [null];
-      machine.engine = engineSelect.value;
       updateControls();
       renderQemuOptions();
       renderTabs();
