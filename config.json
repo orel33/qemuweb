@@ -1,13 +1,22 @@
 {
+  "settings": {
+    "defaults": {
+      "memory": 512,
+      "cpus": 1,
+      "clock": "utc"
+    },
+    "fields": {
+      "memory": {"label": "Memory", "type": "number", "unit": "MB", "min": 64, "max": 32768, "step": 64},
+      "cpus": {"label": "Processors", "type": "number", "min": 1, "max": 64, "step": 1},
+      "clock": {"label": "Hardware clock", "type": "select", "options": ["utc", "localtime"]}
+    }
+  },
   "qemu": {
     "defaults": {
       "machine": "q35",
       "cpuKvm": "host",
       "cpuTcg": "qemu64",
-      "memory": 512,
-      "smp": 1,
       "display": "none",
-      "rtcBase": "utc",
       "diskInterface": "virtio",
       "networkModel": "virtio-net-pci",
       "bootDisk": "c",
@@ -25,9 +34,9 @@
         "raw": "images/alpine.raw",
         "vdi": "images/alpine.vdi"
       },
+      "settings": {},
       "qemu": {},
       "virtualbox": {
-        "memory": 512,
         "nic": "none",
         "osType": "Linux_64"
       }
@@ -42,13 +51,12 @@
         "raw": "images/debian13-cloud.raw",
         "vdi": "images/debian13-cloud.vdi"
       },
+      "settings": {"memory": 1024},
       "qemu": {
-        "memory": 1024,
         "diskInterface": "virtio",
         "networkModel": "virtio-net-pci"
       },
       "virtualbox": {
-        "memory": 1024,
         "nic": "none",
         "osType": "Linux_64"
       }
@@ -63,13 +71,12 @@
         "raw": "images/debian13-legacy.raw",
         "vdi": "images/debian13-legacy.vdi"
       },
+      "settings": {"memory": 1024},
       "qemu": {
-        "memory": 1024,
         "diskInterface": "ide",
         "networkModel": "e1000"
       },
       "virtualbox": {
-        "memory": 1024,
         "nic": "none",
         "osType": "Linux_64"
       }
@@ -84,12 +91,11 @@
         "raw": "images/openwrt.raw",
         "vdi": "images/openwrt.vdi"
       },
+      "settings": {"memory": 256},
       "qemu": {
-        "memory": 256,
         "nic": "none"
       },
       "virtualbox": {
-        "memory": 256,
         "nic": "none",
         "osType": "Linux_64"
       }

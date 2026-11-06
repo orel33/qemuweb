@@ -57,14 +57,25 @@
     .monitor input { flex: 1; min-width: 0; padding: 7px 9px; color: #e7edf5; background: #0b0f14; border: 1px solid #506176; border-radius: 6px; font: 13px ui-monospace, monospace; }
     .qemu-options { width: min(1000px, 94vw); max-width: 94vw; max-height: 85vh; overflow: auto; padding: 18px; border: 1px solid #506176; border-radius: 10px; color: #e7edf5; background: #10151c; box-shadow: 0 16px 60px #000a; }
     .qemu-options::backdrop { background: #000a; }
-    .settings-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .settings-heading { position: sticky; top: -18px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -18px -18px 0; padding: 18px; border-bottom: 1px solid #35404c; background: #10151c; }
     .settings-heading h2 { margin: 0; font-size: 18px; }
-    .qemu-options table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .qemu-options th, .qemu-options td { padding: 5px 8px; border-bottom: 1px solid #35404c; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
-    .qemu-options th { color: #9fb5cb; }
-    .qemu-options td:first-child { color: #91c9ff; font-family: ui-monospace, monospace; }
-    .qemu-options pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
-    .qemu-options p { margin: 7px 0 0; color: #bdc8d6; font-size: 12px; }
+    .settings-description { margin: 10px 0 0; color: #bdc8d6; font-size: 13px; line-height: 1.5; }
+    .settings-login { margin: 2px 0 0; color: #bdc8d6; font-size: 13px; line-height: 1.5; }
+    .settings-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #35404c; }
+    .settings-section > summary { cursor: pointer; color: #9fc5ef; font-size: 14px; font-weight: 700; }
+    .setting-row { display: grid; grid-template-columns: minmax(180px, 250px) minmax(0, 1fr); align-items: center; gap: 12px; padding: 5px 2px; }
+    .setting-row > label { color: #bdcddd; font-size: 13px; }
+    .setting-row input, .setting-row select { appearance: none; width: 100%; min-width: 0; max-width: 460px; height: 32px; padding: 0 10px; border: 1px solid #45586d; border-radius: 4px; background-color: #1a2633; color: #e7edf5; font: 13px system-ui, sans-serif; box-shadow: none; }
+    .setting-row input[type="number"] { appearance: textfield; max-width: 140px; }
+    .setting-row input[type="number"]::-webkit-inner-spin-button { appearance: none; margin: 0; }
+    .setting-row select { max-width: 340px; padding-right: 30px; background-image: linear-gradient(45deg, transparent 50%, #a9bed4 50%), linear-gradient(135deg, #a9bed4 50%, transparent 50%); background-position: calc(100% - 18px) 13px, calc(100% - 12px) 13px; background-size: 6px 6px; background-repeat: no-repeat; }
+    .setting-row input:disabled, .setting-row select:disabled { opacity: 1; color: #aeb9c6; background-color: #303942; border-color: #46515d; box-shadow: none; cursor: default; -webkit-text-fill-color: #aeb9c6; }
+    .setting-row input:not(:disabled):hover, .setting-row select:not(:disabled):hover { border-color: #7395bc; }
+    .setting-row input:focus-visible, .setting-row select:focus-visible { outline: 2px solid #74a7e6; outline-offset: 1px; }
+    .settings-commands { margin-top: 16px; }
+    .settings-commands summary { cursor: pointer; color: #9fc5ef; }
+    .settings-commands pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
+    .settings-section p { margin: 6px 0; color: #bdc8d6; font-size: 13px; overflow-wrap: anywhere; }
     #qemu-config-status { align-self: center; color: #bdc8d6; font-size: 12px; }
     .confirm-dialog { width: min(440px, 94vw); max-width: 94vw; padding: 22px; border: 1px solid #806333; border-radius: 10px; color: #e7edf5; background: #10151c; box-shadow: 0 16px 60px #000a; }
     .confirm-dialog::backdrop { background: #000a; }
@@ -86,7 +97,7 @@
     #terminal-scroll:disabled { cursor: default; opacity: .55; }
     @media (max-width: 1100px) { header { flex-wrap: wrap; } }
     @media (max-width: 900px) { h1 { width: 100%; } }
-    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .note { margin-inline: 10px; } .logs, .monitor, .qemu-options { margin-inline: 10px; } main { padding: 10px; } }
+    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .note { margin-inline: 10px; } .logs, .monitor, .qemu-options { margin-inline: 10px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } }
   </style>
 </head>
 <body>
@@ -103,7 +114,7 @@
     <button id="reset" class="icon-button" disabled title="Reset host from the base image (discard changes)" aria-label="Reset host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg></button>
     <button id="exit" class="icon-button" type="button" disabled title="Exit host, delete its disk and close the tab" aria-label="Exit host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     <button id="clear-console" class="icon-button" type="button" disabled title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
-    <button id="show-qemu-options" class="icon-button" type="button" disabled title="View host launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 5H3"/><path d="M12 19H3"/><path d="M14 3v4"/><path d="M16 17v4"/><path d="M21 12h-9"/><path d="M21 19h-5"/><path d="M21 5h-7"/><path d="M8 10v4"/><path d="M8 12H3"/></svg></button>
+    <button id="show-qemu-options" class="icon-button" type="button" disabled title="View host launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <label class="logs-toggle" for="show-logs" title="Show or hide session logs"><input id="show-logs" type="checkbox" disabled> Log</label>
     <label class="logs-toggle" for="show-monitor" title="Show or hide the QEMU monitor"><input id="show-monitor" type="checkbox" disabled> Monitor</label>
     <span id="status" role="status" data-state="new">NEW</span>
@@ -119,9 +130,16 @@
   </section>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
     <div class="settings-heading"><h2 id="settings-title">Settings</h2><button id="close-settings" type="button">Close</button></div>
-    <p id="options-status">Choose a system and an engine.</p>
-    <table><thead><tr><th>Configuration / source</th><th>Value</th><th>Option or purpose</th></tr></thead><tbody id="options-rows"></tbody></table>
-    <p>Disk creation and launch commands:</p><pre id="options-commands"></pre>
+    <p id="options-status" role="alert" hidden></p>
+    <p class="settings-description" id="settings-description"></p>
+    <p class="settings-login" id="settings-login"></p>
+    <details class="settings-section" open><summary>General</summary><div id="settings-fixed"></div></details>
+    <details class="settings-section" open><summary>Resources and clock</summary><div id="settings-editable"></div></details>
+    <details class="settings-section"><summary>Hardware profile</summary><div id="settings-hardware"></div></details>
+    <details class="settings-section"><summary>Storage</summary><div id="settings-storage"></div></details>
+    <details class="settings-section"><summary>Network interfaces</summary><div id="settings-network"></div></details>
+    <details class="settings-section"><summary>Console</summary><div id="settings-console"></div></details>
+    <details class="settings-section settings-commands"><summary>Full launch commands</summary><pre id="options-commands"></pre></details>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
@@ -189,7 +207,14 @@
     const confirmMessage = document.getElementById('confirm-message');
     const confirmAccept = document.getElementById('confirm-accept');
     const optionsStatus = document.getElementById('options-status');
-    const optionsRows = document.getElementById('options-rows');
+    const settingsDescription = document.getElementById('settings-description');
+    const settingsLogin = document.getElementById('settings-login');
+    const settingsEditable = document.getElementById('settings-editable');
+    const settingsFixed = document.getElementById('settings-fixed');
+    const settingsHardware = document.getElementById('settings-hardware');
+    const settingsStorage = document.getElementById('settings-storage');
+    const settingsNetwork = document.getElementById('settings-network');
+    const settingsConsole = document.getElementById('settings-console');
     const optionsCommands = document.getElementById('options-commands');
     let optionsRequest = 0;
     const machines = new Map();
@@ -220,35 +245,155 @@
       if (machine) { machine.error = String(message); updateControls(); }
       else { status.dataset.state = 'error'; status.textContent = 'ERROR'; status.title = String(message); statusError.textContent = String(message); statusError.hidden = false; }
     }
+    function defaultSettings(machine) {
+      return {...(qemuConfig?.settings?.defaults || {}), ...(qemuConfig?.systems?.[machine.imageId]?.settings || {})};
+    }
+    function settingsKey(machine) { return `qemuweb.settings.${machine.imageId}`; }
+    function getMachineSettings(machine) {
+      if (machine.settings) return {...defaultSettings(machine), ...machine.settings};
+      try {
+        const saved = JSON.parse(localStorage.getItem(settingsKey(machine)) || '{}');
+        machine.settings = {...defaultSettings(machine), ...(saved && typeof saved === 'object' ? saved : {})};
+      } catch (_) { machine.settings = defaultSettings(machine); }
+      return {...machine.settings};
+    }
+    function saveMachineSettings(machine, settings) {
+      machine.settings = {...settings};
+      try { localStorage.setItem(settingsKey(machine), JSON.stringify(machine.settings)); } catch (_) {}
+    }
+    function addSettingRow(container, label, value, disabled = true) {
+      const row = document.createElement('div');
+      row.className = 'setting-row';
+      const title = document.createElement('label');
+      const id = `fixed-${container.id}-${container.childElementCount}`;
+      title.htmlFor = id;
+      title.textContent = label;
+      const input = document.createElement('input');
+      input.id = id;
+      input.type = 'text';
+      input.value = value == null ? '' : String(value);
+      input.disabled = disabled;
+      input.title = input.value;
+      row.append(title, input);
+      container.append(row);
+    }
+    function addSettingSelectRow(container, label, choices, value, disabled, onChange) {
+      const row = document.createElement('div');
+      row.className = 'setting-row';
+      const title = document.createElement('label');
+      const id = `select-${container.id}-${container.childElementCount}`;
+      title.htmlFor = id;
+      title.textContent = label;
+      const select = document.createElement('select');
+      select.id = id;
+      select.disabled = disabled;
+      for (const [optionValue, optionLabel] of choices) {
+        const option = document.createElement('option');
+        option.value = optionValue;
+        option.textContent = optionLabel;
+        select.append(option);
+      }
+      select.value = value;
+      select.onchange = () => onChange(select.value);
+      row.append(title, select);
+      container.append(row);
+    }
     async function renderQemuOptions() {
       const machine = activeMachine();
       if (!machine || machine.kind === 'switch' || !qemuOptionsPanel.open) return;
       const request = ++optionsRequest;
-      optionsStatus.textContent = 'Loading settings…';
-      optionsRows.replaceChildren();
+      optionsStatus.hidden = true;
+      optionsStatus.textContent = '';
+      const image = images.find(item => item.id === machine.imageId);
+      settingsDescription.textContent = image ? `Description: ${image.description}` : 'Description: No image available; run bash prepare.sh.';
+      settingsLogin.textContent = image ? `Login: ${image.login}.` : 'Login: unavailable.';
+      settingsEditable.replaceChildren();
+      settingsFixed.replaceChildren();
+      settingsHardware.replaceChildren();
+      settingsStorage.replaceChildren();
+      settingsNetwork.replaceChildren();
+      settingsConsole.replaceChildren();
       optionsCommands.textContent = '';
       try {
-        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || [])});
+        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine))});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine.id !== activeId) return;
-        optionsStatus.textContent = body.launched ? `Session settings for ${machine.hostname} · ${body.engine}` : `Launch preview · ${body.engine}. Options match the selected engine.`;
-        for (const row of body.rows) {
-          const tr = document.createElement('tr');
-          for (const value of row) { const td = document.createElement('td'); td.textContent = value; tr.append(td); }
-          optionsRows.append(tr);
+        const locked = !!(machine.hasLaunched || machine.running || machine.busy);
+        const settings = body.settings || getMachineSettings(machine);
+        for (const [key, field] of Object.entries(body.fields || {})) {
+          const row = document.createElement('div');
+          row.className = 'setting-row';
+          const label = document.createElement('label');
+          label.htmlFor = `setting-${key}`;
+          label.textContent = field.unit ? `${field.label || key} (${field.unit})` : (field.label || key);
+          let input;
+          if (field.type === 'select') {
+            input = document.createElement('select');
+            for (const value of field.options || []) {
+              const option = document.createElement('option');
+              option.value = value;
+              option.textContent = value;
+              input.append(option);
+            }
+          } else {
+            input = document.createElement('input');
+            input.type = field.type || 'text';
+            if (field.min !== undefined) input.min = field.min;
+            if (field.max !== undefined) input.max = field.max;
+            if (field.step !== undefined) input.step = field.step;
+          }
+          input.id = `setting-${key}`;
+          input.value = settings[key];
+          input.disabled = locked;
+          if (field.type === 'number') input.required = true;
+          input.onchange = () => {
+            if (field.type === 'number' && !input.reportValidity()) {
+              input.value = settings[key];
+              return;
+            }
+            const next = {...settings};
+            next[key] = field.type === 'number' ? Number(input.value) : input.value;
+            saveMachineSettings(machine, next);
+            renderQemuOptions();
+          };
+          row.append(label, input);
+          settingsEditable.append(row);
         }
+        addSettingSelectRow(settingsFixed, 'System', images.map(image => [image.id, image.label]), machine.imageId, locked, value => {
+          imageSelect.value = value;
+          imageSelect.dispatchEvent(new Event('change'));
+        });
+        addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, locked, value => {
+          engineSelect.value = value;
+          engineSelect.dispatchEvent(new Event('change'));
+        });
+        const fixedLabels = {machine: 'Machine type', diskBus: 'Disk bus', networkCard: 'Network card', osType: 'Guest profile'};
+        for (const [key, value] of Object.entries(body.fixed || {})) {
+          if (key !== 'engine') addSettingRow(settingsHardware, fixedLabels[key] || key, value);
+        }
+        for (const disk of body.storage || []) {
+          addSettingRow(settingsStorage, disk.label, disk.path);
+        }
+        for (const item of body.interfaces || []) {
+          addSettingRow(settingsNetwork, `Ethernet ${item.index}`, `${item.switch} · ${item.mac}`);
+        }
+        if (!body.interfaces?.length) {
+          const note = document.createElement('p');
+          note.textContent = 'No Ethernet interfaces configured.';
+          settingsNetwork.append(note);
+        }
+        addSettingRow(settingsConsole, 'VM serial port', body.console?.guest || 'ttyS0 · 115200 baud');
+        addSettingRow(settingsConsole, 'Console socket', body.console?.socket || '');
+        if (body.monitor) addSettingRow(settingsConsole, 'Monitor socket', body.monitor);
         optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
-      } catch (error) { if (request === optionsRequest) optionsStatus.textContent = error.message; }
-    }
-    function describeImage(image) {
-      if (!image) return 'No image available; run bash prepare.sh.';
-      return `${image.description} Login: ${image.login}. RAW: ${image.images.raw}; VDI: ${image.images.vdi}. Network: VDE only for QEMU; none for VirtualBox or without selected interfaces.`;
-    }
-    function updateImageInfo() {
-      const image = images.find(item => item.id === imageSelect.value);
-      imageInfo.textContent = describeImage(image);
+      } catch (error) {
+        if (request === optionsRequest) {
+          optionsStatus.textContent = error.message;
+          optionsStatus.hidden = false;
+        }
+      }
     }
     function renderTabs() {
       tabs.querySelectorAll('.machine-tab').forEach(tab => tab.remove());
@@ -313,6 +458,7 @@
         networkControls.hidden = true;
         logsPanel.hidden = true;
         monitorPanel.hidden = true;
+        imageInfo.hidden = false;
         imageInfo.textContent = 'Add a host or switch to begin.';
         return;
       }
@@ -342,6 +488,7 @@
       document.querySelector('label[for="os-image"]').hidden = isSwitch;
       document.querySelector('label[for="engine"]').hidden = isSwitch;
       if (isSwitch) {
+        imageInfo.hidden = false;
         startButton.disabled = running || busy;
         startButton.title = 'Start VDE switch';
         startButton.setAttribute('aria-label', 'Start VDE switch');
@@ -366,8 +513,7 @@
       engineSelect.disabled = running || machine.hasLaunched || busy;
       imageSelect.value = machine.imageId;
       engineSelect.value = machine.engine;
-      const image = images.find(item => item.id === machine.imageId);
-      imageInfo.textContent = describeImage(image);
+      imageInfo.hidden = true;
       renderNicControls(machine);
     }
     function renderNicControls(machine) {
@@ -495,6 +641,7 @@
           hostname: session.hostname,
           osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
           imageId: image ? image.id : (images[0]?.id || ''),
+          settings: session.settings || null,
           hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
           engine: session.engine || 'qemu',
           interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
@@ -528,6 +675,7 @@
       const machine = activeMachine();
       if (!machine) return;
       machine.imageId = imageSelect.value;
+      machine.settings = null;
       const image = images.find(item => item.id === machine.imageId);
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
@@ -718,7 +866,10 @@
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       machine.message = 'Starting…';
+      const launchSettings = getMachineSettings(machine);
+      saveMachineSettings(machine, launchSettings);
       updateControls();
+      renderQemuOptions();
       renderTabs();
       replaying = true;
       terminal.reset();
@@ -729,12 +880,13 @@
           const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
           socket.emit('select-session', machine.id, ++selectionToken, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
         });
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId, interfaces: machine.interfaces})});
+        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId, interfaces: machine.interfaces, settings: launchSettings})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to start');
         machine.hostname = body.name;
         machine.hasLaunched = true;
         machine.running = true;
+        machine.settings = launchSettings;
         renderQemuOptions();
         terminal.focus();
       } catch (error) {
