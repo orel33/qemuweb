@@ -311,6 +311,22 @@ If port 3002 is already in use, stop the old server or choose another port:
 PORT=3003 npm start
 ```
 
+## Tests
+
+Run the Node test suite for the UI, naming, console views, and session logs:
+
+```sh
+npm test
+```
+
+Run the LAN2 integration test to start two Debian 13 Legacy hosts on one VDE switch, check their serial consoles and bidirectional pings, then verify Stop/Resume:
+
+```sh
+npm run test:lan2
+```
+
+LAN2 requires `images/debian13-legacy.raw` and the QemuWeb system dependencies. It uses KVM when available and falls back to TCG. To force TCG, run `LAN2_ENGINE=qemu-tcg npm run test:lan2`. Its live command and guest output can also be saved with `npm run test:lan2 2>&1 | tee lan2.log`.
+
 ## Official images
 
 - [Alpine Linux virt](https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/)

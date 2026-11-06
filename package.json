@@ -5,7 +5,8 @@
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test"
+    "test": "node --test",
+    "test:lan2": "node scripts/lan2-integration.js"
   },
   "engines": {
     "node": ">=18"
@@ -16,5 +17,8 @@
     "socket.io": "2.3.0",
     "xterm": "4.6.0",
     "xterm-addon-fit": "0.5.0"
+  },
+  "devDependencies": {
+    "socket.io-client": "2.3.0"
   }
 }

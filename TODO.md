@@ -4,7 +4,8 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 
 ## LANs and topology
 
-- [ ] **FQJ27** — Record a repeatable two-host Debian 13 Legacy LAN check: switch ports, static IPs, bidirectional ping, and Stop/Resume.
+- [x] **FQJ27** — Record a repeatable two-host Debian 13 Legacy LAN check: switch ports, static IPs, bidirectional ping, and Stop/Resume.
+- [x] **KPT46** — Add the repeatable LAN2 integration test for Debian 13 Legacy, covering switch ports and MACs, serial login, bidirectional ping, and Stop/Resume.
 - [ ] **NVT64** — Define a network model and API for a switch and its hosts, including stable IDs, port assignments, and an isolated runtime directory.
 - [ ] **KRP13** — Group console pages by LAN and switch, instead of paging through individual sessions in creation order.
 - [ ] **ZMX82** — Allow a switch to appear in a LAN without displaying its management console.
