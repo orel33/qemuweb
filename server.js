@@ -553,7 +553,7 @@ app.get('/api/options/:sessionId', (req, res) => {
           {label: 'Base image (VDI)', path: path.relative(root, imagePath(image.images.vdi))},
           {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, `${image.id}.vdi`))}
         ];
-    res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: session.networkInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: launchCommands.map(args => args.map(shellQuote).join(' '))});
+    res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: session.networkInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: launchCommands.map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 

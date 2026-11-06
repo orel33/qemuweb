@@ -19,7 +19,7 @@
     .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
     .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     #start { color: #57dc91; } #stop { color: #ffaf76; } #reboot { color: #70b9ff; }
-    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-host { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-general-settings { color: #9fc5ef; } #show-network-options { color: #70b9ff; } #new-host { color: #5adbd1; }
+    #reset { color: #ffc36b; } #exit { color: #ff777d; } #clone-host { color: #9ee6b4; } #clear-console { color: #c49aff; } #show-qemu-options { color: #f2ce79; } #show-general-settings { color: #9fc5ef; } #new-host { color: #5adbd1; }
     #toggle-console-columns { color: #9fc5ef; } #show-logs { color: #b8d2ef; } #show-monitor { color: #c6adf5; }
     button:disabled { opacity: .45; cursor: default; }
     .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
@@ -39,12 +39,15 @@
     .network-controls[hidden] { display: none; }
     .network-controls-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
     #nic-list, #create-nic-list { display: grid; gap: 8px; }
-    .nic-row { display: grid; grid-template-columns: 90px minmax(0, 1fr) 36px; align-items: center; gap: 10px; }
+    .nic-row { display: grid; grid-template-columns: minmax(180px, 250px) minmax(0, 340px) minmax(0, 1fr) 36px; align-items: center; gap: 12px; }
     .nic-row > span { color: #bdcddd; }
+    .nic-row .nic-meta { min-width: 0; overflow: hidden; color: #9fb1c7; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
     .nic-row select { appearance: none; width: 100%; min-width: 0; max-width: 460px; height: 32px; padding: 0 30px 0 10px; border: 1px solid #45586d; border-radius: 4px; background-color: #1a2633; background-image: linear-gradient(45deg, transparent 50%, #a9bed4 50%), linear-gradient(135deg, #a9bed4 50%, transparent 50%); background-position: calc(100% - 18px) 13px, calc(100% - 12px) 13px; background-size: 6px 6px; background-repeat: no-repeat; color: #e7edf5; font: 13px system-ui, sans-serif; box-shadow: none; }
     .nic-row select:disabled { opacity: 1; color: #aeb9c6; background-color: #303942; border-color: #46515d; -webkit-text-fill-color: #aeb9c6; }
     .nic-row button { width: 36px; height: 32px; padding: 0; border-radius: 4px; }
     .network-help { margin: 0; color: #bdc8d6; font-size: 13px; line-height: 1.5; }
+    #network-controls { gap: 10px; margin-top: 10px; padding: 0; border: 0; background: transparent; }
+    #network-controls .network-controls-head { justify-content: flex-end; }
     #launch-logs { min-height: 180px; max-height: 62vh; overflow: auto; margin: 12px 0 0; padding: 12px; border: 1px solid #35404c; border-radius: 6px; background: #0b0f14; white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
     .monitor-help { margin: 12px 0; color: #bdc8d6; font-size: 13px; }
     #monitor-output { min-height: 180px; max-height: 52vh; overflow: auto; margin: 0 0 12px; padding: 12px; border: 1px solid #35404c; border-radius: 6px; background: #0b0f14; white-space: pre-wrap; overflow-wrap: anywhere; font: 12px/1.4 ui-monospace, monospace; }
@@ -60,6 +63,9 @@
     .create-autostart { display: flex; align-items: center; gap: 9px; color: #e7edf5; font-size: 13px; }
     .create-autostart input { width: 16px; height: 16px; accent-color: #70a8ff; }
     .create-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+    .host-create-actions { position: sticky; bottom: -18px; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 18px -18px -18px; padding: 14px 18px; border-top: 1px solid #35404c; background: #10151c; }
+    .host-create-actions .create-autostart { margin-right: auto; }
+    #host-settings-form { padding-bottom: 24px; }
     .create-network { margin-top: 0; }
     #create-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
     .settings-heading { position: sticky; top: -18px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -18px -18px 0; padding: 18px; border-bottom: 1px solid #35404c; background: #10151c; }
@@ -101,6 +107,9 @@
     .console-pane[hidden] { display: none; }
     .console-pane[data-active="true"] { border-color: #70a8ff; }
     .console-pane-header { display: flex; align-items: center; gap: 10px; flex: none; padding: 7px 10px; border-bottom: 1px solid #35404c; background: #17212c; }
+    .pane-kind-icon { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .pane-kind-icon[data-kind="vm"] { color: #5adbd1; }
+    .pane-kind-icon[data-kind="switch"] { color: #9ee6b4; }
     .console-pane-header select { width: min(100%, 300px); height: 30px; padding: 0 28px 0 9px; appearance: none; border: 1px solid #45586d; border-radius: 4px; background-color: #1a2633; background-image: linear-gradient(45deg, transparent 50%, #a9bed4 50%), linear-gradient(135deg, #a9bed4 50%, transparent 50%); background-position: calc(100% - 17px) 12px, calc(100% - 11px) 12px; background-size: 6px 6px; background-repeat: no-repeat; color: #e7edf5; font: 13px system-ui, sans-serif; }
     .console-pane-state { margin-left: auto; color: #bdc8d6; font-size: 11px; white-space: nowrap; }
     .console-pane-state[data-state="new"] { color: #9fc5ef; }
@@ -117,7 +126,8 @@
     .terminal-scroll::-moz-range-thumb { width: 12px; height: 44px; border: 1px solid #a9bfd8; border-radius: 7px; background: #7894b1; }
     .terminal-scroll:disabled { cursor: default; opacity: .55; }
     @media (max-width: 850px) { main[data-columns="2"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } }
-    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } .nic-row { grid-template-columns: 70px minmax(0, 1fr) 36px; gap: 6px; } main { padding: 10px; } }
+    @media (max-width: 850px) { .nic-row { grid-template-columns: 95px minmax(0, 1fr) 36px; gap: 6px; } .nic-row .nic-meta { grid-column: 2; grid-row: 2; } .nic-row button { grid-column: 3; grid-row: 1; } }
+    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } }
   </style>
 </head>
 <body>
@@ -131,8 +141,7 @@
     <button id="exit" class="icon-button" type="button" disabled title="Exit host, delete its disk and close the tab" aria-label="Exit host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg></button>
     <button id="clone-host" class="icon-button" type="button" disabled title="Clone host from its base image" aria-label="Clone host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>
     <button id="clear-console" class="icon-button" type="button" disabled title="Clear console history and keep the current line" aria-label="Clear console"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></svg></button>
-    <button id="show-network-options" class="icon-button" type="button" disabled title="Configure Ethernet interfaces" aria-label="Network interfaces"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-2a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2v2M12 12V8"/></svg></button>
-    <button id="show-qemu-options" class="icon-button" type="button" disabled title="View host launch settings" aria-label="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></svg></button>
+    <button id="show-qemu-options" class="icon-button" type="button" disabled title="Host Settings" aria-label="Host Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <button id="show-logs" class="icon-button" type="button" disabled title="View session log" aria-label="Launch log"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button>
     <button id="show-monitor" class="icon-button" type="button" disabled title="Open QEMU monitor" aria-label="QEMU monitor"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m6 8 4 4-4 4M13 16h5"/></svg></button>
   </header>
@@ -160,7 +169,6 @@
       <label class="create-field">Engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
       <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
     </div>
-    <p class="settings-description">The engine applies to new hosts, including clones; naming applies to hosts and switches. Existing sessions keep their settings.</p>
     <p id="general-settings-error" role="alert" hidden></p>
   </dialog>
   <dialog class="qemu-options" id="logs-panel" aria-labelledby="logs-title">
@@ -174,52 +182,55 @@
     <form id="monitor-form"><input id="monitor-command" aria-label="QEMU monitor command" placeholder="info status" maxlength="256" autocomplete="off" spellcheck="false"><button id="monitor-send" type="submit">Send</button></form>
   </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
-    <div class="settings-heading"><h2 id="settings-title">Settings</h2><div class="settings-heading-actions"><button id="toggle-expert-mode" type="button" aria-pressed="false">Mode Expert</button><button id="close-settings" type="button">Close</button></div></div>
+    <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="toggle-expert-mode" type="button" aria-pressed="false">Mode Expert</button><button id="close-settings" type="button">Close</button></div></div>
+    <form id="host-settings-form">
     <p id="options-status" role="alert" hidden></p>
     <details class="settings-section" open><summary>General</summary><div id="settings-fixed"></div></details>
     <details class="settings-section" open><summary>Resources and clock</summary><div id="settings-editable"></div></details>
-    <details class="settings-section" open><summary>Network interfaces</summary><div id="settings-network"></div></details>
+    <details class="settings-section" open><summary>Network interfaces</summary><div id="settings-network">
+      <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces">
+        <div class="network-controls-head"><button id="add-nic" type="button">+ Interface</button></div>
+        <div id="nic-list"></div>
+      </section>
+    </div></details>
     <details class="settings-section" data-expert-section hidden><summary>Hardware profile</summary><div id="settings-hardware"></div></details>
     <details class="settings-section" data-expert-section hidden><summary>Storage</summary><div id="settings-storage"></div></details>
     <details class="settings-section" data-expert-section hidden><summary>Console</summary><div id="settings-console"></div></details>
     <details class="settings-section settings-commands" data-expert-section hidden><summary>Full launch commands</summary><pre id="options-commands"></pre></details>
-  </dialog>
-  <dialog class="qemu-options" id="network-options-panel" aria-labelledby="network-title">
-    <div class="settings-heading"><h2 id="network-title">Network interfaces</h2><button id="close-network-options" type="button">Close</button></div>
-    <p class="settings-description">Add Ethernet cards and connect each one to a running VDE switch before launching the VM.</p>
-    <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces">
-      <div class="network-controls-head"><strong>Ethernet interfaces</strong><button id="add-nic" type="button">+ Interface</button></div>
-      <div id="nic-list"></div>
-      <p class="network-help">Guest interface names may differ from these numbers (for example, <code>enp0s2</code>).</p>
-    </section>
+    <div class="host-create-actions" id="host-create-actions" hidden><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
+    </form>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
     <p id="confirm-message"></p>
     <form method="dialog" class="confirm-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-accept" value="confirm">Continue</button></form>
   </dialog>
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="pane-host-icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
+    <symbol id="pane-switch-icon" viewBox="0 0 24 24"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7"/></symbol>
+  </svg>
   <main id="console-workspace" data-columns="1">
     <section class="console-pane" id="console-pane-0" data-active="true">
-      <div class="console-pane-header"><select id="console-session-0" aria-label="Session in left console column"><option value="">Select a session</option></select><span id="console-state-0" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-0" aria-label="Session in left console column"><option value="">Select a session</option></select><span id="console-state-0" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-0"></div><input class="terminal-scroll" id="terminal-scroll-0" type="range" min="0" max="0" value="0" aria-label="Scroll left console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-1" data-active="false" hidden>
-      <div class="console-pane-header"><select id="console-session-1" aria-label="Session in right console column"><option value="">Select a session</option></select><span id="console-state-1" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-1" aria-label="Session in right console column"><option value="">Select a session</option></select><span id="console-state-1" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-1"></div><input class="terminal-scroll" id="terminal-scroll-1" type="range" min="0" max="0" value="0" aria-label="Scroll right console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-2" data-active="false" hidden>
-      <div class="console-pane-header"><select id="console-session-2" aria-label="Session in lower left console"><option value="">Select a session</option></select><span id="console-state-2" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-2" aria-label="Session in lower left console"><option value="">Select a session</option></select><span id="console-state-2" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-2"></div><input class="terminal-scroll" id="terminal-scroll-2" type="range" min="0" max="0" value="0" aria-label="Scroll lower left console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-3" data-active="false" hidden>
-      <div class="console-pane-header"><select id="console-session-3" aria-label="Session in lower right console"><option value="">Select a session</option></select><span id="console-state-3" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><select id="console-session-3" aria-label="Session in lower right console"><option value="">Select a session</option></select><span id="console-state-3" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-3"></div><input class="terminal-scroll" id="terminal-scroll-3" type="range" min="0" max="0" value="0" aria-label="Scroll lower right console" title="Scroll console history"></div>
     </section>
   </main>
   <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
     <button id="show-general-settings" class="icon-button" type="button" disabled title="General Settings" aria-label="General Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
-    <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20 4v6M17 7h6"/></svg></button>
-    <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20 4v6M17 7h6"/></svg></button>
+    <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20.5 2v6M18 5h5"/></svg></button>
+    <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20.5 2v6M18 5h5"/></svg></button>
     <div class="page-controls" aria-label="Console pages"><button id="previous-page" class="icon-button" type="button" disabled title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><span id="page-position">0 / 0</span><button id="next-page" class="icon-button" type="button" disabled title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div>
     <button id="toggle-console-columns" class="icon-button" type="button" title="Layout: 2 panes; click for 4" aria-label="Layout: 2 panes; click for 4"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg><span class="layout-count" id="layout-count">2</span></button>
   </nav>
@@ -237,6 +248,7 @@
         index,
         socket: io({transports: ['websocket', 'polling']}),
         element: document.getElementById(`console-pane-${index}`),
+        kindIcon: document.querySelector(`#console-pane-${index} .pane-kind-icon`),
         select: document.getElementById(`console-session-${index}`),
         state: document.getElementById(`console-state-${index}`),
         terminal,
@@ -315,6 +327,12 @@
     const showQemuOptions = document.getElementById('show-qemu-options');
     const qemuOptionsPanel = document.getElementById('qemu-options-panel');
     const settingsTitle = document.getElementById('settings-title');
+    const hostSettingsForm = document.getElementById('host-settings-form');
+    const hostCreateActions = document.getElementById('host-create-actions');
+    const hostAutostart = document.getElementById('host-autostart');
+    const confirmHostCreate = document.getElementById('confirm-host-create');
+    const cancelHostCreate = document.getElementById('cancel-host-create');
+    const closeHostSettings = document.getElementById('close-settings');
     const toggleExpertMode = document.getElementById('toggle-expert-mode');
     const expertSections = [...qemuOptionsPanel.querySelectorAll('[data-expert-section]')];
     const showGeneralSettings = document.getElementById('show-general-settings');
@@ -322,9 +340,6 @@
     const defaultEngineSelect = document.getElementById('default-engine');
     const namingSchemeSelect = document.getElementById('naming-scheme');
     const generalSettingsError = document.getElementById('general-settings-error');
-    const showNetworkOptions = document.getElementById('show-network-options');
-    const networkOptionsPanel = document.getElementById('network-options-panel');
-    const networkTitle = document.getElementById('network-title');
     const toggleConsoleColumns = document.getElementById('toggle-console-columns');
     const layoutCount = document.getElementById('layout-count');
     const previousPage = document.getElementById('previous-page');
@@ -339,7 +354,6 @@
     const settingsFixed = document.getElementById('settings-fixed');
     const settingsHardware = document.getElementById('settings-hardware');
     const settingsStorage = document.getElementById('settings-storage');
-    const settingsNetwork = document.getElementById('settings-network');
     const settingsConsole = document.getElementById('settings-console');
     const optionsCommands = document.getElementById('options-commands');
     let optionsRequest = 0;
@@ -355,6 +369,7 @@
     let createKind = null;
     let createDraft = null;
     let cloneSourceId = null;
+    let hostSettingsDraft = null;
     let expertMode = false;
     let namingSchemes = null;
     const generalSettingsKey = 'qemuweb.general-settings';
@@ -382,6 +397,7 @@
     }
 
     function activeMachine() { return activeId ? machines.get(activeId) : null; }
+    function settingsMachine() { return qemuOptionsPanel.open && hostSettingsDraft ? hostSettingsDraft : activeMachine(); }
     function machineDialogName(machine) {
       const system = images.find(item => item.id === machine.imageId);
       return `${machine.hostname}. ${system?.label || machine.osHint}`;
@@ -393,6 +409,11 @@
     function updatePaneStates() {
       for (const pane of panes) {
         const machine = pane.machineId && machines.get(pane.machineId);
+        pane.kindIcon.toggleAttribute('hidden', !machine);
+        if (machine) {
+          pane.kindIcon.dataset.kind = machine.kind;
+          pane.kindIcon.querySelector('use').setAttribute('href', machine.kind === 'switch' ? '#pane-switch-icon' : '#pane-host-icon');
+        }
         const state = machine
           ? machine.error ? 'error' : machine.busy ? (machine.operation || 'starting') : machine.running ? 'running' : machine.hasLaunched ? 'stopped' : 'new'
           : workspaceError && pane.index === activePaneIndex ? 'error' : 'empty';
@@ -572,33 +593,59 @@
       row.append(title, select);
       container.append(row);
     }
+    function updateNicMetadata(interfaces = []) {
+      for (const [index, item] of interfaces.entries()) {
+        const meta = nicList.children[index]?.querySelector('.nic-meta');
+        if (meta) {
+          const port = item.port ?? / · port (\d+)$/.exec(item.switch || '')?.[1];
+          meta.textContent = `${port == null ? '' : `port ${port} · `}${item.mac}`;
+          meta.title = meta.textContent;
+        }
+      }
+    }
+    function keepFocusedNicVisible(select = document.activeElement) {
+      if (!select || !nicList.contains(select)) return;
+      select.scrollIntoView({block: 'nearest'});
+      const visibleBottom = hostCreateActions.hidden
+        ? qemuOptionsPanel.getBoundingClientRect().bottom - 12
+        : hostCreateActions.getBoundingClientRect().top - 12;
+      const hiddenPixels = select.getBoundingClientRect().bottom - visibleBottom;
+      if (hiddenPixels > 0) qemuOptionsPanel.scrollTop += hiddenPixels;
+    }
     async function renderQemuOptions() {
-      const machine = activeMachine();
+      const machine = settingsMachine();
       if (!machine || machine.kind === 'switch' || !qemuOptionsPanel.open) return;
+      const creating = machine === hostSettingsDraft;
       const request = ++optionsRequest;
       optionsStatus.hidden = true;
       optionsStatus.textContent = '';
       const image = images.find(item => item.id === machine.imageId);
-      settingsTitle.textContent = `Settings · ${machineDialogName(machine)}`;
+      settingsTitle.textContent = creating ? 'Add a new host' : `Host Settings · ${machineDialogName(machine)}`;
       settingsEditable.replaceChildren();
       settingsFixed.replaceChildren();
       settingsHardware.replaceChildren();
       settingsStorage.replaceChildren();
-      settingsNetwork.replaceChildren();
       settingsConsole.replaceChildren();
       optionsCommands.textContent = '';
+      networkControls.hidden = machine.engine === 'virtualbox';
+      if (!networkControls.hidden) renderNicControls(machine);
       try {
         const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine))});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
-        if (request !== optionsRequest || machine.id !== activeId) return;
+        if (request !== optionsRequest || machine !== settingsMachine()) return;
+        updateNicMetadata(body.interfaces);
         const locked = !!(machine.running || machine.busy);
         const identityLocked = !!(machine.hasLaunched || locked);
         const settings = locked ? body.settings : getMachineSettings(machine);
         const hostName = addSettingRow(settingsFixed, 'Host name', machine.hostname, false);
         hostName.maxLength = 64;
-        hostName.onchange = async () => {
+        hostName.required = true;
+        if (creating) hostName.oninput = () => {
+          machine.hostname = hostName.value.trim();
+        };
+        else hostName.onchange = async () => {
           const name = hostName.value.trim();
           if (name === machine.hostname) return;
           try {
@@ -607,7 +654,7 @@
             if (!response.ok) throw new Error(result.error || 'Cannot rename host');
             machine.hostname = result.name;
             hostName.value = result.name;
-            settingsTitle.textContent = `Settings · ${machineDialogName(machine)}`;
+            settingsTitle.textContent = `Host Settings · ${machineDialogName(machine)}`;
             renderTabs();
           } catch (error) {
             hostName.value = machine.hostname;
@@ -648,15 +695,26 @@
             }
             const next = {...settings};
             next[key] = field.type === 'number' ? Number(input.value) : input.value;
-            saveMachineSettings(machine, next);
+            if (creating) { machine.settings = next; machine.settingsLoaded = true; }
+            else saveMachineSettings(machine, next);
             refreshLaunchPreview(machine);
           };
           row.append(label, input);
           settingsEditable.append(row);
         }
         addSettingSelectRow(settingsFixed, 'System', images.map(image => [image.id, image.label]), machine.imageId, identityLocked, value => {
-          imageSelect.value = value;
-          imageSelect.dispatchEvent(new Event('change'));
+          if (creating) {
+            machine.imageId = value;
+            machine.settings = null;
+            machine.settingsLoaded = false;
+            const selectedImage = images.find(item => item.id === value);
+            machine.osHint = selectedImage?.label || 'System';
+            machine.hasDifferentialDisk = !!selectedImage?.hasDifferentialDisk;
+            renderQemuOptions();
+          } else {
+            imageSelect.value = value;
+            imageSelect.dispatchEvent(new Event('change'));
+          }
         });
         addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, true);
         addSettingTextRow(settingsFixed, 'Description', image?.description || 'No image available; run bash prepare.sh.');
@@ -667,14 +725,6 @@
         }
         for (const disk of body.storage || []) {
           addSettingRow(settingsStorage, disk.label, disk.path);
-        }
-        for (const item of body.interfaces || []) {
-          addSettingRow(settingsNetwork, `Ethernet ${item.index}`, `${item.switch} · ${item.mac}`);
-        }
-        if (!body.interfaces?.length) {
-          const note = document.createElement('p');
-          note.textContent = 'No Ethernet interfaces configured.';
-          settingsNetwork.append(note);
         }
         addSettingRow(settingsConsole, 'VM serial port', body.console?.guest || 'ttyS0 · 115200 baud');
         addSettingRow(settingsConsole, 'Console socket', body.console?.socket || '');
@@ -694,7 +744,9 @@
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
-        if (request !== optionsRequest || machine.id !== activeId || !qemuOptionsPanel.open) return;
+        if (request !== optionsRequest || machine !== settingsMachine() || !qemuOptionsPanel.open) return;
+        updateNicMetadata(body.interfaces);
+        keepFocusedNicVisible();
         optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
         optionsStatus.hidden = true;
       } catch (error) {
@@ -757,9 +809,6 @@
         showLogs.disabled = true;
         showMonitor.disabled = true;
         showMonitor.hidden = true;
-        showNetworkOptions.disabled = true;
-        if (networkOptionsPanel.open) networkOptionsPanel.close();
-        networkControls.hidden = true;
         if (logsPanel.open) logsPanel.close();
         if (monitorPanel.open) monitorPanel.close();
         return;
@@ -771,9 +820,6 @@
       cloneButton.hidden = machine.kind !== 'vm';
       exitButton.title = isSwitch ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
       exitButton.setAttribute('aria-label', isSwitch ? 'Remove VDE switch' : 'Exit host');
-      networkControls.hidden = isSwitch || machine.engine === 'virtualbox';
-      showNetworkOptions.disabled = isSwitch || machine.engine === 'virtualbox';
-      if (showNetworkOptions.disabled && networkOptionsPanel.open) networkOptionsPanel.close();
       showLogs.disabled = false;
       showMonitor.disabled = isSwitch || !machine.engine.startsWith('qemu');
       showMonitor.hidden = showMonitor.disabled;
@@ -807,25 +853,32 @@
         imageSelect.value = machine.imageId;
         engineSelect.value = machine.engine;
       }
-      renderNicControls(machine);
     }
-    function renderNicControls(machine, list = nicList, addButton = addNic, onChange = renderQemuOptions) {
+    function renderNicControls(machine, list = nicList, addButton = addNic, onChange = () => refreshLaunchPreview(machine)) {
       list.replaceChildren();
       const locked = machine.hasLaunched || machine.busy || machine.engine === 'virtualbox';
       addButton.disabled = locked || (machine.interfaces || []).length >= 4;
       for (const [index, selected] of (machine.interfaces || []).entries()) {
         const row = document.createElement('div'); row.className = 'nic-row';
-        const label = document.createElement('span'); label.textContent = `NIC ${index + 1}`;
+        const label = document.createElement('span'); label.textContent = `Ethernet ${index + 1}`;
         const select = document.createElement('select'); select.setAttribute('aria-label', `Ethernet interface ${index + 1} switch`); select.disabled = locked;
         const disconnected = document.createElement('option'); disconnected.value = ''; disconnected.textContent = 'Disconnected'; select.append(disconnected);
         for (const sw of machines.values()) if (sw.kind === 'switch' && (sw.running || sw.id === selected)) {
           const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
         }
         select.value = selected || '';
-        select.onchange = () => { machine.interfaces[index] = select.value || null; onChange(); };
+        select.onchange = () => { machine.interfaces[index] = select.value || null; meta.textContent = ''; onChange(); };
+        const meta = document.createElement('span'); meta.className = 'nic-meta';
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index + 1}`; remove.disabled = locked;
-        remove.onclick = () => { machine.interfaces.splice(index, 1); renderNicControls(machine, list, addButton, onChange); onChange(); };
-        row.append(label, select, remove); list.append(row);
+        remove.onclick = () => {
+          const scrollTop = qemuOptionsPanel.scrollTop;
+          machine.interfaces.splice(index, 1);
+          renderNicControls(machine, list, addButton, onChange);
+          qemuOptionsPanel.scrollTop = scrollTop;
+          (list.children[index]?.querySelector('select') || list.lastElementChild?.querySelector('select') || addButton).focus({preventScroll: true});
+          onChange();
+        };
+        row.append(label, select, meta, remove); list.append(row);
       }
     }
     function renderCreateNicControls() { renderNicControls(createDraft, createNicList, createAddNic, () => {}); }
@@ -847,6 +900,28 @@
       let number = 1;
       while (used.has(`${prefix}${String(number).padStart(numberWidth, '0')}`)) number++;
       return `${prefix}${String(number).padStart(numberWidth, '0')}`;
+    }
+    async function openHostSettingsCreate() {
+      const current = activeMachine();
+      const imageId = current?.kind === 'vm' ? current.imageId : images[0]?.id;
+      const image = images.find(item => item.id === imageId);
+      hostSettingsDraft = {
+        id: `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`,
+        kind: 'vm', hostname: nextMachineName('vm'), imageId,
+        osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
+        engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
+        settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false
+      };
+      hostAutostart.checked = true;
+      hostCreateActions.hidden = false;
+      setExpertMode(false);
+      toggleExpertMode.hidden = true;
+      settingsTitle.textContent = 'Add a new host';
+      for (const section of qemuOptionsPanel.querySelectorAll('.settings-section:not([data-expert-section])')) section.open = true;
+      qemuOptionsPanel.showModal();
+      qemuOptionsPanel.scrollTop = 0;
+      await renderQemuOptions();
+      if (hostSettingsDraft) settingsFixed.querySelector('input')?.focus();
     }
     function openCreateDialog(kind) {
       createKind = kind;
@@ -884,15 +959,15 @@
       createNetwork.hidden = true;
       document.getElementById('create-autostart-row').hidden = false;
     }
-    async function addHost({name, imageId, engine, interfaces, settings}) {
-      const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+    async function addHost({id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`, name, imageId, engine, interfaces, settings, select = true}) {
       const image = images.find(item => item.id === imageId);
       const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
       const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, settings: body.settings, settingsLoaded: !!body.settings, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
-      selectMachine(id);
+      if (select) selectMachine(id);
+      return machine;
     }
     async function addSwitch({name, autostart}) {
       const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
@@ -1010,7 +1085,7 @@
     document.getElementById('close-general-settings').addEventListener('click', () => generalSettingsPanel.close());
     defaultEngineSelect.addEventListener('change', () => { generalSettings.engine = defaultEngineSelect.value; saveGeneralSettings(); });
     namingSchemeSelect.addEventListener('change', () => { generalSettings.namingScheme = namingSchemeSelect.value; saveGeneralSettings(); });
-    document.getElementById('new-host').addEventListener('click', () => openCreateDialog('vm'));
+    document.getElementById('new-host').addEventListener('click', openHostSettingsCreate);
     document.getElementById('new-switch').addEventListener('click', () => openCreateDialog('switch'));
     cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine?.kind === 'vm') openCloneDialog(machine); });
     document.getElementById('cancel-create').addEventListener('click', () => createDialog.close());
@@ -1055,11 +1130,16 @@
     previousPage.addEventListener('click', () => { if (pageIndex > 0) { pageIndex--; showPage(); } });
     nextPage.addEventListener('click', () => { if ((pageIndex + 1) * layoutSize < machines.size) { pageIndex++; showPage(); } });
     addNic.addEventListener('click', () => {
-      const machine = activeMachine();
+      const machine = settingsMachine();
       if (!machine || machine.kind !== 'vm' || machine.hasLaunched || machine.busy || machine.engine === 'virtualbox' || machine.interfaces.length >= 4) return;
+      const scrollTop = qemuOptionsPanel.scrollTop;
       machine.interfaces.push(null);
       renderNicControls(machine);
-      renderQemuOptions();
+      qemuOptionsPanel.scrollTop = scrollTop;
+      const select = nicList.lastElementChild?.querySelector('select');
+      select?.focus({preventScroll: true});
+      keepFocusedNicVisible(select);
+      refreshLaunchPreview(machine);
     });
     createAddNic.addEventListener('click', () => {
       if (!createDraft || createDraft.interfaces.length >= 4) return;
@@ -1100,26 +1180,56 @@
     });
     document.getElementById('close-monitor').addEventListener('click', () => monitorPanel.close());
     showQemuOptions.addEventListener('click', () => {
+      hostSettingsDraft = null;
+      hostCreateActions.hidden = true;
+      toggleExpertMode.hidden = false;
       if (!qemuOptionsPanel.open) qemuOptionsPanel.showModal();
       renderQemuOptions();
     });
-    toggleExpertMode.addEventListener('click', () => {
-      expertMode = !expertMode;
+    function setExpertMode(enabled) {
+      expertMode = enabled;
       toggleExpertMode.setAttribute('aria-pressed', String(expertMode));
       for (const section of expertSections) {
         section.hidden = !expertMode;
         if (expertMode) section.open = true;
       }
+    }
+    toggleExpertMode.addEventListener('click', () => setExpertMode(!expertMode));
+    closeHostSettings.addEventListener('click', () => { if (!confirmHostCreate.disabled) qemuOptionsPanel.close(); });
+    cancelHostCreate.addEventListener('click', () => qemuOptionsPanel.close());
+    qemuOptionsPanel.addEventListener('cancel', event => { if (confirmHostCreate.disabled) event.preventDefault(); });
+    qemuOptionsPanel.addEventListener('close', () => {
+      if (qemuOptionsPanel.open) return;
+      hostSettingsDraft = null;
+      hostCreateActions.hidden = true;
+      updateControls();
     });
-    document.getElementById('close-settings').addEventListener('click', () => qemuOptionsPanel.close());
-    showNetworkOptions.addEventListener('click', () => {
-      const machine = activeMachine();
-      if (!machine || machine.kind !== 'vm' || machine.engine === 'virtualbox') return;
-      networkTitle.textContent = `Network interfaces · ${machineDialogName(machine)}`;
-      renderNicControls(machine);
-      networkOptionsPanel.showModal();
+    hostSettingsForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      const draft = hostSettingsDraft;
+      if (!draft || !hostSettingsForm.reportValidity()) return;
+      const name = settingsFixed.querySelector('input')?.value.trim();
+      if (!name) return;
+      const autostart = hostAutostart.checked;
+      confirmHostCreate.disabled = true;
+      cancelHostCreate.disabled = true;
+      closeHostSettings.disabled = true;
+      optionsStatus.hidden = true;
+      try {
+        const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine, interfaces: [...draft.interfaces], settings: getMachineSettings(draft), select: false});
+        hostSettingsDraft = null;
+        qemuOptionsPanel.close();
+        selectMachine(machine.id);
+        if (autostart) await startButton.onclick();
+      } catch (error) {
+        optionsStatus.textContent = error.message;
+        optionsStatus.hidden = false;
+      } finally {
+        confirmHostCreate.disabled = false;
+        cancelHostCreate.disabled = false;
+        closeHostSettings.disabled = false;
+      }
     });
-    document.getElementById('close-network-options').addEventListener('click', () => networkOptionsPanel.close());
     document.getElementById('monitor-form').addEventListener('submit', async event => {
       event.preventDefault();
       const machine = activeMachine();
