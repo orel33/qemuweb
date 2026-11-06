@@ -277,7 +277,7 @@
       pane.metrics = document.createElement('span');
       pane.metrics.className = 'pane-metrics';
       pane.metrics.hidden = true;
-      pane.state.before(pane.metrics);
+      pane.select.after(pane.metrics);
       terminal.onScroll(() => syncConsoleScroll(pane));
       terminal.onData(data => {
         if (pane.replaying || !pane.machineId) return;
