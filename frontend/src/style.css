@@ -1,0 +1,651 @@
+.drawflow .drawflow-node {
+    border-radius: 8px;
+    background: none;
+    border: 2px solid transparent;
+    color: white;
+    width: 100px;
+    height: 100px;
+}
+
+.drawflow .drawflow-node.selected {
+    background: none;
+    border: 2px solid rgb(250, 0, 175);
+}
+
+.drawflow .drawflow-node .input, .drawflow .drawflow-node .output {
+    background: #181818;
+    border: 3px solid #494949;
+    width: 15px;
+    height: 15px;
+    margin-top: 14px;
+    margin-bottom: 14px;
+}
+
+.drawflow .drawflow-node .input {
+    left: -21px;
+    width: 15px;
+    height: 15px;
+    --vardisplay: block;
+}
+
+.drawflow .drawflow-node .output {
+    right: -8px;
+    --vardisplay: block;
+}
+
+.drawflow .drawflow-node .output:hover, .drawflow .drawflow-node .input:hover {
+    background: #494949;
+    border: 3px solid rgb(250, 0, 175);
+}
+
+.drawflow .connection .main-path {
+    stroke-width: 3px;
+    stroke: #c5c343;
+}
+
+.drawflow .connection .main-path:hover {
+    stroke: rgb(250, 0, 175);
+}
+
+.drawflow .drawflow-node.selected .drawflow_content_node .header {
+    background:rgb(250, 0, 175);
+}
+
+
+.drawflow .drawflow-node .drawflow_content_node input, .drawflow .drawflow-node .drawflow_content_node .el-select, .drawflow .drawflow-node .drawflow_content_node button {
+    width: 100%; 
+}
+
+.el-drawer__body {
+    color: black;
+}
+
+.drawflow .parent-node {
+    height: 0;
+}
+
+.header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 1px solid #494949;
+}
+
+#header-left {
+    display: flex;
+}
+
+#header-title {
+    margin-right: 40px;
+}
+
+.offline-preview-label {
+    align-self: center;
+    color: #f3c77a;
+    font-size: 0.9rem;
+}
+
+.container {
+    min-height: calc(100vh - 100px);
+}
+
+.column {
+    border-right: 1px solid #494949;
+}
+
+.column ul {
+    padding-inline-start: 0px;
+    padding: 10px 8px;
+}
+
+.column li {
+    background: transparent;
+}
+
+.node {
+    border-radius: 8px;
+    border: 2px solid #494949;
+    display: block;
+    height:44px;
+    width: 44px;
+    line-height:40px;
+    padding: 4px;
+    margin: 10px 0px;
+    cursor: move;
+}
+
+#drawflow {
+  width: 100%;
+  height: 97%;
+  text-align: initial;
+  background: #2b2c30;
+  background-size: 20px 20px;
+  background-image: radial-gradient(#494949 1px, transparent 1px); 
+}
+
+img.switch, img.computer {
+    -webkit-user-drag: none;
+    -khtml-user-drag: none;
+    -moz-user-drag: none;
+    -o-user-drag: none;
+    pointer-events: none;
+}
+
+img.switch, img.computer {
+    width:65px;
+    height:65px;
+}
+
+.node img.switch, .node img.computer {
+    width:32px;
+    height:32px;
+}
+
+img.run-prompt {
+    width: 24px;
+    height: 24px;
+    position: relative;
+    right: 10px;
+    display: none;
+    cursor: pointer;
+}
+
+.Switch img.run-prompt {
+    right: 0px;
+}
+
+.terminal-frame {
+    width: 700px;
+    border-style: solid;
+    border-width: 4px 2px 2px 2px;
+    overflow: hidden;
+    cursor: move;
+    background-color: whitesmoke;
+    z-index: 4;
+}
+
+.terminal-container {
+    position: relative;
+    top: 5px;
+    width: 100%;
+    height: 97%;
+}
+
+.xterm .xterm-viewport {
+    overflow-y: hidden !important;
+}
+
+.term-close {
+    display: block;
+    float: right;
+    background-image: url("@/assets/close.png");
+    background-size: cover;
+    width: 15px;
+    height: 15px;
+    cursor: pointer;
+    margin-right: 4px;
+    margin-top: 3px;
+}
+
+.term-name {
+    color: black;
+    margin-left: 10px;
+    font-size: large;
+}
+
+img.cog:hover, img.cable:hover {
+    cursor: pointer;
+}
+
+img.cable {
+    width: 22px;
+    height: 22px;
+    position: relative;
+    left: 26px;
+}
+
+.modal-section {
+    margin-top: 30px;
+    color: black;
+}
+
+.sides {
+    margin-left: 10px;
+}
+
+div.play-button {
+    width: 0;
+    height: 0;
+    border-top: 15px solid transparent;
+    border-left: 20px solid green;
+    border-bottom: 15px solid transparent; 
+    cursor: pointer;
+}
+
+div.stop-button {
+    width: 20px;
+    height: 20px;
+    background-color: red;
+    cursor: pointer;
+}
+
+.about-link {
+    font-weight: bold;
+    font-size: 19px;
+    margin-left: 20px;
+}
+
+.about-line { 
+    margin-bottom: 20px;
+}
+
+.info-img {
+    width: 22px;
+    height: 22px;
+    margin-left: 12px;
+}
+
+.el-dialog__close {
+    width: 32px;
+    height: 32px;
+    opacity: 0.3;
+}
+.el-dialog__close:hover {
+    opacity: 1;
+}
+.el-dialog__close:before, .el-dialog__close:after {
+    position: absolute;
+    left: 15px;
+    content: ' ';
+    height: 33px;
+    width: 2px;
+    background-color: #333;
+}
+.el-dialog__close:before {
+    transform: rotate(45deg);
+}
+.el-dialog__close:after {
+    transform: rotate(-45deg);
+}
+
+.el-dialog__title {
+    font-size: x-large;
+    font-weight: bold;
+}
+
+.modal-span.at {
+    margin-left: 50px;
+}
+
+.modal-section {
+    margin-top: 30px;
+    color: black;
+  }
+  
+  .modal-mask {
+    position: fixed;
+    z-index: 9998;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: table;
+    transition: opacity 0.3s ease;
+  }
+  
+  .modal-wrapper {
+    display: table-cell;
+    vertical-align: middle;
+  }
+  
+  .modal-container {
+    width: 400px;
+    margin: 0px auto;
+    padding: 20px 30px;
+    background-color: #fff;
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.33);
+    transition: all 0.3s ease;
+  }
+  
+  .modal-header h2 {
+    margin-top: 0;
+    color: #42b983;
+  }
+  
+  .modal-body {
+    margin: 20px 0;
+  }
+  
+  .modal-default-button {
+    float: right;
+  }
+  
+  .modal-footer {
+    padding-bottom: 15px;
+  }
+  
+  /*
+   * The following styles are auto-applied to elements with
+   * transition="modal" when their visibility is toggled
+   * by Vue.js.
+   *
+   * You can easily play with the modal transition by editing
+   * these styles.
+   */
+  
+  .modal-enter-from {
+    opacity: 0;
+  }
+  
+  .modal-leave-to {
+    opacity: 0;
+  }
+  
+  .modal-enter-from .modal-container,
+  .modal-leave-to .modal-container {
+    -webkit-transform: scale(1.1);
+    transform: scale(1.1);
+  }
+  
+
+/* Dropdown Button */
+.dropbtn {
+    background-color: inherit;
+    color: white;
+    font-size: 16px;
+    border: none;
+    cursor: pointer;
+}
+
+/* The container <div> - needed to position the dropdown content */
+.dropdown {
+    position: relative;
+    display: inline-block;
+}
+
+/* Dropdown Content (Hidden by Default) */
+.dropdown-content {
+    display: none;
+    position: absolute;
+    right: -38px;
+    background-color: #f1f1f1;
+    min-width: 115px;
+    border-radius: 4px;
+    z-index: 1;
+}
+
+/* Links inside the dropdown */
+.dropdown-content a {
+    min-width: max-content;
+    color: black;
+    padding: 12px 16px;
+    text-align: center;
+    text-decoration: none;
+    display: block;
+}
+
+/* Change color of dropdown links on hover */
+.dropdown-content a:hover {background-color: #ddd}
+
+/* Show the dropdown menu (use JS to add this class to the .dropdown-content container when the user clicks on the dropdown button) */
+.show {display:block;}
+
+.dropbtn span {
+    display: block;
+    width: 33px;
+    height: 4px;
+    margin-bottom: 5px;
+    position: relative;
+    background: #cdcdcd;
+    border-radius: 3px;
+    z-index: 1;
+}
+
+.drawflow-node.Host .outputs .output:nth-child(1):before {
+    display: var(--vardisplay);
+    content: "eth0";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(2):before {
+    display: var(--vardisplay);
+    content: "eth1";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(3):before {
+    display: var(--vardisplay);
+    content: "eth2";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(4):before {
+    display: var(--vardisplay);
+    content: "eth3";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(5):before {
+    display: var(--vardisplay);
+    content: "eth4";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(6):before {
+    display: var(--vardisplay);
+    content: "eth5";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(7):before {
+    display: var(--vardisplay);
+    content: "eth6";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(8):before {
+    display: var(--vardisplay);
+    content: "eth7";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(9):before {
+    display: var(--vardisplay);
+    content: "eth8";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+.drawflow-node.Host .outputs .output:nth-child(10):before {
+    display: var(--vardisplay);
+    content: "eth9";
+    position: relative;
+    right: -15px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}
+
+
+
+.drawflow-node.Switch .inputs .input:nth-child(1):before {
+    display: var(--vardisplay);
+    content: "#0";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(2):before {
+    display: var(--vardisplay);
+    content: "#1";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(3):before {
+    display: var(--vardisplay);
+    content: "#2";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(4):before {
+    display: var(--vardisplay);
+    content: "#3";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(5):before {
+    display: var(--vardisplay);
+    content: "#4";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(6):before {
+    display: var(--vardisplay);
+    content: "#5";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(7):before {
+    display: var(--vardisplay);
+    content: "#6";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(8):before {
+    display: var(--vardisplay);
+    content: "#7";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(9):before {
+    display: var(--vardisplay);
+    content: "#8";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(10):before {
+    display: var(--vardisplay);
+    content: "#9";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(11):before {
+    display: var(--vardisplay);
+    content: "#10";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(12):before {
+    display: var(--vardisplay);
+    content: "#11";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(13):before {
+    display: var(--vardisplay);
+    content: "#12";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(14):before {
+    display: var(--vardisplay);
+    content: "#13";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(15):before {
+    display: var(--vardisplay);
+    content: "#14";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(16):before {
+    display: var(--vardisplay);
+    content: "#15";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(17):before {
+    display: var(--vardisplay);
+    content: "#16";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(18):before {
+    display: var(--vardisplay);
+    content: "#17";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}.drawflow-node.Switch .inputs .input:nth-child(19):before {
+    display: var(--vardisplay);
+    content: "#18";
+    position: relative;
+    right: 33px;
+    bottom: 4px;
+    top: var(--vartop);
+    left: var(--varleft);
+}

@@ -1,0 +1,13 @@
+{
+  "imagesdir": "",
+  "images": {
+    "tinycore": {},
+    "debian9": {},
+    "debian10": {},
+    "debian10x": {},
+    "alpine": {},
+    "alpinex": {},
+    "kali": {},
+    "debian-sr": {}
+  }
+}

@@ -1,0 +1,52 @@
+{
+    "imagesdir": "/srv/images",
+    "images": {
+      "tinycore": {
+        "sys": "linux",
+        "fs": "imagesdir/tinycore.img",
+        "qemuopt": "-cpu host -m 512"
+      },
+      "debian9": {
+        "sys": "linux",
+        "fs": "imagesdir/debian9.img",
+        "kernel": "imagesdir/debian9.vmlinuz",
+        "initrd": "imagesdir/debian9.initrd",
+        "qemuopt": "-cpu host -m 512"
+      },
+      "debian10": {
+        "sys": "linux",
+        "fs": "imagesdir/debian10.img",
+        "kernel": "imagesdir/debian10.vmlinuz",
+        "initrd": "imagesdir/debian10.initrd",
+        "qemuopt": "-cpu host -m 200"
+      },
+      "debian10x": {
+        "sys": "linux",
+        "fs": "imagesdir/debian10x.img",
+        "qemuopt": "-m 2G"
+      },
+      "alpine": {
+        "sys": "linux",
+        "fs": "imagesdir/alpine.img",
+        "qemuopt": "-cpu host -m 1G"
+      },
+      "alpinex": {
+        "sys": "linux",
+        "fs": "imagesdir/alpinex.img",
+        "qemuopt": "-cpu host -m 1G"
+      },
+      "kali": {
+        "sys": "linux",
+        "fs": "imagesdir/kali.img",
+        "qemuopt": "-cpu host -m 1G"
+      },
+      "debian-sr": {
+        "sys": "linux",
+        "fs": "imagesdir/debian-sr.img",
+        "kernel": "imagesdir/debian-sr.vmlinuz",
+        "initrd": "imagesdir/debian-sr.initrd",
+        "qemuopt": "-m 1.5G"
+      }
+    }
+  }
+  

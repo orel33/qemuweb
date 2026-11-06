@@ -1,0 +1,60 @@
+digraph QemuWeb {
+  graph [
+    label="QemuWeb — architecture actuelle (constat du code, novembre 2026)\nTrait plein : échange implémenté    ·    Pointillé orange : lancement prévu, bloqué ou incomplet",
+    labelloc=t, labeljust=l, fontname="DejaVu Sans", fontsize=21,
+    bgcolor="#ffffff", pad=0.30, nodesep=0.42, ranksep=0.75,
+    splines=polyline, rankdir=TB, outputorder=edgesfirst
+  ];
+  node [shape=box, style="rounded,filled", color="#52647b", fillcolor="#f4f7fb",
+        fontname="DejaVu Sans", fontsize=11, margin="0.18,0.12", penwidth=1.2];
+  edge [fontname="DejaVu Sans", fontsize=9, color="#52647b", arrowsize=0.8];
+
+  subgraph cluster_browser {
+    label="Navigateur de l'étudiant";
+    fontname="DejaVu Sans"; fontsize=15; color="#87b7d8"; bgcolor="#eef7fc";
+    vue [label="Vue 3 + Drawflow\nÉditeur de topologie\nImport/export .topo et JSON"];
+    xterm [label="Xterm.js\nUne fenêtre par hôte ou switch"];
+    local [label="Fichiers locaux\n.topo / JSON", shape=folder, fillcolor="#ffffff"];
+    vue -> local [dir=both, label="lire / sauver"];
+  }
+
+  subgraph cluster_server {
+    label="Serveur Node.js";
+    fontname="DejaVu Sans"; fontsize=15; color="#9eb3cd"; bgcolor="#f3f6fb";
+    express [label="Express (app.js)\nPages et API HTTP(S)\n/index, /images, /state,\n/runtopo, /registerjson, /stoptopo"];
+    auth [label="express-session + Passport\nOpenID Connect optionnel", fillcolor="#fff9e9", color="#caa45e"];
+    socket [label="SocketService\nSocket.IO : input, output, resize\nClients gardés en mémoire ; délai 3 h"];
+    client [label="Client + Topology\nAnalyse .topo, crée hôtes/switches\nÉtat de la séance en mémoire"];
+    pty [label="PTYService / node-pty\nShell de contrôle : bash\nTerminaux : Firejail sans options de jonction"];
+    express -> auth [label="requêtes HTTP"];
+    auth -> client [label="état et actions"];
+    socket -> client [label="choix du terminal"];
+    client -> pty [label="écrit les commandes"];
+    pty -> socket [label="sortie du terminal", constraint=false];
+  }
+
+  subgraph cluster_host {
+    label="Machine hôte du serveur";
+    fontname="DejaVu Sans"; fontsize=15; color="#c7ae9b"; bgcolor="#fcf7f3";
+    scripts [label="Scripts Bash\nsession-start / session-run-cmd\nqemunet-start / switch / host / exit", fillcolor="#fff6e9", color="#d99545"];
+    vde [label="vde_switch\nCommutateurs virtuels", fillcolor="#ffffff"];
+    qemu [label="QEMU + KVM\nVM Linux en mode texte", fillcolor="#ffffff"];
+    images [label="Images et disques\nimages/*.img ; /tmp/<session>/*.qcow2", shape=folder, fillcolor="#ffffff"];
+    scripts -> vde [style=dashed, color="#c7782d", label="lancement prévu"];
+    scripts -> qemu [style=dashed, color="#c7782d", label="lancement prévu"];
+    qemu -> vde [dir=both, label="réseau VDE", constraint=false];
+    qemu -> images [dir=both, label="disques", constraint=false];
+  }
+
+  vue -> express [label="HTTP(S) : catalogue, état,\ndémarrer, arrêter, dessin"];
+  xterm -> socket [dir=both, label="Socket.IO\nclavier / affichage"];
+  pty -> scripts [label="commande écrite\ndans un shell"];
+
+  catalog [label="images.json\nCatalogue montré dans l'interface", shape=note, fillcolor="#fff9e9", color="#caa45e"];
+  catalog -> express [label="lecture"];
+
+  warning [label="Blocages constatés : session-run-cmd.sh n'exécute pas la commande reçue ;\nles chemins /srv/qemuweb/scripts et le catalogue d'images divergent ;\nl'isolation par utilisateur et la sauvegarde d'une séance restent incomplètes.",
+           shape=note, fillcolor="#fff0e9", color="#c7782d", fontsize=10];
+  {rank=sink; warning;}
+  scripts -> warning [style=invis];
+}
