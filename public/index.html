@@ -27,6 +27,10 @@
     #toggle-console-columns { color: #9fc5ef; }
     #exit-all { color: #ff777d; }
     #toggle-switch-consoles { color: #9fc5ef; }
+    #toggle-graphic-view { flex: none; min-width: 112px; margin-left: auto; border-color: #5b7998; background: #203247; color: #cce3ff; font-weight: 700; }
+    #toggle-graphic-view:hover { background: #304b68; }
+    #toggle-graphic-view:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+    body[data-view="graphic"] .page-controls, body[data-view="graphic"] #toggle-console-columns, body[data-view="graphic"] #toggle-switch-consoles { display: none; }
     button:disabled { opacity: .45; cursor: default; }
     .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
     .machine-tab { display: none; align-items: center; gap: 6px; padding: 5px 7px 5px 10px; white-space: nowrap; background: #1b2531; }
@@ -105,6 +109,39 @@
     main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; flex: 1; min-width: 0; min-height: 0; padding: 12px 16px 16px; }
     main[data-columns="1"] { grid-template-columns: minmax(0, 1fr); }
     main[data-columns="4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
+    #graphic-workspace { display: flex; flex-direction: column; flex: 1; min-width: 0; min-height: 0; margin: 12px 16px 16px; border: 1px solid #35404c; border-radius: 9px; background: #10151c; overflow: hidden; }
+    .graphic-heading { display: flex; align-items: baseline; gap: 14px; flex: none; padding: 15px 20px; border-bottom: 1px solid #35404c; background: #17212c; }
+    .graphic-heading h2 { margin: 0; font-size: 17px; }
+    .graphic-heading p { margin: 0; color: #adc0d3; font-size: 12px; }
+    .graphic-zoom { display: flex; align-items: center; gap: 6px; margin-left: auto; }
+    .graphic-zoom button { display: grid; place-items: center; width: 32px; height: 30px; padding: 4px; }
+    .graphic-zoom button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+    .graphic-zoom svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    #graphic-zoom-level { min-width: 43px; color: #c9d9e8; font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
+    #graphic-canvas { flex: 1; min-height: 0; overflow: auto; background-color: #111a24; background-image: radial-gradient(#344454 0.8px, transparent 0.8px); background-size: 22px 22px; }
+    .topology-svg { display: block; width: 100%; min-width: 900px; height: auto; min-height: 100%; }
+    .topology-link path { fill: none; stroke: #c5c343; stroke-width: 3; }
+    .topology-link text { fill: #e0df9c; font: 700 12px system-ui, sans-serif; paint-order: stroke; stroke: #111a24; stroke-width: 4px; stroke-linejoin: round; }
+    .topology-node { cursor: pointer; }
+    .topology-node .node-card { fill: #1d2a38; stroke: #52677e; stroke-width: 2; }
+    .topology-node:hover .node-card, .topology-node:focus-visible .node-card { stroke: #9cc8ff; stroke-width: 3; }
+    .topology-node:focus-visible { outline: none; }
+    .topology-node .node-accent { fill: #5adbd1; }
+    .topology-switch .node-accent { fill: #9ee6b4; }
+    .topology-node .node-icon-bg { fill: #183c44; }
+    .topology-switch .node-icon-bg { fill: #274233; }
+    .topology-node .node-icon { fill: none; stroke: #5adbd1; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    .topology-switch .node-icon { stroke: #9ee6b4; }
+    .topology-node .node-name { fill: #eef6ff; font: 700 17px system-ui, sans-serif; }
+    .topology-node .node-detail { fill: #b3c3d4; font: 12px system-ui, sans-serif; }
+    .topology-node .node-status { fill: #9fc5ef; font: 700 10px system-ui, sans-serif; letter-spacing: 1px; }
+    .topology-node[data-state="running"] .node-status { fill: #7ae4a3; }
+    .topology-node[data-state="stopped"] .node-status, .topology-node[data-state="starting"] .node-status, .topology-node[data-state="stopping"] .node-status { fill: #ffd17c; }
+    .topology-node[data-state="error"] .node-status { fill: #ff9b9e; }
+    .graphic-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100%; padding: 30px; color: #bdcddd; text-align: center; }
+    .graphic-empty svg { width: 60px; height: 60px; fill: none; stroke: #5adbd1; stroke-width: 1.5; }
+    .graphic-empty h2 { margin: 18px 0 4px; color: #eef6ff; font-size: 19px; }
+    .graphic-empty p { margin: 0; font-size: 13px; }
     .console-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid #35404c; border-radius: 7px; background: #10151c; overflow: hidden; container-type: inline-size; }
     .console-pane[hidden] { display: none; }
     .console-pane[data-active="true"] { border-color: #70a8ff; }
@@ -162,12 +199,13 @@
     .terminal-scroll:disabled { cursor: default; opacity: .55; }
     @media (max-width: 850px) { main[data-columns="2"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } }
     @media (max-width: 850px) { .nic-row { grid-template-columns: 95px minmax(0, 1fr) 36px; gap: 6px; } .nic-row .nic-meta { grid-column: 2; grid-row: 2; } .nic-row button { grid-column: 3; grid-row: 1; } }
-    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } }
+    @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } #graphic-workspace { margin: 10px; } .graphic-heading { flex-wrap: wrap; gap: 4px 12px; padding: 12px; } }
   </style>
 </head>
 <body>
   <header>
     <h1>QemuWeb <span class="beta-badge" aria-label="Beta version">BETA</span></h1>
+    <button id="toggle-graphic-view" type="button" aria-label="Show Graphic view">Graphic</button>
     <!-- Lucide inline icons include SquareTerminal, MonitorCog and FileText for pane controls. License: /icons/LICENSE-lucide.txt -->
   </header>
   <dialog class="qemu-options create-dialog" id="create-dialog" aria-labelledby="create-title">
@@ -256,7 +294,6 @@
     <symbol id="pane-stop-icon" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
     <symbol id="pane-reboot-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
     <symbol id="pane-reset-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
-    <symbol id="pane-exit-icon" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="pane-settings-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="pane-clear-icon" viewBox="0 0 24 24"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></symbol>
   </svg>
@@ -278,6 +315,10 @@
       <div class="terminal-frame"><div class="terminal" id="terminal-3"></div><input class="terminal-scroll" id="terminal-scroll-3" type="range" min="0" max="0" value="0" aria-label="Scroll lower right console" title="Scroll console history"></div>
     </section>
   </main>
+  <section id="graphic-workspace" aria-label="Graphic network overview" hidden>
+    <div class="graphic-heading"><h2>Network overview</h2><p id="graphic-summary">0 hosts · 0 switches · 0 links</p><div class="graphic-zoom" role="group" aria-label="Graphic zoom"><button id="graphic-zoom-out" type="button" title="Zoom out" aria-label="Zoom out"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7.5"/><path d="M8 10.5h5M16 16l5 5"/></svg></button><span id="graphic-zoom-level">100%</span><button id="graphic-zoom-in" type="button" title="Zoom in" aria-label="Zoom in"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10.5" cy="10.5" r="7.5"/><path d="M8 10.5h5M10.5 8v5M16 16l5 5"/></svg></button></div></div>
+    <div id="graphic-canvas"></div>
+  </section>
   <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
     <button id="show-general-settings" class="icon-button" type="button" disabled title="General Settings" aria-label="General Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
     <input id="topology-file" type="file" accept=".topo" hidden>
@@ -296,6 +337,7 @@
   <script src="/vendor-addon-fit/lib/xterm-addon-fit.js"></script>
   <script src="/monitor-terminal.js"></script>
   <script src="/session-log.js"></script>
+  <script src="/topology-graphic.js"></script>
   <script>
     let socket = null;
     const workspace = document.getElementById('console-workspace');
@@ -554,6 +596,52 @@
     function saveGeneralSettings() {
       try { localStorage.setItem(generalSettingsKey, JSON.stringify(generalSettings)); } catch (_) {}
     }
+    const graphicWorkspace = document.getElementById('graphic-workspace');
+    const graphicCanvas = document.getElementById('graphic-canvas');
+    const graphicSummary = document.getElementById('graphic-summary');
+    const graphicToggle = document.getElementById('toggle-graphic-view');
+    const graphicZoomOut = document.getElementById('graphic-zoom-out');
+    const graphicZoomIn = document.getElementById('graphic-zoom-in');
+    const graphicZoomLevel = document.getElementById('graphic-zoom-level');
+    let graphicVisible = false;
+    let graphicZoom = 1;
+    function applyGraphicZoom() {
+      const svg = graphicCanvas.querySelector('.topology-svg');
+      if (svg) {
+        svg.style.width = `${graphicZoom * 100}%`;
+        svg.style.minWidth = `${900 * graphicZoom}px`;
+      }
+      graphicZoomLevel.textContent = `${Math.round(graphicZoom * 100)}%`;
+      graphicZoomOut.disabled = graphicZoom <= 0.5;
+      graphicZoomIn.disabled = graphicZoom >= 2;
+    }
+    function renderGraphic() {
+      if (!graphicVisible) return;
+      const scrollLeft = graphicCanvas.scrollLeft;
+      const scrollTop = graphicCanvas.scrollTop;
+      const graph = TopologyGraphic.draw(graphicCanvas, machines.values(), id => {
+        setGraphicView(false);
+        selectMachine(id);
+      });
+      graphicSummary.textContent = `${graph.hosts} host${graph.hosts === 1 ? '' : 's'} · ${graph.switches} switch${graph.switches === 1 ? '' : 'es'} · ${graph.links.length} link${graph.links.length === 1 ? '' : 's'}`;
+      applyGraphicZoom();
+      graphicCanvas.scrollLeft = scrollLeft;
+      graphicCanvas.scrollTop = scrollTop;
+    }
+    function setGraphicView(visible) {
+      graphicVisible = visible;
+      document.body.dataset.view = visible ? 'graphic' : 'terminals';
+      workspace.hidden = visible;
+      graphicWorkspace.hidden = !visible;
+      graphicToggle.textContent = visible ? 'Terminals' : 'Graphic';
+      graphicToggle.setAttribute('aria-label', visible ? 'Show Terminals view' : 'Show Graphic view');
+      if (visible) renderGraphic();
+      else requestAnimationFrame(fitTerminals);
+    }
+    graphicToggle.addEventListener('click', () => setGraphicView(!graphicVisible));
+    graphicZoomOut.addEventListener('click', () => { graphicZoom = Math.max(0.5, graphicZoom - 0.25); applyGraphicZoom(); });
+    graphicZoomIn.addEventListener('click', () => { graphicZoom = Math.min(2, graphicZoom + 0.25); applyGraphicZoom(); });
+    applyGraphicZoom();
 
     function finishReplay(pane, generation, id) {
       if (generation !== pane.replayGeneration || id !== pane.machineId || pane.view !== 'console') return;
@@ -1113,8 +1201,10 @@
         tabs.insertBefore(tab, tabs.querySelector('.page-controls'));
       }
       renderPaneTitles();
+      renderGraphic();
     }
     function updateControls() {
+      renderGraphic();
       const machine = activeMachine();
       exitAllButton.disabled = exitAllBusy || !machines.size || [...machines.values()].some(item => item.busy);
       updatePaneStates();
@@ -1146,12 +1236,13 @@
           const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
         }
         select.value = selected || '';
-        select.onchange = () => { machine.interfaces[index] = select.value || null; meta.textContent = ''; onChange(); };
+        select.onchange = () => { machine.interfaces[index] = select.value || null; meta.textContent = ''; renderGraphic(); onChange(); };
         const meta = document.createElement('span'); meta.className = 'nic-meta';
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index + 1}`; remove.disabled = locked;
         remove.onclick = () => {
           const scrollTop = qemuOptionsPanel.scrollTop;
           machine.interfaces.splice(index, 1);
+          renderGraphic();
           renderNicControls(machine, list, addButton, onChange);
           qemuOptionsPanel.scrollTop = scrollTop;
           (list.children[index]?.querySelector('select') || list.lastElementChild?.querySelector('select') || addButton).focus({preventScroll: true});
@@ -1250,9 +1341,10 @@
       const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, settings: body.settings, settingsLoaded: !!body.settings, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       if (select) selectMachine(id);
+      else renderGraphic();
       return machine;
     }
     async function addSwitch({name, autostart}) {
@@ -1323,6 +1415,59 @@
       }
     }
 
+    function machineFromSession(session) {
+      const image = images.find(item => item.id === session.imageId);
+      return {
+        id: session.id, kind: session.kind || 'vm', hostname: session.hostname,
+        osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
+        imageId: image ? image.id : (images[0]?.id || ''),
+        settings: session.settings || null, settingsLoaded: !!session.settings,
+        hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
+        engine: session.engine || 'qemu',
+        interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
+        networkInterfaces: session.networkInterfaces || [],
+        running: session.running, hasLaunched: session.hasLaunched,
+        message: session.message,
+        error: /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null,
+        logs: [], serial: '', monitorOutput: ''
+      };
+    }
+    function mergeSession(session) {
+      if (!session.hostname) return;
+      const current = machines.get(session.id);
+      if (!current) { machines.set(session.id, machineFromSession(session)); return; }
+      current.hostname = session.hostname;
+      current.running = session.running;
+      current.hasLaunched = session.hasLaunched;
+      current.message = session.message;
+      current.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
+      current.networkInterfaces = session.networkInterfaces || [];
+      if (!(qemuOptionsPanel.open && settingsMachine()?.id === session.id)) {
+        const image = images.find(item => item.id === session.imageId);
+        current.imageId = image ? image.id : (session.imageId || images[0]?.id || '');
+        current.osHint = session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system');
+        current.engine = session.engine || 'qemu';
+        current.interfaces = current.networkInterfaces.map(nic => nic.switchId);
+      }
+    }
+    let sessionSyncTimer = null;
+    function scheduleSessionSync() {
+      if (sessionSyncTimer) return;
+      sessionSyncTimer = setTimeout(() => { sessionSyncTimer = null; syncSessionsFromServer(); }, 100);
+    }
+    async function syncSessionsFromServer() {
+      try {
+        const response = await fetch('/api/sessions', {cache: 'no-store'});
+        const current = await response.json();
+        if (!response.ok) throw new Error(current.error || 'Cannot refresh sessions');
+        const currentIds = new Set(current.map(session => session.id));
+        for (const id of machines.keys()) if (!currentIds.has(id)) machines.delete(id);
+        for (const session of current) mergeSession(session);
+        const index = consoleSessions().findIndex(machine => machine.id === activeId);
+        if (index >= 0) pageIndex = Math.floor(index / layoutSize);
+        showPage(index >= 0 ? activeId : null);
+      } catch (error) { showStatusError(error.message); }
+    }
     Promise.all([
       fetch('/api/systems').then(response => response.json()),
       fetch('/api/qemu-config').then(response => response.ok ? response.json() : null).catch(() => null),
@@ -1347,28 +1492,7 @@
       document.getElementById('new-switch').disabled = false;
       imageSelect.replaceChildren(...items.map(image => { const option = document.createElement('option'); option.value = image.id; option.textContent = image.label; return option; }));
       document.getElementById('new-host').disabled = !items.length;
-      for (const session of existing) {
-        if (!session.hostname) continue;
-        const image = images.find(item => item.id === session.imageId);
-        machines.set(session.id, {
-          id: session.id,
-          kind: session.kind || 'vm',
-          hostname: session.hostname,
-          osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
-          imageId: image ? image.id : (images[0]?.id || ''),
-          settings: session.settings || null,
-          settingsLoaded: !!session.settings,
-          hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
-          engine: session.engine || 'qemu',
-          interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
-          running: session.running,
-          hasLaunched: session.hasLaunched,
-          message: session.message,
-          logs: [],
-          serial: '',
-          monitorOutput: ''
-        });
-      }
+      for (const session of existing) mergeSession(session);
       showPage();
     }).catch(error => { showStatusError(`System list unavailable: ${error.message}`); });
 
@@ -1540,6 +1664,7 @@
       if (!machine || machine.kind !== 'vm' || machine.hasLaunched || machine.busy || machine.engine === 'virtualbox' || machine.interfaces.length >= 4) return;
       const scrollTop = qemuOptionsPanel.scrollTop;
       machine.interfaces.push(null);
+      renderGraphic();
       renderNicControls(machine);
       qemuOptionsPanel.scrollTop = scrollTop;
       const select = nicList.lastElementChild?.querySelector('select');
@@ -1694,25 +1819,16 @@
     panes.forEach(attachPaneSocket);
     socket.on('sessions-changed', event => {
       const machine = event && machines.get(event.sessionId);
-      if (!machine || machine.id === activeId) return;
+      if (!machine) { scheduleSessionSync(); return; }
+      if (machine.id === activeId) { if (graphicVisible) scheduleSessionSync(); return; }
       machine.running = event.running;
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
       machine.message = event.message;
       machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
       renderTabs();
+      if (graphicVisible) scheduleSessionSync();
     });
-    socket.on('connect', async () => {
-      try {
-        const response = await fetch('/api/sessions', {cache: 'no-store'});
-        const current = await response.json();
-        if (!response.ok) throw new Error(current.error || 'Cannot refresh sessions');
-        const currentIds = new Set(current.map(session => session.id));
-        for (const id of machines.keys()) if (!currentIds.has(id)) machines.delete(id);
-        const index = consoleSessions().findIndex(machine => machine.id === activeId);
-        if (index >= 0) pageIndex = Math.floor(index / layoutSize);
-        showPage(index >= 0 ? activeId : null);
-      } catch (error) { showStatusError(error.message); }
-    });
+    socket.on('connect', syncSessionsFromServer);
     socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
     socket.on('sessions-removed', event => {
       for (const id of event.ids || []) machines.delete(id);
@@ -1775,6 +1891,7 @@
         machine.hasLaunched = true;
         machine.running = true;
         machine.settings = launchSettings;
+        scheduleSessionSync();
         renderQemuOptions();
         if (pane.view === 'console') pane.terminal.focus();
       } catch (error) {

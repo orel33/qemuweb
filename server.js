@@ -1007,6 +1007,7 @@ app.post('/api/topology', async (req, res) => {
         }
       }
     }
+    if (created.length) io.emit('sessions-changed', {sessionId: null});
     res.json({created: created.length, errors});
   } catch (error) {
     for (const id of created) sessions.delete(id);
@@ -1051,7 +1052,8 @@ app.post('/api/hosts', (req, res) => {
     session.networkInterfaces = networkInterfaces;
     session.launchSettings = launchSettings;
     session.lastMessage = 'Host ready to start';
-    res.json({id, name: hostname, imageId: image.id, engine, interfaces: networkInterfaces.map(nic => nic.switchId), settings: launchSettings});
+    io.emit('sessions-changed', {sessionId: id, running: false, hasLaunched: false, message: session.lastMessage});
+    res.json({id, name: hostname, imageId: image.id, engine, interfaces: networkInterfaces.map(nic => nic.switchId), networkInterfaces, settings: launchSettings});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -1065,6 +1067,7 @@ app.post('/api/switches', async (req, res) => {
     session.hostname = name;
     session.lastMessage = 'VDE switch ready to start';
     if (autostart) await startSwitch(session);
+    io.emit('sessions-changed', {sessionId: id, running: !!session.machine, hasLaunched: session.everStarted, message: stateMessage(session)});
     res.json({id, name, running: !!session.machine, message: stateMessage(session)});
   } catch (error) {
     if (session) {
@@ -1153,6 +1156,7 @@ app.delete('/api/sessions/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     await destroySession(session);
+    io.emit('sessions-removed', {ids: [req.params.sessionId]});
     res.json({ok: true});
   } catch (error) { res.status(500).json({error: error.message}); }
 });

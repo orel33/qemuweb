@@ -271,6 +271,8 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 
 ### Host and switch actions
 
+The top-right **Graphic** button opens a read-only overview of the current network. It shows hosts, switches, their state, and one curved link per connected Ethernet interface, labeled with its interface and switch port. The magnifier buttons zoom the whole graph in or out. Click a node to return to **Terminals** with that session selected. The top-right **Terminals** button also returns without changing running sessions.
+
 The icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Click the framed Host or Switch icon at the left of a terminal to open its action menu. Host Settings and Clear console sit beside that menu. General Settings is the first button in the bottom bar, and Exit All is the last button before the page controls. Actions in a terminal apply to its own session.
 
 | Icon / control | Action | Menu label or hint | Effect |
@@ -284,7 +286,7 @@ The icons come from [Lucide](https://lucide.dev/icons); their license is kept in
 | **Exit All** | **Exit all** | `Exit all hosts and switches` | After confirmation, close every host and switch and delete their working disks. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console` | Clear this tab's console history while preserving its current prompt or line. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **Host Settings** | `Host Settings` | Edit the selected host's available launch settings and network interfaces; Mode Expert reveals the full command and technical details. |
-| ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the engine for every new host, including clones, and the automatic naming scheme in this browser. |
+| ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the engine for every new host, including clones, the automatic naming scheme, and the terminal font and size in this browser. |
 | ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open Host Settings in creation mode, titled `Add a new host`; the Expert button is hidden and Autostart is selected by default. |
 | ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Open the VDE switch creation dialog; Autostart is selected by default. |
 | **Console / Monitor / Log** icons | **Terminal view** | `Console` / `Monitor` / `Log` | Reuse the same xterm area for the selected session's views. QEMU hosts provide all three; VirtualBox hosts and switches provide Console and read-only Log. New log lines and log resets update a visible Log view. |
