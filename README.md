@@ -271,7 +271,7 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 
 ### Host and switch actions
 
-The icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Click the framed Host or Switch icon at the left of a terminal to open its action menu. Host Settings and Clear console sit beside that menu. The red X at the right exits that terminal's session. General Settings is the first button in the bottom bar, and Exit All is the last button before the page controls. Actions in a terminal apply to its own session.
+The icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Click the framed Host or Switch icon at the left of a terminal to open its action menu. Host Settings and Clear console sit beside that menu. General Settings is the first button in the bottom bar, and Exit All is the last button before the page controls. Actions in a terminal apply to its own session.
 
 | Icon / control | Action | Menu label or hint | Effect |
 |---|---|---|---|
@@ -280,7 +280,7 @@ The icons come from [Lucide](https://lucide.dev/icons); their license is kept in
 | ![Power icon](docs/icons/power.svg) | **Stop** | `Stop` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
 | ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot` | Stop and boot again from the same disk. Use the same forced-stop fallback if needed. Keep the tab and display name. |
 | ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset` | After a QemuWeb warning dialog, stop the host, delete its current disk, create a fresh one from the base image, and boot. Keep the tab and display name. |
-| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red X in the terminal header and on the tab asks for the same confirmation. |
+| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red X on the tab asks for the same confirmation. |
 | **Exit All** | **Exit all** | `Exit all hosts and switches` | After confirmation, close every host and switch and delete their working disks. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console` | Clear this tab's console history while preserving its current prompt or line. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **Host Settings** | `Host Settings` | Edit the selected host's available launch settings and network interfaces; Mode Expert reveals the full command and technical details. |

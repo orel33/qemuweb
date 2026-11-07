@@ -41,6 +41,7 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 
 ## Console and monitor
 
+- [x] **JRX42** — Add font family and font size controls to General Settings and apply them consistently to Host/Switch Console, Log and Monitor through shared CSS variables.
 - [x] **VBR06** — Put the console/monitor toggle in the toolbar directly above the terminal, and render the QEMU monitor in that same terminal area so the user switches between the serial console and monitor in place.
 - [x] **LWX29** — Integrate session logs as a third terminal view alongside Console and Monitor:
   - Replace the global Log button and dialog with an in-place Log view in each console pane.

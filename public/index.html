@@ -6,6 +6,11 @@
   <title>QemuWeb · beta</title>
   <link rel="stylesheet" href="/vendor/css/xterm.css">
   <style>
+    :root { --console-font-family: "Ubuntu Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; --console-font-size: 17px; }
+    :root[data-console-font="consolas"] { --console-font-family: Consolas, "Liberation Mono", monospace; }
+    :root[data-console-font="menlo"] { --console-font-family: Menlo, Monaco, monospace; }
+    :root[data-console-font="liberation"] { --console-font-family: "Liberation Mono", monospace; }
+    :root[data-console-font="default"] { --console-font-family: monospace; }
     * { box-sizing: border-box; }
     html, body { height: 100%; overflow: hidden; }
     body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; margin: 0; background: #141a22; color: #e7edf5; font: 15px system-ui, sans-serif; }
@@ -143,15 +148,12 @@
     .console-pane-state[data-state="stopped"] { color: #ffd17c; }
     .console-pane-state[data-state="starting"], .console-pane-state[data-state="stopping"], .console-pane-state[data-state="rebooting"], .console-pane-state[data-state="resetting"] { color: #ffd17c; }
     .console-pane-state[data-state="error"] { color: #ff9b9e; }
-    .pane-exit-button { display: grid; place-items: center; flex: none; width: 32px; height: 32px; padding: 0; border: 1px solid #7d4248; border-radius: 5px; background: #322329; color: #ff777d; }
-    .pane-exit-button:not(:disabled):hover { border-color: #ff777d; background: #563039; }
-    .pane-exit-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
-    .pane-exit-button svg { width: 17px; height: 17px; }
     .pane-metrics { flex: none; color: #b7c9db; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pane-metrics[data-status="unavailable"] { color: #8899aa; }
     @container (max-width: 550px) { .console-pane-header { gap: 6px; } }
     .terminal-frame { display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 8px; background: #0b0f14; }
-    .terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+    .terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; font-family: var(--console-font-family); font-size: var(--console-font-size); }
+    .terminal .xterm { font-family: var(--console-font-family); font-size: var(--console-font-size); }
     .terminal .xterm-viewport { overflow-x: hidden; overflow-y: scroll; scrollbar-width: none; }
     .terminal .xterm-viewport::-webkit-scrollbar { display: none; }
     .terminal-scroll { flex: none; width: 14px; height: 100%; margin: 0; appearance: none; writing-mode: vertical-lr; direction: ltr; border-radius: 8px; background: #243244; cursor: pointer; }
@@ -218,6 +220,8 @@
     <div class="create-fields">
       <label class="create-field">Engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
       <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
+      <label class="create-field">Console font<select id="console-font-family"><option value="system">Ubuntu Sans Mono (GNOME Terminal)</option><option value="consolas">Consolas</option><option value="menlo">Menlo</option><option value="liberation">Liberation Mono</option><option value="default">Browser default monospace</option></select></label>
+      <label class="create-field">Console font size<select id="console-font-size"><option value="11">11 px</option><option value="12">12 px</option><option value="13">13 px</option><option value="14">14 px</option><option value="15">15 px</option><option value="16">16 px</option><option value="17">17 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="22">22 px</option><option value="24">24 px</option></select></label>
     </div>
     <p id="general-settings-error" role="alert" hidden></p>
   </dialog>
@@ -395,13 +399,6 @@
       pane.clearButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-clear-icon"></use></svg>';
       pane.clearButton.addEventListener('click', () => clearPaneConsole(pane));
       pane.settingsButton.after(pane.clearButton);
-      pane.exitButton = document.createElement('button');
-      pane.exitButton.type = 'button';
-      pane.exitButton.className = 'pane-exit-button';
-      pane.exitButton.hidden = true;
-      pane.exitButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-exit-icon"></use></svg>';
-      pane.exitButton.addEventListener('click', () => { if (pane.machineId) closeMachine(pane.machineId); });
-      pane.state.after(pane.exitButton);
       terminal.onScroll(() => syncConsoleScroll(pane));
       terminal.onData(data => {
         if (pane.replaying || !pane.machineId) return;
@@ -489,6 +486,8 @@
     const generalSettingsPanel = document.getElementById('general-settings-panel');
     const defaultEngineSelect = document.getElementById('default-engine');
     const namingSchemeSelect = document.getElementById('naming-scheme');
+    const consoleFontFamilySelect = document.getElementById('console-font-family');
+    const consoleFontSizeSelect = document.getElementById('console-font-size');
     const generalSettingsError = document.getElementById('general-settings-error');
     const toggleConsoleColumns = document.getElementById('toggle-console-columns');
     const toggleSwitchConsoles = document.getElementById('toggle-switch-consoles');
@@ -528,12 +527,30 @@
     let expertMode = false;
     let namingSchemes = null;
     const generalSettingsKey = 'qemuweb.general-settings';
-    const generalSettings = {engine: 'qemu', namingScheme: 'classicLong'};
+    const generalSettings = {engine: 'qemu', namingScheme: 'classicLong', consoleFontFamily: 'system', consoleFontSize: 17};
     try {
       const saved = JSON.parse(localStorage.getItem(generalSettingsKey) || '{}');
       if (['qemu', 'qemu-tcg', 'virtualbox'].includes(saved?.engine)) generalSettings.engine = saved.engine;
       if (typeof saved?.namingScheme === 'string') generalSettings.namingScheme = saved.namingScheme;
+      if (['system', 'consolas', 'menlo', 'liberation', 'default'].includes(saved?.consoleFontFamily)) generalSettings.consoleFontFamily = saved.consoleFontFamily;
+      if ([...consoleFontSizeSelect.options].some(option => Number(option.value) === Number(saved?.consoleFontSize))) generalSettings.consoleFontSize = Number(saved.consoleFontSize);
     } catch (_) {}
+    function applyConsoleAppearance() {
+      const root = document.documentElement;
+      root.dataset.consoleFont = generalSettings.consoleFontFamily;
+      root.style.setProperty('--console-font-size', `${generalSettings.consoleFontSize}px`);
+      const style = getComputedStyle(root);
+      const fontFamily = style.getPropertyValue('--console-font-family').trim();
+      const fontSize = Number.parseFloat(style.getPropertyValue('--console-font-size'));
+      for (const pane of panes) {
+        pane.terminal.setOption('fontFamily', fontFamily);
+        pane.terminal.setOption('fontSize', fontSize);
+      }
+      requestAnimationFrame(fitTerminals);
+    }
+    consoleFontFamilySelect.value = generalSettings.consoleFontFamily;
+    consoleFontSizeSelect.value = String(generalSettings.consoleFontSize);
+    applyConsoleAppearance();
     function saveGeneralSettings() {
       try { localStorage.setItem(generalSettingsKey, JSON.stringify(generalSettings)); } catch (_) {}
     }
@@ -686,15 +703,9 @@
       for (const pane of panes) {
         const machine = pane.machineId && machines.get(pane.machineId);
         updatePaneActionMenu(pane, machine);
-        pane.exitButton.hidden = !machine;
-        pane.exitButton.disabled = !machine || !!machine.busy;
         pane.settingsButton.hidden = !machine || machine.kind !== 'vm';
         pane.clearButton.hidden = !machine;
         pane.clearButton.disabled = !machine || pane.view !== 'console';
-        if (machine) {
-          pane.exitButton.title = `Exit ${machine.kind === 'switch' ? 'switch' : 'host'}`;
-          pane.exitButton.setAttribute('aria-label', pane.exitButton.title);
-        }
         pane.kindIcon.toggleAttribute('hidden', !machine);
         if (machine) {
           pane.kindIcon.dataset.kind = machine.kind;
@@ -1432,10 +1443,21 @@
       }
     });
 
-    showGeneralSettings.addEventListener('click', () => generalSettingsPanel.showModal());
+    let consoleAppearanceChangedWhileOpen = false;
+    showGeneralSettings.addEventListener('click', () => { consoleAppearanceChangedWhileOpen = false; generalSettingsPanel.showModal(); });
     document.getElementById('close-general-settings').addEventListener('click', () => generalSettingsPanel.close());
+    generalSettingsPanel.addEventListener('close', () => {
+      if (!consoleAppearanceChangedWhileOpen) return;
+      requestAnimationFrame(() => {
+        fitTerminals();
+        const pane = panes[activePaneIndex];
+        if (pane.machineId && !pane.element.hidden) pane.terminal.focus();
+      });
+    });
     defaultEngineSelect.addEventListener('change', () => { generalSettings.engine = defaultEngineSelect.value; saveGeneralSettings(); });
     namingSchemeSelect.addEventListener('change', () => { generalSettings.namingScheme = namingSchemeSelect.value; saveGeneralSettings(); });
+    consoleFontFamilySelect.addEventListener('change', () => { generalSettings.consoleFontFamily = consoleFontFamilySelect.value; consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(); });
+    consoleFontSizeSelect.addEventListener('change', () => { generalSettings.consoleFontSize = Number(consoleFontSizeSelect.value); consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(); });
     document.getElementById('new-host').addEventListener('click', openHostSettingsCreate);
     document.getElementById('new-switch').addEventListener('click', () => openCreateDialog('switch'));
     cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine && !machine.busy) openCloneDialog(machine); });
