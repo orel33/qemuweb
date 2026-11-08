@@ -17,7 +17,7 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
     - Draw every host and switch as a named node, with one distinct SVG Bézier link for each connected Ethernet interface. Show useful status and interface/switch information, including multiple links between the same nodes.
     - Clicking a node selects its session and opens its terminal view. Fit the loaded `topo/lan.topo` and `topo/gw.topo` examples, handle an empty network, and keep the graph in sync when sessions are added, removed, renamed or started/stopped.
     - Use `backup/legacy-qemuweb-2026-11-03:frontend/src/components/Drawflow.vue`, its Host/Switch node components and `frontend/src/style.css` as visual references within the current Web app.
-  - [ ] **YLD71** — **After v0.3.0:** make the graphical topology editable: arrange nodes and change host-to-switch links through the graph, validate changes against the current interface rules, and save the resulting hosts, switches and ordered links back to the existing `.topo` format. Keep runtime-only state and disk overlays out of the file.
+  - [ ] **YLD71** — **After v0.3.0:** extend the draggable graphical overview with host-to-switch link editing, validate changes against the current interface rules, and save the resulting hosts, switches and ordered links back to the existing `.topo` format. Decide how to persist node positions separately from `.topo`; they currently last for the browser session only. Keep runtime-only state and disk overlays out of the file.
   - [ ] **PSA36** — Add whole-network Start and Stop with partial-start cleanup; extend the lifecycle to Resume, Reset and Delete in the durable-session stage.
 - [ ] **WEX58** — Prepare the topologies needed for TP6.
 
@@ -58,4 +58,8 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 ## Server and deployment
 
 - [ ] **URK47** — Extend startup checks into per-engine capability reports for QEMU/KVM, QEMU/TCG, QEMU/VDE, and VirtualBox.
+- [ ] **KYP59** — Move VM and VDE execution to a remote Linux runner, separate from the Web controller, in the style of a GitLab Runner:
+  - Start with one authenticated runner that registers with the controller, reports engine/image capabilities, and owns QEMU/VDE processes, overlays, runtime directories and Unix sockets. Place every host and switch of a LAN on the same runner.
+  - Route lifecycle commands, serial consoles, QEMU monitors, switch terminals, logs and CPU/RAM metrics through the controller. Keep worker paths and sockets off the browser network; use stable network/session IDs and idempotent commands.
+  - Preserve running LANs across browser disconnects, report runner loss clearly, and reconnect/reconcile state after controller or runner restart. Prove the design with the existing LAN2 scenario from a browser on a different machine; add multi-runner scheduling only afterward.
 - [ ] **EZY15** — For the beta release, evaluate isolated concurrent sessions for anonymous users before production authentication is available.

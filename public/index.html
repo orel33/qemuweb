@@ -122,7 +122,8 @@
     .topology-svg { display: block; width: 100%; min-width: 900px; height: auto; min-height: 100%; }
     .topology-link path { fill: none; stroke: #c5c343; stroke-width: 3; }
     .topology-link text { fill: #e0df9c; font: 700 12px system-ui, sans-serif; paint-order: stroke; stroke: #111a24; stroke-width: 4px; stroke-linejoin: round; }
-    .topology-node { cursor: pointer; }
+    .topology-node { cursor: grab; touch-action: none; }
+    #graphic-canvas[data-dragging="true"] .topology-node { cursor: grabbing; }
     .topology-node .node-card { fill: #1d2a38; stroke: #52677e; stroke-width: 2; }
     .topology-node:hover .node-card, .topology-node:focus-visible .node-card { stroke: #9cc8ff; stroke-width: 3; }
     .topology-node:focus-visible { outline: none; }
@@ -605,6 +606,10 @@
     const graphicZoomLevel = document.getElementById('graphic-zoom-level');
     let graphicVisible = false;
     let graphicZoom = 1;
+    let graphicGraph = null;
+    let graphicDrag = null;
+    let suppressGraphicClick = false;
+    const graphicPositions = new Map();
     function applyGraphicZoom() {
       const svg = graphicCanvas.querySelector('.topology-svg');
       if (svg) {
@@ -619,15 +624,63 @@
       if (!graphicVisible) return;
       const scrollLeft = graphicCanvas.scrollLeft;
       const scrollTop = graphicCanvas.scrollTop;
+      for (const id of graphicPositions.keys()) if (!machines.has(id)) graphicPositions.delete(id);
       const graph = TopologyGraphic.draw(graphicCanvas, machines.values(), id => {
+        if (suppressGraphicClick) return;
         setGraphicView(false);
         selectMachine(id);
-      });
+      }, graphicPositions);
+      graphicGraph = graph;
       graphicSummary.textContent = `${graph.hosts} host${graph.hosts === 1 ? '' : 's'} · ${graph.switches} switch${graph.switches === 1 ? '' : 'es'} · ${graph.links.length} link${graph.links.length === 1 ? '' : 's'}`;
       applyGraphicZoom();
       graphicCanvas.scrollLeft = scrollLeft;
       graphicCanvas.scrollTop = scrollTop;
     }
+    function graphicPointerPosition(event) {
+      const svg = graphicCanvas.querySelector('.topology-svg');
+      const matrix = svg?.getScreenCTM();
+      if (!matrix) return null;
+      const point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      return point.matrixTransform(matrix.inverse());
+    }
+    graphicCanvas.addEventListener('pointerdown', event => {
+      if (event.button !== 0) return;
+      const nodeElement = event.target.closest('.topology-node');
+      const node = graphicGraph?.nodes.find(item => item.id === nodeElement?.dataset.sessionId);
+      const pointer = graphicPointerPosition(event);
+      if (!node || !pointer) return;
+      graphicDrag = {pointerId: event.pointerId, id: node.id, x: node.x, y: node.y, startX: pointer.x, startY: pointer.y, moved: false};
+      graphicCanvas.setPointerCapture(event.pointerId);
+    });
+    graphicCanvas.addEventListener('pointermove', event => {
+      if (!graphicDrag || event.pointerId !== graphicDrag.pointerId) return;
+      const pointer = graphicPointerPosition(event);
+      if (!pointer) return;
+      const dx = pointer.x - graphicDrag.startX;
+      const dy = pointer.y - graphicDrag.startY;
+      if (!graphicDrag.moved && Math.hypot(dx, dy) < 5) return;
+      graphicDrag.moved = true;
+      graphicPositions.set(graphicDrag.id, {x: graphicDrag.x + dx, y: graphicDrag.y + dy});
+      graphicCanvas.dataset.dragging = 'true';
+      renderGraphic();
+    });
+    function finishGraphicDrag(event) {
+      if (!graphicDrag || event.pointerId !== graphicDrag.pointerId) return;
+      if (graphicDrag.moved) {
+        suppressGraphicClick = true;
+        setTimeout(() => { suppressGraphicClick = false; }, 0);
+      }
+      graphicDrag = null;
+      delete graphicCanvas.dataset.dragging;
+      if (graphicCanvas.hasPointerCapture(event.pointerId)) graphicCanvas.releasePointerCapture(event.pointerId);
+    }
+    graphicCanvas.addEventListener('pointerup', finishGraphicDrag);
+    graphicCanvas.addEventListener('pointercancel', finishGraphicDrag);
+    graphicCanvas.addEventListener('click', event => {
+      if (suppressGraphicClick) { event.preventDefault(); event.stopPropagation(); }
+    }, true);
     function setGraphicView(visible) {
       graphicVisible = visible;
       document.body.dataset.view = visible ? 'graphic' : 'terminals';
@@ -1778,9 +1831,9 @@
         pane.replayPending = '';
         pane.terminal.write('', () => {
           if (generation !== pane.replayGeneration || machine.id !== pane.machineId || pane.view !== 'console') return;
-          if (event.preserveLine) pane.terminal.clear();
-          else pane.terminal.reset();
-          finishReplay(pane, generation, machine.id);
+          pane.terminal.reset();
+          if (event.preserveLine && event.serial) pane.terminal.write(event.serial, () => finishReplay(pane, generation, machine.id));
+          else finishReplay(pane, generation, machine.id);
         });
       });
       pane.socket.on('serial', event => {

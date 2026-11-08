@@ -271,7 +271,7 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 
 ### Host and switch actions
 
-The top-right **Graphic** button opens a read-only overview of the current network. It shows hosts, switches, their state, and one curved link per connected Ethernet interface, labeled with its interface and switch port. The magnifier buttons zoom the whole graph in or out. Click a node to return to **Terminals** with that session selected. The top-right **Terminals** button also returns without changing running sessions.
+The top-right **Graphic** button opens an overview of the current network. It shows hosts, switches, their state, and one curved link per connected Ethernet interface, labeled with its interface and switch port. Drag a host or switch to rearrange the view; links follow the nodes. These positions last for the current browser session and do not change the `.topo` file or network connections. The magnifier buttons zoom the whole graph in or out. Click a node to return to **Terminals** with that session selected. The top-right **Terminals** button also returns without changing running sessions.
 
 The icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Click the framed Host or Switch icon at the left of a terminal to open its action menu. Host Settings and Clear console sit beside that menu. General Settings is the first button in the bottom bar, and Exit All is the last button before the page controls. Actions in a terminal apply to its own session.
 

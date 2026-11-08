@@ -49,6 +49,20 @@ test('parallel interfaces remain separate and disconnected interfaces have no li
   assert.notEqual(graph.links[0].y2, graph.links[1].y2);
 });
 
+test('moving nodes updates their Bézier endpoints without changing network links', () => {
+  const sessions = [
+    {id: 's1', kind: 'switch', hostname: 's1'},
+    {id: 'h1', kind: 'vm', hostname: 'h1', interfaces: ['s1']}
+  ];
+  const original = buildGraph(sessions);
+  const moved = buildGraph(sessions, new Map([['h1', {x: 400, y: 300}], ['s1', {x: 700, y: 220}]]));
+  assert.equal(moved.links.length, original.links.length);
+  assert.deepEqual(moved.nodes.map(node => node.id), original.nodes.map(node => node.id));
+  assert.equal(moved.nodes.find(node => node.id === 'h1').x, 400);
+  assert.equal(moved.nodes.find(node => node.id === 's1').y, 220);
+  assert.notEqual(moved.links[0].path, original.links[0].path);
+});
+
 test('empty and changing session states are represented', () => {
   assert.deepEqual(buildGraph([]).nodes, []);
   assert.equal(stateOf({running: false, hasLaunched: false}), 'ready');

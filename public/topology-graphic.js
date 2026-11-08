@@ -1,4 +1,4 @@
-// Read-only topology overview. Positions are derived from the live session list;
+// Topology overview. Node positions are local to this browser session;
 // no graph state is saved to .topo or sent to the server.
 (function (root, factory) {
   const api = factory();
@@ -20,7 +20,7 @@
     return count < 2 ? 0 : (index / (count - 1) - 0.5) * range * 2;
   }
 
-  function buildGraph(sessions) {
+  function buildGraph(sessions, positions = new Map()) {
     const machines = [...sessions];
     const switches = machines.filter(machine => machine.kind === 'switch');
     const switchOrder = new Map(switches.map((sw, index) => [sw.id, index]));
@@ -43,6 +43,12 @@
       id: sw.id, machine: sw, x: 560,
       y: height * (index + 1) / (switches.length + 1), state: stateOf(sw)
     }));
+    for (const [id, position] of positions) {
+      const node = nodes.get(id);
+      if (!node || !Number.isFinite(position.x) || !Number.isFinite(position.y)) continue;
+      node.x = Math.max(CARD_WIDTH / 2, Math.min(WIDTH - CARD_WIDTH / 2, position.x));
+      node.y = Math.max(48, Math.min(height - 48, position.y));
+    }
 
     const links = [];
     const switchSides = new Map();
@@ -52,7 +58,7 @@
         if (!switchId || !byId.has(switchId) || byId.get(switchId).kind !== 'switch') return;
         const portInfo = host.networkInterfaces?.[nicIndex];
         const port = portInfo?.switchId === switchId ? portInfo.port : null;
-        const side = nodes.get(host.id).x < 560 ? 'left' : 'right';
+        const side = nodes.get(host.id).x < nodes.get(switchId).x ? 'left' : 'right';
         const link = {hostId: host.id, switchId, nicIndex, port, side};
         links.push(link);
         const key = `${switchId}:${side}`;
@@ -92,8 +98,8 @@
     return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
   }
 
-  function draw(container, sessions, onSelect) {
-    const graph = buildGraph(sessions);
+  function draw(container, sessions, onSelect, positions) {
+    const graph = buildGraph(sessions, positions);
     container.replaceChildren();
     if (!graph.nodes.length) {
       const empty = document.createElement('div');
