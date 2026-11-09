@@ -14,7 +14,7 @@ const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
-const {validateBootFiles, createGuestIso} = require('./guest-media');
+const {LABEL: GUEST_ISO_LABEL, validateBootFiles, createGuestIso} = require('./guest-media');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -122,8 +122,8 @@ function getSession(id, create = false, kind = 'vm') {
       action: null,
       runLog: [],
       serialBuffer: '',
-      guestLogPending: '',
-      guestLogActive: false,
+      serialFilterPending: '',
+      serialFilterPassThrough: false,
       generation: 0,
       runDisk: null,
       guestMedia: {script: '#!/bin/sh\n', resources: []},
@@ -164,16 +164,41 @@ function appendLog(session, message) {
   io.to(session.id).emit('log', {sessionId: session.id, line});
 }
 
-function captureGuestLog(session, text) {
-  session.guestLogPending = (session.guestLogPending + text).slice(-8192);
-  const lines = session.guestLogPending.split(/\r?\n/);
-  session.guestLogPending = lines.pop();
-  for (const raw of lines) {
-    const line = raw.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '').trim();
-    if (/QEMUWEB_START_BEGIN/.test(line)) session.guestLogActive = true;
-    if (session.guestLogActive || /QEMUWEB_START_(?:ERROR|EXIT)/.test(line)) appendLog(session, `[guest] ${line.slice(0, 2048)}`);
-    if (/QEMUWEB_START_(?:ERROR|EXIT)/.test(line)) session.guestLogActive = false;
+function plainSerialLine(line) {
+  return line.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '');
+}
+
+function possibleGuestHookLine(line) {
+  const plain = plainSerialLine(line);
+  if (plain.length > 160) return false;
+  if (plain.startsWith('\x1b')) return true; // Wait for a split ANSI sequence.
+  const timestamp = /^\[\s*[\d.]*\]\s*(.*)$/.exec(plain);
+  if (timestamp) return 'qemuweb-guest-start'.startsWith(timestamp[1]) || timestamp[1].startsWith('qemuweb-guest-start');
+  if (/^\[\s*[\d.]*$/.test(plain)) return true;
+  return ['qemuweb-guest-start', 'QEMUWEB_START_'].some(prefix => prefix.startsWith(plain) || plain.startsWith(prefix));
+}
+
+function filterGuestHookSerial(session, text) {
+  let visible = '';
+  for (const char of text) {
+    if (session.serialFilterPassThrough) {
+      visible += char;
+      if (char === '\n') session.serialFilterPassThrough = false;
+      continue;
+    }
+    session.serialFilterPending += char;
+    if (char === '\n') {
+      if (!/(?:qemuweb-guest-start\[\d+\]:\s*)?QEMUWEB_START_(?:BEGIN|EXIT)\b/.test(plainSerialLine(session.serialFilterPending))) {
+        visible += session.serialFilterPending;
+      }
+      session.serialFilterPending = '';
+    } else if (!possibleGuestHookLine(session.serialFilterPending)) {
+      visible += session.serialFilterPending;
+      session.serialFilterPending = '';
+      session.serialFilterPassThrough = true;
+    }
   }
+  return visible;
 }
 
 function execLogged(session, command, args, options = {stdio: 'pipe'}) {
@@ -298,7 +323,7 @@ app.get('/api/systems', (_req, res) => {
   } catch (error) { res.status(500).json({error: error.message}); }
 });
 
-app.get('/api/guest-cdrom-capability', (_req, res) => res.json({autoBuild: true}));
+app.get('/api/guest-cdrom-capability', (_req, res) => res.json({autoBuild: true, previewIso: true}));
 
 app.get('/api/sessions', (_req, res) => {
   res.json([...sessions.values()].map(session => ({
@@ -332,17 +357,20 @@ function connectSerial(session, attempt = 0, generation = session.generation) {
   connection.once('connect', () => {
     // Serial socket chunks can split a UTF-8 character across reads.
     const decoder = new StringDecoder('utf8');
-    const publishSerial = text => {
+    const emitSerial = text => {
       if (!text) return;
-      captureGuestLog(session, text);
       session.serialBuffer = (session.serialBuffer + text).slice(-262144);
       io.to(session.id).emit('serial', {sessionId: session.id, data: text});
     };
+    const publishSerial = text => emitSerial(filterGuestHookSerial(session, text));
     session.serial = connection;
     publishState(session);
     connection.on('data', data => publishSerial(decoder.write(data)));
     connection.on('close', () => {
       publishSerial(decoder.end());
+      emitSerial(session.serialFilterPending);
+      session.serialFilterPending = '';
+      session.serialFilterPassThrough = false;
       if (session.serial === connection) session.serial = null;
       if (!session.stopping && session.action !== 'reboot' && session.machine) publishState(session, 'Serial console disconnected');
     });
@@ -366,9 +394,9 @@ function guestIsoStatus(session) {
   };
 }
 
-function buildGuestIso(session, files) {
+function buildGuestIso(session, files, destination = tempFile(session, `guest-setup-${crypto.randomUUID()}.iso`)) {
   const validated = validateBootFiles(files);
-  const next = tempFile(session, `guest-setup-${crypto.randomUUID()}.iso`);
+  const next = destination;
   createGuestIso({files: validated, destination: next, genisoimage: commands.GENISOIMAGE,
     onCommand: (command, args) => appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`)});
   const previous = session.guestIso;
@@ -665,6 +693,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     if (!image || !['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown system or engine.');
     const session = launched ? existing : {
       id, vmName: `qemuweb-${process.pid}-${id}`,
+      generation: existing?.generation || 0,
       socketPath: path.join(runtime, `qemuweb-${process.pid}-${id}.sock`),
       monitorPath: path.join(runtime, `qemuweb-${process.pid}-${id}.monitor.sock`),
       engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
@@ -683,13 +712,17 @@ app.get('/api/options/:sessionId', (req, res) => {
       ? launched ? {...session.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
       : null;
     if (!launched && isQemu) session.qemuOptions = options;
+    const nextGuestIso = tempFile(session, `guest-setup-${session.generation + 1}.iso`);
     const previewSession = {...session, launchSettings: userSettings, qemuOptions: options,
       guestIsoAttached: attachGuestCdrom,
-      guestIso: attachGuestCdrom ? tempFile(session, 'guest-setup-next.iso') : null};
+      guestIso: attachGuestCdrom ? nextGuestIso : null};
     const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
     const fixed = isQemu
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
       : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.nic};
+    const isoCommands = attachGuestCdrom
+      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', `${nextGuestIso}.tmp`, path.join(runtime, '.qemuweb-iso-<temporary>')]]
+      : [];
     const launchCommands = isQemu
       ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
       : launched
@@ -705,8 +738,8 @@ app.get('/api/options/:sessionId', (req, res) => {
           {label: 'Base image (VDI)', path: path.relative(root, imagePath(image.images.vdi))},
           {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, `${image.id}.vdi`))}
         ];
-    storage.push({label: 'Guest CD-ROM ISO', path: session.guestIso ? socketLabel(session.guestIso) : attachGuestCdrom ? 'Built at next start' : 'Not created'});
-    res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: session.networkInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: launchCommands.map(args => args.map(shellQuote).join(' '))});
+    storage.push({label: 'Guest CD-ROM ISO', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
+    res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: session.networkInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -769,8 +802,8 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.generation += 1;
   if (!options.reset && !resume) session.runLog = [];
   session.serialBuffer = '';
-  session.guestLogPending = '';
-  session.guestLogActive = false;
+  session.serialFilterPending = '';
+  session.serialFilterPassThrough = false;
   session.lastMessage = 'Starting…';
   if (!options.reset && !resume) io.to(session.id).emit('logs-reset', {sessionId: session.id});
   io.to(session.id).emit('serial-reset', {sessionId: session.id});
@@ -781,7 +814,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.hostname = displayName;
   session.qemuOptions = qemuOptions;
   session.launchSettings = launchSettings;
-  if (session.guestIsoAttached) buildGuestIso(session, session.guestMedia);
+  if (session.guestIsoAttached) buildGuestIso(session, session.guestMedia, tempFile(session, `guest-setup-${session.generation}.iso`));
   if (selectedEngine === 'virtualbox' && resume) {
     if (!['poweroff', 'aborted'].includes(virtualBoxState(session))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
     if (session.activeGuestIso) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);

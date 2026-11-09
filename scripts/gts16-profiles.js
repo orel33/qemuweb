@@ -89,12 +89,13 @@ printf 'GTS16_JOURNAL_CHECK_%s\\n' "$?"`;
           `${profile} normal systemd completion status is missing from serial: ${stripAnsi(serial).split('\n').filter(line => /Finished|QemuWeb|qemuweb-guest/.test(line)).slice(-15).join(' | ')}`);
         console.log(`${profile}: ISO script and resource verified in journalctl, exit 0; no guest hook syslog in serial or Host Log`);
       } else {
-        try { await waitFor(`${profile} guest hook`, () => serial.includes('QEMUWEB_START_EXIT 0') || serial.includes('QEMUWEB_START_ERROR'), 90000); }
+        try { await waitFor(`${profile} guest hook`, () => serial.includes(marker) || serial.includes('QEMUWEB_START_ERROR'), 90000); }
         catch (error) { throw new Error(`${error.message}\nRecent serial:\n${serial.slice(-4000)}`); }
-        assert.match(serial, /QEMUWEB_START_EXIT 0/, `${profile} guest hook failed: ${serial.slice(-2500)}`);
+        assert.ok(serial.includes(`GTS16_${profile.replaceAll('-', '_')}_SCRIPT`), `${profile} start.sh output not printed: ${serial.slice(-2500)}`);
         assert.ok(serial.includes(marker), `${profile} companion resource not printed: ${serial.slice(-2500)}`);
-        await waitFor(`${profile} Host Log`, () => logs.some(line => line.includes('QEMUWEB_START_EXIT 0')) && logs.some(line => line.includes(marker)));
-        console.log(`${profile}: ISO mounted, start.sh and companion file ran, exit 0 visible in console and Host Log`);
+        assert.doesNotMatch(serial, /QEMUWEB_START_(?:BEGIN|EXIT)/, `${profile} boot console contains guest hook markers.`);
+        assert.ok(!logs.some(line => line.startsWith('[guest]')), `${profile} Host Log contains guest serial output.`);
+        console.log(`${profile}: ISO mounted; start.sh and companion file output verified without guest hook markers in console or Host Log`);
       }
     } finally { socket.disconnect(); }
     await request(`/api/sessions/${id}`, 'DELETE');
@@ -117,8 +118,8 @@ printf 'GTS16_JOURNAL_CHECK_%s\\n' "$?"`;
       await request('/api/start', 'POST', {sessionId: id, engine: 'qemu', imageId: 'openwrt', interfaces: [], settings: {memory: 256, cpus: 1, clock: 'utc'}});
       await waitFor('missing-script report', () => serial.includes('QEMUWEB_START_ERROR /mnt/cdrom/start.sh missing'), 90000);
       assert.ok(serial.includes('Please press Enter to activate this console.'), 'OpenWrt boot did not reach its console.');
-      await waitFor('missing-script Host Log', () => logs.some(line => line.includes('QEMUWEB_START_ERROR /mnt/cdrom/start.sh missing')));
-      console.log('openwrt: missing start.sh reported promptly in console and Host Log; boot reached console');
+      assert.ok(!logs.some(line => line.startsWith('[guest]')), 'Host Log contains guest serial output.');
+      console.log('openwrt: missing start.sh reported promptly in console; boot reached console');
     } finally { socket.disconnect(); }
     await request(`/api/sessions/${id}`, 'DELETE');
   }

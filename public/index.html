@@ -603,9 +603,14 @@
     const guestScriptFile = document.getElementById('guest-script-file');
     const guestAttachCdrom = document.getElementById('guest-attach-cdrom');
     let autoCdromSupported = false;
+    let isoPreviewSupported = false;
     fetch('/api/guest-cdrom-capability', {cache: 'no-store'})
       .then(response => response.ok ? response.json() : null)
-      .then(capabilities => { autoCdromSupported = capabilities?.autoBuild === true; guestAttachCdrom.disabled = !autoCdromSupported; })
+      .then(capabilities => {
+        autoCdromSupported = capabilities?.autoBuild === true;
+        isoPreviewSupported = capabilities?.previewIso === true;
+        guestAttachCdrom.disabled = !autoCdromSupported;
+      })
       .catch(() => { guestAttachCdrom.disabled = true; });
     const hostCreateActions = document.getElementById('host-create-actions');
     const hostAutostart = document.getElementById('host-autostart');
@@ -1310,6 +1315,11 @@
       settingsStorage.replaceChildren();
       for (const disk of storage || []) addSettingRow(settingsStorage, disk.label, disk.path);
     }
+    function showIsoPreviewStatus(machine) {
+      const needsRestart = machine.autoBuildGuestCdrom && autoCdromSupported && !isoPreviewSupported;
+      optionsStatus.textContent = needsRestart ? 'Restart the QemuWeb server to show the planned ISO path and creation command.' : '';
+      optionsStatus.hidden = !needsRestart;
+    }
     async function renderQemuOptions() {
       const machine = settingsMachine();
       if (!machine || machine.kind === 'switch' || !qemuOptionsPanel.open) return;
@@ -1426,6 +1436,7 @@
         addSettingRow(settingsConsole, 'Console socket', body.console?.socket || '');
         if (body.monitor) addSettingRow(settingsConsole, 'Monitor socket', body.monitor);
         optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
+        showIsoPreviewStatus(machine);
       } catch (error) {
         if (request === optionsRequest) {
           optionsStatus.textContent = error.message;
@@ -1445,7 +1456,7 @@
         renderStorageSettings(body.storage);
         keepFocusedNicVisible();
         optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
-        optionsStatus.hidden = true;
+        showIsoPreviewStatus(machine);
       } catch (error) {
         if (request !== optionsRequest) return;
         optionsStatus.textContent = error.message;
