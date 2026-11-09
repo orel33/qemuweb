@@ -127,7 +127,7 @@ Both options use the same short syntax here, but provide two distinct interfaces
 
 `-serial` connects the first virtual serial port (`ttyS0` in Linux) to the guest's interactive terminal: boot messages, `login:`, and then a shell. `-monitor` opens the text-based HMP monitor of **QEMU itself**: its commands control the emulator and are not Linux shell commands. `server=on` makes QEMU listen on each Unix socket; the Node server connects to them. `wait=off` lets QEMU start without waiting for a connection. The short form of `-serial` replaces the earlier `-chardev socket,… -serial chardev:serial0` pair.
 
-In the bar directly above each terminal, choose **Console**, **Monitor**, or **Log** to reuse that pane's xterm area. QEMU hosts offer all three views; VirtualBox hosts and VDE switches offer Console and Log. The Log view is read-only, replays the session's existing history, and refreshes as new lines arrive or the server resets the log. In a QEMU host's **Monitor** view, for example, `help` lists commands, `info status` reports the VM's status, and `info block` describes its disks. Commands such as `system_reset` or `quit` directly change or stop the VM, so use them with care. Monitor commands and responses are recorded in the session Log even while that view is hidden.
+In the bar directly above each terminal, click the current view icon to choose **Console**, **Monitor**, or **Log** from a small menu. QEMU hosts offer all three views; VirtualBox hosts and VDE switches offer Console and Log. The **A−** and **A+** buttons change the font size of that terminal only (11–24 px); changing the font size in General Settings resets all terminal sizes to the new common value. The Log view is read-only, replays the session's existing history, and refreshes as new lines arrive or the server resets the log. In a QEMU host's **Monitor** view, for example, `help` lists commands, `info status` reports the VM's status, and `info block` describes its disks. Commands such as `system_reset` or `quit` directly change or stop the VM, so use them with care. Monitor commands and responses are recorded in the session Log even while that view is hidden.
 
 ## Image preparation
 
@@ -157,7 +157,7 @@ At startup, the server checks the configured commands, prints a green check or r
 
 `qemu.defaults` supplies common values. The `rtcBase` value is either `utc` (the Linux-friendly default, emitted as `-rtc base=utc`) or `localtime` (emitted as `-rtc base=localtime`); a system can override it in `systems.<id>.qemu`. The `systems.<id>.qemu` object contains only overrides: Debian 13 Cloud requests 1,024 MiB, OpenWrt requests 256 MiB, and Alpine inherits the defaults. All profiles have external networking disabled. `systems.<id>.virtualbox` separately supplies its memory, disabled network setting, and VirtualBox OS type. To add an already prepared Linux system in text mode, add a complete entry to `systems` with paths to its RAW and VDI bases; no separate catalog is needed.
 
-In the web page, click **Host Settings** to view the selected host's system, resources, network interfaces and corresponding QEMU or VirtualBox arguments. **Add a new host** opens the same dialog under that title, with editable fields, Autostart and Cancel/OK; the Expert button is hidden during creation. The disk creation and launch commands are previewed before launch. The interface and system descriptions are in English.
+In the web page, click **Host Settings** to view the selected host's system, resources, network interfaces and corresponding QEMU or VirtualBox arguments. **Add a new host** opens the same dialog under that title, with editable fields, Autostart and Cancel/OK; the Expert tab remains available. The disk creation and launch commands are previewed before launch. The interface and system descriptions are in English.
 
 The **QEMU · KVM / TCG** choice is in **General Settings**. **QEMU · KVM** requires accessible `/dev/kvm` and fails with an error if KVM is unavailable or a VirtualBox VM is running. Select **QEMU · TCG** explicitly to use software emulation. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 working disk format and control sockets are part of the application's operation. Configuration changes apply to **new sessions**. **Reboot** and **Reset** retain the options selected when their tab first started.
 
@@ -165,8 +165,14 @@ Every prepared image uses the internal hostname `qemuweb` and provides the same 
 
 ### Stopping and cleaning up
 
+Use `stop.sh` for a normal shutdown. It reads `runtime/server-<port>.pid` and signals only that QemuWeb server. The server writes this file after it opens its port, whether started with `start.sh` or `npm start`, and removes it on exit. By default the port is 3002; set `PORT` to target another instance. If the PID no longer exists, `stop.sh` removes the stale file; if it belongs to another process, the script refuses to signal it.
+
+`Ctrl+C` sends `SIGINT` and `stop.sh` sends `SIGTERM`; QemuWeb handles both with the same graceful shutdown. This closes its hosts and switches and removes their temporary working disks. Use `killall.sh` only when you need to find and stop **all** project servers, including orphaned QEMU or VirtualBox instances.
+
 ```sh
-./killall.sh                 # stop all servers and VMs belonging to this project
+./stop.sh                    # stop the tracked server on port 3002
+PORT=3003 ./stop.sh          # stop the tracked server on port 3003
+./killall.sh                 # emergency cleanup of all project servers and VMs
 ./cleanall.sh                # stop instances and empty runtime/; keep images/ and sources/
 ./cleanall.sh --images       # also empty images/; keep downloads in sources/
 ./cleanall.sh --sources      # also empty the sources/ download cache; keep the bases
@@ -174,7 +180,7 @@ Every prepared image uses the internal hostname `qemuweb` and provides the same 
 ./cleanall.sh --dry-run      # show what would be stopped and removed
 ```
 
-These scripts target the QEMU and Node processes and VirtualBox VMs associated with this directory. `cleanall.sh` keeps `.gitkeep` files and does not delete the code or `node_modules/`. After `--images`, `prepare.sh` can rebuild the bases from `sources/` without downloading them again; after `--sources`, a full preparation will need to download any missing sources.
+`cleanall.sh` calls the broader process cleanup and then removes the requested files. It keeps `.gitkeep` files and does not delete the code or `node_modules/`. After `--images`, `prepare.sh` can rebuild the bases from `sources/` without downloading them again; after `--sources`, a full preparation will need to download any missing sources.
 
 ### Formats in use
 
@@ -245,10 +251,11 @@ Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sourc
 ## Running QemuWeb
 
 ```sh
-npm start
+./start.sh
+PORT=3003 ./start.sh  # launch another instance on port 3003
 ```
 
-Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. **Add a new host** opens the Host Settings dialog titled **Add a new host**, with name, system, resources, network interfaces and Autostart; Cancel leaves no host behind, and OK creates it. The switch uses its own creation dialog. The engine is shown read-only in Host Settings. **General Settings** at the bottom left is its only selector for new hosts, including clones; QEMU/KVM is the default. It also sets the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. Names from the French and Greek lists are selected at random without reusing an active name. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a session, then choose a view in the bar above that pane's terminal. Login details appear in Host Settings.
+`start.sh` runs `npm start` in the foreground; `Ctrl+C` and `./stop.sh` can both end it. Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. **Add a new host** opens the Host Settings dialog titled **Add a new host**, with name, system, resources, network interfaces and Autostart; Cancel leaves no host behind, and OK creates it. The switch uses its own creation dialog. The engine is shown read-only in Host Settings. **General Settings** at the bottom left is its only selector for new hosts, including clones; QEMU/KVM is the default. It also sets the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. Names from the French and Greek lists are selected at random without reusing an active name. These preferences are saved in this browser's `localStorage`; the name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing sessions keep their names and engines. Use each pane's selector to open a session, then choose a view in the bar above that pane's terminal. Login details appear in Host Settings.
 
 ### Local VDE LAN prototype
 
@@ -287,11 +294,12 @@ The icons come from [Lucide](https://lucide.dev/icons); their license is kept in
 | ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red X on the tab asks for the same confirmation. |
 | **Exit All** | **Exit all** | `Exit all hosts and switches` | After confirmation, close every host and switch and delete their working disks. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console` | Clear this tab's console history while preserving its current prompt or line. |
-| ![Settings icon](docs/icons/sliders-horizontal.svg) | **Host Settings** | `Host Settings` | Edit the selected host's available launch settings and network interfaces; Mode Expert reveals the full command and technical details. |
+| ![Settings icon](docs/icons/sliders-horizontal.svg) | **Host Settings** | `Host Settings` | Edit the selected host's launch settings and network interfaces; the Expert tab shows commands and technical details. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the engine for every new host, including clones, the automatic naming scheme, and the terminal font and size in this browser. |
-| ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open Host Settings in creation mode, titled `Add a new host`; the Expert button is hidden and Autostart is selected by default. |
+| ![New host icon](docs/icons/plus.svg) | **New host** | `Add a new host` | Open Host Settings in creation mode, titled `Add a new host`; Autostart is selected by default. |
 | ![New switch icon](docs/icons/network-plus.svg) | **New switch** | `Add a new switch` | Open the VDE switch creation dialog; Autostart is selected by default. |
-| **Console / Monitor / Log** icons | **Terminal view** | `Console` / `Monitor` / `Log` | Reuse the same xterm area for the selected session's views. QEMU hosts provide all three; VirtualBox hosts and switches provide Console and read-only Log. New log lines and log resets update a visible Log view. |
+| **Console / Monitor / Log** menu | **Terminal view** | Current view icon | Reuse the same xterm area for the selected session's views. QEMU hosts provide all three; VirtualBox hosts and switches provide Console and read-only Log. |
+| **A− / A+** | **Terminal font size** | `Decrease` / `Increase terminal font size` | Adjust only this terminal. General Settings can reset all terminals to a common size. |
 
 A forced Stop can leave the guest filesystem needing repair on the next boot. Exit All affects every session.
 
