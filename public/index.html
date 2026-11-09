@@ -78,7 +78,6 @@
     .settings-heading h2 { margin: 0; font-size: 18px; }
     #qemu-options-panel .settings-heading { flex-wrap: wrap; }
     .settings-heading-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-    #toggle-expert-mode[aria-pressed="true"] { border-color: #70a8ff; background: #355177; color: #fff; }
     .settings-tabs { display: flex; gap: 4px; margin-top: 16px; overflow-x: auto; border-bottom: 1px solid #35404c; }
     .settings-tab { flex: 0 0 auto; padding: 10px 14px; border: 1px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: #bdc8d6; font-weight: 600; }
     .settings-tab:hover { color: #e7edf5; background: #1a2633; }
@@ -183,12 +182,27 @@
     .pane-clear-button:not(:disabled):hover { border-color: #c49aff; background: #304256; }
     .pane-clear-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     .pane-clear-button svg { width: 18px; height: 18px; }
+    .pane-expand-button { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #9fc5ef; }
+    .pane-expand-button:hover { border-color: #9fc5ef; background: #304256; }
+    .pane-expand-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+    .pane-expand-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .pane-session-title { display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 240px; box-sizing: border-box; height: 30px; padding: 0 9px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 700 13px/28px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-    .console-view-toggle { display: inline-flex; flex: none; gap: 4px; margin-left: auto; }
-    .console-view-toggle button { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 1px solid #405166; border-radius: 4px; background: #1a2633; color: #aebdcd; }
-    .console-view-toggle svg { width: 18px; height: 18px; }
-    .console-view-toggle button[aria-pressed="true"] { border-color: #70a8ff; background: #355177; color: #fff; }
-    .console-view-toggle button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 1px; }
+    .pane-session-title[data-empty="true"] { padding-left: 0; border-color: transparent; background: transparent; color: #9daec0; }
+    .pane-font-button { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #b7d7f4; font: 700 12px system-ui, sans-serif; }
+    .pane-font-button:not(:disabled):hover { border-color: #9fc5ef; background: #304256; }
+    .pane-font-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+    .pane-view-menu { position: relative; flex: none; margin-left: auto; }
+    .pane-view-menu[open] { z-index: 5; }
+    .pane-view-menu summary { display: grid; place-items: center; width: 30px; height: 30px; border: 1px solid #405166; border-radius: 4px; background: #1a2633; color: #aebdcd; cursor: pointer; list-style: none; }
+    .pane-view-menu summary::-webkit-details-marker { display: none; }
+    .pane-view-menu summary:hover, .pane-view-menu[open] summary { border-color: #70a8ff; background: #304256; }
+    .pane-view-menu summary:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 1px; }
+    .pane-view-menu .console-view-toggle { position: absolute; top: calc(100% + 5px); right: 0; display: grid; gap: 2px; width: 150px; padding: 4px; border: 1px solid #506176; border-radius: 6px; background: #1a2633; box-shadow: 0 10px 28px #0009; }
+    .pane-view-menu:not([open]) .console-view-toggle { display: none; }
+    .pane-view-menu .console-view-toggle button { display: flex; align-items: center; gap: 9px; width: 100%; padding: 7px 9px; border: 0; border-radius: 4px; background: transparent; color: #c6d5e5; text-align: left; font: 13px system-ui, sans-serif; }
+    .pane-view-menu .console-view-toggle button:hover, .pane-view-menu .console-view-toggle button[aria-pressed="true"] { background: #304256; color: #fff; }
+    .pane-view-menu .console-view-toggle button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: -2px; }
+    .console-view-toggle svg, .pane-view-menu summary svg { flex: none; width: 18px; height: 18px; }
     .console-pane-state { display: inline-flex; flex: none; align-items: center; height: 32px; padding: 0 7px; border: 1px solid #405166; border-radius: 5px; background: #101820; color: #bdc8d6; font-size: 11px; white-space: nowrap; }
     .console-pane-state[data-state="new"] { color: #9fc5ef; }
     .console-pane-state[data-state="running"] { color: #7ae4a3; }
@@ -274,18 +288,18 @@
     <p id="general-settings-error" role="alert" hidden></p>
   </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
-    <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="toggle-expert-mode" type="button" aria-pressed="false">Mode Expert</button><button id="close-settings" type="button">Close</button></div></div>
+    <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="close-settings" type="button">Close</button></div></div>
     <form id="host-settings-form" novalidate>
     <p id="options-status" role="alert" hidden></p>
     <div class="settings-tabs" role="tablist" aria-label="Host settings sections">
       <button class="settings-tab" id="host-tab-general" type="button" role="tab" aria-controls="host-panel-general" aria-selected="true" tabindex="0" data-settings-tab="general">General</button>
-      <button class="settings-tab" id="host-tab-resources" type="button" role="tab" aria-controls="host-panel-resources" aria-selected="false" tabindex="-1" data-settings-tab="resources">Resources</button>
+      <button class="settings-tab" id="host-tab-resources" type="button" role="tab" aria-controls="host-panel-resources" aria-selected="false" tabindex="-1" data-settings-tab="resources">Hardware</button>
       <button class="settings-tab" id="host-tab-network" type="button" role="tab" aria-controls="host-panel-network" aria-selected="false" tabindex="-1" data-settings-tab="network">Network</button>
       <button class="settings-tab" id="host-tab-startup" type="button" role="tab" aria-controls="host-panel-startup" aria-selected="false" tabindex="-1" data-settings-tab="startup">Startup</button>
-      <button class="settings-tab" id="host-tab-expert" type="button" role="tab" aria-controls="host-panel-expert" aria-selected="false" tabindex="-1" data-settings-tab="expert" hidden>Expert</button>
+      <button class="settings-tab" id="host-tab-expert" type="button" role="tab" aria-controls="host-panel-expert" aria-selected="false" tabindex="-1" data-settings-tab="expert">Expert</button>
     </div>
     <section class="settings-tab-panel" id="host-panel-general" role="tabpanel" aria-labelledby="host-tab-general" data-settings-panel="general"><div id="settings-fixed"></div></section>
-    <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-editable"></div></section>
+    <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-hardware"></div><div id="settings-editable"></div></section>
     <section class="settings-tab-panel" id="host-panel-network" role="tabpanel" aria-labelledby="host-tab-network" data-settings-panel="network" hidden><div id="settings-network">
       <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces">
         <div class="network-controls-head"><button id="add-nic" type="button">+ Interface</button></div>
@@ -293,18 +307,11 @@
       </section>
     </div></section>
     <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
-      <p>Runs in the guest at each boot from /mnt/cdrom. Changes take effect on the next Reboot or Start/Resume.</p>
       <label for="guest-start-script">start.sh</label><textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
       <label>Import start.sh <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain"></label>
-      <p>Additional files for start.sh: choose a file, then optionally change its name on the ISO. For example, config/message.txt is available at /mnt/cdrom/config/message.txt.</p>
-      <div id="guest-resource-list"></div>
-      <label for="guest-resource-file">Additional file</label><input id="guest-resource-file" type="file">
-      <label for="guest-resource-path">File name on ISO <input id="guest-resource-path" type="text" placeholder="config/message.txt" maxlength="128" autocomplete="off" disabled></label>
-      <button id="guest-add-resource" type="button" disabled>Add file</button>
-      <button id="guest-save-media" type="button">Save startup files</button>
+      <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup CD-ROM</label>
     </section>
     <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
-      <div class="settings-section"><h3>Hardware profile</h3><div id="settings-hardware"></div></div>
       <div class="settings-section"><h3>Storage</h3><div id="settings-storage"></div></div>
       <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
       <div class="settings-section settings-commands"><h3>Full launch commands</h3><pre id="options-commands"></pre></div>
@@ -324,24 +331,25 @@
     <symbol id="pane-stop-icon" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
     <symbol id="pane-reboot-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
     <symbol id="pane-reset-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="pane-exit-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
     <symbol id="pane-settings-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="pane-clear-icon" viewBox="0 0 24 24"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></symbol>
   </svg>
   <main id="console-workspace" data-columns="1">
     <section class="console-pane" id="console-pane-0" data-active="true">
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-0" class="pane-session-title">No session</span><div id="console-view-0" class="console-view-toggle" role="group" aria-label="Left terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-0" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-0" class="pane-session-title" data-empty="true">Add a host or switch</span><div id="console-view-0" class="console-view-toggle" role="group" aria-label="Left terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-0" class="console-pane-state" role="status" aria-live="polite" hidden></span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-0"></div><input class="terminal-scroll" id="terminal-scroll-0" type="range" min="0" max="0" value="0" aria-label="Scroll left console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-1" data-active="false" hidden>
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-1" class="pane-session-title">No session</span><div id="console-view-1" class="console-view-toggle" role="group" aria-label="Right terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-1" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-1" class="pane-session-title" data-empty="true">Add a host or switch</span><div id="console-view-1" class="console-view-toggle" role="group" aria-label="Right terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-1" class="console-pane-state" role="status" aria-live="polite" hidden></span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-1"></div><input class="terminal-scroll" id="terminal-scroll-1" type="range" min="0" max="0" value="0" aria-label="Scroll right console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-2" data-active="false" hidden>
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-2" class="pane-session-title">No session</span><div id="console-view-2" class="console-view-toggle" role="group" aria-label="Lower left terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-2" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-2" class="pane-session-title" data-empty="true">Add a host or switch</span><div id="console-view-2" class="console-view-toggle" role="group" aria-label="Lower left terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-2" class="console-pane-state" role="status" aria-live="polite" hidden></span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-2"></div><input class="terminal-scroll" id="terminal-scroll-2" type="range" min="0" max="0" value="0" aria-label="Scroll lower left console" title="Scroll console history"></div>
     </section>
     <section class="console-pane" id="console-pane-3" data-active="false" hidden>
-      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-3" class="pane-session-title">No session</span><div id="console-view-3" class="console-view-toggle" role="group" aria-label="Lower right terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-3" class="console-pane-state" role="status" aria-live="polite">No session</span></div>
+      <div class="console-pane-header"><svg class="pane-kind-icon" viewBox="0 0 24 24" aria-hidden="true" hidden><use href="#pane-host-icon"></use></svg><span id="console-session-3" class="pane-session-title" data-empty="true">Add a host or switch</span><div id="console-view-3" class="console-view-toggle" role="group" aria-label="Lower right terminal view" hidden><button type="button" data-view="console" data-icon="SquareTerminal" aria-label="Console" title="Console" aria-pressed="true"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="18" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg></button><button type="button" data-view="monitor" data-icon="MonitorCog" aria-label="Monitor" title="Monitor" aria-pressed="false" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 17v4"/><path d="m14.305 7.53.923-.382"/><path d="m15.228 4.852-.923-.383"/><path d="m16.852 3.228-.383-.924"/><path d="m16.852 8.772-.383.923"/><path d="m19.148 3.228.383-.924"/><path d="m19.53 9.696-.382-.924"/><path d="m20.772 4.852.924-.383"/><path d="m20.772 7.148.924.383"/><path d="M22 13v2a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"/><path d="M8 21h8"/><circle cx="18" cy="6" r="3"/></svg></button><button type="button" data-view="log" data-icon="FileText" aria-label="Log" title="Log" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M8 13h8M8 17h8"/></svg></button></div><span id="console-state-3" class="console-pane-state" role="status" aria-live="polite" hidden></span></div>
       <div class="terminal-frame"><div class="terminal" id="terminal-3"></div><input class="terminal-scroll" id="terminal-scroll-3" type="range" min="0" max="0" value="0" aria-label="Scroll lower right console" title="Scroll console history"></div>
     </section>
   </main>
@@ -359,7 +367,7 @@
     <button id="clone-machine" class="icon-button" type="button" disabled title="Clone selected host or switch" aria-label="Clone selected host or switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>
     <button id="exit-all" class="icon-button" type="button" disabled title="Exit all hosts and switches" aria-label="Exit all hosts and switches"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 21h12a2 2 0 0 0 2-2V7M7 7l6 6m0-6-6 6"/></svg></button>
     <div class="page-controls" aria-label="Console pages"><button id="previous-page" class="icon-button" type="button" disabled title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><span id="page-position">0 / 0</span><button id="next-page" class="icon-button" type="button" disabled title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div>
-    <button id="toggle-console-columns" class="icon-button" type="button" title="Layout: 2 panes; click for 4" aria-label="Layout: 2 panes; click for 4"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg><span class="layout-count" id="layout-count">2</span></button>
+    <button id="toggle-console-columns" class="icon-button" type="button" title="Layout: 1 pane; click for 2" aria-label="Layout: 1 pane; click for 2"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg><span class="layout-count" id="layout-count">1</span></button>
     <button id="toggle-switch-consoles" class="icon-button" type="button" aria-pressed="true" title="Hide switch consoles" aria-label="Hide switch consoles"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
   </nav>
   <script src="/socket.io/socket.io.js"></script>
@@ -396,8 +404,27 @@
         token: 0,
         replayGeneration: 0,
         replaying: false,
-        replayPending: ''
+        replayPending: '',
+        fontSizeOverride: null
       };
+      pane.viewMenu = document.createElement('details');
+      pane.viewMenu.className = 'pane-view-menu';
+      pane.viewMenu.hidden = true;
+      pane.viewMenuToggle = document.createElement('summary');
+      pane.viewToggle.hidden = false;
+      for (const button of pane.viewButtons) {
+        const label = document.createElement('span');
+        label.textContent = button.getAttribute('aria-label');
+        button.append(label);
+      }
+      pane.viewToggle.replaceWith(pane.viewMenu);
+      pane.viewMenu.append(pane.viewMenuToggle, pane.viewToggle);
+      pane.viewMenu.addEventListener('toggle', () => {
+        if (pane.viewMenu.open) for (const other of panes) {
+          if (other !== pane) other.viewMenu.open = false;
+          other.actionMenu?.removeAttribute('open');
+        }
+      });
       pane.metrics = document.createElement('span');
       pane.metrics.className = 'pane-metrics';
       pane.metrics.hidden = true;
@@ -446,7 +473,10 @@
       pane.actionMenu.append(actionToggle, actionList);
       pane.title.before(pane.actionMenu);
       pane.actionMenu.addEventListener('toggle', () => {
-        if (pane.actionMenu.open) for (const other of panes) if (other !== pane) other.actionMenu.open = false;
+        if (pane.actionMenu.open) for (const other of panes) {
+          if (other !== pane) other.actionMenu.open = false;
+          other.viewMenu.open = false;
+        }
       });
       pane.settingsButton = document.createElement('button');
       pane.settingsButton.type = 'button';
@@ -471,6 +501,24 @@
       pane.clearButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-clear-icon"></use></svg>';
       pane.clearButton.addEventListener('click', () => clearPaneConsole(pane));
       pane.settingsButton.after(pane.clearButton);
+      pane.expandButton = document.createElement('button');
+      pane.expandButton.type = 'button';
+      pane.expandButton.className = 'pane-expand-button';
+      pane.expandButton.hidden = true;
+      pane.expandButton.addEventListener('click', () => togglePaneExpansion(pane));
+      pane.clearButton.after(pane.expandButton);
+      pane.fontButtons = [-1, 1].map(change => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'pane-font-button';
+        button.textContent = change < 0 ? 'A−' : 'A+';
+        button.title = change < 0 ? 'Decrease terminal font size' : 'Increase terminal font size';
+        button.setAttribute('aria-label', button.title);
+        button.hidden = true;
+        button.addEventListener('click', () => changePaneFontSize(pane, change));
+        return button;
+      });
+      pane.expandButton.after(...pane.fontButtons);
       terminal.onScroll(() => syncConsoleScroll(pane));
       terminal.onData(data => {
         if (pane.replaying || !pane.machineId) return;
@@ -484,15 +532,19 @@
       return pane;
     });
     document.addEventListener('pointerdown', event => {
-      for (const pane of panes) if (!pane.actionMenu.contains(event.target)) pane.actionMenu.open = false;
+      for (const pane of panes) {
+        if (!pane.actionMenu.contains(event.target)) pane.actionMenu.open = false;
+        if (!pane.viewMenu.contains(event.target)) pane.viewMenu.open = false;
+      }
     });
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
-      const openMenu = panes.find(pane => pane.actionMenu.open);
+      const openMenu = panes.find(pane => pane.actionMenu.open || pane.viewMenu.open);
       if (!openMenu) return;
       event.preventDefault();
-      openMenu.actionMenu.open = false;
-      openMenu.actionMenu.querySelector('summary').focus();
+      const menu = openMenu.viewMenu.open ? openMenu.viewMenu : openMenu.actionMenu;
+      menu.open = false;
+      menu.querySelector('summary').focus();
     });
     function syncConsoleScroll(pane) {
       const buffer = pane.terminal.buffer.active;
@@ -549,20 +601,19 @@
     const hostSettingsForm = document.getElementById('host-settings-form');
     const guestStartScript = document.getElementById('guest-start-script');
     const guestScriptFile = document.getElementById('guest-script-file');
-    const guestResourceList = document.getElementById('guest-resource-list');
-    const guestResourcePath = document.getElementById('guest-resource-path');
-    const guestResourceFile = document.getElementById('guest-resource-file');
-    const guestAddResource = document.getElementById('guest-add-resource');
-    const guestSaveMedia = document.getElementById('guest-save-media');
+    const guestAttachCdrom = document.getElementById('guest-attach-cdrom');
+    let autoCdromSupported = false;
+    fetch('/api/guest-cdrom-capability', {cache: 'no-store'})
+      .then(response => response.ok ? response.json() : null)
+      .then(capabilities => { autoCdromSupported = capabilities?.autoBuild === true; guestAttachCdrom.disabled = !autoCdromSupported; })
+      .catch(() => { guestAttachCdrom.disabled = true; });
     const hostCreateActions = document.getElementById('host-create-actions');
     const hostAutostart = document.getElementById('host-autostart');
     const confirmHostCreate = document.getElementById('confirm-host-create');
     const cancelHostCreate = document.getElementById('cancel-host-create');
     const closeHostSettings = document.getElementById('close-settings');
-    const toggleExpertMode = document.getElementById('toggle-expert-mode');
     const settingsTabs = [...qemuOptionsPanel.querySelectorAll('[data-settings-tab]')];
     const settingsPanels = [...qemuOptionsPanel.querySelectorAll('[data-settings-panel]')];
-    const expertTab = document.getElementById('host-tab-expert');
     const showGeneralSettings = document.getElementById('show-general-settings');
     const generalSettingsPanel = document.getElementById('general-settings-panel');
     const defaultEngineSelect = document.getElementById('default-engine');
@@ -596,7 +647,8 @@
     let activeId = null;
     let exitAllBusy = false;
     let activePaneIndex = 0;
-    let layoutSize = 2;
+    let layoutSize = 1;
+    let expandedPaneIndex = null;
     let showSwitchConsoles = true;
     let pageIndex = 0;
     let selectionToken = 0;
@@ -605,37 +657,65 @@
     let createDraft = null;
     let cloneSourceId = null;
     let hostSettingsDraft = null;
-    function resetGuestResourceSelection() {
-      guestResourceFile.value = '';
-      guestResourcePath.value = '';
-      guestResourcePath.disabled = true;
-      guestAddResource.disabled = true;
+    const startupStoragePrefix = 'qemuweb.startup.';
+    function storedStartup(machine) {
+      try {
+        const value = JSON.parse(localStorage.getItem(startupStoragePrefix + machine.id) || 'null');
+        return value && typeof value.script === 'string' && typeof value.autoBuild === 'boolean' ? value : null;
+      } catch (_) { return null; }
     }
-    function currentGuestMedia() {
-      const machine = settingsMachine();
-      if (!machine) return null;
-      if (!machine.guestMedia) machine.guestMedia = {script: '#!/bin/sh\n', resources: []};
-      return machine.guestMedia;
+    function restoreStartup(machine, serverMedia, serverAutoBuild) {
+      const saved = storedStartup(machine);
+      machine.guestMedia = serverMedia || machine.guestMedia || {script: '#!/bin/sh\n', resources: []};
+      if (saved) machine.guestMedia.script = saved.script;
+      machine.autoBuildGuestCdrom = saved ? saved.autoBuild : !!serverAutoBuild;
+    }
+    function saveStartupLocally(machine) {
+      if (machine === hostSettingsDraft) return;
+      try {
+        localStorage.setItem(startupStoragePrefix + machine.id, JSON.stringify({
+          script: machine.guestMedia.script, autoBuild: !!machine.autoBuildGuestCdrom
+        }));
+      } catch (error) {
+        optionsStatus.textContent = `Cannot save start.sh in this browser: ${error.message}`;
+        optionsStatus.hidden = false;
+      }
+    }
+    function forgetStartupLocally(machine) {
+      if (machine?.kind !== 'vm') return;
+      try { localStorage.removeItem(startupStoragePrefix + machine.id); } catch (_) {}
+    }
+    async function startupPayload(machine) {
+      const saved = storedStartup(machine);
+      if (!machine.guestMedia) {
+        const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Cannot load startup files.');
+        restoreStartup(machine, {script: data.script, resources: data.resources}, data.guestCdrom?.attached);
+      }
+      if (saved) {
+        machine.guestMedia.script = saved.script;
+        machine.autoBuildGuestCdrom = saved.autoBuild;
+      }
+      return {
+        guestMedia: machine.guestMedia,
+        autoBuildGuestCdrom: !!machine.autoBuildGuestCdrom
+      };
     }
     function renderGuestMedia() {
       const machine = settingsMachine();
-      const media = currentGuestMedia();
-      if (!media) return;
-      guestStartScript.value = media.script;
-      guestResourceList.replaceChildren();
-      for (const resource of media.resources) {
-        const row = document.createElement('div');
-        row.textContent = resource.path + ' ';
-        const remove = document.createElement('button');
-        remove.type = 'button';
-        remove.textContent = 'Remove';
-        remove.onclick = () => { media.resources = media.resources.filter(item => item !== resource); renderGuestMedia(); };
-        row.append(remove);
-        guestResourceList.append(row);
-      }
-      guestSaveMedia.hidden = machine === hostSettingsDraft;
+      if (!machine) return;
+      guestStartScript.value = machine.guestMedia?.script || '';
+      guestAttachCdrom.checked = !!machine.autoBuildGuestCdrom;
+      guestAttachCdrom.disabled = !autoCdromSupported;
     }
-    guestStartScript.addEventListener('input', () => { const media = currentGuestMedia(); if (media) media.script = guestStartScript.value; });
+    guestStartScript.addEventListener('input', () => {
+      const machine = settingsMachine();
+      if (!machine) return;
+      if (!machine.guestMedia) machine.guestMedia = {script: '', resources: []};
+      machine.guestMedia.script = guestStartScript.value;
+      saveStartupLocally(machine);
+    });
     guestScriptFile.addEventListener('change', async () => {
       const file = guestScriptFile.files?.[0];
       if (!file) return;
@@ -643,43 +723,23 @@
         if (file.size > 65536) throw new Error('start.sh must be at most 64 KiB.');
         const script = new TextDecoder('utf-8', {fatal: true}).decode(await file.arrayBuffer());
         if (script.includes('\0')) throw new Error('start.sh cannot contain NUL bytes.');
-        const media = currentGuestMedia();
-        if (media) { media.script = script; renderGuestMedia(); }
+        const machine = settingsMachine();
+        if (machine) {
+          if (!machine.guestMedia) machine.guestMedia = {script: '', resources: []};
+          machine.guestMedia.script = script;
+          saveStartupLocally(machine);
+          renderGuestMedia();
+        }
       } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
       guestScriptFile.value = '';
     });
-    guestResourceFile.addEventListener('change', () => {
-      const file = guestResourceFile.files?.[0];
-      guestResourcePath.value = file?.webkitRelativePath || file?.name || '';
-      guestResourcePath.disabled = !file;
-      guestAddResource.disabled = !file;
-    });
-    guestAddResource.addEventListener('click', async () => {
-      const media = currentGuestMedia();
-      const file = guestResourceFile.files?.[0];
-      const resourcePath = (guestResourcePath.value.trim() || file?.webkitRelativePath || file?.name || '');
-      if (!media || !file) { optionsStatus.textContent = 'Choose a companion file.'; optionsStatus.hidden = false; return; }
-      if (file.size > 1048576 || media.resources.length >= 32) { optionsStatus.textContent = 'Maximum 1 MiB per file and 32 files.'; optionsStatus.hidden = false; return; }
-      const bytes = new Uint8Array(await file.arrayBuffer());
-      let binary = '';
-      for (const byte of bytes) binary += String.fromCharCode(byte);
-      media.resources = media.resources.filter(item => item.path !== resourcePath);
-      media.resources.push({path: resourcePath, contentBase64: btoa(binary)});
-      resetGuestResourceSelection();
-      renderGuestMedia();
-    });
-    guestSaveMedia.addEventListener('click', async () => {
+    guestAttachCdrom.addEventListener('change', () => {
       const machine = settingsMachine();
-      if (!machine || machine === hostSettingsDraft) return;
-      try {
-        const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentGuestMedia())});
-        const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Cannot save startup files');
-        optionsStatus.textContent = 'Startup files saved for the next guest boot.';
-        optionsStatus.hidden = false;
-      } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
+      if (!machine) return;
+      machine.autoBuildGuestCdrom = guestAttachCdrom.checked;
+      saveStartupLocally(machine);
+      refreshLaunchPreview(machine);
     });
-    let expertMode = false;
     let namingSchemes = null;
     const generalSettingsKey = 'qemuweb.general-settings';
     const generalSettings = {engine: 'qemu', namingScheme: 'classicLong', consoleFontFamily: 'system', consoleFontSize: 17};
@@ -690,16 +750,33 @@
       if (['system', 'consolas', 'menlo', 'liberation', 'default'].includes(saved?.consoleFontFamily)) generalSettings.consoleFontFamily = saved.consoleFontFamily;
       if ([...consoleFontSizeSelect.options].some(option => Number(option.value) === Number(saved?.consoleFontSize))) generalSettings.consoleFontSize = Number(saved.consoleFontSize);
     } catch (_) {}
-    function applyConsoleAppearance() {
+    function applyPaneFontSize(pane) {
+      const size = pane.fontSizeOverride ?? generalSettings.consoleFontSize;
+      if (pane.fontSizeOverride === null) pane.element.style.removeProperty('--console-font-size');
+      else pane.element.style.setProperty('--console-font-size', `${size}px`);
+      pane.terminal.setOption('fontSize', size);
+      for (const [index, button] of pane.fontButtons.entries()) {
+        button.disabled = index === 0 ? size <= 11 : size >= 24;
+        button.title = `${index === 0 ? 'Decrease' : 'Increase'} terminal font size (${size} px)`;
+        button.setAttribute('aria-label', button.title);
+      }
+    }
+    function changePaneFontSize(pane, change) {
+      const current = pane.fontSizeOverride ?? generalSettings.consoleFontSize;
+      pane.fontSizeOverride = Math.max(11, Math.min(24, current + change));
+      applyPaneFontSize(pane);
+      requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
+    }
+    function applyConsoleAppearance(resetPaneSizes = false) {
       const root = document.documentElement;
       root.dataset.consoleFont = generalSettings.consoleFontFamily;
       root.style.setProperty('--console-font-size', `${generalSettings.consoleFontSize}px`);
       const style = getComputedStyle(root);
       const fontFamily = style.getPropertyValue('--console-font-family').trim();
-      const fontSize = Number.parseFloat(style.getPropertyValue('--console-font-size'));
       for (const pane of panes) {
+        if (resetPaneSizes) pane.fontSizeOverride = null;
         pane.terminal.setOption('fontFamily', fontFamily);
-        pane.terminal.setOption('fontSize', fontSize);
+        applyPaneFontSize(pane);
       }
       requestAnimationFrame(fitTerminals);
     }
@@ -872,10 +949,12 @@
       const machine = pane.machineId && machines.get(pane.machineId);
       if (!['console', 'monitor', 'log'].includes(view) || !machine) return;
       if (view === 'monitor' && !MonitorTerminal.isSupported(machine)) return;
+      pane.viewMenu.open = false;
       if (pane.view === view) { pane.terminal.focus(); return; }
       pane.view = view;
       pane.monitorInput = '';
       pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === view)));
+      updatePaneViewMenuIcon(pane);
       if (view === 'monitor') renderMonitorView(pane);
       else if (view === 'log') renderLogView(pane);
       else renderConsoleView(pane);
@@ -883,13 +962,23 @@
       if (pane.index === activePaneIndex) updateControls();
       requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
     }
+    function updatePaneViewMenuIcon(pane) {
+      if (pane.viewMenuToggle.dataset.view === pane.view) return;
+      const selected = pane.viewButtons.find(button => button.dataset.view === pane.view);
+      pane.viewMenuToggle.replaceChildren(selected.querySelector('svg').cloneNode(true));
+      pane.viewMenuToggle.dataset.view = pane.view;
+      const label = selected.getAttribute('aria-label');
+      pane.viewMenuToggle.title = `${label} · choose terminal view`;
+      pane.viewMenuToggle.setAttribute('aria-label', pane.viewMenuToggle.title);
+    }
     function updatePaneViewControls() {
       for (const pane of panes) {
         const machine = pane.machineId && machines.get(pane.machineId);
         const supported = !!machine;
         const monitorSupported = MonitorTerminal.isSupported(machine);
         const available = monitorIsAvailable(machine);
-        pane.viewToggle.hidden = !supported;
+        pane.viewMenu.hidden = !supported;
+        if (!supported) pane.viewMenu.open = false;
         pane.viewButtons.forEach(button => {
           if (button.dataset.view === 'monitor') button.hidden = !monitorSupported;
         });
@@ -899,6 +988,7 @@
           renderConsoleView(pane);
         }
         pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === pane.view)));
+        updatePaneViewMenuIcon(pane);
         if (pane.view === 'monitor' && pane.monitorAvailable !== available) renderMonitorView(pane);
         pane.monitorAvailable = available;
       }
@@ -959,6 +1049,8 @@
         pane.settingsButton.hidden = !machine || machine.kind !== 'vm';
         pane.clearButton.hidden = !machine;
         pane.clearButton.disabled = !machine || pane.view !== 'console';
+        pane.expandButton.hidden = !machine || (layoutSize === 1 && expandedPaneIndex === null);
+        for (const button of pane.fontButtons) button.hidden = !machine;
         pane.kindIcon.toggleAttribute('hidden', !machine);
         if (machine) {
           pane.kindIcon.dataset.kind = machine.kind;
@@ -968,7 +1060,8 @@
           ? machine.error ? 'error' : machine.busy ? (machine.operation || 'starting') : machine.running ? 'running' : machine.hasLaunched ? 'stopped' : 'new'
           : workspaceError && pane.index === activePaneIndex ? 'error' : 'empty';
         pane.state.dataset.state = state;
-        pane.state.textContent = state === 'new' ? 'READY' : state === 'empty' ? 'No session' : state.toUpperCase();
+        pane.state.hidden = state === 'empty';
+        pane.state.textContent = state === 'new' ? 'READY' : state.toUpperCase();
         pane.state.title = machine ? (machine.error || machine.message || '') : (state === 'error' ? workspaceError : '');
         pane.metrics.hidden = !machine || machine.kind !== 'vm';
         if (!pane.metrics.hidden) {
@@ -998,9 +1091,10 @@
     function renderPaneTitles() {
       for (const pane of panes) {
         const machine = pane.machineId && machines.get(pane.machineId);
-        const title = machine ? `${machine.hostname} · ${machine.kind === 'switch' ? 'VDE switch' : machine.osHint}` : 'No session';
+        const title = machine ? `${machine.hostname} · ${machine.kind === 'switch' ? 'VDE switch' : machine.osHint}` : machines.size ? 'Unused terminal' : 'Add a host or switch';
         pane.title.textContent = title;
         pane.title.title = title;
+        pane.title.dataset.empty = String(!machine);
         pane.element.dataset.active = String(pane.index === activePaneIndex);
       }
       updatePaneViewControls();
@@ -1019,12 +1113,28 @@
         : '<path d="m3 3 18 18"/><path d="M10.6 5.1A11.8 11.8 0 0 1 12 5c6.5 0 10 7 10 7a16.7 16.7 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.8-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>';
     }
     function updateWorkspaceLayout() {
-      workspace.dataset.columns = String(layoutSize);
+      workspace.dataset.columns = String(expandedPaneIndex === null ? layoutSize : 1);
       const nextSize = layoutSize === 1 ? 2 : layoutSize === 2 ? 4 : 1;
-      toggleConsoleColumns.title = `Layout: ${layoutSize} pane${layoutSize === 1 ? '' : 's'}; click for ${nextSize}`;
+      toggleConsoleColumns.title = expandedPaneIndex === null
+        ? `Layout: ${layoutSize} pane${layoutSize === 1 ? '' : 's'}; click for ${nextSize}`
+        : `Restore the ${layoutSize}-pane layout using the terminal button`;
       toggleConsoleColumns.setAttribute('aria-label', toggleConsoleColumns.title);
+      toggleConsoleColumns.disabled = expandedPaneIndex !== null;
       layoutCount.textContent = String(layoutSize);
-      for (const pane of panes) pane.element.hidden = pane.index >= layoutSize;
+      for (const pane of panes) {
+        pane.element.hidden = pane.index >= layoutSize || (expandedPaneIndex !== null && pane.index !== expandedPaneIndex);
+        const expanded = pane.index === expandedPaneIndex;
+        const label = expanded ? `Restore ${layoutSize}-terminal layout` : 'Show only this terminal';
+        pane.expandButton.title = label;
+        pane.expandButton.setAttribute('aria-label', label);
+        pane.expandButton.setAttribute('aria-pressed', String(expanded));
+        if (pane.expandButton.dataset.expanded !== String(expanded)) {
+          pane.expandButton.dataset.expanded = String(expanded);
+          pane.expandButton.innerHTML = expanded
+            ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>'
+            : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+        }
+      }
       const pages = Math.ceil(consoleSessions().length / layoutSize);
       previousPage.disabled = pageIndex === 0;
       nextPage.disabled = pageIndex >= pages - 1;
@@ -1032,9 +1142,16 @@
       fitTerminals();
       requestAnimationFrame(fitTerminals);
     }
+    function togglePaneExpansion(pane) {
+      if (!pane.machineId || (layoutSize === 1 && expandedPaneIndex === null)) return;
+      expandedPaneIndex = expandedPaneIndex === pane.index ? null : pane.index;
+      focusPane(pane.index);
+      requestAnimationFrame(() => { fitTerminals(); pane.terminal.focus(); });
+    }
     function setPaneSessions(ids, activeIndex = 0) {
       const before = panes.map(pane => pane.machineId);
       panes.forEach((pane, index) => { pane.machineId = ids[index] || null; });
+      if (expandedPaneIndex !== null && before[expandedPaneIndex] !== panes[expandedPaneIndex].machineId) expandedPaneIndex = null;
       panes.forEach(pane => {
         if (before[pane.index] === pane.machineId) return;
         pane.actionMenu.open = false;
@@ -1079,6 +1196,7 @@
       setPaneSessions(ids, activeIndex);
     }
     function focusPane(index) {
+      if (expandedPaneIndex !== null && expandedPaneIndex !== index) expandedPaneIndex = null;
       activePaneIndex = index;
       const pane = panes[index];
       activeId = pane.machineId;
@@ -1188,6 +1306,10 @@
       const hiddenPixels = select.getBoundingClientRect().bottom - visibleBottom;
       if (hiddenPixels > 0) qemuOptionsPanel.scrollTop += hiddenPixels;
     }
+    function renderStorageSettings(storage) {
+      settingsStorage.replaceChildren();
+      for (const disk of storage || []) addSettingRow(settingsStorage, disk.label, disk.path);
+    }
     async function renderQemuOptions() {
       const machine = settingsMachine();
       if (!machine || machine.kind === 'switch' || !qemuOptionsPanel.open) return;
@@ -1206,7 +1328,7 @@
       networkControls.hidden = machine.engine === 'virtualbox';
       if (!networkControls.hidden) renderNicControls(machine);
       try {
-        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine))});
+        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), guestCdrom: String(!!machine.autoBuildGuestCdrom)});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
@@ -1299,9 +1421,7 @@
         for (const [key, value] of Object.entries(body.fixed || {})) {
           if (key !== 'engine') addSettingRow(settingsHardware, fixedLabels[key] || key, value);
         }
-        for (const disk of body.storage || []) {
-          addSettingRow(settingsStorage, disk.label, disk.path);
-        }
+        renderStorageSettings(body.storage);
         addSettingRow(settingsConsole, 'VM serial port', body.console?.guest || 'ttyS0 · 115200 baud');
         addSettingRow(settingsConsole, 'Console socket', body.console?.socket || '');
         if (body.monitor) addSettingRow(settingsConsole, 'Monitor socket', body.monitor);
@@ -1316,12 +1436,13 @@
     async function refreshLaunchPreview(machine) {
       const request = ++optionsRequest;
       try {
-        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine))});
+        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), guestCdrom: String(!!machine.autoBuildGuestCdrom)});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine !== settingsMachine() || !qemuOptionsPanel.open) return;
         updateNicMetadata(body.interfaces);
+        renderStorageSettings(body.storage);
         keepFocusedNicVisible();
         optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
         optionsStatus.hidden = true;
@@ -1446,17 +1567,14 @@
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
-        guestMedia: {script: '#!/bin/sh\n', resources: []}
+        guestMedia: {script: '#!/bin/sh\n', resources: []}, autoBuildGuestCdrom: false
       };
       hostAutostart.checked = true;
       hostCreateActions.hidden = false;
-      setExpertMode(false);
-      toggleExpertMode.hidden = true;
       closeHostSettings.hidden = true;
       settingsTitle.textContent = 'Add a new host';
       qemuOptionsPanel.showModal();
       selectSettingsTab('general');
-      resetGuestResourceSelection();
       renderGuestMedia();
       qemuOptionsPanel.scrollTop = 0;
       await renderQemuOptions();
@@ -1504,13 +1622,14 @@
       cloneName.focus();
       cloneName.select();
     }
-    async function addHost({id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`, name, imageId, engine, interfaces, settings, guestMedia, select = true}) {
+    async function addHost({id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom = false, select = true}) {
       const image = images.find(item => item.id === imageId);
-      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia})});
+      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: guestMedia || {script: '#!/bin/sh\n', resources: []}, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: guestMedia || {script: '#!/bin/sh\n', resources: []}, autoBuildGuestCdrom, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
+      saveStartupLocally(machine);
       if (select) selectMachine(id);
       else renderGraphic();
       return machine;
@@ -1566,6 +1685,7 @@
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to close session');
         machines.delete(id);
+        forgetStartupLocally(machine);
         showPage(activeId !== id ? activeId : null);
       } catch (error) { showStatusError(`Cannot close session: ${error.message}`); }
     }
@@ -1749,7 +1869,7 @@
     defaultEngineSelect.addEventListener('change', () => { generalSettings.engine = defaultEngineSelect.value; saveGeneralSettings(); });
     namingSchemeSelect.addEventListener('change', () => { generalSettings.namingScheme = namingSchemeSelect.value; saveGeneralSettings(); });
     consoleFontFamilySelect.addEventListener('change', () => { generalSettings.consoleFontFamily = consoleFontFamilySelect.value; consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(); });
-    consoleFontSizeSelect.addEventListener('change', () => { generalSettings.consoleFontSize = Number(consoleFontSizeSelect.value); consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(); });
+    consoleFontSizeSelect.addEventListener('change', () => { generalSettings.consoleFontSize = Number(consoleFontSizeSelect.value); consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(true); });
     document.getElementById('new-host').addEventListener('click', openHostSettingsCreate);
     document.getElementById('new-switch').addEventListener('click', () => openCreateDialog('switch'));
     cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine && !machine.busy) openCloneDialog(machine); });
@@ -1773,7 +1893,10 @@
           const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked ? [] : [...source.interfaces];
           const mediaResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/guest-media`);
           if (!mediaResponse.ok) throw new Error('Cannot copy guest startup files.');
-          await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces, settings: getMachineSettings(source), guestMedia: await mediaResponse.json()});
+          const media = await mediaResponse.json();
+          const saved = storedStartup(source);
+          if (saved) media.script = saved.script;
+          await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces, settings: getMachineSettings(source), guestMedia: media, autoBuildGuestCdrom: saved?.autoBuild ?? source.autoBuildGuestCdrom ?? media.guestCdrom?.attached ?? false});
           startHost = autostart;
         }
         cloneDialog.close();
@@ -1865,17 +1988,15 @@
       if (activeMachine()?.kind !== 'vm') return;
       hostSettingsDraft = null;
       hostCreateActions.hidden = true;
-      toggleExpertMode.hidden = false;
       closeHostSettings.hidden = false;
       if (!qemuOptionsPanel.open) qemuOptionsPanel.showModal();
       selectSettingsTab('general');
-      resetGuestResourceSelection();
       try {
         const machine = activeMachine();
         const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`);
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Cannot load startup files.');
-        machine.guestMedia = data;
+        restoreStartup(machine, {script: data.script, resources: data.resources}, data.guestCdrom?.attached);
         renderGuestMedia();
       } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
       renderQemuOptions();
@@ -1904,14 +2025,6 @@
         selectSettingsTab(next.dataset.settingsTab, true);
       });
     }
-    function setExpertMode(enabled) {
-      expertMode = enabled;
-      toggleExpertMode.setAttribute('aria-pressed', String(expertMode));
-      expertTab.hidden = !expertMode;
-      if (expertMode) selectSettingsTab('expert');
-      else if (expertTab.getAttribute('aria-selected') === 'true') selectSettingsTab('general');
-    }
-    toggleExpertMode.addEventListener('click', () => setExpertMode(!expertMode));
     closeHostSettings.addEventListener('click', () => { if (!confirmHostCreate.disabled) qemuOptionsPanel.close(); });
     cancelHostCreate.addEventListener('click', () => qemuOptionsPanel.close());
     qemuOptionsPanel.addEventListener('cancel', event => { if (confirmHostCreate.disabled) event.preventDefault(); });
@@ -1941,7 +2054,7 @@
       closeHostSettings.disabled = true;
       optionsStatus.hidden = true;
       try {
-        const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine, interfaces: [...draft.interfaces], settings: getMachineSettings(draft), guestMedia: draft.guestMedia, select: false});
+        const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine, interfaces: [...draft.interfaces], settings: getMachineSettings(draft), guestMedia: draft.guestMedia, autoBuildGuestCdrom: draft.autoBuildGuestCdrom, select: false});
         hostSettingsDraft = null;
         qemuOptionsPanel.close();
         selectMachine(machine.id);
@@ -2095,7 +2208,8 @@
           pane.token = ++selectionToken;
           pane.socket.emit('select-session', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
         });
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId, interfaces: machine.interfaces, settings: launchSettings})});
+        const startup = await startupPayload(machine);
+        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId, interfaces: machine.interfaces, settings: launchSettings, ...startup})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to start');
         machine.hostname = body.name;
@@ -2142,7 +2256,11 @@
         const response = await fetch('/api/sessions', {method: 'DELETE'});
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to exit all sessions');
-        for (const id of result.removed) machines.delete(id);
+        for (const id of result.removed) {
+          const machine = machines.get(id);
+          machines.delete(id);
+          forgetStartupLocally(machine);
+        }
         showPage();
       } catch (error) { showStatusError(`Cannot exit all sessions: ${error.message}`); }
       finally { exitAllBusy = false; updateControls(); }
@@ -2156,7 +2274,8 @@
       machine.message = 'Rebooting…';
       updateControls();
       try {
-        const response = await fetch(`/api/reboot/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const startup = await startupPayload(machine);
+        const response = await fetch(`/api/reboot/${encodeURIComponent(machine.id)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(startup)});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reboot');
       } catch (error) { machine.message = error.message; machine.error = error.message; }
@@ -2173,7 +2292,8 @@
       machine.message = 'Resetting from base image…';
       updateControls();
       try {
-        const response = await fetch(`/api/reset/${encodeURIComponent(machine.id)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({settings: getMachineSettings(machine)})});
+        const startup = await startupPayload(machine);
+        const response = await fetch(`/api/reset/${encodeURIComponent(machine.id)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({settings: getMachineSettings(machine), ...startup})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reset');
         machine.hasLaunched = true;

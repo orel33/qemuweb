@@ -360,6 +360,8 @@ async function run() {
     for (let index = 0; index < hostIds.length; index++) {
       await installGuestHook(consoles[index]);
       await request(`/api/hosts/${hostIds[index]}/guest-media`, {method: 'PUT', body: mediaFor(index)});
+      await request(`/api/hosts/${hostIds[index]}/guest-cdrom`, {method: 'POST', body: mediaFor(index)});
+      await request(`/api/hosts/${hostIds[index]}/guest-cdrom`, {method: 'PATCH', body: {attached: true}});
     }
     console.log('GTS16: hooks installés dans les overlays, médias propres aux hôtes enregistrés');
   }
@@ -390,6 +392,7 @@ async function run() {
   console.log('LAN2: IP statiques reconfigurées, ping bidirectionnel validé après reprise');
   if (verifyGuestMedia) {
     await request(`/api/hosts/${hostIds[0]}/guest-media`, {method: 'PUT', body: mediaFor(0, 2)});
+    await request(`/api/hosts/${hostIds[0]}/guest-cdrom`, {method: 'POST', body: mediaFor(0, 2)});
     const resetBeforeReboot = consoles[0].resetCount;
     await request(`/api/reboot/${hostIds[0]}`, {method: 'POST'});
     await waitFor('h1 reboot serial reset', () => consoles[0].resetCount > resetBeforeReboot);

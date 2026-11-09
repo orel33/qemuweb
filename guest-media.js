@@ -53,7 +53,7 @@ function validateBootFiles(value) {
   return {script: value.script, resources};
 }
 
-function createGuestIso({files, destination, genisoimage}) {
+function createGuestIso({files, destination, genisoimage, onCommand}) {
   const source = validateBootFiles(files);
   const stage = fs.mkdtempSync(path.join(path.dirname(destination), '.qemuweb-iso-'));
   const nextIso = `${destination}.tmp`;
@@ -66,7 +66,9 @@ function createGuestIso({files, destination, genisoimage}) {
       fs.mkdirSync(path.dirname(target), {recursive: true});
       fs.writeFileSync(target, Buffer.from(entry.contentBase64, 'base64'));
     }
-    execFileSync(genisoimage, ['-quiet', '-R', '-J', '-V', LABEL, '-o', nextIso, stage], {stdio: 'pipe'});
+    const args = ['-quiet', '-R', '-J', '-V', LABEL, '-o', nextIso, stage];
+    if (onCommand) onCommand(genisoimage, args);
+    execFileSync(genisoimage, args, {stdio: 'pipe'});
     fs.chmodSync(nextIso, 0o444);
     fs.renameSync(nextIso, destination);
   } finally {

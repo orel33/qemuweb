@@ -37,7 +37,7 @@ test('Add a new host hides Close while Host Settings restores it', () => {
   const createStart = html.indexOf('async function openHostSettingsCreate()');
   const createEnd = html.indexOf('function openCreateDialog', createStart);
   const settingsStart = html.indexOf('function openHostSettings()');
-  const settingsEnd = html.indexOf('function setExpertMode', settingsStart);
+  const settingsEnd = html.indexOf("closeHostSettings.addEventListener('click'", settingsStart);
 
   assert.ok(createStart >= 0 && createEnd > createStart);
   assert.ok(settingsStart >= 0 && settingsEnd > settingsStart);

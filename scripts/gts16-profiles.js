@@ -58,6 +58,8 @@ async function run() {
     const marker = `GTS16_${profile.replaceAll('-', '_')}_RESOURCE`;
     const media = {script: `#!/bin/sh\necho GTS16_${profile.replaceAll('-', '_')}_SCRIPT\ncat config/value.txt\n`, resources: [{path: 'config/value.txt', contentBase64: Buffer.from(`${marker}\n`).toString('base64')}]};
     await request('/api/hosts', 'POST', {id, name: `GTS16 ${profile}`, imageId: profile, engine, interfaces: [], guestMedia: media});
+    await request(`/api/hosts/${id}/guest-cdrom`, 'POST', media);
+    await request(`/api/hosts/${id}/guest-cdrom`, 'PATCH', {attached: true});
     const socket = io(baseUrl, {reconnection: false, timeout: 10000});
     let serial = '';
     let logs = [];
@@ -101,6 +103,8 @@ printf 'GTS16_JOURNAL_CHECK_%s\\n' "$?"`;
     const id = `gts16-missing-${process.pid}`;
     ids.push(id);
     await request('/api/hosts', 'POST', {id, name: 'GTS16 missing script', imageId: 'openwrt', engine: 'qemu', interfaces: [], guestMedia: {script: '', resources: []}});
+    await request(`/api/hosts/${id}/guest-cdrom`, 'POST', {script: '', resources: []});
+    await request(`/api/hosts/${id}/guest-cdrom`, 'PATCH', {attached: true});
     const socket = io(baseUrl, {reconnection: false, timeout: 10000});
     let serial = '';
     let logs = [];
