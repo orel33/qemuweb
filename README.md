@@ -1,5 +1,7 @@
 # QemuWeb - beta
 
+Guest startup ISO setup and existing-image upgrade: [Guest startup media](docs/guest-startup.md).
+
 QemuWeb runs Alpine Linux, Debian 13 Cloud, Debian 13 Legacy, or OpenWrt in QEMU or VirtualBox and relays the `ttyS0` serial console to xterm.js through a local web server.
 
 ## Software architecture overview

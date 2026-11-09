@@ -46,9 +46,24 @@ else
 fi
 uci commit system
 printf 'qemuweb\n' > /proc/sys/kernel/hostname
+OPENWRT_PREPARE
+  cat >> "$guest_script" <<'OPENWRT_HOOK'
+mkdir -p /usr/local/sbin
+cat > /usr/local/sbin/qemuweb-guest-start <<'GUEST_HOOK'
+OPENWRT_HOOK
+  cat "$ROOT/scripts/prepare/guest-start.sh" >> "$guest_script"
+  cat >> "$guest_script" <<'OPENWRT_HOOK'
+GUEST_HOOK
+cat > /etc/init.d/qemuweb-guest-start <<'INIT_HOOK'
+#!/bin/sh /etc/rc.common
+START=99
+start() { /usr/local/sbin/qemuweb-guest-start >/dev/ttyS0 2>&1; }
+INIT_HOOK
+chmod 755 /usr/local/sbin/qemuweb-guest-start /etc/init.d/qemuweb-guest-start
+/etc/init.d/qemuweb-guest-start enable
 sync
 echo QEMUWEB_OPENWRT_PREPARED
-OPENWRT_PREPARE
+OPENWRT_HOOK
   payload="$(base64 -w 0 "$guest_script")"
   gzip -dc "$source_dir/$archive" > "$disk"
   qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 256 -smp 1 \

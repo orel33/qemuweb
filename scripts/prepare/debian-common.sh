@@ -18,7 +18,7 @@ prepare_debian_image() {
   (cd "$source_dir" && grep -E '[ *]debian-13-genericcloud-amd64\.qcow2$' SHA512SUMS | sha512sum -c -)
 
   if [[ ! -s "$raw" ]]; then
-    require_commands qemu-system-x86_64 qemu-img genisoimage python3
+    require_commands qemu-system-x86_64 qemu-img genisoimage python3 base64
     temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
     chmod 700 "$temp_dir"
     local overlay="$temp_dir/debian-bootstrap.qcow2" seed="$temp_dir/debian-seed.iso"
@@ -26,6 +26,9 @@ prepare_debian_image() {
     local user_data="$temp_dir/user-data" meta_data="$temp_dir/meta-data" network_config="$temp_dir/network-config"
     # Cloud-init creates the lab account, enables both consoles, and configures
     # the guest NIC for DHCP. The VDE switch itself does not provide DHCP.
+    local hook_b64 unit_b64
+    hook_b64="$(base64 -w 0 "$ROOT/scripts/prepare/guest-start.sh")"
+    unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/qemuweb-guest-start.service")"
     cat > "$user_data" <<CLOUD_CONFIG
 #cloud-config
 hostname: qemuweb
@@ -44,6 +47,14 @@ chpasswd:
   users:
     - {name: toto, password: toto, type: text}
 write_files:
+  - path: /usr/local/sbin/qemuweb-guest-start
+    permissions: '0755'
+    encoding: b64
+    content: $hook_b64
+  - path: /etc/systemd/system/qemuweb-guest-start.service
+    permissions: '0644'
+    encoding: b64
+    content: $unit_b64
   - path: /etc/systemd/network/20-qemunet.network
     permissions: '0644'
     content: |
@@ -56,6 +67,7 @@ runcmd:
   - [systemctl, enable, serial-getty@ttyS0.service]
   - [systemctl, enable, getty@tty1.service]
   - [systemctl, enable, systemd-networkd.service]
+  - [systemctl, enable, qemuweb-guest-start.service]
   - [touch, /etc/cloud/cloud-init.disabled]
   - [sh, -c, 'echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0']
 CLOUD_CONFIG

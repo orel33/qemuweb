@@ -6,7 +6,9 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test",
-    "test:lan2": "node scripts/lan2-integration.js"
+    "test:lan2": "node scripts/lan2-integration.js",
+    "test:gts16-lan2": "LAN2_GTS16=1 node scripts/lan2-integration.js",
+    "test:gts16-profiles": "node scripts/gts16-profiles.js"
   },
   "engines": {
     "node": ">=18"

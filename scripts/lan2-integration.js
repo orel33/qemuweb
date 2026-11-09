@@ -19,6 +19,7 @@ const kvmAvailable = (() => {
 const engine = process.env.LAN2_ENGINE || (kvmAvailable ? 'qemu' : 'qemu-tcg');
 const timeoutMs = Number(process.env.LAN2_TIMEOUT_MS || (engine === 'qemu-tcg' ? 300000 : 120000));
 const addresses = ['192.0.2.101', '192.0.2.102'];
+const verifyGuestMedia = process.env.LAN2_GTS16 === '1';
 const nonce = `${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
 const switchId = `lan2-sw-${nonce}`;
 const hostIds = [`lan2-a-${nonce}`, `lan2-b-${nonce}`];
@@ -96,6 +97,8 @@ class SerialShell {
     this.id = id;
     this.label = label;
     this.output = '';
+    this.logs = [];
+    this.resetCount = 0;
     this.connected = false;
     this.selected = false;
     this.socket = io(baseUrl, {reconnection: false, timeout: 10000});
@@ -107,13 +110,17 @@ class SerialShell {
       });
     });
     this.socket.on('session-snapshot', snapshot => {
-      if (snapshot.sessionId === id) this.append(snapshot.serial || '');
+      if (snapshot.sessionId === id) {
+        this.logs = snapshot.logs || [];
+        this.append(snapshot.serial || '');
+      }
     });
+    this.socket.on('log', packet => { if (packet.sessionId === id) this.logs.push(packet.line); });
     this.socket.on('serial', packet => {
       if (packet.sessionId === id) this.append(packet.data || '');
     });
     this.socket.on('serial-reset', packet => {
-      if (!packet || packet.sessionId === id) this.output = '';
+      if (!packet || packet.sessionId === id) { this.output = ''; this.resetCount++; }
     });
     this.socket.on('connect_error', error => { this.connectionError = error.message; });
     this.socket.on('session-error', error => { this.selectionError = String(error); });
@@ -244,6 +251,40 @@ async function ping(shell, address) {
   assert.match(output, /3 packets transmitted, 3 received|3 packets transmitted, 3 packets received/, `${shell.label} could not ping ${address}:\n${output}`);
 }
 
+async function installGuestHook(shell) {
+  const files = [
+    ['guest-start.sh', '/usr/local/sbin/qemuweb-guest-start', '755'],
+    ['qemuweb-guest-start.service', '/etc/systemd/system/qemuweb-guest-start.service', '644']
+  ];
+  for (const [name, destination, mode] of files) {
+    const encoded = fs.readFileSync(path.join(root, 'scripts/prepare', name)).toString('base64');
+    const temporary = `/tmp/${name}.b64`;
+    await shell.exec(`: > ${temporary}`);
+    for (let offset = 0; offset < encoded.length; offset += 400) {
+      await shell.exec(`printf '%s' '${encoded.slice(offset, offset + 400)}' >> ${temporary}`);
+    }
+    await shell.exec(`base64 -d ${temporary} > ${destination} && chmod ${mode} ${destination} && rm ${temporary}`);
+  }
+  await shell.exec('systemctl daemon-reload && systemctl enable qemuweb-guest-start.service');
+}
+
+function mediaFor(index, version = 1) {
+  const name = `gts16-h${index + 1}-v${version}`;
+  return {
+    script: `#!/bin/sh\nhostname ${name}\nip link set eth0 up\nip addr flush dev eth0\nip addr add ${addresses[index]}/24 dev eth0\necho ${name} > /root/.gts16-disk-marker\ncat config/message.txt\n`,
+    resources: [{path: 'config/message.txt', contentBase64: Buffer.from(`resource-${name}\n`).toString('base64')}]
+  };
+}
+
+async function verifyGuestBoot(shell, index, version) {
+  const name = `gts16-h${index + 1}-v${version}`;
+  await waitFor(`${shell.label} guest hook exit`, () => shell.output.includes('QEMUWEB_START_EXIT 0'));
+  await waitFor(`${shell.label} guest log`, () => shell.logs.some(line => line.includes('QEMUWEB_START_EXIT 0')));
+  await shell.exec(`test "$(hostname)" = "${name}" && test "$(cat /root/.gts16-disk-marker)" = "${name}" && ip -o -4 addr show eth0 | grep -q '${addresses[index]}/24'`);
+  assert.match(shell.output, new RegExp(`resource-${name}`));
+  assert.ok(shell.logs.some(line => line.includes(`resource-${name}`)), `${shell.label} resource output missing from Host Log.`);
+}
+
 async function startHost(id) {
   await request('/api/start', {method: 'POST', body: {
     sessionId: id,
@@ -309,6 +350,14 @@ async function run() {
   await ping(consoles[1], addresses[0]);
   console.log('LAN2: ping bidirectionnel validé');
 
+  if (verifyGuestMedia) {
+    for (let index = 0; index < hostIds.length; index++) {
+      await installGuestHook(consoles[index]);
+      await request(`/api/hosts/${hostIds[index]}/guest-media`, {method: 'PUT', body: mediaFor(index)});
+    }
+    console.log('GTS16: hooks installés dans les overlays, médias propres aux hôtes enregistrés');
+  }
+
   for (const id of hostIds) await request(`/api/stop/${id}`, {method: 'POST'});
   for (const id of hostIds) {
     const stopped = await waitForSession(id, session => !session.running && session.hasDifferentialDisk, `${id} stop`);
@@ -325,13 +374,25 @@ async function run() {
     assert.equal(nic.port, beforeResume[index].networkInterfaces[0].port, `${hostIds[index]} VDE port changed on Resume.`);
     assert.equal(nic.mac, beforeResume[index].networkInterfaces[0].mac, `${hostIds[index]} MAC changed on Resume.`);
     await consoles[index].exec(`test "$(cat /root/.lan2-address-marker)" = "${addresses[index]}"`);
+    if (verifyGuestMedia) await verifyGuestBoot(consoles[index], index, 1);
   }
   console.log('LAN2: reprise confirmée, port/MAC et disque conservés');
 
-  await Promise.all(consoles.map((shell, index) => setStaticAddress(shell, addresses[index])));
+  if (!verifyGuestMedia) await Promise.all(consoles.map((shell, index) => setStaticAddress(shell, addresses[index])));
   await ping(consoles[0], addresses[1]);
   await ping(consoles[1], addresses[0]);
   console.log('LAN2: IP statiques reconfigurées, ping bidirectionnel validé après reprise');
+  if (verifyGuestMedia) {
+    await request(`/api/hosts/${hostIds[0]}/guest-media`, {method: 'PUT', body: mediaFor(0, 2)});
+    const resetBeforeReboot = consoles[0].resetCount;
+    await request(`/api/reboot/${hostIds[0]}`, {method: 'POST'});
+    await waitFor('h1 reboot serial reset', () => consoles[0].resetCount > resetBeforeReboot);
+    await waitFor('h1 fresh login prompt', () => /login:\s*$/m.test(stripAnsi(consoles[0].output)));
+    await consoles[0].waitForShell();
+    await verifyGuestBoot(consoles[0], 0, 2);
+    await ping(consoles[0], addresses[1]);
+    console.log('GTS16: script édité après Reboot, ressource lue, IP/hostname et disque vérifiés');
+  }
 }
 
 async function cleanup() {

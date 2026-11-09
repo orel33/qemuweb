@@ -14,6 +14,7 @@ const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
+const {validateBootFiles, createGuestIso} = require('./guest-media');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -120,8 +121,12 @@ function getSession(id, create = false, kind = 'vm') {
       action: null,
       runLog: [],
       serialBuffer: '',
+      guestLogPending: '',
+      guestLogActive: false,
       generation: 0,
       runDisk: null,
+      guestMedia: {script: '#!/bin/sh\n', resources: []},
+      guestIso: null,
       networkInterfaces: [],
       socketDir: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}-vde`) : null,
       mgmtPath: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}.mgmt`) : null,
@@ -154,12 +159,24 @@ function appendLog(session, message) {
   io.to(session.id).emit('log', {sessionId: session.id, line});
 }
 
+function captureGuestLog(session, text) {
+  session.guestLogPending = (session.guestLogPending + text).slice(-8192);
+  const lines = session.guestLogPending.split(/\r?\n/);
+  session.guestLogPending = lines.pop();
+  for (const raw of lines) {
+    const line = raw.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '').trim();
+    if (/QEMUWEB_START_BEGIN/.test(line)) session.guestLogActive = true;
+    if (session.guestLogActive || /QEMUWEB_START_(?:ERROR|EXIT)/.test(line)) appendLog(session, `[guest] ${line.slice(0, 2048)}`);
+    if (/QEMUWEB_START_(?:ERROR|EXIT)/.test(line)) session.guestLogActive = false;
+  }
+}
+
 function execLogged(session, command, args, options = {stdio: 'pipe'}) {
   appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`);
   return execFileSync(command, args, options);
 }
 
-app.use(express.json());
+app.use(express.json({limit: '6mb'}));
 app.use('/vendor', express.static(path.join(root, 'node_modules/xterm')));
 app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/xterm-addon-fit')));
 app.use((req, res, next) => {
@@ -310,6 +327,7 @@ function connectSerial(session, attempt = 0, generation = session.generation) {
     const decoder = new StringDecoder('utf8');
     const publishSerial = text => {
       if (!text) return;
+      captureGuestLog(session, text);
       session.serialBuffer = (session.serialBuffer + text).slice(-262144);
       io.to(session.id).emit('serial', {sessionId: session.id, data: text});
     };
@@ -343,6 +361,7 @@ function qemuArgs(session, image, overlay) {
   ];
   // QEMU PC boot notation: c = first hard disk.
   const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
+  if (session.guestIso) args.push('-drive', `file=${session.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);
   // Disable QEMU's implicit user-network NIC; explicit -device NICs below remain enabled.
   args.push('-nic', 'none');
   for (const [index, nic] of session.networkInterfaces.entries()) {
@@ -585,6 +604,8 @@ function virtualBoxCommands(session, image) {
     ['createmedium', 'disk', '--filename', disk, '--diffparent', imagePath(image.images.vdi), '--format', 'VDI'],
     ['storagectl', session.vmName, '--name', 'SATA', '--add', 'sata', '--controller', 'IntelAhci'],
     ['storageattach', session.vmName, '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', disk],
+    ['storagectl', session.vmName, '--name', 'Guest setup', '--add', 'ide', '--controller', 'PIIX4'],
+    ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', session.guestIso],
     ['modifyvm', session.vmName, '--boot1', 'disk', '--boot2', 'dvd', '--boot3', 'none', '--boot4', 'none'],
     ['startvm', session.vmName, '--type', 'headless']
   ];
@@ -617,7 +638,7 @@ app.get('/api/options/:sessionId', (req, res) => {
       ? launched ? {...session.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
       : null;
     if (!launched && isQemu) session.qemuOptions = options;
-    const previewSession = {...session, launchSettings: userSettings, qemuOptions: options};
+    const previewSession = {...session, launchSettings: userSettings, qemuOptions: options, guestIso: tempFile(session, 'guest-setup.iso')};
     const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
     const fixed = isQemu
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
@@ -625,9 +646,10 @@ app.get('/api/options/:sessionId', (req, res) => {
     const launchCommands = isQemu
       ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
       : launched
-        ? [[commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off'], [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
+        ? [[commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off'], [commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso], [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
     const socketLabel = filePath => path.join('runtime', path.relative(runtime, filePath));
+    storage.push({label: 'Guest setup ISO (read-only)', path: socketLabel(previewSession.guestIso)});
     const storage = isQemu
       ? [
           {label: 'Base image (RAW)', path: path.relative(root, imagePath(image.images.raw))},
@@ -695,6 +717,8 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.generation += 1;
   if (!options.reset && !resume) session.runLog = [];
   session.serialBuffer = '';
+  session.guestLogPending = '';
+  session.guestLogActive = false;
   session.lastMessage = 'Starting…';
   if (!options.reset && !resume) io.to(session.id).emit('logs-reset', {sessionId: session.id});
   io.to(session.id).emit('serial-reset', {sessionId: session.id});
@@ -705,9 +729,22 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.hostname = displayName;
   session.qemuOptions = qemuOptions;
   session.launchSettings = launchSettings;
+  if (selectedEngine === 'virtualbox' && resume) {
+    if (!['poweroff', 'aborted'].includes(virtualBoxState(session))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
+    vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
+  }
+  session.guestIso = tempFile(session, 'guest-setup.iso');
+  try { createGuestIso({files: session.guestMedia, destination: session.guestIso, genisoimage: commands.GENISOIMAGE}); }
+  catch (error) {
+    appendLog(session, `# Guest ISO build failed: ${error.message}`);
+    publishState(session, `Guest ISO build failed: ${error.message}`);
+    throw error;
+  }
+  appendLog(session, `# Guest setup ISO: ${session.guestIso} (label QWEBSTART; read-only)`);
   if (selectedEngine.startsWith('qemu')) spawnQemu(session, image, resume);
   else if (resume) {
     vbox(session, ['modifyvm', session.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off']);
+    vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', session.guestIso]);
     vbox(session, ['startvm', session.vmName, '--type', 'headless']);
     session.machine = {kind: 'virtualbox', vmDir: tempFile(session, 'vbox-vm')};
   } else spawnVirtualBox(session, image);
@@ -840,6 +877,7 @@ function discardSessionDisk(session) {
     fs.rmSync(tempFile(session, 'vbox-vm'), {recursive: true, force: true});
   }
   cleanupRunFiles(session, image);
+  if (session.guestIso) fs.rmSync(session.guestIso, {force: true});
 }
 
 async function stop(session, options = {}) {
@@ -917,6 +955,7 @@ async function destroySession(session) {
   cleanupRunFiles(session, image);
   try { fs.unlinkSync(session.socketPath); } catch (_) {}
   try { fs.unlinkSync(session.monitorPath); } catch (_) {}
+  if (session.guestIso) fs.rmSync(session.guestIso, {force: true});
   session.runLog = [];
   session.serialBuffer = '';
   session.selectedImage = null;
@@ -1035,7 +1074,7 @@ app.get('/api/topology', (_req, res) => {
 
 app.post('/api/hosts', (req, res) => {
   try {
-    const {id, name, imageId, engine = 'qemu', interfaces, settings} = req.body || {};
+    const {id, name, imageId, engine = 'qemu', interfaces, settings, guestMedia} = req.body || {};
     if (sessions.has(id)) throw new Error('Host ID already exists.');
     const image = imageById(imageId || Object.keys(readConfig().systems)[0]);
     if (!image) throw new Error('Unknown system in config.json.');
@@ -1045,15 +1084,35 @@ app.post('/api/hosts', (req, res) => {
     if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
     const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
     const launchSettings = settings ? launchSettingsFor(image.id, settings) : null;
+    const validatedMedia = guestMedia === undefined ? {script: '#!/bin/sh\n', resources: []} : validateBootFiles(guestMedia);
     const session = getSession(id, true, 'vm');
     session.hostname = hostname;
     session.selectedImage = image;
     session.engine = engine;
     session.networkInterfaces = networkInterfaces;
     session.launchSettings = launchSettings;
+    session.guestMedia = validatedMedia;
     session.lastMessage = 'Host ready to start';
     io.emit('sessions-changed', {sessionId: id, running: false, hasLaunched: false, message: session.lastMessage});
     res.json({id, name: hostname, imageId: image.id, engine, interfaces: networkInterfaces.map(nic => nic.switchId), networkInterfaces, settings: launchSettings});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
+app.get('/api/hosts/:sessionId/guest-media', (req, res) => {
+  try {
+    const session = getSession(req.params.sessionId);
+    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
+    res.json(session.guestMedia);
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
+app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
+  try {
+    const session = getSession(req.params.sessionId);
+    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
+    session.guestMedia = validateBootFiles(req.body);
+    appendLog(session, '# Guest startup files saved; the ISO will refresh on the next Start, Resume or Reboot.');
+    res.json({ok: true, files: session.guestMedia.resources.length});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 

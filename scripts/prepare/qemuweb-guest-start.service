@@ -1,0 +1,13 @@
+[Unit]
+Description=Run QemuWeb guest startup media
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/qemuweb-guest-start
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=30
+
+[Install]
+WantedBy=multi-user.target

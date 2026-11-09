@@ -60,9 +60,34 @@ APKCACHEOPTS=none
 export KERNELOPTS="quiet console=ttyS0,115200"
 ANSWERS
 ERASE_DISKS=/dev/vda setup-alpine -e -f /tmp/qemunet-answers
+ALPINE_PREPARE
+  cat >> "$guest_script" <<'ALPINE_HOOK'
+target=''
+for partition in /dev/vda3 /dev/vda2 /dev/vda4; do
+  if mount "$partition" /mnt 2>/dev/null; then
+    if [ -f /mnt/etc/alpine-release ]; then target=/mnt; break; fi
+    umount /mnt
+  fi
+done
+[ -n "$target" ] || { echo 'Alpine installed root partition not found'; exit 1; }
+mkdir -p "$target/usr/local/sbin" "$target/etc/init.d" "$target/etc/runlevels/default"
+cat > "$target/usr/local/sbin/qemuweb-guest-start" <<'GUEST_HOOK'
+ALPINE_HOOK
+  cat "$ROOT/scripts/prepare/guest-start.sh" >> "$guest_script"
+  cat >> "$guest_script" <<'ALPINE_HOOK'
+GUEST_HOOK
+cat > "$target/etc/init.d/qemuweb-guest-start" <<'INIT_HOOK'
+#!/sbin/openrc-run
+description="Run QemuWeb guest startup media"
+depend() { after local; }
+start() { ebegin "QemuWeb guest startup"; /usr/local/sbin/qemuweb-guest-start >/dev/ttyS0 2>&1; eend $?; }
+INIT_HOOK
+chmod 755 "$target/usr/local/sbin/qemuweb-guest-start" "$target/etc/init.d/qemuweb-guest-start"
+ln -sf /etc/init.d/qemuweb-guest-start "$target/etc/runlevels/default/qemuweb-guest-start"
+umount "$target"
 sync
 echo QEMUNET_ALPINE_PREPARED
-ALPINE_PREPARE
+ALPINE_HOOK
   payload="$(base64 -w 0 "$guest_script")"
   # Boot the installer with a temporary user-mode NIC for package/repository
   # access; this is only for image preparation, not the resulting LAN topology.
@@ -99,7 +124,16 @@ def wait_for(patterns):
 wait_for([rb'login:\s*$'])
 sock.sendall(b'root\r')
 wait_for([rb':~#\s*$'])
-command = f'echo {payload} | base64 -d >/tmp/qemunet-prepare.sh && sh /tmp/qemunet-prepare.sh; status=$?; echo QEMUNET_ALPINE_STATUS_$status'
+def command_at_prompt(command):
+    global buffer
+    buffer = b''
+    sock.sendall(command.encode() + b'\r')
+    wait_for([rb':~#\s*$'])
+command_at_prompt(': > /tmp/qemunet-prepare.b64')
+for offset in range(0, len(payload), 400):
+    command_at_prompt(f"printf '%s' '{payload[offset:offset + 400]}' >> /tmp/qemunet-prepare.b64")
+command = 'base64 -d /tmp/qemunet-prepare.b64 >/tmp/qemunet-prepare.sh && sh /tmp/qemunet-prepare.sh; status=$?; echo QEMUNET_ALPINE_STATUS_$status'
+buffer = b''
 sock.sendall(command.encode() + b'\r')
 if wait_for([rb'QEMUNET_ALPINE_STATUS_0', rb'QEMUNET_ALPINE_STATUS_[1-9][0-9]*']) != 0:
     raise RuntimeError('Alpine installation failed')

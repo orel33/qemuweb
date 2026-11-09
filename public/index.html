@@ -276,6 +276,16 @@
         <div id="nic-list"></div>
       </section>
     </div></details>
+    <details class="settings-section" open><summary>Guest startup files</summary>
+      <p>Runs in the guest at each boot from /mnt/cdrom. Changes take effect on the next Reboot or Start/Resume.</p>
+      <label for="guest-start-script">start.sh</label><textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
+      <label>Import start.sh <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain"></label>
+      <div id="guest-resource-list"></div>
+      <label>Relative path on ISO <input id="guest-resource-path" type="text" placeholder="config/example.txt" maxlength="128"></label>
+      <input id="guest-resource-file" type="file" aria-label="Companion file">
+      <button id="guest-add-resource" type="button">Add file</button>
+      <button id="guest-save-media" type="button">Save startup files</button>
+    </details>
     <details class="settings-section" data-expert-section hidden><summary>Hardware profile</summary><div id="settings-hardware"></div></details>
     <details class="settings-section" data-expert-section hidden><summary>Storage</summary><div id="settings-storage"></div></details>
     <details class="settings-section" data-expert-section hidden><summary>Console</summary><div id="settings-console"></div></details>
@@ -518,6 +528,12 @@
     const qemuOptionsPanel = document.getElementById('qemu-options-panel');
     const settingsTitle = document.getElementById('settings-title');
     const hostSettingsForm = document.getElementById('host-settings-form');
+    const guestStartScript = document.getElementById('guest-start-script');
+    const guestScriptFile = document.getElementById('guest-script-file');
+    const guestResourceList = document.getElementById('guest-resource-list');
+    const guestResourcePath = document.getElementById('guest-resource-path');
+    const guestResourceFile = document.getElementById('guest-resource-file');
+    const guestSaveMedia = document.getElementById('guest-save-media');
     const hostCreateActions = document.getElementById('host-create-actions');
     const hostAutostart = document.getElementById('host-autostart');
     const confirmHostCreate = document.getElementById('confirm-host-create');
@@ -567,6 +583,69 @@
     let createDraft = null;
     let cloneSourceId = null;
     let hostSettingsDraft = null;
+    function currentGuestMedia() {
+      const machine = settingsMachine();
+      if (!machine) return null;
+      if (!machine.guestMedia) machine.guestMedia = {script: '#!/bin/sh\n', resources: []};
+      return machine.guestMedia;
+    }
+    function renderGuestMedia() {
+      const machine = settingsMachine();
+      const media = currentGuestMedia();
+      if (!media) return;
+      guestStartScript.value = media.script;
+      guestResourceList.replaceChildren();
+      for (const resource of media.resources) {
+        const row = document.createElement('div');
+        row.textContent = resource.path + ' ';
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.onclick = () => { media.resources = media.resources.filter(item => item !== resource); renderGuestMedia(); };
+        row.append(remove);
+        guestResourceList.append(row);
+      }
+      guestSaveMedia.hidden = machine === hostSettingsDraft;
+    }
+    guestStartScript.addEventListener('input', () => { const media = currentGuestMedia(); if (media) media.script = guestStartScript.value; });
+    guestScriptFile.addEventListener('change', async () => {
+      const file = guestScriptFile.files?.[0];
+      if (!file) return;
+      try {
+        if (file.size > 65536) throw new Error('start.sh must be at most 64 KiB.');
+        const script = new TextDecoder('utf-8', {fatal: true}).decode(await file.arrayBuffer());
+        if (script.includes('\0')) throw new Error('start.sh cannot contain NUL bytes.');
+        const media = currentGuestMedia();
+        if (media) { media.script = script; renderGuestMedia(); }
+      } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
+      guestScriptFile.value = '';
+    });
+    document.getElementById('guest-add-resource').addEventListener('click', async () => {
+      const media = currentGuestMedia();
+      const file = guestResourceFile.files?.[0];
+      const resourcePath = (guestResourcePath.value.trim() || file?.webkitRelativePath || file?.name || '');
+      if (!media || !file) { optionsStatus.textContent = 'Choose a companion file.'; optionsStatus.hidden = false; return; }
+      if (file.size > 1048576 || media.resources.length >= 32) { optionsStatus.textContent = 'Maximum 1 MiB per file and 32 files.'; optionsStatus.hidden = false; return; }
+      const bytes = new Uint8Array(await file.arrayBuffer());
+      let binary = '';
+      for (const byte of bytes) binary += String.fromCharCode(byte);
+      media.resources = media.resources.filter(item => item.path !== resourcePath);
+      media.resources.push({path: resourcePath, contentBase64: btoa(binary)});
+      guestResourceFile.value = '';
+      guestResourcePath.value = '';
+      renderGuestMedia();
+    });
+    guestSaveMedia.addEventListener('click', async () => {
+      const machine = settingsMachine();
+      if (!machine || machine === hostSettingsDraft) return;
+      try {
+        const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`, {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(currentGuestMedia())});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Cannot save startup files');
+        optionsStatus.textContent = 'Startup files saved for the next guest boot.';
+        optionsStatus.hidden = false;
+      } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
+    });
     let expertMode = false;
     let namingSchemes = null;
     const generalSettingsKey = 'qemuweb.general-settings';
@@ -1333,7 +1412,8 @@
         kind: 'vm', hostname: nextMachineName('vm'), imageId,
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
-        settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false
+        settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
+        guestMedia: {script: '#!/bin/sh\n', resources: []}
       };
       hostAutostart.checked = true;
       hostCreateActions.hidden = false;
@@ -1343,6 +1423,7 @@
       settingsTitle.textContent = 'Add a new host';
       for (const section of qemuOptionsPanel.querySelectorAll('.settings-section:not([data-expert-section])')) section.open = true;
       qemuOptionsPanel.showModal();
+      renderGuestMedia();
       qemuOptionsPanel.scrollTop = 0;
       await renderQemuOptions();
       if (hostSettingsDraft) settingsFixed.querySelector('input')?.focus();
@@ -1389,12 +1470,12 @@
       cloneName.focus();
       cloneName.select();
     }
-    async function addHost({id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`, name, imageId, engine, interfaces, settings, select = true}) {
+    async function addHost({id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`, name, imageId, engine, interfaces, settings, guestMedia, select = true}) {
       const image = images.find(item => item.id === imageId);
-      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings})});
+      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: guestMedia || {script: '#!/bin/sh\n', resources: []}, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       if (select) selectMachine(id);
       else renderGraphic();
@@ -1656,7 +1737,9 @@
           await addSwitch({name: cloneName.value.trim(), autostart});
         } else {
           const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked ? [] : [...source.interfaces];
-          await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces, settings: getMachineSettings(source)});
+          const mediaResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/guest-media`);
+          if (!mediaResponse.ok) throw new Error('Cannot copy guest startup files.');
+          await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces, settings: getMachineSettings(source), guestMedia: await mediaResponse.json()});
           startHost = autostart;
         }
         cloneDialog.close();
@@ -1744,13 +1827,21 @@
       renderQemuOptions();
       renderTabs();
     });
-    function openHostSettings() {
+    async function openHostSettings() {
       if (activeMachine()?.kind !== 'vm') return;
       hostSettingsDraft = null;
       hostCreateActions.hidden = true;
       toggleExpertMode.hidden = false;
       closeHostSettings.hidden = false;
       if (!qemuOptionsPanel.open) qemuOptionsPanel.showModal();
+      try {
+        const machine = activeMachine();
+        const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`);
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Cannot load startup files.');
+        machine.guestMedia = data;
+        renderGuestMedia();
+      } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
       renderQemuOptions();
     }
     function setExpertMode(enabled) {
@@ -1783,7 +1874,7 @@
       closeHostSettings.disabled = true;
       optionsStatus.hidden = true;
       try {
-        const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine, interfaces: [...draft.interfaces], settings: getMachineSettings(draft), select: false});
+        const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine, interfaces: [...draft.interfaces], settings: getMachineSettings(draft), guestMedia: draft.guestMedia, select: false});
         hostSettingsDraft = null;
         qemuOptionsPanel.close();
         selectMachine(machine.id);
