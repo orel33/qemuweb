@@ -9,6 +9,22 @@ SOURCES="$ROOT/sources"
 RUNTIME="$ROOT/runtime"
 mkdir -p "$IMAGES" "$SOURCES" "$RUNTIME"
 
+parse_prepare_mode() {
+  if (( $# > 1 )); then
+    echo 'Usage: scripts/prepare/<system>.sh [--sources | --images]' >&2
+    exit 2
+  fi
+  case "${1:---all}" in
+    --all) PREPARE_MODE=all ;;
+    --sources) PREPARE_MODE=sources ;;
+    --images) PREPARE_MODE=images ;;
+    *) echo "Unknown preparation mode: $1" >&2; exit 2 ;;
+  esac
+}
+
+prepare_sources() { [[ "$PREPARE_MODE" != images ]]; }
+prepare_images() { [[ "$PREPARE_MODE" != sources ]]; }
+
 require_commands() {
   # Check tools only when a script actually needs to build an image.
   for command in "$@"; do
@@ -19,7 +35,12 @@ require_commands() {
 fetch_file() {
   local url="$1" target="$2"
   # Reuse an existing non-empty download; this makes interrupted runs cheap to resume.
-  if [[ ! -s "$target" ]]; then curl -fL --retry 3 "$url" -o "$target"; fi
+  if [[ -s "$target" ]]; then
+    echo "  Reuse source: $target"
+  else
+    echo "  Download: $url -> $target"
+    curl -fL --retry 3 "$url" -o "$target"
+  fi
 }
 
 move_if_present() {

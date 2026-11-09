@@ -131,7 +131,17 @@ In the bar directly above each terminal, click the current view icon to choose *
 
 ## Image preparation
 
-`prepare.sh` reads the IDs under `systems` in `config.json` and invokes the matching `scripts/prepare/<id>.sh`. Shared helpers are alongside these scripts. Each target keeps its downloads and checksums in `sources/<id>/`:
+`prepare.sh` reads the IDs under `systems` in `config.json` and invokes the matching `scripts/prepare/<id>.sh` twice: first for sources in `sources/<id>/`, then for RAW/VDI images in `images/`. It prints both steps and their elapsed time, plus the total time for each system. `--list` shows each system's allocated RAW and VDI disk usage in decimal GB and the newest image modification date in local time. Shared helpers are alongside these scripts.
+
+```sh
+bash prepare.sh --help
+bash prepare.sh --list
+bash prepare.sh                 # all configured systems
+bash prepare.sh --system debian13-legacy
+bash prepare.sh --system debian13-legacy --force
+```
+
+Without `--force`, existing images are reused. `--force` warns, saves each old RAW/VDI pair in `images/backups/`, and replaces it with a rebuilt pair; if the build fails, it restores the old pair. It also runs while VMs are active, so stop affected hosts first when their working disks matter: an old differential disk may be incompatible with a rebuilt base. Each target keeps its downloads and checksums in `sources/<id>/`:
 
 - **Alpine**: the script downloads and verifies the official `virt` ISO, installs it unattended into a RAW image, prepares the `root` and `toto` accounts, configures boot output and login on `ttyS0`, then produces the VDI base for VirtualBox.
 - **Debian 13 Cloud**: the script downloads and verifies the official cloud image, boots it once in an isolated temporary QEMU VM, prepares the `root` and `toto` accounts, configures serial access and DHCP networking, disables cloud-init for subsequent boots, then produces a read-only RAW image.
@@ -246,7 +256,7 @@ npm ci
 bash prepare.sh
 ```
 
-Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sources/<id>/` and its final `<id>.raw` and `<id>.vdi` bases in `images/`. The orchestrator checks that every path declared in `config.json` exists but does not rewrite the file. The page's system menu is populated directly from `config.json`. `runtime/` is reserved for temporary preparation and VM files. These directories are ignored by Git, except for their `.gitkeep` files.
+Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sources/<id>/` and its final `<id>.raw` and `<id>.vdi` bases in `images/`. The orchestrator checks the selected systems' image paths declared in `config.json` but does not rewrite the file. The page's system menu is populated directly from `config.json`. `runtime/` is reserved for temporary preparation and VM files. These directories are ignored by Git, except for their `.gitkeep` files.
 
 ## Running QemuWeb
 

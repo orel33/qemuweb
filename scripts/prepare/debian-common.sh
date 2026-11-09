@@ -12,12 +12,16 @@ prepare_debian_image() {
   mkdir -p "$source_dir"
   cloud_source="$source_dir/debian-13-genericcloud-amd64.qcow2"
   sums="$source_dir/SHA512SUMS"
-  fetch_file "$url/debian-13-genericcloud-amd64.qcow2" "$cloud_source"
-  fetch_file "$url/SHA512SUMS" "$sums"
-  # Verify the downloaded cloud image against Debian's published checksum list.
-  (cd "$source_dir" && grep -E '[ *]debian-13-genericcloud-amd64\.qcow2$' SHA512SUMS | sha512sum -c -)
+  if prepare_sources; then
+    fetch_file "$url/debian-13-genericcloud-amd64.qcow2" "$cloud_source"
+    fetch_file "$url/SHA512SUMS" "$sums"
+    # Verify the downloaded cloud image against Debian's published checksum list.
+    (cd "$source_dir" && grep -E '[ *]debian-13-genericcloud-amd64\.qcow2$' SHA512SUMS | sha512sum -c -)
+  fi
+  if ! prepare_images; then return 0; fi
 
   if [[ ! -s "$raw" ]]; then
+    [[ -s "$cloud_source" ]] || { echo "Missing source image: $cloud_source (run --sources first)." >&2; return 1; }
     require_commands qemu-system-x86_64 qemu-img genisoimage python3 base64
     temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
     chmod 700 "$temp_dir"

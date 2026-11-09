@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
+parse_prepare_mode "$@"
 
 # Keep the downloaded release archive and checksum file under the OpenWrt ID;
 # migrate older top-level files if present.
@@ -10,14 +11,20 @@ vdi="$IMAGES/openwrt.vdi"
 archive=openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz
 url=https://downloads.openwrt.org/releases/25.12.6/targets/x86/64
 mkdir -p "$source_dir"
-move_if_present "$SOURCES/$archive" "$source_dir/$archive"
-move_if_present "$SOURCES/sha256sums" "$source_dir/sha256sums"
-move_if_present "$IMAGES/openwrt-25.12.6-x86-64-qemunet.vdi" "$vdi"
-fetch_file "$url/$archive" "$source_dir/$archive"
-fetch_file "$url/sha256sums" "$source_dir/sha256sums"
-# Verify the release image against OpenWrt's published SHA-256 list.
-(cd "$source_dir" && grep -E "[ *]$archive$" sha256sums | sha256sum -c -)
+if prepare_sources; then
+  move_if_present "$SOURCES/$archive" "$source_dir/$archive"
+  move_if_present "$SOURCES/sha256sums" "$source_dir/sha256sums"
+  fetch_file "$url/$archive" "$source_dir/$archive"
+  fetch_file "$url/sha256sums" "$source_dir/sha256sums"
+  # Verify the release image against OpenWrt's published SHA-256 list.
+  (cd "$source_dir" && grep -E "[ *]$archive$" sha256sums | sha256sum -c -)
+fi
+if ! prepare_images; then exit 0; fi
+if [[ "${QEMUWEB_PREPARE_FORCE:-0}" != 1 ]]; then
+  move_if_present "$IMAGES/openwrt-25.12.6-x86-64-qemunet.vdi" "$vdi"
+fi
 if [[ ! -s "$raw" ]]; then
+  [[ -s "$source_dir/$archive" ]] || { echo "Missing source archive: $source_dir/$archive (run --sources first)." >&2; exit 1; }
   require_commands qemu-system-x86_64 qemu-img python3 base64
   temp_dir="$(mktemp -d "$RUNTIME/.openwrt-prepare.XXXXXX")"
   disk="$temp_dir/openwrt.raw"

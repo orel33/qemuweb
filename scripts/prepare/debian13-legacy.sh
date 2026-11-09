@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
+parse_prepare_mode "$@"
 
 id=debian13-legacy
 # This profile installs Debian from the netinst ISO, rather than using a cloud
@@ -14,13 +15,18 @@ sums="$source_dir/SHA512SUMS"
 base_url=https://cdimage.debian.org/debian-cd/current/amd64/iso-cd
 mkdir -p "$source_dir"
 
-if [[ ! -s "$raw" ]]; then
+if prepare_sources; then
   # Verify the installer media before extracting its kernel and initrd for an
   # unattended serial-console installation.
-  require_commands curl sha512sum isoinfo python3 qemu-system-x86_64 qemu-img
   fetch_file "$base_url/$iso_name" "$iso"
   fetch_file "$base_url/SHA512SUMS" "$sums"
   (cd "$source_dir" && grep -E "[ *]${iso_name//./\\.}$" SHA512SUMS | sha512sum -c -)
+fi
+if ! prepare_images; then exit 0; fi
+
+if [[ ! -s "$raw" ]]; then
+  [[ -s "$iso" ]] || { echo "Missing source ISO: $iso (run --sources first)." >&2; exit 1; }
+  require_commands isoinfo python3 qemu-system-x86_64 qemu-img
 
   temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
   trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; rm -rf "$temp_dir"' EXIT

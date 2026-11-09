@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
+parse_prepare_mode "$@"
 # Alpine's inputs and outputs live under its own ID, while older files are
 # moved into this layout to preserve existing downloads and prepared images.
 source_dir="$SOURCES/alpine"
@@ -10,16 +11,22 @@ version=3.24.3
 iso="alpine-virt-$version-x86_64.iso"
 url="https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64"
 mkdir -p "$source_dir"
-move_if_present "$SOURCES/$iso" "$source_dir/$iso"
-move_if_present "$SOURCES/$iso.sha256" "$source_dir/$iso.sha256"
-move_if_present "$IMAGES/alpine-$version-qemunet-x86_64.raw" "$raw"
-move_if_present "$IMAGES/alpine-$version-qemunet-x86_64.vdi" "$vdi"
-fetch_file "$url/$iso" "$source_dir/$iso"
-fetch_file "$url/$iso.sha256" "$source_dir/$iso.sha256"
-# Do not build from an ISO unless its publisher-provided checksum matches.
-(cd "$source_dir" && sha256sum -c "$iso.sha256")
+if prepare_sources; then
+  move_if_present "$SOURCES/$iso" "$source_dir/$iso"
+  move_if_present "$SOURCES/$iso.sha256" "$source_dir/$iso.sha256"
+  fetch_file "$url/$iso" "$source_dir/$iso"
+  fetch_file "$url/$iso.sha256" "$source_dir/$iso.sha256"
+  # Do not build from an ISO unless its publisher-provided checksum matches.
+  (cd "$source_dir" && sha256sum -c "$iso.sha256")
+fi
+if ! prepare_images; then exit 0; fi
+if [[ "${QEMUWEB_PREPARE_FORCE:-0}" != 1 ]]; then
+  move_if_present "$IMAGES/alpine-$version-qemunet-x86_64.raw" "$raw"
+  move_if_present "$IMAGES/alpine-$version-qemunet-x86_64.vdi" "$vdi"
+fi
 
 if [[ ! -s "$raw" ]]; then
+  [[ -s "$source_dir/$iso" ]] || { echo "Missing source ISO: $source_dir/$iso (run --sources first)." >&2; exit 1; }
   require_commands qemu-system-x86_64 qemu-img python3 base64
   temp_dir="$(mktemp -d "$RUNTIME/.alpine-prepare.XXXXXX")"
   disk="$temp_dir/alpine.raw"
