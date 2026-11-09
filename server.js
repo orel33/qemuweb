@@ -649,7 +649,6 @@ app.get('/api/options/:sessionId', (req, res) => {
         ? [[commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off'], [commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso], [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
     const socketLabel = filePath => path.join('runtime', path.relative(runtime, filePath));
-    storage.push({label: 'Guest setup ISO (read-only)', path: socketLabel(previewSession.guestIso)});
     const storage = isQemu
       ? [
           {label: 'Base image (RAW)', path: path.relative(root, imagePath(image.images.raw))},
@@ -659,6 +658,7 @@ app.get('/api/options/:sessionId', (req, res) => {
           {label: 'Base image (VDI)', path: path.relative(root, imagePath(image.images.vdi))},
           {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, `${image.id}.vdi`))}
         ];
+    storage.push({label: 'Guest setup ISO (read-only)', path: socketLabel(previewSession.guestIso)});
     res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: session.networkInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: launchCommands.map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
