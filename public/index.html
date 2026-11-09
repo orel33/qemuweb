@@ -282,12 +282,13 @@
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
     <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
     <div class="create-fields">
-      <label class="create-field">Engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
+      <label class="create-field">Session engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
       <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
       <label class="create-field">Console font<select id="console-font-family"><option value="system">Ubuntu Sans Mono (GNOME Terminal)</option><option value="consolas">Consolas</option><option value="menlo">Menlo</option><option value="liberation">Liberation Mono</option><option value="default">Browser default monospace</option></select></label>
       <label class="create-field">Console font size<select id="console-font-size"><option value="11">11 px</option><option value="12">12 px</option><option value="13">13 px</option><option value="14">14 px</option><option value="15">15 px</option><option value="16">16 px</option><option value="17">17 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="22">22 px</option><option value="24">24 px</option></select></label>
     </div>
     <p id="general-settings-error" role="alert" hidden></p>
+    <p id="engine-settings-error" role="alert" hidden></p>
   </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
     <form id="host-settings-form" novalidate>
@@ -636,6 +637,7 @@
     const consoleFontFamilySelect = document.getElementById('console-font-family');
     const consoleFontSizeSelect = document.getElementById('console-font-size');
     const generalSettingsError = document.getElementById('general-settings-error');
+    const engineSettingsError = document.getElementById('engine-settings-error');
     const toggleConsoleColumns = document.getElementById('toggle-console-columns');
     const toggleSwitchConsoles = document.getElementById('toggle-switch-consoles');
     const layoutCount = document.getElementById('layout-count');
@@ -759,7 +761,6 @@
     const generalSettings = {engine: 'qemu', namingScheme: 'classicLong', consoleFontFamily: 'system', consoleFontSize: 17};
     try {
       const saved = JSON.parse(localStorage.getItem(generalSettingsKey) || '{}');
-      if (['qemu', 'qemu-tcg', 'virtualbox'].includes(saved?.engine)) generalSettings.engine = saved.engine;
       if (typeof saved?.namingScheme === 'string') generalSettings.namingScheme = saved.namingScheme;
       if (['system', 'consolas', 'menlo', 'liberation', 'default'].includes(saved?.consoleFontFamily)) generalSettings.consoleFontFamily = saved.consoleFontFamily;
       if ([...consoleFontSizeSelect.options].some(option => Number(option.value) === Number(saved?.consoleFontSize))) generalSettings.consoleFontSize = Number(saved.consoleFontSize);
@@ -798,7 +799,8 @@
     consoleFontSizeSelect.value = String(generalSettings.consoleFontSize);
     applyConsoleAppearance();
     function saveGeneralSettings() {
-      try { localStorage.setItem(generalSettingsKey, JSON.stringify(generalSettings)); } catch (_) {}
+      const {namingScheme, consoleFontFamily, consoleFontSize} = generalSettings;
+      try { localStorage.setItem(generalSettingsKey, JSON.stringify({namingScheme, consoleFontFamily, consoleFontSize})); } catch (_) {}
     }
     const graphicWorkspace = document.getElementById('graphic-workspace');
     const graphicCanvas = document.getElementById('graphic-canvas');
@@ -1419,7 +1421,7 @@
           row.append(label, input);
           settingsEditable.append(row);
         }
-        addSettingSelectRow(settingsFixed, 'System', images.map(image => [image.id, image.label]), machine.imageId, identityLocked, value => {
+        addSettingSelectRow(settingsFixed, 'System', images.map(image => [image.id, image.label]), machine.imageId, !creating || identityLocked, value => {
           if (creating) {
             machine.imageId = value;
             machine.settings = null;
@@ -1433,7 +1435,9 @@
             imageSelect.dispatchEvent(new Event('change'));
           }
         });
+        addSettingTextRow(settingsFixed, 'System ID', machine.imageId);
         addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, true);
+        addSettingTextRow(settingsFixed, 'Base image', image?.images?.[machine.engine === 'virtualbox' ? 'vdi' : 'raw'] || 'Unavailable');
         addSettingTextRow(settingsFixed, 'Description', image?.description || 'No image available; run bash prepare.sh.');
         addSettingTextRow(settingsFixed, 'Login', image?.login || 'Unavailable');
         const fixedLabels = {machine: 'Machine type', diskBus: 'Disk bus', networkCard: 'Network card', osType: 'Guest profile'};
@@ -1731,7 +1735,7 @@
         imageId: image ? image.id : (images[0]?.id || ''),
         settings: session.settings || null, settingsLoaded: !!session.settings,
         hasDifferentialDisk: session.hasDifferentialDisk ?? !!image?.hasDifferentialDisk,
-        engine: session.engine || 'qemu',
+        engine: session.engine || generalSettings.engine,
         interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
         networkInterfaces: session.networkInterfaces || [],
         running: session.running, hasLaunched: session.hasLaunched,
@@ -1754,7 +1758,7 @@
         const image = images.find(item => item.id === session.imageId);
         current.imageId = image ? image.id : (session.imageId || images[0]?.id || '');
         current.osHint = session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system');
-        current.engine = session.engine || 'qemu';
+        current.engine = session.engine || generalSettings.engine;
         current.interfaces = current.networkInterfaces.map(nic => nic.switchId);
       }
     }
@@ -1779,12 +1783,14 @@
     Promise.all([
       fetch('/api/systems').then(response => response.json()),
       fetch('/api/qemu-config').then(response => response.ok ? response.json() : null).catch(() => null),
+      fetch('/api/general-settings').then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Session settings unavailable'); return body; }),
       fetch('/api/sessions').then(response => response.json()),
       fetch('/resources/naming-schemes.json').then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
       }).catch(error => ({error: error.message}))
-    ]).then(([items, config, existing, schemes]) => {
+    ]).then(([items, config, sessionSettings, existing, schemes]) => {
+      generalSettings.engine = sessionSettings.engine;
       images = items;
       qemuConfig = config;
       namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};
@@ -1886,7 +1892,21 @@
         if (pane.machineId && !pane.element.hidden) pane.terminal.focus();
       });
     });
-    defaultEngineSelect.addEventListener('change', () => { generalSettings.engine = defaultEngineSelect.value; saveGeneralSettings(); });
+    defaultEngineSelect.addEventListener('change', async () => {
+      const engine = defaultEngineSelect.value;
+      defaultEngineSelect.disabled = true;
+      engineSettingsError.hidden = true;
+      try {
+        const response = await fetch('/api/general-settings', {method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({engine})});
+        const body = await response.json();
+        if (!response.ok) throw new Error(body.error || 'Cannot change session engine');
+        generalSettings.engine = body.engine;
+      } catch (error) {
+        defaultEngineSelect.value = generalSettings.engine;
+        engineSettingsError.textContent = error.message;
+        engineSettingsError.hidden = false;
+      } finally { defaultEngineSelect.disabled = false; }
+    });
     namingSchemeSelect.addEventListener('change', () => { generalSettings.namingScheme = namingSchemeSelect.value; saveGeneralSettings(); });
     consoleFontFamilySelect.addEventListener('change', () => { generalSettings.consoleFontFamily = consoleFontFamilySelect.value; consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(); });
     consoleFontSizeSelect.addEventListener('change', () => { generalSettings.consoleFontSize = Number(consoleFontSizeSelect.value); consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(true); });
@@ -2173,6 +2193,12 @@
       if (graphicVisible) scheduleSessionSync();
     });
     socket.on('connect', syncSessionsFromServer);
+    socket.on('general-settings-changed', event => {
+      if (event?.engine && ['qemu', 'qemu-tcg', 'virtualbox'].includes(event.engine)) {
+        generalSettings.engine = event.engine;
+        defaultEngineSelect.value = event.engine;
+      }
+    });
     socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
     socket.on('sessions-removed', event => {
       for (const id of event.ids || []) machines.delete(id);

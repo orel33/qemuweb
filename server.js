@@ -23,7 +23,9 @@ console.log(`QemuWeb ${packageInfo.version}\n`);
 try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
-const runtimeInstance = path.join(runtime, `qemuweb-${process.pid}`);
+const sessionId = crypto.randomBytes(8).toString('hex');
+const runtimeInstance = path.join(runtime, sessionId);
+const sessionFile = path.join(runtimeInstance, 'session.json');
 const configPath = path.join(root, 'config.json');
 const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'rtcBase', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
 const port = Number(process.env.PORT || 3002);
@@ -38,6 +40,26 @@ const previousProcessSamples = new Map();
 const vboxMetricSetup = new Map();
 let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
+let sessionEngine = readConfig().session.defaults.engine;
+
+function writeJsonAtomic(file, value) {
+  const temporary = `${file}.${crypto.randomBytes(8).toString('hex')}.tmp`;
+  try {
+    fs.writeFileSync(temporary, `${JSON.stringify(value, null, 2)}\n`, {encoding: 'utf8', mode: 0o600, flag: 'wx'});
+    fs.renameSync(temporary, file);
+  } catch (error) {
+    try { fs.rmSync(temporary, {force: true}); } catch (_) {}
+    throw error;
+  }
+}
+
+function saveSessionMetadata(engine = sessionEngine) {
+  writeJsonAtomic(sessionFile, {schemaVersion: 1, id: sessionId, engine});
+}
+
+function requireSessionEngine(engine) {
+  if (engine !== sessionEngine) throw new Error(`Engine ${engine} differs from this session's ${sessionEngine} engine. Change General Settings before adding hosts.`);
+}
 
 function resourceResult(cpuPercent, ramBytes) {
   const available = [cpuPercent, ramBytes].filter(Number.isFinite).length;
@@ -322,6 +344,7 @@ function readConfig() {
   try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); }
   catch (error) { throw new Error(`Cannot read config.json: ${error.message}`); }
   if (!config || !config.qemu || !config.systems || typeof config.systems !== 'object' || Array.isArray(config.systems)) throw new Error('Invalid config.json structure.');
+  if (config.schemaVersion !== 1 || !['qemu', 'qemu-tcg', 'virtualbox'].includes(config.session?.defaults?.engine)) throw new Error('Invalid session defaults in config.json.');
   validateQemuOptions(config.qemu.defaults, true);
   if (!config.settings || !config.settings.defaults || !config.settings.fields) throw new Error('Missing generic settings in config.json.');
   validateLaunchSettings(config.settings.defaults);
@@ -356,6 +379,27 @@ function launchSettingsFor(imageId, overrides = {}) {
   const system = config.systems[imageId];
   return validateLaunchSettings({...config.settings.defaults, ...(system?.settings || {}), ...overrides});
 }
+
+app.get('/api/general-settings', (_req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.json({sessionId, engine: sessionEngine});
+});
+
+app.put('/api/general-settings', (req, res) => {
+  try {
+    const engine = req.body?.engine;
+    if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
+    if (engine !== sessionEngine) {
+      if ([...sessions.values()].some(session => session.kind === 'vm')) {
+        return res.status(409).json({error: 'Delete existing hosts before changing the session engine.'});
+      }
+      saveSessionMetadata(engine);
+      sessionEngine = engine;
+      io.emit('general-settings-changed', {sessionId, engine});
+    }
+    res.json({sessionId, engine: sessionEngine});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
 
 app.get('/api/qemu-config', (_req, res) => {
   try {
@@ -737,6 +781,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     const launched = !!(existing && existing.everStarted && existing.selectedImage);
     const image = launched ? existing.selectedImage : imageById(req.query.system);
     const engine = launched ? existing.engine : req.query.engine;
+    requireSessionEngine(engine);
     if (!image || !['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown system or engine.');
     const session = launched ? existing : {
       id, ...sessionPaths(id),
@@ -816,6 +861,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (resume && (selectedEngine !== session.engine || imageId !== session.selectedImage?.id)) throw new Error('Resume must use the original system and engine.');
   if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current host disk was not found.');
   if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
+  requireSessionEngine(selectedEngine);
   const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
   if (selectedEngine === 'virtualbox') {
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
@@ -1127,8 +1173,9 @@ app.post('/api/start', (req, res) => {
 });
 
 function validateTopologyRequest(body) {
-  const {text, engine = 'qemu'} = body || {};
+  const {text, engine = sessionEngine} = body || {};
   if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
+  requireSessionEngine(engine);
   const topology = parseTopology(text, Object.keys(readConfig().systems));
   if (engine === 'virtualbox' && topology.hosts.some(host => host.switches.length)) throw new Error('Connected interfaces require a QEMU engine.');
   return {topology, engine};
@@ -1212,11 +1259,12 @@ app.get('/api/topology', (_req, res) => {
 
 app.post('/api/hosts', (req, res) => {
   try {
-    const {id, name, imageId, engine = 'qemu', interfaces, settings, guestMedia, createGuestCdrom = false, attachGuestCdrom = false, autoBuildGuestCdrom} = req.body || {};
+    const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, createGuestCdrom = false, attachGuestCdrom = false, autoBuildGuestCdrom} = req.body || {};
     if (sessions.has(id)) throw new Error('Host ID already exists.');
     const image = imageById(imageId || Object.keys(readConfig().systems)[0]);
     if (!image) throw new Error('Unknown system in config.json.');
     if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
+    requireSessionEngine(engine);
     if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name))) throw new Error('Invalid host name (1 to 64 characters).');
     const hostname = name === undefined ? allocateName('h') : name.trim();
     if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
@@ -1457,6 +1505,7 @@ server.on('error', error => {
 });
 server.listen(port, '127.0.0.1', () => {
   fs.mkdirSync(runtimeInstance, {recursive: true});
+  saveSessionMetadata();
   fs.writeFileSync(serverPidFile, `${process.pid}\n`, {mode: 0o600});
   console.log('\nQemuWeb is ready.');
   console.log(`  Web interface      http://127.0.0.1:${port}`);

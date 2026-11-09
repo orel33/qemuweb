@@ -1,4 +1,6 @@
 {
+  "schemaVersion": 1,
+  "session": {"defaults": {"engine": "qemu"}},
   "settings": {
     "defaults": {
       "memory": 512,
