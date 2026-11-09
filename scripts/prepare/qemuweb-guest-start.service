@@ -5,8 +5,8 @@ After=network.target
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/qemuweb-guest-start
-StandardOutput=journal+console
-StandardError=journal+console
+StandardOutput=journal
+StandardError=journal
 TimeoutStartSec=30
 
 [Install]

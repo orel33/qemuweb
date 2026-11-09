@@ -1,6 +1,6 @@
 'use strict';
 
-// Boot newly prepared Alpine, Debian Cloud and OpenWrt bases with isolated media.
+// Boot prepared OS bases with isolated guest media.
 const assert = require('node:assert/strict');
 const {spawn} = require('node:child_process');
 const fs = require('node:fs');
@@ -41,6 +41,10 @@ async function request(route, method = 'GET', body) {
   return result;
 }
 
+function stripAnsi(value) {
+  return value.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '');
+}
+
 async function run() {
   for (const profile of profiles) assert.ok(fs.existsSync(path.join(root, 'images', `${profile}.raw`)), `Missing prepared ${profile} RAW base`);
   const port = await freePort();
@@ -64,12 +68,32 @@ async function run() {
     try {
       await waitFor(`${profile} socket`, () => socket.connected);
       await request('/api/start', 'POST', {sessionId: id, engine, imageId: profile, interfaces: [], settings: {memory: profile === 'openwrt' ? 256 : 1024, cpus: 1, clock: 'utc'}});
-      try { await waitFor(`${profile} guest hook`, () => serial.includes('QEMUWEB_START_EXIT 0') || serial.includes('QEMUWEB_START_ERROR'), 90000); }
-      catch (error) { throw new Error(`${error.message}\nRecent serial:\n${serial.slice(-4000)}`); }
-      assert.match(serial, /QEMUWEB_START_EXIT 0/, `${profile} guest hook failed: ${serial.slice(-2500)}`);
-      assert.ok(serial.includes(marker), `${profile} companion resource not printed: ${serial.slice(-2500)}`);
-      await waitFor(`${profile} Host Log`, () => logs.some(line => line.includes('QEMUWEB_START_EXIT 0')) && logs.some(line => line.includes(marker)));
-      console.log(`${profile}: ISO mounted, start.sh and companion file ran, exit 0 visible in console and Host Log`);
+      if (profile.startsWith('debian')) {
+        await waitFor(`${profile} login`, () => /login:\s*$/.test(serial), 90000);
+        socket.emit('input', 'root\r');
+        await waitFor(`${profile} root shell`, () => /root@[^\r\n]*#\s*$/.test(serial), 15000);
+        const journalCheck = `for attempt in $(seq 1 60); do journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' && break; sleep 1; done
+journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' &&
+journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq '${marker}' &&
+journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_BEGIN'
+printf 'GTS16_JOURNAL_CHECK_%s\\n' "$?"`;
+        const encoded = Buffer.from(journalCheck).toString('base64');
+        socket.emit('input', `printf '%s' '${encoded}' | base64 -d | /bin/sh\r`);
+        await waitFor(`${profile} journal check`, () => /GTS16_JOURNAL_CHECK_\d+/.test(serial), 90000);
+        assert.match(serial, /GTS16_JOURNAL_CHECK_0/, `${profile} journal lacks script output or exit 0: ${serial.slice(-2500)}`);
+        assert.doesNotMatch(serial, /qemuweb-guest-start\[\d+\]: QEMUWEB_START_/);
+        assert.ok(!logs.some(line => line.includes('QEMUWEB_START_')), `${profile} Host Log contains guest hook output.`);
+        assert.match(stripAnsi(serial), /Finished .*QemuWeb guest startup media/,
+          `${profile} normal systemd completion status is missing from serial: ${stripAnsi(serial).split('\n').filter(line => /Finished|QemuWeb|qemuweb-guest/.test(line)).slice(-15).join(' | ')}`);
+        console.log(`${profile}: ISO script and resource verified in journalctl, exit 0; no guest hook syslog in serial or Host Log`);
+      } else {
+        try { await waitFor(`${profile} guest hook`, () => serial.includes('QEMUWEB_START_EXIT 0') || serial.includes('QEMUWEB_START_ERROR'), 90000); }
+        catch (error) { throw new Error(`${error.message}\nRecent serial:\n${serial.slice(-4000)}`); }
+        assert.match(serial, /QEMUWEB_START_EXIT 0/, `${profile} guest hook failed: ${serial.slice(-2500)}`);
+        assert.ok(serial.includes(marker), `${profile} companion resource not printed: ${serial.slice(-2500)}`);
+        await waitFor(`${profile} Host Log`, () => logs.some(line => line.includes('QEMUWEB_START_EXIT 0')) && logs.some(line => line.includes(marker)));
+        console.log(`${profile}: ISO mounted, start.sh and companion file ran, exit 0 visible in console and Host Log`);
+      }
     } finally { socket.disconnect(); }
     await request(`/api/sessions/${id}`, 'DELETE');
   }

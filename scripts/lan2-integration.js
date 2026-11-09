@@ -278,11 +278,17 @@ function mediaFor(index, version = 1) {
 
 async function verifyGuestBoot(shell, index, version) {
   const name = `gts16-h${index + 1}-v${version}`;
-  await waitFor(`${shell.label} guest hook exit`, () => shell.output.includes('QEMUWEB_START_EXIT 0'));
-  await waitFor(`${shell.label} guest log`, () => shell.logs.some(line => line.includes('QEMUWEB_START_EXIT 0')));
+  assert.doesNotMatch(shell.output, /qemuweb-guest-start\[\d+\]: QEMUWEB_START_/,
+    `${shell.label} boot console contains guest hook syslog lines.`);
+  assert.ok(!shell.logs.some(line => line.includes('QEMUWEB_START_')),
+    `${shell.label} Host Log contains Debian guest hook output.`);
+  await shell.exec(`for attempt in $(seq 1 60); do journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' && break; sleep 1; done
+journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' &&
+journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'resource-${name}' &&
+journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_BEGIN'`);
   await shell.exec(`test "$(hostname)" = "${name}" && test "$(cat /root/.gts16-disk-marker)" = "${name}" && ip -o -4 addr show eth0 | grep -q '${addresses[index]}/24'`);
-  assert.match(shell.output, new RegExp(`resource-${name}`));
-  assert.ok(shell.logs.some(line => line.includes(`resource-${name}`)), `${shell.label} resource output missing from Host Log.`);
+  assert.ok(!shell.logs.some(line => line.includes('QEMUWEB_START_')),
+    `${shell.label} Host Log gained Debian guest hook output after journal query.`);
 }
 
 async function startHost(id) {
