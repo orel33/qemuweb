@@ -90,7 +90,7 @@ if command -v VBoxManage >/dev/null 2>&1; then
   if (( ! DRY_RUN )) && [[ -d "$RUNTIME" ]]; then
     while IFS= read -r -d '' vdi; do
       VBoxManage closemedium disk "$vdi" --delete >/dev/null 2>&1 || true
-    done < <(find "$RUNTIME" -maxdepth 1 -name 'qemuweb-*.vdi' -type f -print0)
+    done < <(find "$RUNTIME" -type f \( -name 'disk.vdi' -o -name 'qemuweb-*.vdi' \) -print0)
   fi
 fi
 

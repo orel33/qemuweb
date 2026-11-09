@@ -23,6 +23,7 @@ console.log(`QemuWeb ${packageInfo.version}\n`);
 try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
+const runtimeInstance = path.join(runtime, `qemuweb-${process.pid}`);
 const configPath = path.join(root, 'config.json');
 const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'rtcBase', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
 const port = Number(process.env.PORT || 3002);
@@ -100,15 +101,64 @@ function shellQuote(value) {
   return /^[a-zA-Z0-9_./:=,+-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
+function sessionPaths(id, kind = 'vm') {
+  const runtimeId = `${kind === 'switch' ? 's' : 'h'}-${crypto.createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
+  const runtimeDir = path.join(runtimeInstance, runtimeId);
+  const paths = {
+    runtimeDir,
+    vmName: `qemuweb-${process.pid}-${runtimeId}`,
+    socketPath: path.join(runtimeDir, 'serial.sock'),
+    monitorPath: path.join(runtimeDir, 'mon.sock'),
+    socketDir: kind === 'switch' ? path.join(runtimeDir, 'vde') : null,
+    mgmtPath: kind === 'switch' ? path.join(runtimeDir, 'mgmt.sock') : null
+  };
+  if ([paths.socketPath, paths.monitorPath, paths.mgmtPath].some(name => name && Buffer.byteLength(name) > 107)) {
+    throw new Error('Runtime socket path is too long; move the project to a shorter directory.');
+  }
+  return paths;
+}
+
+function hostnameAliasPath(session, name) {
+  const encoded = encodeURIComponent(name);
+  const safeName = encoded === '.' || encoded === '..' ? encoded.replaceAll('.', '%2E') : encoded;
+  const component = Buffer.byteLength(safeName) <= 120
+    ? safeName : `${safeName.slice(0, 96)}-${path.basename(session.runtimeDir)}`;
+  return path.join(runtimeInstance, session.kind === 'switch' ? 'switches' : 'hosts', component);
+}
+
+function setSessionHostname(session, name) {
+  const alias = hostnameAliasPath(session, name);
+  if (alias !== session.hostnameAliasPath) {
+    fs.mkdirSync(path.dirname(alias), {recursive: true});
+    const target = path.relative(path.dirname(alias), session.runtimeDir);
+    try { fs.symlinkSync(target, alias, 'dir'); }
+    catch (error) {
+      if (error.code !== 'EEXIST' || fs.readlinkSync(alias) !== target) throw error;
+    }
+    removeHostnameAlias(session);
+    session.hostnameAliasPath = alias;
+  }
+  session.hostname = name;
+}
+
+function removeHostnameAlias(session) {
+  const alias = session.hostnameAliasPath;
+  if (!alias) return;
+  try { fs.unlinkSync(alias); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  session.hostnameAliasPath = null;
+  try { fs.rmdirSync(path.dirname(alias)); } catch (_) {}
+}
+
 function getSession(id, create = false, kind = 'vm') {
   if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error('Invalid session ID.');
   if (!sessions.has(id) && create) {
+    const paths = sessionPaths(id, kind);
+    if ([...sessions.values()].some(session => session.runtimeDir === paths.runtimeDir)) throw new Error('Runtime ID collision; retry with another host or switch ID.');
+    fs.mkdirSync(paths.runtimeDir, {recursive: true});
     sessions.set(id, {
       id,
       kind,
-      vmName: `qemuweb-${process.pid}-${id}`,
-      socketPath: path.join(runtime, `qemuweb-${process.pid}-${id}.sock`),
-      monitorPath: path.join(runtime, `qemuweb-${process.pid}-${id}.monitor.sock`),
+      ...paths,
       machine: null,
       serial: null,
       engine: null,
@@ -117,6 +167,7 @@ function getSession(id, create = false, kind = 'vm') {
       launchSettings: null,
       selectedImage: null,
       hostname: null,
+      hostnameAliasPath: null,
       everStarted: false,
       stopping: false,
       action: null,
@@ -133,8 +184,6 @@ function getSession(id, create = false, kind = 'vm') {
       activeGuestIso: null,
       guestIsoFiles: new Set(),
       networkInterfaces: [],
-      socketDir: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}-vde`) : null,
-      mgmtPath: kind === 'switch' ? path.join(runtime, `qemuweb-${process.pid}-${id}.mgmt`) : null,
       mgmtAliasPath: null,
       switchTerminal: null
     });
@@ -380,7 +429,7 @@ function connectSerial(session, attempt = 0, generation = session.generation) {
 }
 
 function tempFile(session, name) {
-  return path.join(runtime, `qemuweb-${process.pid}-${session.id}-${name}`);
+  return path.join(session.runtimeDir, name);
 }
 
 function guestIsoStatus(session) {
@@ -394,10 +443,10 @@ function guestIsoStatus(session) {
   };
 }
 
-function buildGuestIso(session, files, destination = tempFile(session, `guest-setup-${crypto.randomUUID()}.iso`)) {
+function buildGuestIso(session, files, destination = tempFile(session, `startup-${crypto.randomUUID()}.iso`)) {
   const validated = validateBootFiles(files);
   const next = destination;
-  createGuestIso({files: validated, destination: next, genisoimage: commands.GENISOIMAGE,
+  createGuestIso({files: validated, destination: next, genisoimage: commands.GENISOIMAGE, stagingDirectory: tempFile(session, 'iso-stage'),
     onCommand: (command, args) => appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`)});
   const previous = session.guestIso;
   session.guestMedia = validated;
@@ -513,7 +562,7 @@ function startSwitchTerminal(session) {
   stopSwitchTerminal(session);
   session.serialBuffer = '';
   io.to(session.id).emit('serial-reset', {sessionId: session.id, serial: ''});
-  const aliasDir = path.join(runtime, `qemuweb-${process.pid}-vdeterm`);
+  const aliasDir = path.join(runtimeInstance, 'vdeterm');
   const aliasName = session.hostname;
   const aliasPath = path.join(aliasDir, aliasName);
   fs.mkdirSync(aliasDir, {recursive: true});
@@ -625,7 +674,7 @@ function qemuOverlayArgs(image, overlay) {
 }
 
 function spawnQemu(session, image, reuseDisk = false) {
-  const overlay = reuseDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
+  const overlay = reuseDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
   if (!overlay || !fs.existsSync(overlay)) {
     if (reuseDisk) throw new Error('The current host disk was not found.');
     execLogged(session, commands.QEMU_IMG, qemuOverlayArgs(image, overlay), {stdio: 'pipe'});
@@ -668,7 +717,7 @@ function vbox(session, args) {
 
 function virtualBoxCommands(session, image) {
   const vmDir = tempFile(session, 'vbox-vm');
-  const disk = tempFile(session, `${image.id}.vdi`);
+  const disk = tempFile(session, 'disk.vdi');
   return [
     ['createvm', '--name', session.vmName, '--basefolder', vmDir, '--ostype', image.virtualbox.osType, '--register'],
     ['modifyvm', session.vmName, '--memory', String(session.launchSettings.memory), '--cpus', String(session.launchSettings.cpus), '--rtcuseutc', session.launchSettings.clock === 'utc' ? 'on' : 'off', '--nic1', image.virtualbox.nic, '--uart1', '0x3F8', '4', '--uartmode1', 'server', session.socketPath],
@@ -692,10 +741,8 @@ app.get('/api/options/:sessionId', (req, res) => {
     const engine = launched ? existing.engine : req.query.engine;
     if (!image || !['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown system or engine.');
     const session = launched ? existing : {
-      id, vmName: `qemuweb-${process.pid}-${id}`,
+      id, ...sessionPaths(id),
       generation: existing?.generation || 0,
-      socketPath: path.join(runtime, `qemuweb-${process.pid}-${id}.sock`),
-      monitorPath: path.join(runtime, `qemuweb-${process.pid}-${id}.monitor.sock`),
       engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
       launchSettings: launchSettingsFor(image.id, req.query.settings ? JSON.parse(req.query.settings) : {}),
       qemuOptions: null,
@@ -712,16 +759,16 @@ app.get('/api/options/:sessionId', (req, res) => {
       ? launched ? {...session.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
       : null;
     if (!launched && isQemu) session.qemuOptions = options;
-    const nextGuestIso = tempFile(session, `guest-setup-${session.generation + 1}.iso`);
+    const nextGuestIso = tempFile(session, `startup-${session.generation + 1}.iso`);
     const previewSession = {...session, launchSettings: userSettings, qemuOptions: options,
       guestIsoAttached: attachGuestCdrom,
       guestIso: attachGuestCdrom ? nextGuestIso : null};
-    const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, `${image.id}-overlay.qcow2`);
+    const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
     const fixed = isQemu
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
       : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.nic};
     const isoCommands = attachGuestCdrom
-      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', `${nextGuestIso}.tmp`, path.join(runtime, '.qemuweb-iso-<temporary>')]]
+      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, 'iso-stage')]]
       : [];
     const launchCommands = isQemu
       ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
@@ -736,7 +783,7 @@ app.get('/api/options/:sessionId', (req, res) => {
         ]
       : [
           {label: 'Base image (VDI)', path: path.relative(root, imagePath(image.images.vdi))},
-          {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, `${image.id}.vdi`))}
+          {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, 'disk.vdi'))}
         ];
     storage.push({label: 'Guest CD-ROM ISO', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
     res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: session.networkInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
@@ -747,7 +794,7 @@ function spawnVirtualBox(session, image) {
   const vmDir = tempFile(session, 'vbox-vm');
   fs.mkdirSync(vmDir, {recursive: true});
   try {
-    const disk = tempFile(session, `${image.id}.vdi`);
+    const disk = tempFile(session, 'disk.vdi');
     image.runFiles = [disk];
     session.runDisk = disk;
     for (const args of virtualBoxCommands(session, image)) vbox(session, args);
@@ -811,10 +858,10 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.engine = selectedEngine;
   session.qemuAcceleration = acceleration;
   session.selectedImage = image;
-  session.hostname = displayName;
+  setSessionHostname(session, displayName);
   session.qemuOptions = qemuOptions;
   session.launchSettings = launchSettings;
-  if (session.guestIsoAttached) buildGuestIso(session, session.guestMedia, tempFile(session, `guest-setup-${session.generation}.iso`));
+  if (session.guestIsoAttached) buildGuestIso(session, session.guestMedia, tempFile(session, `startup-${session.generation}.iso`));
   if (selectedEngine === 'virtualbox' && resume) {
     if (!['poweroff', 'aborted'].includes(virtualBoxState(session))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
     if (session.activeGuestIso) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
@@ -1012,7 +1059,9 @@ async function destroySession(session) {
   if (session.kind === 'switch') {
     if (linkedHosts(session.id).length) throw new Error('Remove connected host tabs before deleting this switch.');
     await stopSwitch(session, true);
+    removeHostnameAlias(session);
     sessions.delete(session.id);
+    fs.rmSync(session.runtimeDir, {recursive: true, force: true});
     return;
   }
   session.action = 'destroy';
@@ -1043,7 +1092,9 @@ async function destroySession(session) {
   session.selectedImage = null;
   session.qemuOptions = null;
   session.everStarted = false;
+  removeHostnameAlias(session);
   sessions.delete(session.id);
+  fs.rmSync(session.runtimeDir, {recursive: true, force: true});
 }
 
 async function exitAllSessions() {
@@ -1105,14 +1156,14 @@ app.post('/api/topology', async (req, res) => {
     for (const sw of topology.switches) {
       const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const session = getSession(id, true, 'switch'); created.push(id);
-      session.hostname = sw.name; session.lastMessage = 'VDE switch ready to start';
+      setSessionHostname(session, sw.name); session.lastMessage = 'VDE switch ready to start';
       switchIds.set(sw.name, id);
     }
     for (const host of topology.hosts) {
       const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const interfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(host.switches.map(name => switchIds.get(name)), engine, false));
       const session = getSession(id, true, 'vm'); created.push(id);
-      session.hostname = host.name; session.selectedImage = imageById(host.system); session.engine = engine;
+      setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
       session.networkInterfaces = interfaces; session.lastMessage = 'Host ready to start';
     }
     const errors = [];
@@ -1132,7 +1183,13 @@ app.post('/api/topology', async (req, res) => {
     if (created.length) io.emit('sessions-changed', {sessionId: null});
     res.json({created: created.length, errors});
   } catch (error) {
-    for (const id of created) sessions.delete(id);
+    for (const id of created.reverse()) {
+      const session = sessions.get(id);
+      if (session) {
+        try { await destroySession(session); }
+        catch (cleanupError) { console.error('Topology rollback:', cleanupError); }
+      }
+    }
     res.status(400).json({error: error.message});
   }
 });
@@ -1171,18 +1228,20 @@ app.post('/api/hosts', (req, res) => {
     if (typeof createGuestCdrom !== 'boolean' || typeof attachGuestCdrom !== 'boolean' || (attachGuestCdrom && !createGuestCdrom) ||
       (autoBuildGuestCdrom !== undefined && typeof autoBuildGuestCdrom !== 'boolean')) throw new Error('Invalid guest CD-ROM options.');
     const session = getSession(id, true, 'vm');
-    session.hostname = hostname;
     session.selectedImage = image;
     session.engine = engine;
     session.networkInterfaces = networkInterfaces;
     session.launchSettings = launchSettings;
     session.guestMedia = validatedMedia;
     try {
+      setSessionHostname(session, hostname);
       if (createGuestCdrom) buildGuestIso(session, validatedMedia);
       session.guestIsoAttached = autoBuildGuestCdrom === undefined ? attachGuestCdrom : autoBuildGuestCdrom;
     } catch (error) {
       cleanupGuestIsoFiles(session);
+      removeHostnameAlias(session);
       sessions.delete(id);
+      fs.rmSync(session.runtimeDir, {recursive: true, force: true});
       throw error;
     }
     session.lastMessage = 'Host ready to start';
@@ -1237,7 +1296,7 @@ app.post('/api/switches', async (req, res) => {
     if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)) throw new Error('Switch name must be 1–32 letters, digits, underscores or hyphens.');
     if (sessions.has(id) || [...sessions.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
     session = getSession(id, true, 'switch');
-    session.hostname = name;
+    setSessionHostname(session, name);
     session.lastMessage = 'VDE switch ready to start';
     if (autostart) await startSwitch(session);
     io.emit('sessions-changed', {sessionId: id, running: !!session.machine, hasLaunched: session.everStarted, message: stateMessage(session)});
@@ -1314,7 +1373,7 @@ app.patch('/api/sessions/:sessionId', (req, res) => {
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
     if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
-    session.hostname = name.trim();
+    setSessionHostname(session, name.trim());
     io.emit('session-renamed', {sessionId: session.id, name: session.hostname});
     res.json({name: session.hostname});
   } catch (error) { res.status(400).json({error: error.message}); }
@@ -1399,16 +1458,19 @@ server.on('error', error => {
   process.exitCode = 1;
 });
 server.listen(port, '127.0.0.1', () => {
+  fs.mkdirSync(runtimeInstance, {recursive: true});
   fs.writeFileSync(serverPidFile, `${process.pid}\n`, {mode: 0o600});
   console.log('\nQemuWeb is ready.');
-  console.log(`  Web interface  http://127.0.0.1:${port}`);
-  console.log('  Stop           Ctrl+C or ./stop.sh\n');
+  console.log(`  Web interface      http://127.0.0.1:${port}`);
+  console.log(`  Session directory  ${runtimeInstance}`);
+  console.log('  Stop               Ctrl+C or ./stop.sh\n');
 });
 
 process.on('exit', () => {
   try {
     if (fs.readFileSync(serverPidFile, 'utf8').trim() === String(process.pid)) fs.rmSync(serverPidFile, {force: true});
   } catch (_) {}
+  try { fs.rmdirSync(runtimeInstance); } catch (_) {}
 });
 
 let shuttingDown = false;

@@ -53,12 +53,15 @@ function validateBootFiles(value) {
   return {script: value.script, resources};
 }
 
-function createGuestIso({files, destination, genisoimage, onCommand}) {
+function createGuestIso({files, destination, genisoimage, onCommand, stagingDirectory}) {
   const source = validateBootFiles(files);
-  const stage = fs.mkdtempSync(path.join(path.dirname(destination), '.qemuweb-iso-'));
-  const nextIso = `${destination}.tmp`;
+  const stage = stagingDirectory || fs.mkdtempSync(path.join(path.dirname(destination), '.qemuweb-iso-'));
   try {
-    fs.rmSync(nextIso, {force: true});
+    if (stagingDirectory) {
+      fs.rmSync(stage, {recursive: true, force: true});
+      fs.mkdirSync(stage, {recursive: true, mode: 0o700});
+    }
+    fs.rmSync(destination, {force: true});
     fs.writeFileSync(path.join(stage, '.qemuweb-media'), 'QemuWeb guest startup media\n');
     if (source.script) fs.writeFileSync(path.join(stage, 'start.sh'), source.script, {mode: 0o755});
     for (const entry of source.resources) {
@@ -66,14 +69,15 @@ function createGuestIso({files, destination, genisoimage, onCommand}) {
       fs.mkdirSync(path.dirname(target), {recursive: true});
       fs.writeFileSync(target, Buffer.from(entry.contentBase64, 'base64'));
     }
-    const args = ['-quiet', '-R', '-J', '-V', LABEL, '-o', nextIso, stage];
+    const args = ['-quiet', '-R', '-J', '-V', LABEL, '-o', destination, stage];
     if (onCommand) onCommand(genisoimage, args);
     execFileSync(genisoimage, args, {stdio: 'pipe'});
-    fs.chmodSync(nextIso, 0o444);
-    fs.renameSync(nextIso, destination);
+    fs.chmodSync(destination, 0o444);
+  } catch (error) {
+    fs.rmSync(destination, {force: true});
+    throw error;
   } finally {
     fs.rmSync(stage, {recursive: true, force: true});
-    fs.rmSync(nextIso, {force: true});
   }
   return destination;
 }
