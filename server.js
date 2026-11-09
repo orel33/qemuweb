@@ -546,7 +546,6 @@ function removeSwitchTerminalAlias(session) {
   session.mgmtAliasPath = null;
   if (!aliasPath) return;
   try { fs.unlinkSync(aliasPath); } catch (_) {}
-  try { fs.rmdirSync(path.dirname(aliasPath)); } catch (_) {}
 }
 
 function stopSwitchTerminal(session) {
@@ -562,12 +561,11 @@ function startSwitchTerminal(session) {
   stopSwitchTerminal(session);
   session.serialBuffer = '';
   io.to(session.id).emit('serial-reset', {sessionId: session.id, serial: ''});
-  const aliasDir = path.join(runtimeInstance, 'vdeterm');
-  const aliasName = session.hostname;
+  const aliasDir = session.runtimeDir;
+  const aliasName = session.hostname === 'vde' ? '@vde' : session.hostname;
   const aliasPath = path.join(aliasDir, aliasName);
-  fs.mkdirSync(aliasDir, {recursive: true});
   try { fs.unlinkSync(aliasPath); } catch (_) {}
-  fs.symlinkSync(session.mgmtPath, aliasPath);
+  fs.symlinkSync(path.basename(session.mgmtPath), aliasPath);
   session.mgmtAliasPath = aliasPath;
   appendLog(session, `$ ${[commands.VDETERM, aliasName].map(shellQuote).join(' ')}  # cwd=${shellQuote(aliasDir)}`);
   let terminal;
