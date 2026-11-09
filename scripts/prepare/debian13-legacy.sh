@@ -66,7 +66,7 @@ tasksel tasksel/first multiselect standard
 popularity-contest popularity-contest/participate boolean false
 d-i grub-installer/only_debian boolean true
 d-i grub-installer/bootdev string /dev/sda
-d-i preseed/late_command string cp /legacy-setup.sh /target/tmp/legacy-setup.sh; cp /guest-start.sh /target/tmp/guest-start.sh; cp /qemuweb-guest-start.service /target/tmp/qemuweb-guest-start.service; in-target /bin/sh /tmp/legacy-setup.sh
+d-i preseed/late_command string cp /legacy-setup.sh /target/tmp/legacy-setup.sh; cp /guest-start.sh /target/tmp/guest-start.sh; cp /qemuweb-start.service /target/tmp/qemuweb-start.service; in-target /bin/sh /tmp/legacy-setup.sh
 d-i finish-install/reboot_in_progress note
 d-i debian-installer/exit/poweroff boolean true
 PRESEED
@@ -103,8 +103,8 @@ DHCP=yes
 NETWORK
 systemctl enable serial-getty@ttyS0.service getty@tty1.service systemd-networkd.service
 install -m 755 /tmp/guest-start.sh /usr/local/sbin/qemuweb-guest-start
-install -m 644 /tmp/qemuweb-guest-start.service /etc/systemd/system/qemuweb-guest-start.service
-systemctl enable qemuweb-guest-start.service
+install -m 644 /tmp/qemuweb-start.service /etc/systemd/system/qemuweb-start.service
+systemctl enable qemuweb-start.service
 # Refresh boot artifacts after changing GRUB and console/kernel settings.
 update-grub
 update-initramfs -u -k all
@@ -112,12 +112,12 @@ echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0 || true
 SETUP
   chmod +x "$temp_dir/legacy-setup.sh"
   cp "$ROOT/scripts/prepare/guest-start.sh" "$temp_dir/guest-start.sh"
-  cp "$ROOT/scripts/prepare/qemuweb-guest-start.service" "$temp_dir/qemuweb-guest-start.service"
+  cp "$ROOT/scripts/prepare/qemuweb-start.service" "$temp_dir/qemuweb-start.service"
   python3 - "$temp_dir" <<'PY'
 import gzip, os, stat, sys
 from pathlib import Path
 root = Path(sys.argv[1])
-files = [('preseed.cfg', 0o100644), ('legacy-setup.sh', 0o100755), ('guest-start.sh', 0o100755), ('qemuweb-guest-start.service', 0o100644)]
+files = [('preseed.cfg', 0o100644), ('legacy-setup.sh', 0o100755), ('guest-start.sh', 0o100755), ('qemuweb-start.service', 0o100644)]
 out = bytearray()
 ino = 1
 for name, mode in files:

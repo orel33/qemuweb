@@ -28,7 +28,7 @@ prepare_debian_image() {
     # the guest NIC for DHCP. The VDE switch itself does not provide DHCP.
     local hook_b64 unit_b64
     hook_b64="$(base64 -w 0 "$ROOT/scripts/prepare/guest-start.sh")"
-    unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/qemuweb-guest-start.service")"
+    unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/qemuweb-start.service")"
     cat > "$user_data" <<CLOUD_CONFIG
 #cloud-config
 hostname: qemuweb
@@ -51,7 +51,7 @@ write_files:
     permissions: '0755'
     encoding: b64
     content: $hook_b64
-  - path: /etc/systemd/system/qemuweb-guest-start.service
+  - path: /etc/systemd/system/qemuweb-start.service
     permissions: '0644'
     encoding: b64
     content: $unit_b64
@@ -67,7 +67,7 @@ runcmd:
   - [systemctl, enable, serial-getty@ttyS0.service]
   - [systemctl, enable, getty@tty1.service]
   - [systemctl, enable, systemd-networkd.service]
-  - [systemctl, enable, qemuweb-guest-start.service]
+  - [systemctl, enable, qemuweb-start.service]
   - [touch, /etc/cloud/cloud-init.disabled]
   - [sh, -c, 'echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0']
 CLOUD_CONFIG

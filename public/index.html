@@ -76,7 +76,9 @@
     #topology-error { white-space: pre-line; }
     .settings-heading { position: sticky; top: -18px; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: -18px -18px 0; padding: 18px; border-bottom: 1px solid #35404c; background: #10151c; }
     .settings-heading h2 { margin: 0; font-size: 18px; }
-    #qemu-options-panel .settings-heading { flex-wrap: wrap; }
+    #qemu-options-panel .settings-sticky { position: sticky; top: -18px; z-index: 4; margin: -18px -18px 0; padding: 0 18px; background: #10151c; }
+    #qemu-options-panel .settings-heading { position: static; flex-wrap: wrap; margin: 0 -18px; }
+    #qemu-options-panel .settings-tabs { margin: 0 -18px; padding: 12px 18px 0; background: #10151c; }
     .settings-heading-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
     .settings-tabs { display: flex; gap: 4px; margin-top: 16px; overflow-x: auto; border-bottom: 1px solid #35404c; }
     .settings-tab { flex: 0 0 auto; padding: 10px 14px; border: 1px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: #bdc8d6; font-weight: 600; }
@@ -288,9 +290,9 @@
     <p id="general-settings-error" role="alert" hidden></p>
   </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
-    <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="close-settings" type="button">Close</button></div></div>
     <form id="host-settings-form" novalidate>
-    <p id="options-status" role="alert" hidden></p>
+    <div class="settings-sticky">
+    <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="close-settings" type="button">Close</button></div></div>
     <div class="settings-tabs" role="tablist" aria-label="Host settings sections">
       <button class="settings-tab" id="host-tab-general" type="button" role="tab" aria-controls="host-panel-general" aria-selected="true" tabindex="0" data-settings-tab="general">General</button>
       <button class="settings-tab" id="host-tab-resources" type="button" role="tab" aria-controls="host-panel-resources" aria-selected="false" tabindex="-1" data-settings-tab="resources">Hardware</button>
@@ -298,6 +300,8 @@
       <button class="settings-tab" id="host-tab-startup" type="button" role="tab" aria-controls="host-panel-startup" aria-selected="false" tabindex="-1" data-settings-tab="startup">Startup</button>
       <button class="settings-tab" id="host-tab-expert" type="button" role="tab" aria-controls="host-panel-expert" aria-selected="false" tabindex="-1" data-settings-tab="expert">Expert</button>
     </div>
+    </div>
+    <p id="options-status" role="alert" hidden></p>
     <section class="settings-tab-panel" id="host-panel-general" role="tabpanel" aria-labelledby="host-tab-general" data-settings-panel="general"><div id="settings-fixed"></div></section>
     <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-hardware"></div><div id="settings-editable"></div></section>
     <section class="settings-tab-panel" id="host-panel-network" role="tabpanel" aria-labelledby="host-tab-network" data-settings-panel="network" hidden><div id="settings-network">
@@ -378,6 +382,7 @@
   <script src="/topology-graphic.js"></script>
   <script>
     let socket = null;
+    const machines = new Map();
     const workspace = document.getElementById('console-workspace');
     const panes = [0, 1, 2, 3].map(index => {
       const terminal = new Terminal({cursorBlink: true, convertEol: true, scrollback: 5000, theme: {background: '#0b0f14'}});
@@ -523,7 +528,12 @@
       terminal.onData(data => {
         if (pane.replaying || !pane.machineId) return;
         if (pane.view === 'monitor') handleMonitorInput(pane, data);
-        else if (pane.view === 'console') pane.socket.emit('input', data);
+        else if (pane.view === 'console') {
+          const machine = machines.get(pane.machineId);
+          // Boot-time cursor position replies are echoed literally by serial getty.
+          const input = machine?.kind === 'vm' ? data.replace(/\x1b\[\d+;\d+R/g, '') : data;
+          if (input) pane.socket.emit('input', input);
+        }
       });
       pane.viewButtons.forEach(button => button.addEventListener('click', () => setPaneView(pane, button.dataset.view)));
       pane.scroll.addEventListener('input', () => terminal.scrollToLine(Number(pane.scroll.value)));
@@ -644,7 +654,6 @@
     const settingsConsole = document.getElementById('settings-console');
     const optionsCommands = document.getElementById('options-commands');
     let optionsRequest = 0;
-    const machines = new Map();
     const resourceMetrics = new Map();
     let resourceRequestPending = false;
     let images = [];

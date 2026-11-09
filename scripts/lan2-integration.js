@@ -254,7 +254,7 @@ async function ping(shell, address) {
 async function installGuestHook(shell) {
   const files = [
     ['guest-start.sh', '/usr/local/sbin/qemuweb-guest-start', '755'],
-    ['qemuweb-guest-start.service', '/etc/systemd/system/qemuweb-guest-start.service', '644']
+    ['qemuweb-start.service', '/etc/systemd/system/qemuweb-start.service', '644']
   ];
   for (const [name, destination, mode] of files) {
     const encoded = fs.readFileSync(path.join(root, 'scripts/prepare', name)).toString('base64');
@@ -265,7 +265,7 @@ async function installGuestHook(shell) {
     }
     await shell.exec(`base64 -d ${temporary} > ${destination} && chmod ${mode} ${destination} && rm ${temporary}`);
   }
-  await shell.exec('systemctl daemon-reload && systemctl enable qemuweb-guest-start.service');
+  await shell.exec('systemctl disable --now qemuweb-guest-start.service >/dev/null 2>&1 || true; rm -f /etc/systemd/system/qemuweb-guest-start.service; systemctl daemon-reload && systemctl enable qemuweb-start.service');
 }
 
 function mediaFor(index, version = 1) {
@@ -282,10 +282,10 @@ async function verifyGuestBoot(shell, index, version) {
     `${shell.label} boot console contains guest hook syslog lines.`);
   assert.ok(!shell.logs.some(line => line.includes('QEMUWEB_START_')),
     `${shell.label} Host Log contains Debian guest hook output.`);
-  await shell.exec(`for attempt in $(seq 1 60); do journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' && break; sleep 1; done
-journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' &&
-journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'resource-${name}' &&
-journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_BEGIN'`);
+  await shell.exec(`for attempt in $(seq 1 60); do journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' && break; sleep 1; done
+journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' &&
+journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'resource-${name}' &&
+journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_BEGIN'`);
   await shell.exec(`test "$(hostname)" = "${name}" && test "$(cat /root/.gts16-disk-marker)" = "${name}" && ip -o -4 addr show eth0 | grep -q '${addresses[index]}/24'`);
   assert.ok(!shell.logs.some(line => line.includes('QEMUWEB_START_')),
     `${shell.label} Host Log gained Debian guest hook output after journal query.`);

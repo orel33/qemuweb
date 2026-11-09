@@ -1,5 +1,5 @@
 [Unit]
-Description=Run QemuWeb guest startup media
+Description=Run start.sh
 After=network.target
 
 [Service]

@@ -74,10 +74,10 @@ async function run() {
         await waitFor(`${profile} login`, () => /login:\s*$/.test(serial), 90000);
         socket.emit('input', 'root\r');
         await waitFor(`${profile} root shell`, () => /root@[^\r\n]*#\s*$/.test(serial), 15000);
-        const journalCheck = `for attempt in $(seq 1 60); do journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' && break; sleep 1; done
-journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' &&
-journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq '${marker}' &&
-journalctl -b -u qemuweb-guest-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_BEGIN'
+        const journalCheck = `for attempt in $(seq 1 60); do journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' && break; sleep 1; done
+journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_EXIT 0' &&
+journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq '${marker}' &&
+journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_START_BEGIN'
 printf 'GTS16_JOURNAL_CHECK_%s\\n' "$?"`;
         const encoded = Buffer.from(journalCheck).toString('base64');
         socket.emit('input', `printf '%s' '${encoded}' | base64 -d | /bin/sh\r`);
