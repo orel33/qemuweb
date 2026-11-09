@@ -79,6 +79,15 @@
     #qemu-options-panel .settings-heading { flex-wrap: wrap; }
     .settings-heading-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
     #toggle-expert-mode[aria-pressed="true"] { border-color: #70a8ff; background: #355177; color: #fff; }
+    .settings-tabs { display: flex; gap: 4px; margin-top: 16px; overflow-x: auto; border-bottom: 1px solid #35404c; }
+    .settings-tab { flex: 0 0 auto; padding: 10px 14px; border: 1px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: #bdc8d6; font-weight: 600; }
+    .settings-tab:hover { color: #e7edf5; background: #1a2633; }
+    .settings-tab[aria-selected="true"] { border-color: #45586d; border-bottom-color: #1a2633; background: #1a2633; color: #fff; }
+    .settings-tab:focus-visible { outline: 2px solid #74a7e6; outline-offset: -2px; }
+    .settings-tab-panel { min-height: 160px; padding-top: 14px; }
+    .settings-tab-panel[hidden], .settings-tab[hidden] { display: none; }
+    .settings-tab-panel .settings-section:first-child { margin-top: 0; padding-top: 0; border-top: 0; }
+    .settings-tab-panel .settings-section h3 { margin: 0 0 8px; color: #9fc5ef; font-size: 14px; }
     .settings-description { margin: 10px 0 0; color: #bdc8d6; font-size: 13px; line-height: 1.5; }
     .settings-section { margin-top: 16px; padding-top: 12px; border-top: 1px solid #35404c; }
     .settings-section > summary { cursor: pointer; color: #9fc5ef; font-size: 14px; font-weight: 700; }
@@ -95,7 +104,7 @@
     .settings-commands { margin-top: 16px; }
     .settings-commands summary { cursor: pointer; color: #9fc5ef; }
     .settings-commands pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
-    .settings-section p { margin: 6px 0; color: #bdc8d6; font-size: 13px; overflow-wrap: anywhere; }
+    .settings-tab-panel p { margin: 6px 0 14px; color: #bdc8d6; font-size: 13px; overflow-wrap: anywhere; }
     #qemu-config-status { align-self: center; color: #bdc8d6; font-size: 12px; }
     .confirm-dialog { width: min(440px, 94vw); max-width: 94vw; padding: 22px; border: 1px solid #806333; border-radius: 10px; color: #e7edf5; background: #10151c; box-shadow: 0 16px 60px #000a; }
     .confirm-dialog::backdrop { background: #000a; }
@@ -266,17 +275,24 @@
   </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
     <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="toggle-expert-mode" type="button" aria-pressed="false">Mode Expert</button><button id="close-settings" type="button">Close</button></div></div>
-    <form id="host-settings-form">
+    <form id="host-settings-form" novalidate>
     <p id="options-status" role="alert" hidden></p>
-    <details class="settings-section" open><summary>General</summary><div id="settings-fixed"></div></details>
-    <details class="settings-section" open><summary>Resources and clock</summary><div id="settings-editable"></div></details>
-    <details class="settings-section" open><summary>Network interfaces</summary><div id="settings-network">
+    <div class="settings-tabs" role="tablist" aria-label="Host settings sections">
+      <button class="settings-tab" id="host-tab-general" type="button" role="tab" aria-controls="host-panel-general" aria-selected="true" tabindex="0" data-settings-tab="general">General</button>
+      <button class="settings-tab" id="host-tab-resources" type="button" role="tab" aria-controls="host-panel-resources" aria-selected="false" tabindex="-1" data-settings-tab="resources">Resources</button>
+      <button class="settings-tab" id="host-tab-network" type="button" role="tab" aria-controls="host-panel-network" aria-selected="false" tabindex="-1" data-settings-tab="network">Network</button>
+      <button class="settings-tab" id="host-tab-startup" type="button" role="tab" aria-controls="host-panel-startup" aria-selected="false" tabindex="-1" data-settings-tab="startup">Startup</button>
+      <button class="settings-tab" id="host-tab-expert" type="button" role="tab" aria-controls="host-panel-expert" aria-selected="false" tabindex="-1" data-settings-tab="expert" hidden>Expert</button>
+    </div>
+    <section class="settings-tab-panel" id="host-panel-general" role="tabpanel" aria-labelledby="host-tab-general" data-settings-panel="general"><div id="settings-fixed"></div></section>
+    <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-editable"></div></section>
+    <section class="settings-tab-panel" id="host-panel-network" role="tabpanel" aria-labelledby="host-tab-network" data-settings-panel="network" hidden><div id="settings-network">
       <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces">
         <div class="network-controls-head"><button id="add-nic" type="button">+ Interface</button></div>
         <div id="nic-list"></div>
       </section>
-    </div></details>
-    <details class="settings-section" open><summary>Guest startup files</summary>
+    </div></section>
+    <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
       <p>Runs in the guest at each boot from /mnt/cdrom. Changes take effect on the next Reboot or Start/Resume.</p>
       <label for="guest-start-script">start.sh</label><textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
       <label>Import start.sh <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain"></label>
@@ -285,11 +301,13 @@
       <input id="guest-resource-file" type="file" aria-label="Companion file">
       <button id="guest-add-resource" type="button">Add file</button>
       <button id="guest-save-media" type="button">Save startup files</button>
-    </details>
-    <details class="settings-section" data-expert-section hidden><summary>Hardware profile</summary><div id="settings-hardware"></div></details>
-    <details class="settings-section" data-expert-section hidden><summary>Storage</summary><div id="settings-storage"></div></details>
-    <details class="settings-section" data-expert-section hidden><summary>Console</summary><div id="settings-console"></div></details>
-    <details class="settings-section settings-commands" data-expert-section hidden><summary>Full launch commands</summary><pre id="options-commands"></pre></details>
+    </section>
+    <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
+      <div class="settings-section"><h3>Hardware profile</h3><div id="settings-hardware"></div></div>
+      <div class="settings-section"><h3>Storage</h3><div id="settings-storage"></div></div>
+      <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
+      <div class="settings-section settings-commands"><h3>Full launch commands</h3><pre id="options-commands"></pre></div>
+    </section>
     <div class="host-create-actions" id="host-create-actions" hidden><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
     </form>
   </dialog>
@@ -540,7 +558,9 @@
     const cancelHostCreate = document.getElementById('cancel-host-create');
     const closeHostSettings = document.getElementById('close-settings');
     const toggleExpertMode = document.getElementById('toggle-expert-mode');
-    const expertSections = [...qemuOptionsPanel.querySelectorAll('[data-expert-section]')];
+    const settingsTabs = [...qemuOptionsPanel.querySelectorAll('[data-settings-tab]')];
+    const settingsPanels = [...qemuOptionsPanel.querySelectorAll('[data-settings-panel]')];
+    const expertTab = document.getElementById('host-tab-expert');
     const showGeneralSettings = document.getElementById('show-general-settings');
     const generalSettingsPanel = document.getElementById('general-settings-panel');
     const defaultEngineSelect = document.getElementById('default-engine');
@@ -1421,8 +1441,8 @@
       toggleExpertMode.hidden = true;
       closeHostSettings.hidden = true;
       settingsTitle.textContent = 'Add a new host';
-      for (const section of qemuOptionsPanel.querySelectorAll('.settings-section:not([data-expert-section])')) section.open = true;
       qemuOptionsPanel.showModal();
+      selectSettingsTab('general');
       renderGuestMedia();
       qemuOptionsPanel.scrollTop = 0;
       await renderQemuOptions();
@@ -1834,6 +1854,7 @@
       toggleExpertMode.hidden = false;
       closeHostSettings.hidden = false;
       if (!qemuOptionsPanel.open) qemuOptionsPanel.showModal();
+      selectSettingsTab('general');
       try {
         const machine = activeMachine();
         const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`);
@@ -1844,13 +1865,36 @@
       } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
       renderQemuOptions();
     }
+    function selectSettingsTab(name, focus = false) {
+      const selected = settingsTabs.find(tab => tab.dataset.settingsTab === name && !tab.hidden);
+      if (!selected) return;
+      for (const tab of settingsTabs) {
+        const active = tab === selected;
+        tab.setAttribute('aria-selected', String(active));
+        tab.tabIndex = active ? 0 : -1;
+      }
+      for (const panel of settingsPanels) panel.hidden = panel.dataset.settingsPanel !== name;
+      if (focus) selected.focus();
+    }
+    for (const tab of settingsTabs) {
+      tab.addEventListener('click', () => selectSettingsTab(tab.dataset.settingsTab));
+      tab.addEventListener('keydown', event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        const visible = settingsTabs.filter(item => !item.hidden);
+        const index = visible.indexOf(tab);
+        const next = event.key === 'Home' ? visible[0]
+          : event.key === 'End' ? visible[visible.length - 1]
+          : visible[(index + (event.key === 'ArrowRight' ? 1 : -1) + visible.length) % visible.length];
+        event.preventDefault();
+        selectSettingsTab(next.dataset.settingsTab, true);
+      });
+    }
     function setExpertMode(enabled) {
       expertMode = enabled;
       toggleExpertMode.setAttribute('aria-pressed', String(expertMode));
-      for (const section of expertSections) {
-        section.hidden = !expertMode;
-        if (expertMode) section.open = true;
-      }
+      expertTab.hidden = !expertMode;
+      if (expertMode) selectSettingsTab('expert');
+      else if (expertTab.getAttribute('aria-selected') === 'true') selectSettingsTab('general');
     }
     toggleExpertMode.addEventListener('click', () => setExpertMode(!expertMode));
     closeHostSettings.addEventListener('click', () => { if (!confirmHostCreate.disabled) qemuOptionsPanel.close(); });
@@ -1865,7 +1909,15 @@
     hostSettingsForm.addEventListener('submit', async event => {
       event.preventDefault();
       const draft = hostSettingsDraft;
-      if (!draft || !hostSettingsForm.reportValidity()) return;
+      if (!draft) return;
+      const invalid = hostSettingsForm.querySelector('input:invalid, select:invalid, textarea:invalid');
+      if (invalid) {
+        const panel = invalid.closest('[data-settings-panel]');
+        if (panel) selectSettingsTab(panel.dataset.settingsPanel);
+        invalid.focus();
+        invalid.reportValidity();
+        return;
+      }
       const name = settingsFixed.querySelector('input')?.value.trim();
       if (!name) return;
       const autostart = hostAutostart.checked;
