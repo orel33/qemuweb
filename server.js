@@ -263,6 +263,9 @@ function possibleGuestHookLine(line) {
   const plain = plainSerialLine(line);
   if (plain.length > 160) return false;
   if (plain.startsWith('\x1b')) return true; // Wait for a split ANSI sequence.
+  // OpenRC writes its service label immediately before the hook's first line.
+  const openRcPrefix = ' * QemuWeb guest startup ...';
+  if (openRcPrefix.startsWith(plain) || plain.startsWith(openRcPrefix)) return true;
   const timestamp = /^\[\s*[\d.]*\]\s*(.*)$/.exec(plain);
   if (timestamp) return 'qemuweb-guest-start'.startsWith(timestamp[1]) || timestamp[1].startsWith('qemuweb-guest-start');
   if (/^\[\s*[\d.]*$/.test(plain)) return true;

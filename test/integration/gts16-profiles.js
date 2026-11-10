@@ -114,7 +114,7 @@ printf 'GTS16_JOURNAL_CHECK_%s\\n' "$?"`;
     assert.ok(state.serial.includes(media.resourceMarker), `${profile} companion resource not printed: ${state.serial.slice(-2500)}`);
     assert.ok(state.serial.includes(media.diskMarker), `${profile} disk marker not printed: ${state.serial.slice(-2500)}`);
     assert.doesNotMatch(state.serial, /QEMUWEB_START_ERROR|QEMUWEB_START_(?:BEGIN|EXIT)/,
-      `${profile} boot console contains guest hook error or technical markers.`);
+      `${profile} boot console contains guest hook error or technical markers: ${state.serial.slice(-2500)}`);
     assert.ok(!state.logs.some(line => line.startsWith('[guest]')), `${profile} Host Log contains guest serial output.`);
   }
 }
