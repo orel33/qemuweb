@@ -1,4 +1,4 @@
-# QemuWeb - beta
+# QemuWeb v0.5.0
 
 Guest startup ISO setup and existing-image upgrade: [Guest startup media](docs/guest-startup.md).
 

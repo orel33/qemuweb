@@ -50,7 +50,7 @@ This later capability report should let optional engines be unavailable without 
 
 ## Delivery stages
 
-**v0.4.0** delivers GTS16 for Debian 13 Legacy under QEMU, using the current per-host sessions. The **v0.5.0 beta series** implements **CMZ38**: a clear configuration hierarchy, transactional Host Settings, server-owned per-session and per-host/switch JSON, and application of edited launch settings at the next guest start. Code review is complete; automated and guest runtime checks have not been run. Full restoration after a server restart remains Stage 6; live NIC hotplug remains Stage 4. **NQX72** covers the other three guests under QEMU. VirtualBox validation (**VBH54**) and companion-file editing (**FUR92**) are separate follow-ups. The remaining stages describe the longer network and deployment path.
+**v0.4.0** delivers GTS16 for Debian 13 Legacy under QEMU, using the current per-host sessions. **v0.5.0** implements **CMZ38**: a clear configuration hierarchy, transactional Host Settings, server-owned per-session and per-host/switch JSON, and application of edited launch settings at the next guest start. Code review is complete and the user reported a successful manual check; Codex did not run automated tests. Full restoration after a server restart remains Stage 6; live NIC hotplug remains Stage 4. **NQX72** covers the other three guests under QEMU. VirtualBox guest validation (**VBH54**) and companion-file editing (**FUR92**) are separate follow-ups. The remaining stages describe the longer network and deployment path.
 
 | Stage | Work | Done when |
 |---|---|---|
