@@ -14,7 +14,7 @@ const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
-const {LABEL: GUEST_ISO_LABEL, validateBootFiles, createGuestIso} = require('./guest-media');
+const {LABEL: GUEST_ISO_LABEL, validateBootFiles, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./guest-media');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -193,6 +193,7 @@ function getSession(id, create = false, expectedKind = null) {
     const paths = sessionPaths(id, kind);
     if (fs.existsSync(paths.runtimeDir)) throw new Error('Runtime directory already exists for this ID.');
     fs.mkdirSync(paths.runtimeDir);
+    if (kind === 'vm') fs.mkdirSync(path.join(paths.runtimeDir, 'startup'));
     sessions.set(id, {
       id,
       kind,
@@ -219,6 +220,7 @@ function getSession(id, create = false, expectedKind = null) {
       guestIso: null,
       guestIsoAttached: false,
       guestIsoOutdated: false,
+      guestIsoSource: null,
       activeGuestIso: null,
       guestIsoFiles: new Set(),
       networkInterfaces: [],
@@ -509,17 +511,47 @@ function guestIsoStatus(session) {
     attached: session.guestIsoAttached,
     attachedNow,
     currentIso: attachedNow && session.activeGuestIso === session.guestIso,
-    outdated: session.guestIsoOutdated
+    outdated: session.guestIsoOutdated || (!!session.guestIsoSource &&
+      JSON.stringify(readStartupFiles(startupDirectory(session))) !== JSON.stringify(session.guestIsoSource))
   };
 }
 
-function buildGuestIso(session, files, destination = tempFile(session, `startup-${crypto.randomUUID()}.iso`)) {
-  const validated = validateBootFiles(files);
+function startupDirectory(session) {
+  const directory = tempFile(session, 'startup');
+  const configFile = tempFile(session, 'host.json');
+  // Older session files may still contain startup content. Copy it before
+  // rewriting host.json; the directory is the source of truth once present.
+  if (fs.existsSync(configFile)) {
+    const saved = JSON.parse(fs.readFileSync(configFile, 'utf8'));
+    if (Object.hasOwn(saved, 'guestMedia')) {
+      const legacy = validateBootFiles(saved.guestMedia);
+      if (!fs.existsSync(directory)) writeStartupFiles(directory, legacy);
+      else {
+        const current = readStartupFiles(directory);
+        const hadScript = fs.existsSync(path.join(directory, 'start.sh'));
+        const known = new Set(current.resources.map(entry => entry.path));
+        const missing = legacy.resources.filter(entry => !known.has(entry.path));
+        if ((!hadScript && legacy.script) || missing.length) {
+          writeStartupFiles(directory, validateBootFiles({
+            script: hadScript ? current.script : legacy.script,
+            resources: [...current.resources, ...missing]
+          }));
+        }
+      }
+      delete saved.guestMedia;
+      writeJsonAtomic(configFile, saved);
+    }
+  }
+  return directory;
+}
+
+function buildGuestIso(session, destination = tempFile(session, `startup-${crypto.randomUUID()}.iso`)) {
   const next = destination;
-  createGuestIso({files: validated, destination: next, genisoimage: commands.GENISOIMAGE, stagingDirectory: tempFile(session, 'iso-stage'),
+  createGuestIso({directory: startupDirectory(session), destination: next, genisoimage: commands.GENISOIMAGE,
     onCommand: (command, args) => appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`)});
   const previous = session.guestIso;
-  session.guestMedia = validated;
+  session.guestMedia = readStartupFiles(startupDirectory(session));
+  session.guestIsoSource = session.guestMedia;
   session.guestIso = next;
   session.guestIsoOutdated = false;
   session.guestIsoFiles.add(next);
@@ -535,6 +567,7 @@ function cleanupGuestIsoFiles(session) {
   for (const file of session.guestIsoFiles) fs.rmSync(file, {force: true});
   session.guestIsoFiles.clear();
   session.guestIso = null;
+  session.guestIsoSource = null;
   session.activeGuestIso = null;
 }
 
@@ -546,7 +579,7 @@ function activeConfiguration(session) {
   return {
     settings: {...session.launchSettings},
     networkInterfaces: session.networkInterfaces.map(nic => ({...nic})),
-    guestMedia: structuredClone(session.guestMedia),
+    guestMedia: readStartupFiles(startupDirectory(session)),
     autoBuildGuestCdrom: session.guestIsoAttached
   };
 }
@@ -557,7 +590,7 @@ function pendingRestart(session) {
   return session.resetWorkingDiskAtRestart ||
     ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
     JSON.stringify(session.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
-    JSON.stringify(session.guestMedia) !== JSON.stringify(active.guestMedia) ||
+    JSON.stringify(readStartupFiles(startupDirectory(session))) !== JSON.stringify(active.guestMedia) ||
     session.guestIsoAttached !== active.autoBuildGuestCdrom;
 }
 
@@ -570,7 +603,6 @@ function hostConfiguration(session) {
     engine: session.engine,
     settings: session.launchSettings,
     networkInterfaces: session.networkInterfaces,
-    guestMedia: session.guestMedia,
     autoBuildGuestCdrom: session.guestIsoAttached,
     resetWorkingDiskAtRestart: session.resetWorkingDiskAtRestart
   };
@@ -588,7 +620,7 @@ function completePendingDiskReset(session, publish = true) {
 }
 
 function hostConfigurationResponse(session) {
-  return {...hostConfiguration(session), interfaces: session.networkInterfaces.map(nic => nic.switchId),
+  return {...hostConfiguration(session), guestMedia: readStartupFiles(startupDirectory(session)), interfaces: session.networkInterfaces.map(nic => nic.switchId),
     running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), guestCdrom: guestIsoStatus(session)};
 }
 
@@ -908,7 +940,7 @@ app.get('/api/options/:sessionId', (req, res) => {
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
       : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.nic};
     const isoCommands = attachGuestCdrom
-      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, 'iso-stage')]]
+      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, 'startup')]]
       : [];
     const vboxDetachCommand = launched && !isQemu && session.activeGuestIso
       ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']]
@@ -975,7 +1007,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (!image) throw new Error('Unknown system in config.json.');
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash prepare.sh.`);
   if (selectedEngine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash prepare.sh.`);
-  if (options.guestMedia !== undefined) session.guestMedia = validateBootFiles(options.guestMedia);
+  session.guestMedia = readStartupFiles(startupDirectory(session));
   if (options.autoBuildGuestCdrom !== undefined) {
     if (typeof options.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
     session.guestIsoAttached = options.autoBuildGuestCdrom;
@@ -1012,7 +1044,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   setSessionHostname(session, displayName);
   session.qemuOptions = qemuOptions;
   session.launchSettings = launchSettings;
-  if (session.guestIsoAttached) buildGuestIso(session, session.guestMedia, tempFile(session, `startup-${session.generation}.iso`));
+  if (session.guestIsoAttached) buildGuestIso(session, tempFile(session, `startup-${session.generation}.iso`));
   if (selectedEngine === 'virtualbox' && resume) {
     if (!['poweroff', 'aborted'].includes(virtualBoxState(session))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
     if (session.activeGuestIso) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
@@ -1294,7 +1326,7 @@ app.post('/api/start', async (req, res) => {
     else {
       start(configured.id, configured.engine, configured.selectedImage.id, {
         interfaces: configured.networkInterfaces.map(nic => nic.switchId), settings: configured.launchSettings,
-        guestMedia: configured.guestMedia, autoBuildGuestCdrom: configured.guestIsoAttached
+        autoBuildGuestCdrom: configured.guestIsoAttached
       });
       completePendingDiskReset(configured);
     }
@@ -1421,10 +1453,11 @@ app.post('/api/hosts', (req, res) => {
     session.engine = engine;
     session.networkInterfaces = networkInterfaces;
     session.launchSettings = launchSettings;
-    session.guestMedia = validatedMedia;
     try {
+      writeStartupFiles(startupDirectory(session), validatedMedia);
+      session.guestMedia = validatedMedia;
       setSessionHostname(session, hostname);
-      if (createGuestCdrom) buildGuestIso(session, validatedMedia);
+      if (createGuestCdrom) buildGuestIso(session);
       session.guestIsoAttached = autoBuildGuestCdrom === undefined ? attachGuestCdrom : autoBuildGuestCdrom;
       persistHostConfiguration(session);
       saveSessionMetadata();
@@ -1478,24 +1511,33 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
       ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
     const previousName = session.hostname;
-    const previousMedia = session.guestMedia;
+    const previousMedia = readStartupFiles(startupDirectory(session));
+    validateBootFiles({script: media.script, resources: previousMedia.resources});
+    const scriptChanged = media.script !== previousMedia.script;
+    const scriptPath = path.join(startupDirectory(session), 'start.sh');
+    const hadScript = fs.existsSync(scriptPath);
     if (name !== previousName) setSessionHostname(session, name);
     try {
+      if (scriptChanged) writeStartupScript(startupDirectory(session), media.script);
       writeJsonAtomic(tempFile(session, 'host.json'), {
         schemaVersion: 1, id: session.id, name, systemId: body.systemId, engine: body.engine,
-        settings, networkInterfaces: interfaces, guestMedia: media, autoBuildGuestCdrom: body.autoBuildGuestCdrom,
+        settings, networkInterfaces: interfaces, autoBuildGuestCdrom: body.autoBuildGuestCdrom,
         resetWorkingDiskAtRestart
       });
     } catch (error) {
+      if (scriptChanged) {
+        if (hadScript) writeStartupScript(startupDirectory(session), previousMedia.script, {keepEmpty: true});
+        else fs.rmSync(scriptPath, {force: true});
+      }
       if (name !== previousName) setSessionHostname(session, previousName);
       throw error;
     }
     session.launchSettings = settings;
     session.networkInterfaces = interfaces;
-    session.guestMedia = media;
+    session.guestMedia = readStartupFiles(startupDirectory(session));
     session.guestIsoAttached = body.autoBuildGuestCdrom;
     session.resetWorkingDiskAtRestart = resetWorkingDiskAtRestart;
-    if (JSON.stringify(media) !== JSON.stringify(previousMedia)) session.guestIsoOutdated = !!session.guestIso;
+    if (scriptChanged) session.guestIsoOutdated = !!session.guestIso;
     if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});
     io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message: stateMessage(session)});
     res.json(hostConfigurationResponse(session));
@@ -1506,7 +1548,7 @@ app.get('/api/hosts/:sessionId/guest-media', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
-    res.json({...session.guestMedia, guestCdrom: guestIsoStatus(session)});
+    res.json({...readStartupFiles(startupDirectory(session)), guestCdrom: guestIsoStatus(session)});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -1515,10 +1557,8 @@ app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
-    const previous = session.guestMedia;
+    writeStartupFiles(startupDirectory(session), media);
     session.guestMedia = media;
-    try { persistHostConfiguration(session); }
-    catch (error) { session.guestMedia = previous; throw error; }
     session.guestIsoOutdated = !!session.guestIso;
     appendLog(session, '# Guest startup files saved; create the CD-ROM to include these changes.');
     res.json({ok: true, files: session.guestMedia.resources.length, guestCdrom: guestIsoStatus(session)});
@@ -1530,11 +1570,9 @@ app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
-    const previous = session.guestMedia;
+    writeStartupFiles(startupDirectory(session), media);
     session.guestMedia = media;
-    try { persistHostConfiguration(session); }
-    catch (error) { session.guestMedia = previous; throw error; }
-    const status = buildGuestIso(session, media);
+    const status = buildGuestIso(session);
     res.json({ok: true, guestCdrom: status});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
