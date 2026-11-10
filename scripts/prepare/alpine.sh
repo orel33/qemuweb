@@ -77,6 +77,18 @@ for partition in /dev/vda3 /dev/vda2 /dev/vda4; do
   fi
 done
 [ -n "$target" ] || { echo 'Alpine installed root partition not found'; exit 1; }
+# Install the lab tools into the disk installation, not the temporary live ISO.
+# traceroute is in Alpine's community repository.
+if ! grep -Eq '^[^#].*/community/?$' "$target/etc/apk/repositories"; then
+  printf '%s\n' 'https://dl-cdn.alpinelinux.org/alpine/v3.24/community' >> "$target/etc/apk/repositories"
+fi
+apk --root "$target" --no-cache add \
+  net-tools iputils-ping iproute2 tcpdump traceroute bind-tools netcat-openbsd nano
+chroot "$target" /bin/sh -c '
+  for tool in ifconfig ping ip tcpdump traceroute dig nc nano; do
+    command -v "$tool" >/dev/null || { echo "Missing Alpine tool: $tool" >&2; exit 1; }
+  done
+'
 mkdir -p "$target/usr/local/sbin" "$target/etc/init.d" "$target/etc/runlevels/default"
 cat > "$target/usr/local/sbin/qemuweb-guest-start" <<'GUEST_HOOK'
 ALPINE_HOOK
@@ -105,6 +117,7 @@ ALPINE_HOOK
     -drive "file=$source_dir/$iso,media=cdrom,readonly=on" -boot order=d \
     -nic user,model=virtio-net-pci >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
   qemu_pid=$!
+  trap 'kill -TERM "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true' EXIT
   python3 - "$serial_socket" "$serial_log" "$payload" <<'PY'
 import os, re, socket, sys, time
 socket_path, log_path, payload = sys.argv[1:]
@@ -148,6 +161,7 @@ sock.close()
 PY
   kill -TERM "$qemu_pid"
   wait "$qemu_pid" || true
+  trap - EXIT
   chmod 444 "$disk"
   # Publish the completed disk only after the guest preparation has succeeded.
   mv "$disk" "$raw"

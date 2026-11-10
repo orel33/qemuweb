@@ -53,6 +53,18 @@ else
 fi
 uci commit system
 printf 'qemuweb\n' > /proc/sys/kernel/hostname
+# eth0 is OpenWrt's LAN port; the second temporary NIC supplies DHCP on the
+# default eth1 WAN during image preparation. Neither NIC is part of the base.
+attempt=0
+until ip -4 route show default | grep -q 'dev eth1'; do
+  attempt=$((attempt + 1))
+  [ "$attempt" -lt 60 ] || { echo 'OpenWrt preparation WAN did not get a route' >&2; exit 1; }
+  sleep 1
+done
+apk -U add tcpdump nano
+for tool in ifconfig ping ip route traceroute nslookup nc tcpdump nano; do
+  command -v "$tool" >/dev/null || { echo "Missing OpenWrt tool: $tool" >&2; exit 1; }
+done
 OPENWRT_PREPARE
   cat >> "$guest_script" <<'OPENWRT_HOOK'
 mkdir -p /usr/local/sbin
@@ -75,13 +87,16 @@ OPENWRT_HOOK
   gzip -dc "$source_dir/$archive" > "$disk"
   qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 256 -smp 1 \
     -display none -monitor none -serial "unix:$serial_socket,server=on,wait=off" -no-reboot \
-    -drive "file=$disk,if=virtio,format=raw" -boot order=c -nic none \
+    -drive "file=$disk,if=virtio,format=raw" -boot order=c \
+    -netdev user,id=prep-lan,restrict=on -device virtio-net-pci,netdev=prep-lan \
+    -netdev user,id=prep-wan -device virtio-net-pci,netdev=prep-wan \
     >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
   qemu_pid=$!
+  trap 'kill -TERM "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true' EXIT
   python3 - "$serial_socket" "$serial_log" "$payload" <<'PY'
 import base64, os, re, shlex, socket, sys, time
 socket_path, log_path, payload = sys.argv[1:]
-deadline = time.monotonic() + 300
+deadline = time.monotonic() + 900
 while not os.path.exists(socket_path):
     if time.monotonic() >= deadline: raise RuntimeError('OpenWrt serial socket unavailable')
     time.sleep(.1)
@@ -134,6 +149,7 @@ PY
   done
   if kill -0 "$qemu_pid" 2>/dev/null; then kill -TERM "$qemu_pid"; fi
   wait "$qemu_pid" || true
+  trap - EXIT
   chmod 444 "$disk"
   mv "$disk" "$raw"
   rm -rf "$temp_dir"
