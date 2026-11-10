@@ -221,6 +221,7 @@ function getSession(id, create = false, expectedKind = null) {
       activeGuestIso: null,
       guestIsoFiles: new Set(),
       networkInterfaces: [],
+      activeConfig: null,
       mgmtAliasPath: null,
       switchTerminal: null
     });
@@ -237,7 +238,7 @@ function stateMessage(session) {
 
 function publishState(session, message = stateMessage(session)) {
   session.lastMessage = message;
-  const state = {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, message};
+  const state = {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message};
   io.to(session.id).emit('state', state);
   io.emit('sessions-changed', state);
 }
@@ -444,6 +445,7 @@ app.get('/api/sessions', (_req, res) => {
     settings: session.launchSettings,
     hostname: session.hostname,
     networkInterfaces: session.networkInterfaces,
+    pendingRestart: pendingRestart(session),
     hasDifferentialDisk: !!session.runDisk && fs.existsSync(session.runDisk),
     message: stateMessage(session)
   })));
@@ -531,6 +533,24 @@ function persistSwitchConfiguration(session) {
   writeJsonAtomic(tempFile(session, 'switch.json'), {schemaVersion: 1, id: session.id, name: session.hostname, kind: 'vde'});
 }
 
+function activeConfiguration(session) {
+  return {
+    settings: {...session.launchSettings},
+    networkInterfaces: session.networkInterfaces.map(nic => ({...nic})),
+    guestMedia: structuredClone(session.guestMedia),
+    autoBuildGuestCdrom: session.guestIsoAttached
+  };
+}
+
+function pendingRestart(session) {
+  if (session?.kind !== 'vm' || !session.machine || !session.activeConfig) return false;
+  const active = session.activeConfig;
+  return ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
+    JSON.stringify(session.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
+    JSON.stringify(session.guestMedia) !== JSON.stringify(active.guestMedia) ||
+    session.guestIsoAttached !== active.autoBuildGuestCdrom;
+}
+
 function hostConfiguration(session) {
   return {
     schemaVersion: 1,
@@ -551,7 +571,7 @@ function persistHostConfiguration(session) {
 
 function hostConfigurationResponse(session) {
   return {...hostConfiguration(session), interfaces: session.networkInterfaces.map(nic => nic.switchId),
-    running: !!session.machine, hasLaunched: session.everStarted, guestCdrom: guestIsoStatus(session)};
+    running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), guestCdrom: guestIsoStatus(session)};
 }
 
 function imagePath(file) { return path.resolve(root, file); }
@@ -595,12 +615,21 @@ function validateNetworkInterfaces(value, engine, requireRunning = true) {
 }
 
 function assignNetworkInterfaces(session, switches) {
+  const previous = session.networkInterfaces || [];
   const planned = [];
-  const usedMacs = new Set([...sessions.values()]
-    .filter(other => other.id !== session.id)
-    .flatMap(other => other.networkInterfaces || [])
-    .map(nic => nic.mac));
+  const otherInterfaces = [...sessions.values()].flatMap(other => [
+    ...(other.id === session.id ? [] : other.networkInterfaces || []),
+    ...(other.activeConfig?.networkInterfaces || [])
+  ]);
+  const usedMacs = new Set(otherInterfaces.map(nic => nic.mac));
   for (const [index, sw] of switches.entries()) {
+    const switchId = sw?.id ?? null;
+    const retained = previous[index];
+    if (retained && retained.switchId === switchId) {
+      planned.push(retained);
+      usedMacs.add(retained.mac);
+      continue;
+    }
     let mac;
     for (let salt = 0; ; salt++) {
       const digest = crypto.createHash('sha256').update(`${session.id}:${index}${salt ? `:${salt}` : ''}`).digest();
@@ -612,19 +641,19 @@ function assignNetworkInterfaces(session, switches) {
       planned.push({switchId: null, port: null, mac});
       continue;
     }
-    const used = new Set([...sessions.values()].filter(other => other.id !== session.id).flatMap(other => other.networkInterfaces || [])
-      .filter(nic => nic.switchId === sw.id).map(nic => nic.port));
-    for (const nic of planned) if (nic.switchId === sw.id) used.add(nic.port);
-    const port = Array.from({length: 32}, (_, n) => n + 1).find(n => !used.has(n));
+    const usedPorts = new Set([...otherInterfaces, ...planned]
+      .filter(nic => nic.switchId === switchId).map(nic => nic.port));
+    const port = Array.from({length: 32}, (_, n) => n + 1).find(n => !usedPorts.has(n));
     if (!port) throw new Error(`No free port on ${sw.hostname}.`);
-    planned.push({switchId: sw.id, port, mac});
+    planned.push({switchId, port, mac});
   }
   return planned;
 }
 
 function linkedHosts(switchId) {
   return [...sessions.values()].filter(session => session.kind === 'vm' &&
-    session.networkInterfaces.some(nic => nic.switchId === switchId));
+    [...session.networkInterfaces, ...(session.machine ? session.activeConfig?.networkInterfaces || [] : [])]
+      .some(nic => nic.switchId === switchId));
 }
 
 function removeSwitchTerminalAlias(session) {
@@ -774,6 +803,7 @@ function spawnQemu(session, image, reuseDisk = false) {
   child.once('error', error => {
     if (session.machine === child) {
       session.machine = null;
+      session.activeConfig = null;
       session.everStarted = !!session.runDisk;
       try { fs.unlinkSync(session.socketPath); } catch (_) {}
       try { fs.unlinkSync(session.monitorPath); } catch (_) {}
@@ -783,7 +813,7 @@ function spawnQemu(session, image, reuseDisk = false) {
   child.once('exit', code => {
     try { fs.unlinkSync(session.socketPath); } catch (_) {}
     try { fs.unlinkSync(session.monitorPath); } catch (_) {}
-    if (session.machine === child) session.machine = null;
+    if (session.machine === child) { session.machine = null; session.activeConfig = null; }
     if (session.stopping || session.action === 'reboot' || session.action === 'reset' || session.action === 'destroy') return;
     publishState(session, `QEMU stopped (${code})`);
   });
@@ -825,27 +855,34 @@ app.get('/api/options/:sessionId', (req, res) => {
     const engine = launched ? existing.engine : req.query.engine;
     requireSessionEngine(engine);
     if (!image || !['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown system or engine.');
+    const requestedInterfaces = req.query.interfaces !== undefined ? JSON.parse(req.query.interfaces)
+      : req.query.switches ? String(req.query.switches).split(',')
+        : existing?.networkInterfaces.map(nic => nic.switchId);
+    const switches = validateNetworkInterfaces(requestedInterfaces, engine, false);
+    const savedInterfaces = existing?.networkInterfaces.map(nic => nic.switchId);
+    const previewInterfaces = existing && JSON.stringify(requestedInterfaces) === JSON.stringify(savedInterfaces)
+      ? existing.networkInterfaces : assignNetworkInterfaces(existing || {id}, switches);
     const session = launched ? existing : {
       id, ...sessionPaths(id),
       generation: existing?.generation || 0,
       engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
       launchSettings: launchSettingsFor(image.id, req.query.settings ? JSON.parse(req.query.settings) : {}),
       qemuOptions: null,
-      networkInterfaces: assignNetworkInterfaces({id}, validateNetworkInterfaces(req.query.interfaces !== undefined ? JSON.parse(req.query.interfaces) : req.query.switches ? String(req.query.switches).split(',') : undefined, engine, false))
+      networkInterfaces: previewInterfaces
     };
     const attachGuestCdrom = req.query.guestCdrom === undefined ? !!existing?.guestIsoAttached : req.query.guestCdrom === 'true';
     if (!launched) session.guestIso = existing?.guestIso || null;
     const isQemu = engine.startsWith('qemu');
     const draftSettings = req.query.settings ? JSON.parse(req.query.settings) : {};
     const userSettings = launched
-      ? existing.machine || existing.action ? session.launchSettings : validateLaunchSettings({...session.launchSettings, ...draftSettings})
+      ? validateLaunchSettings({...session.launchSettings, ...draftSettings})
       : launchSettingsFor(image.id, draftSettings);
     const options = isQemu
       ? launched ? {...session.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
       : null;
     if (!launched && isQemu) session.qemuOptions = options;
     const nextGuestIso = tempFile(session, `startup-${session.generation + 1}.iso`);
-    const previewSession = {...session, launchSettings: userSettings, qemuOptions: options,
+    const previewSession = {...session, launchSettings: userSettings, networkInterfaces: previewInterfaces, qemuOptions: options,
       guestIsoAttached: attachGuestCdrom,
       guestIso: attachGuestCdrom ? nextGuestIso : null};
     const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
@@ -871,7 +908,7 @@ app.get('/api/options/:sessionId', (req, res) => {
           {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, 'disk.vdi'))}
         ];
     storage.push({label: 'Guest CD-ROM ISO', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
-    res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: session.networkInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
+    res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: previewInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -967,6 +1004,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.activeGuestIso = session.guestIsoAttached ? session.guestIso : null;
   for (const file of session.guestIsoFiles) if (file !== session.guestIso && file !== session.activeGuestIso) { fs.rmSync(file, {force: true}); session.guestIsoFiles.delete(file); }
   session.everStarted = true;
+  session.activeConfig = activeConfiguration(session);
   publishState(session, selectedEngine === 'qemu' ? `QEMU/${session.qemuAcceleration.toUpperCase()} · ${image.label} starting…` : `VirtualBox · ${image.label} starting…`);
   connectSerial(session);
   return session;
@@ -1043,6 +1081,8 @@ async function reboot(session, startup = {}) {
   if (!session || !session.everStarted) throw new Error('This host has not started yet.');
   if (!session.machine) throw new Error('The host is stopped; use Play to resume from its current disk.');
   if (session.action) throw new Error('An action is already in progress for this host.');
+  if (!session.runDisk || !fs.existsSync(session.runDisk)) throw new Error('The current host disk was not found.');
+  for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
   session.action = 'reboot';
   try {
     publishState(session, 'Graceful shutdown before reboot…');
@@ -1063,6 +1103,7 @@ async function reset(session, settings, startup = {}) {
   if (session?.kind === 'switch') throw new Error('Reset applies only to hosts.');
   if (!session || !session.everStarted || !session.selectedImage) throw new Error('This host has not started yet.');
   if (session.action) throw new Error('An action is already in progress for this host.');
+  for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
   session.action = 'reset';
   const engine = session.engine;
   const imageId = session.selectedImage.id;
@@ -1135,6 +1176,7 @@ async function stop(session, options = {}) {
     }
     if (session.serial) { session.serial.destroy(); session.serial = null; }
     if (session.machine === current) session.machine = null;
+    session.activeConfig = null;
     try { fs.unlinkSync(session.socketPath); } catch (_) {}
     try { fs.unlinkSync(session.monitorPath); } catch (_) {}
     if (options.publish !== false && session.action !== 'destroy') publishState(session, 'Host stopped; current disk kept');
@@ -1162,6 +1204,7 @@ async function destroySession(session) {
   const current = session.machine;
   const image = session.selectedImage || {};
   session.machine = null;
+  session.activeConfig = null;
   if (session.engine === 'virtualbox' && session.everStarted && session.selectedImage) {
     if (current) { try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {} }
     try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
@@ -1379,12 +1422,10 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     const name = body.name.trim();
     if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name)) throw new Error('Host name already exists.');
     const settings = validateLaunchSettings(body.settings);
-    if (session.machine && ['memory', 'cpus', 'clock'].some(key => settings[key] !== session.launchSettings[key])) throw new Error('Resource settings are locked while this host runs until CMZ38 β3.');
     const media = validateBootFiles(body.guestMedia);
     if (typeof body.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
     const switches = validateNetworkInterfaces(body.interfaces, session.engine, false);
     const oldSwitches = session.networkInterfaces.map(nic => nic.switchId);
-    if (session.everStarted && JSON.stringify(body.interfaces) !== JSON.stringify(oldSwitches)) throw new Error('Network interfaces are locked after the first launch until CMZ38 β3.');
     const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
       ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
     const previousName = session.hostname;
@@ -1405,7 +1446,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     session.guestIsoAttached = body.autoBuildGuestCdrom;
     if (JSON.stringify(media) !== JSON.stringify(previousMedia)) session.guestIsoOutdated = !!session.guestIso;
     if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});
-    io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, message: stateMessage(session)});
+    io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message: stateMessage(session)});
     res.json(hostConfigurationResponse(session));
   } catch (error) { res.status(400).json({error: error.message}); }
 });

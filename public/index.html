@@ -36,6 +36,7 @@
     .machine-tab { display: none; align-items: center; gap: 6px; padding: 5px 7px 5px 10px; white-space: nowrap; background: #1b2531; }
     .machine-tab[aria-selected="true"] { background: #355177; border-color: #70a8ff; }
     .machine-tab .machine-name { border: 0; padding: 2px; background: transparent; text-align: left; }
+    .pending-badge { border: 1px solid #a87930; border-radius: 4px; padding: 1px 5px; color: #ffd17c; font-size: 11px; }
     .machine-tab .machine-close { display: inline-grid; place-items: center; padding: 2px 4px; color: #ff777d; background: transparent; border: 0; }
     .machine-tab .machine-close svg { width: 16px; height: 16px; }
     #new-host { flex: none; background: #1b2531; }
@@ -303,6 +304,7 @@
     </div>
     </div>
     <p id="options-status" role="alert" hidden></p>
+    <p id="host-pending-status" class="settings-description" hidden>Pending restart: saved settings will apply at the next Play, Reboot or Reset.</p>
     <section class="settings-tab-panel" id="host-panel-general" role="tabpanel" aria-labelledby="host-tab-general" data-settings-panel="general"><div id="settings-fixed"></div></section>
     <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-hardware"></div><div id="settings-editable"></div></section>
     <section class="settings-tab-panel" id="host-panel-network" role="tabpanel" aria-labelledby="host-tab-network" data-settings-panel="network" hidden><div id="settings-network">
@@ -321,7 +323,7 @@
       <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
       <div class="settings-section settings-commands"><h3>Full launch commands</h3><pre id="options-commands"></pre></div>
     </section>
-    <div class="host-create-actions" id="host-create-actions" hidden><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
+    <div class="host-create-actions" id="host-create-actions" hidden><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><label class="create-autostart" id="host-reboot-row" hidden><input id="host-reboot-now" type="checkbox">Reboot now to apply</label><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
     </form>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
@@ -625,6 +627,9 @@
       .catch(() => { guestAttachCdrom.disabled = true; });
     const hostCreateActions = document.getElementById('host-create-actions');
     const hostAutostart = document.getElementById('host-autostart');
+    const hostRebootRow = document.getElementById('host-reboot-row');
+    const hostRebootNow = document.getElementById('host-reboot-now');
+    const hostPendingStatus = document.getElementById('host-pending-status');
     const confirmHostCreate = document.getElementById('confirm-host-create');
     const cancelHostCreate = document.getElementById('cancel-host-create');
     const closeHostSettings = document.getElementById('close-settings');
@@ -1282,6 +1287,7 @@
       const request = ++optionsRequest;
       optionsStatus.hidden = true;
       optionsStatus.textContent = '';
+      hostPendingStatus.hidden = !(machine.pendingRestart && machine.running);
       const image = images.find(item => item.id === machine.imageId);
       settingsTitle.textContent = creating ? 'Add a new host' : `Host Settings · ${machineDialogName(machine)}`;
       settingsEditable.replaceChildren();
@@ -1299,9 +1305,9 @@
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine !== settingsMachine()) return;
         updateNicMetadata(body.interfaces);
-        const locked = !!(machine.running || machine.busy);
+        const locked = !!machine.busy;
         const identityLocked = !!(machine.hasLaunched || locked);
-        const settings = locked ? body.settings : getMachineSettings(machine);
+        const settings = getMachineSettings(machine);
         const hostName = addSettingRow(settingsFixed, 'Host name', machine.hostname, false);
         hostName.maxLength = 64;
         hostName.required = true;
@@ -1428,7 +1434,12 @@
         close.title = machine.kind === 'switch' ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
         close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Exit host'} ${machine.hostname}`);
         close.onclick = () => closeMachine(machine.id);
-        tab.append(select, close);
+        if (machine.kind === 'vm' && machine.pendingRestart) {
+          const badge = document.createElement('span');
+          badge.className = 'pending-badge';
+          badge.textContent = 'Restart pending';
+          tab.append(select, badge, close);
+        } else tab.append(select, close);
         tabs.insertBefore(tab, tabs.querySelector('.page-controls'));
       }
       renderPaneTitles();
@@ -1456,7 +1467,7 @@
     }
     function renderNicControls(machine, list = nicList, addButton = addNic, onChange = () => refreshLaunchPreview(machine)) {
       list.replaceChildren();
-      const locked = machine.hasLaunched || machine.busy || machine.engine === 'virtualbox';
+      const locked = machine.busy || machine.engine === 'virtualbox';
       addButton.disabled = locked || (machine.interfaces || []).length >= 4;
       for (const [index, selected] of (machine.interfaces || []).entries()) {
         const row = document.createElement('div'); row.className = 'nic-row';
@@ -1517,6 +1528,9 @@
       hostAutostart.checked = true;
       hostCreateActions.hidden = false;
       hostAutostart.closest('label').hidden = false;
+      hostRebootRow.hidden = true;
+      hostRebootNow.checked = false;
+      hostPendingStatus.hidden = true;
       closeHostSettings.hidden = true;
       settingsTitle.textContent = 'Add a new host';
       qemuOptionsPanel.showModal();
@@ -1658,7 +1672,7 @@
         engine: session.engine || generalSettings.engine,
         interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
         networkInterfaces: session.networkInterfaces || [],
-        running: session.running, hasLaunched: session.hasLaunched,
+        running: session.running, hasLaunched: session.hasLaunched, pendingRestart: !!session.pendingRestart,
         message: session.message,
         error: /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null,
         logs: [], serial: '', monitorOutput: ''
@@ -1671,6 +1685,7 @@
       current.hostname = session.hostname;
       current.running = session.running;
       current.hasLaunched = session.hasLaunched;
+      current.pendingRestart = !!session.pendingRestart;
       current.message = session.message;
       current.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
       current.networkInterfaces = session.networkInterfaces || [];
@@ -1914,7 +1929,7 @@
     });
     addNic.addEventListener('click', () => {
       const machine = settingsMachine();
-      if (!machine || machine.kind !== 'vm' || machine.hasLaunched || machine.busy || machine.engine === 'virtualbox' || machine.interfaces.length >= 4) return;
+      if (!machine || machine.kind !== 'vm' || machine.busy || machine.engine === 'virtualbox' || machine.interfaces.length >= 4) return;
       const scrollTop = qemuOptionsPanel.scrollTop;
       machine.interfaces.push(null);
       renderGraphic();
@@ -1944,10 +1959,12 @@
           engine: data.engine, interfaces: [...data.interfaces], networkInterfaces: data.networkInterfaces,
           settings: {...data.settings}, settingsLoaded: true,
           guestMedia: structuredClone(data.guestMedia), autoBuildGuestCdrom: data.autoBuildGuestCdrom,
-          running: source.running, hasLaunched: source.hasLaunched, busy: source.busy
+          running: data.running, hasLaunched: data.hasLaunched, pendingRestart: data.pendingRestart, busy: source.busy
         };
         hostCreateActions.hidden = false;
         hostAutostart.closest('label').hidden = true;
+        hostRebootRow.hidden = !data.running;
+        hostRebootNow.checked = false;
         closeHostSettings.hidden = false;
         qemuOptionsPanel.showModal();
         selectSettingsTab('general');
@@ -2003,6 +2020,7 @@
       const name = settingsFixed.querySelector('input')?.value.trim();
       if (!name) return;
       const autostart = draft.isNew && hostAutostart.checked;
+      const rebootNow = !draft.isNew && hostRebootNow.checked;
       confirmHostCreate.disabled = true;
       cancelHostCreate.disabled = true;
       closeHostSettings.disabled = true;
@@ -2034,6 +2052,17 @@
             machine.networkInterfaces = data.networkInterfaces;
             machine.guestMedia = data.guestMedia;
             machine.autoBuildGuestCdrom = data.autoBuildGuestCdrom;
+            machine.pendingRestart = data.pendingRestart;
+          }
+          draft.pendingRestart = data.pendingRestart;
+          hostPendingStatus.hidden = !(data.pendingRestart && data.running);
+          if (rebootNow && data.running && data.pendingRestart) {
+            const rebootResponse = await fetch(`/api/reboot/${encodeURIComponent(draft.id)}`, {method: 'POST'});
+            const rebootResult = await rebootResponse.json();
+            if (!rebootResponse.ok) throw new Error(`Settings saved, but reboot failed: ${rebootResult.error || 'unknown error'}`);
+            if (machine) machine.pendingRestart = false;
+            draft.pendingRestart = false;
+            scheduleSessionSync();
           }
           hostSettingsDraft = null;
           qemuOptionsPanel.close();
@@ -2113,6 +2142,7 @@
         if (!machine || pane.machineId !== event.sessionId) return;
         machine.running = event.running;
         if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
+        if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
         machine.message = event.message;
         machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
         renderTabs();
@@ -2125,12 +2155,13 @@
     socket.on('sessions-changed', event => {
       const machine = event && machines.get(event.sessionId);
       if (!machine) { scheduleSessionSync(); return; }
-      if (machine.id === activeId) { if (graphicVisible) scheduleSessionSync(); return; }
       machine.running = event.running;
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
+      if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
       machine.message = event.message;
       machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
       renderTabs();
+      if (machine.id === activeId) updateControls();
       if (graphicVisible) scheduleSessionSync();
     });
     socket.on('connect', syncSessionsFromServer);
