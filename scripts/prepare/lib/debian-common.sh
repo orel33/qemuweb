@@ -40,7 +40,49 @@ manage_etc_hosts: true
 ssh_pwauth: true
 disable_root: false
 package_update: true
-packages: []
+# Match the Debian Legacy networking toolkit without pulling optional graphical
+# and plotting packages recommended by tools such as Scapy.
+apt:
+  conf: |
+    APT::Install-Recommends "false";
+packages:
+  # Console and download tools.
+  - sudo
+  - procps
+  - nano
+  - bash-completion
+  - curl
+  - wget
+  # Network administration and diagnostics.
+  - iproute2
+  - net-tools
+  - iputils-ping
+  - traceroute
+  - netcat-openbsd
+  - tcpdump
+  - bridge-utils
+  - vlan
+  - iptables
+  # DNS and DHCP clients and servers.
+  - dnsutils
+  - dnsmasq
+  - dnsmasq-utils
+  - isc-dhcp-client
+  - isc-dhcp-server
+  # Capture, scanning, security, and VPN.
+  - nmap
+  - dsniff
+  - python3-scapy
+  - openssl
+  - gnutls-bin
+  - openvpn
+  # Remote and legacy network services.
+  - openssh-client
+  - openssh-server
+  - inetutils-telnet
+  - inetutils-telnetd
+  - tnftp
+  - inetutils-ftpd
 users:
   - name: toto
     groups: [sudo]
@@ -73,7 +115,7 @@ runcmd:
   - [systemctl, enable, systemd-networkd.service]
   - [systemctl, enable, qemuweb-start.service]
   - [touch, /etc/cloud/cloud-init.disabled]
-  - [sh, -c, 'echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0']
+  - [sh, -c, 'if test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null; then echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_PACKAGE_CHECK_FAILED >/dev/ttyS0; exit 1; fi']
 CLOUD_CONFIG
     cat > "$meta_data" <<EOF_META
 instance-id: qemuweb-$id-$(date +%s)
@@ -98,7 +140,8 @@ NETWORK_CONFIG
       >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
     qemu_pid=$!
     local prepared=0
-    for _ in $(seq 1 900); do
+    for _ in $(seq 1 1800); do
+      if grep -q QEMUNET_PACKAGE_CHECK_FAILED "$serial_log" 2>/dev/null; then break; fi
       if grep -q 'QEMUNET_IMAGE_PREPARED' "$serial_log" 2>/dev/null && grep -q 'Cloud-init v.* finished at' "$serial_log" 2>/dev/null; then prepared=1; break; fi
       if ! kill -0 "$qemu_pid" 2>/dev/null; then break; fi
       sleep 1
