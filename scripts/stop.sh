@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 port="${PORT:-3002}"
 if [[ ! "$port" =~ ^[0-9]+$ ]]; then
   echo "Invalid PORT: $port" >&2

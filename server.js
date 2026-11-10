@@ -1008,8 +1008,8 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   }
   const image = resume ? session.selectedImage : imageById(imageId);
   if (!image) throw new Error('Unknown system in config.json.');
-  if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash prepare.sh.`);
-  if (selectedEngine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash prepare.sh.`);
+  if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  if (selectedEngine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
   session.guestMedia = readStartupFiles(startupDirectory(session));
   if (options.autoBuildGuestCdrom !== undefined) {
     if (typeof options.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
@@ -1142,8 +1142,8 @@ function validateRestartPrerequisites(session) {
     throw new Error('VirtualBox cannot start while a QEMU host uses KVM. Stop that host, restart it with QEMU TCG, then start VirtualBox.');
   }
   const image = session.selectedImage;
-  if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash prepare.sh.`);
-  if (session.engine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash prepare.sh.`);
+  if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  if (session.engine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
   for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
 }
 
@@ -1776,7 +1776,7 @@ server.listen(port, '127.0.0.1', () => {
   console.log(`  Web interface      http://127.0.0.1:${port}`);
   console.log(`  Session ID         ${sessionId}`);
   console.log(`  Session directory  ${runtimeInstance}`);
-  console.log('  Stop               Ctrl+C or ./stop.sh\n');
+  console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
 });
 
 process.on('exit', () => {

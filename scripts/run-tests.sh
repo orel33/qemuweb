@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-cd -- "$(dirname -- "${BASH_SOURCE[0]}")"
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
 usage() {
   cat <<'EOF'
-Usage: ./run-tests.sh <test>
+Usage: ./scripts/run-tests.sh <test>
 
 Available tests:
   unit            Unit tests: topology, UI helpers, guest media and metrics
@@ -17,7 +17,7 @@ Available tests:
 
 Use --list or --help to show this list. Nothing runs without a test name.
 See test/TESTS.md for the purpose and prerequisites of each test.
-To keep a live log: ./run-tests.sh lan2 2>&1 | tee lan2.log
+To keep a live log: ./scripts/run-tests.sh lan2 2>&1 | tee lan2.log
 EOF
 }
 

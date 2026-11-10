@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$(dirname "$0")/common.sh"
+source "$(dirname "$0")/lib/common.sh"
 parse_prepare_mode "$@"
 # Alpine's inputs and outputs live under its own ID, while older files are
 # moved into this layout to preserve existing downloads and prepared images.
@@ -80,7 +80,7 @@ done
 mkdir -p "$target/usr/local/sbin" "$target/etc/init.d" "$target/etc/runlevels/default"
 cat > "$target/usr/local/sbin/qemuweb-guest-start" <<'GUEST_HOOK'
 ALPINE_HOOK
-  cat "$ROOT/scripts/prepare/guest-start.sh" >> "$guest_script"
+  cat "$ROOT/scripts/prepare/resources/guest-start.sh" >> "$guest_script"
   cat >> "$guest_script" <<'ALPINE_HOOK'
 GUEST_HOOK
 cat > "$target/etc/init.d/qemuweb-guest-start" <<'INIT_HOOK'

@@ -1,2 +1,1 @@
-#!/bin/bash
-npm start
+scripts/start.sh

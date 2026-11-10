@@ -108,13 +108,13 @@ guest NIC ↔ QEMU -netdev vde ↔ VDE data socket (-s) ↔ vde_switch ↔ anoth
 
 The management path carries switch commands; it carries no guest network packets. Conversely, the VDE data socket transports Ethernet frames and is not a command console.
 
-Offline image preparation is separate from runtime execution. `prepare.sh` and `scripts/prepare/` build reusable base images under `images/`. At runtime, `server.js` reads [config.json](config.json), creates per-session disks and Unix sockets under `runtime/`, and never modifies the base images. Current session state and bounded console transcripts are kept in server memory; working disks and sockets disappear when their session is deleted or the server performs its cleanup.
+Offline image preparation is separate from runtime execution. `scripts/prepare.sh` and `scripts/prepare/` build reusable base images under `images/`. At runtime, `server.js` reads [config.json](config.json), creates per-session disks and Unix sockets under `runtime/`, and never modifies the base images. Current session state and bounded console transcripts are kept in server memory; working disks and sockets disappear when their session is deleted or the server performs its cleanup.
 
 ## Text console: xterm and the browser
 
 In the historical QemuNet command, `-append '… console=ttyS0 …'` explicitly tells the **Linux kernel** to write to its first serial port. With `xterm -e qemu-system-x86_64 … -nographic`, QEMU hides the video display and, when no `-serial` option is supplied, implicitly connects that serial port to its standard input and output, and therefore to xterm. QEMU also shares those streams with its monitor (`Ctrl+A`, then `C`). The name `ttyS0` is not implicit: its **connection to xterm** is. A `getty` service on `ttyS0` is still needed to display a `login:` prompt.
 
-In QemuWeb, `-display none` only hides the video display. `-serial unix:…` explicitly connects the serial port to a socket; the server then relays characters between that socket and xterm.js over WebSocket. `-monitor unix:…` opens a separate socket for the QEMU monitor. The serial console and login are configured in the images by `prepare.sh`. [The migration notes](docs/qemunet-to-qemuweb.md) describe both paths and the LAN migration.
+In QemuWeb, `-display none` only hides the video display. `-serial unix:…` explicitly connects the serial port to a socket; the server then relays characters between that socket and xterm.js over WebSocket. `-monitor unix:…` opens a separate socket for the QEMU monitor. The serial console and login are configured in the images by `scripts/prepare.sh`. [The migration notes](docs/qemunet-to-qemuweb.md) describe both paths and the LAN migration.
 
 ### Serial console and QEMU monitor
 
@@ -131,14 +131,14 @@ In the bar directly above each terminal, click the current view icon to choose *
 
 ## Image preparation
 
-`prepare.sh` reads the IDs under `systems` in `config.json` and invokes the matching `scripts/prepare/<id>.sh` twice: first for sources in `sources/<id>/`, then for RAW/VDI images in `images/`. It prints both steps and their elapsed time, plus the total time for each system. `--list` shows each system's allocated RAW and VDI disk usage in decimal GB and the newest image modification date in local time. Shared helpers are alongside these scripts.
+The main shell entrypoints (`start`, `stop`, `killall`, `cleanall`, `prepare`, and `run-tests`) are in `scripts/`. `scripts/prepare.sh` reads the IDs under `systems` in `config.json` and invokes the matching `scripts/prepare/<id>.sh` twice: first for sources in `sources/<id>/`, then for RAW/VDI images in `images/`. It prints both steps and their elapsed time, plus the total time for each system. `--list` shows each system's allocated RAW and VDI disk usage in decimal GB and the newest image modification date in local time. The shared shell functions are in `scripts/prepare/lib/`; the guest hook and Debian service file are in `scripts/prepare/resources/`.
 
 ```sh
-bash prepare.sh --help
-bash prepare.sh --list
-bash prepare.sh                 # all configured systems
-bash prepare.sh --system debian13-legacy
-bash prepare.sh --system debian13-legacy --force
+bash scripts/prepare.sh --help
+bash scripts/prepare.sh --list
+bash scripts/prepare.sh                 # all configured systems
+bash scripts/prepare.sh --system debian13-legacy
+bash scripts/prepare.sh --system debian13-legacy --force
 ```
 
 Without `--force`, existing images are reused. `--force` warns, saves each old RAW/VDI pair in `images/backups/`, and replaces it with a rebuilt pair; if the build fails, it restores the old pair. It also runs while VMs are active, so stop affected hosts first when their working disks matter: an old differential disk may be incompatible with a rebuilt base. Each target keeps its downloads and checksums in `sources/<id>/`:
@@ -175,22 +175,22 @@ Every prepared image uses the internal hostname `qemuweb` and provides the same 
 
 ### Stopping and cleaning up
 
-Use `stop.sh` for a normal shutdown. It reads `runtime/server-<port>.pid` and signals only that QemuWeb server. The server writes this file after it opens its port, whether started with `start.sh` or `npm start`, and removes it on exit. By default the port is 3002; set `PORT` to target another instance. If the PID no longer exists, `stop.sh` removes the stale file; if it belongs to another process, the script refuses to signal it.
+Use `scripts/stop.sh` for a normal shutdown. It reads `runtime/server-<port>.pid` and signals only that QemuWeb server. The server writes this file after it opens its port, whether started with `scripts/start.sh` or `npm start`, and removes it on exit. By default the port is 3002; set `PORT` to target another instance. If the PID no longer exists, `scripts/stop.sh` removes the stale file; if it belongs to another process, the script refuses to signal it.
 
-`Ctrl+C` sends `SIGINT` and `stop.sh` sends `SIGTERM`; QemuWeb handles both with the same graceful shutdown. This closes its hosts and switches and removes their temporary working disks. Use `killall.sh` only when you need to find and stop **all** project servers, including orphaned QEMU or VirtualBox instances.
+`Ctrl+C` sends `SIGINT` and `scripts/stop.sh` sends `SIGTERM`; QemuWeb handles both with the same graceful shutdown. This closes its hosts and switches and removes their temporary working disks. Use `scripts/killall.sh` only when you need to find and stop **all** project servers, including orphaned QEMU or VirtualBox instances.
 
 ```sh
-./stop.sh                    # stop the tracked server on port 3002
-PORT=3003 ./stop.sh          # stop the tracked server on port 3003
-./killall.sh                 # emergency cleanup of all project servers and VMs
-./cleanall.sh                # stop instances and empty runtime/; keep images/ and sources/
-./cleanall.sh --images       # also empty images/; keep downloads in sources/
-./cleanall.sh --sources      # also empty the sources/ download cache; keep the bases
-./cleanall.sh --images --sources  # remove both the bases and the preparation cache
-./cleanall.sh --dry-run      # show what would be stopped and removed
+./scripts/stop.sh                    # stop the tracked server on port 3002
+PORT=3003 ./scripts/stop.sh          # stop the tracked server on port 3003
+./scripts/killall.sh                 # emergency cleanup of all project servers and VMs
+./scripts/cleanall.sh                # stop instances and empty runtime/; keep images/ and sources/
+./scripts/cleanall.sh --images       # also empty images/; keep downloads in sources/
+./scripts/cleanall.sh --sources      # also empty the sources/ download cache; keep the bases
+./scripts/cleanall.sh --images --sources  # remove both the bases and the preparation cache
+./scripts/cleanall.sh --dry-run      # show what would be stopped and removed
 ```
 
-`cleanall.sh` calls the broader process cleanup and then removes the requested files. It keeps `.gitkeep` files and does not delete the code or `node_modules/`. After `--images`, `prepare.sh` can rebuild the bases from `sources/` without downloading them again; after `--sources`, a full preparation will need to download any missing sources.
+`scripts/cleanall.sh` calls the broader process cleanup and then removes the requested files. It keeps `.gitkeep` files and does not delete the code or `node_modules/`. After `--images`, `scripts/prepare.sh` can rebuild the bases from `sources/` without downloading them again; after `--sources`, a full preparation will need to download any missing sources.
 
 ### Formats in use
 
@@ -199,7 +199,7 @@ PORT=3003 ./stop.sh          # stop the tracked server on port 3003
 | QEMU | RAW | QCOW2 |
 | VirtualBox | VDI converted from the same RAW image | Differential VDI |
 
-The RAW image remains the master source. `prepare.sh` produces an additional VDI base for VirtualBox, which uses additional disk space. Both engines use the same OS content, but each creates its own working disk. The bases are never modified.
+The RAW image remains the master source. `scripts/prepare.sh` produces an additional VDI base for VirtualBox, which uses additional disk space. Both engines use the same OS content, but each creates its own working disk. The bases are never modified.
 
 Technically, the **current disk** mentioned in the interface is a *differential disk*: a per-VM QCOW2 overlay for QEMU or a per-VM VDI differencing image for VirtualBox. It stores only the VM's writes and depends on its read-only base image. **Resume** and **Reboot** reopen that same disk; **Reset** replaces it with a new one.
 
@@ -253,7 +253,7 @@ Provide `qemu-system-x86_64` from `qemu-system-x86` or a custom build, and insta
 git clone --branch main https://github.com/orel33/qemuweb.git
 cd qemuweb
 npm ci
-bash prepare.sh
+bash scripts/prepare.sh
 ```
 
 Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sources/<id>/` and its final `<id>.raw` and `<id>.vdi` bases in `images/`. The orchestrator checks the selected systems' image paths declared in `config.json` but does not rewrite the file. The page's system menu is populated directly from `config.json`. `runtime/` is reserved for temporary preparation and VM files. These directories are ignored by Git, except for their `.gitkeep` files.
@@ -265,7 +265,7 @@ Each `scripts/prepare/<id>.sh` places that system's downloaded sources in `sourc
 PORT=3003 ./start.sh  # launch another instance on port 3003
 ```
 
-`start.sh` runs `npm start` in the foreground; `Ctrl+C` and `./stop.sh` can both end it. Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. **Add a new host** opens the Host Settings dialog titled **Add a new host**, with name, system, resources, network interfaces and Autostart; Cancel leaves no host behind, and OK creates it. The switch uses its own creation dialog. The engine is shown read-only in Host Settings. **General Settings** at the bottom left is its only selector for new hosts, including clones; QEMU/KVM is the default. It also sets the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. Names from the French and Greek lists are selected at random without reusing an active name. The engine is saved on the server for the current session; naming and console appearance remain browser-local in `localStorage`. The name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing hosts keep their names; all hosts in this application session share its engine. Use each pane's selector to open a session, then choose a view in the bar above that pane's terminal. Login details appear in Host Settings.
+The root-level `start.sh` is a symbolic link to `scripts/start.sh`. It runs `npm start` in the foreground; `Ctrl+C` and `./scripts/stop.sh` can both end it. Open <http://127.0.0.1:3002>. Use the buttons at the bottom to add a host or a switch. **Add a new host** opens the Host Settings dialog titled **Add a new host**, with name, system, resources, network interfaces and Autostart; Cancel leaves no host behind, and OK creates it. The switch uses its own creation dialog. The engine is shown read-only in Host Settings. **General Settings** at the bottom left is its only selector for new hosts, including clones; QEMU/KVM is the default. It also sets the naming scheme for new hosts and switches: classic long (`host01`, `switch01`, ...; the default), classic (`h1`, `s1`, ...), French women's names from 1900, or Greek letters. Names from the French and Greek lists are selected at random without reusing an active name. The engine is saved on the server for the current session; naming and console appearance remain browser-local in `localStorage`. The name lists are in [naming-schemes.json](public/resources/naming-schemes.json). Existing hosts keep their names; all hosts in this application session share its engine. Use each pane's selector to open a session, then choose a view in the bar above that pane's terminal. Login details appear in Host Settings.
 
 ### Local VDE LAN prototype
 
@@ -342,7 +342,7 @@ PORT=3003 npm start
 
 Tests are organized under [`test/unit/`](test/unit/) and [`test/integration/`](test/integration/). [`test/TESTS.md`](test/TESTS.md) describes each test, its prerequisites, and its command. `npm test` runs only the unit tests; integration tests are selected separately because they boot prepared guest images.
 
-Use `./run-tests.sh --list` to see the scenarios, then run one by name, for example `./run-tests.sh unit`, `./run-tests.sh lan2`, or `./run-tests.sh gts16-profiles`. The runner prints a short description before starting each test. `./run-tests.sh web` starts the application on port 3003 for manual interface testing; set `PORT` to choose another port. To keep live output, use `./run-tests.sh lan2 2>&1 | tee lan2.log`.
+Use `./scripts/run-tests.sh --list` to see the scenarios, then run one by name, for example `./scripts/run-tests.sh unit`, `./scripts/run-tests.sh lan2`, or `./scripts/run-tests.sh gts16-profiles`. The runner prints a short description before starting each test. `./scripts/run-tests.sh web` starts the application on port 3003 for manual interface testing; set `PORT` to choose another port. To keep live output, use `./scripts/run-tests.sh lan2 2>&1 | tee lan2.log`.
 
 ## Official images
 

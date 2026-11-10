@@ -2,7 +2,7 @@
 set -euo pipefail
 # The cloud-based Debian image shares its provisioning logic with other
 # Debian cloud profiles; the ID selects its own source and output image paths.
-source "$(dirname "$0")/debian-common.sh"
+source "$(dirname "$0")/lib/debian-common.sh"
 parse_prepare_mode "$@"
 
 # Preserve already prepared artifacts when upgrading from the former

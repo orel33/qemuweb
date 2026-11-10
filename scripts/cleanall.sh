@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd -P)"
+ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 RUNTIME="$ROOT/runtime"
 IMAGES="$ROOT/images"
 SOURCES="$ROOT/sources"
@@ -19,9 +19,9 @@ for option in "$@"; do
 done
 
 if (( DRY_RUN )); then
-  "$ROOT/killall.sh" --dry-run
+  "$ROOT/scripts/killall.sh" --dry-run
 else
-  "$ROOT/killall.sh"
+  "$ROOT/scripts/killall.sh"
 fi
 
 clean_directory() {

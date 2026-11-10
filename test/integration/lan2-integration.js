@@ -258,7 +258,7 @@ async function installGuestHook(shell) {
     ['qemuweb-start.service', '/etc/systemd/system/qemuweb-start.service', '644']
   ];
   for (const [name, destination, mode] of files) {
-    const encoded = fs.readFileSync(path.join(root, 'scripts/prepare', name)).toString('base64');
+    const encoded = fs.readFileSync(path.join(root, 'scripts/prepare/resources', name)).toString('base64');
     const temporary = `/tmp/${name}.b64`;
     await shell.exec(`: > ${temporary}`);
     for (let offset = 0; offset < encoded.length; offset += 400) {
@@ -303,7 +303,7 @@ async function startHost(id) {
 }
 
 async function run() {
-  assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash prepare.sh first.`);
+  assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh first.`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {

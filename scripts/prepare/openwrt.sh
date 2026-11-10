@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$(dirname "$0")/common.sh"
+source "$(dirname "$0")/lib/common.sh"
 parse_prepare_mode "$@"
 
 # Keep the downloaded release archive and checksum file under the OpenWrt ID;
@@ -58,7 +58,7 @@ OPENWRT_PREPARE
 mkdir -p /usr/local/sbin
 cat > /usr/local/sbin/qemuweb-guest-start <<'GUEST_HOOK'
 OPENWRT_HOOK
-  cat "$ROOT/scripts/prepare/guest-start.sh" >> "$guest_script"
+  cat "$ROOT/scripts/prepare/resources/guest-start.sh" >> "$guest_script"
   cat >> "$guest_script" <<'OPENWRT_HOOK'
 GUEST_HOOK
 cat > /etc/init.d/qemuweb-guest-start <<'INIT_HOOK'

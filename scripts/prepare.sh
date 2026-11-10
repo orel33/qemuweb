@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT="$(cd "$(dirname "$0")" && pwd)"
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'HELP'
-Usage: bash prepare.sh [--all | --system <sysname>] [--force]
-       bash prepare.sh --list
-       bash prepare.sh --help
+Usage: bash scripts/prepare.sh [--all | --system <sysname>] [--force]
+       bash scripts/prepare.sh --list
+       bash scripts/prepare.sh --help
 
 Prepare every system by default. For each system:
   1. Fetch and verify sources in sources/<sysname>/.

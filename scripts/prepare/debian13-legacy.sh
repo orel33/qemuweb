@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
-source "$(dirname "$0")/common.sh"
+source "$(dirname "$0")/lib/common.sh"
 parse_prepare_mode "$@"
 
 id=debian13-legacy
@@ -117,8 +117,8 @@ update-initramfs -u -k all
 echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0 || true
 SETUP
   chmod +x "$temp_dir/legacy-setup.sh"
-  cp "$ROOT/scripts/prepare/guest-start.sh" "$temp_dir/guest-start.sh"
-  cp "$ROOT/scripts/prepare/qemuweb-start.service" "$temp_dir/qemuweb-start.service"
+  cp "$ROOT/scripts/prepare/resources/guest-start.sh" "$temp_dir/guest-start.sh"
+  cp "$ROOT/scripts/prepare/resources/qemuweb-start.service" "$temp_dir/qemuweb-start.service"
   python3 - "$temp_dir" <<'PY'
 import gzip, os, stat, sys
 from pathlib import Path

@@ -31,8 +31,8 @@ prepare_debian_image() {
     # Cloud-init creates the lab account, enables both consoles, and configures
     # the guest NIC for DHCP. The VDE switch itself does not provide DHCP.
     local hook_b64 unit_b64
-    hook_b64="$(base64 -w 0 "$ROOT/scripts/prepare/guest-start.sh")"
-    unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/qemuweb-start.service")"
+    hook_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/guest-start.sh")"
+    unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/qemuweb-start.service")"
     cat > "$user_data" <<CLOUD_CONFIG
 #cloud-config
 hostname: qemuweb

@@ -24,21 +24,21 @@ The hook waits at most two seconds for labeled media. Missing ISO, missing scrip
 
 ## Existing prepared bases
 
-`bash prepare.sh` deliberately reuses nonempty RAW and VDI images; it does not inject the hook into older bases. Existing bases and their differential disks remain untouched by the application. To upgrade a base, run `bash prepare.sh --system <system> --force` for the chosen system. It warns, saves the old pair in `images/backups/`, builds a new RAW/VDI pair, and restores the old pair if preparation fails. It does not block running VMs, but **replacing a base while an old QCOW2/VDI differential disk depends on it can make that disk unusable on the next launch**. Exit affected hosts first, or migrate their service inside the guest if their disks must be kept. Verify `QEMUWEB_START_EXIT 0` in the Debian guest journal, or the script's expected output on Alpine/OpenWrt serial, before discarding backups. Rebuilding requires the usual source downloads and image preparation tools; it can take substantial time.
+`bash scripts/prepare.sh` deliberately reuses nonempty RAW and VDI images; it does not inject the hook into older bases. Existing bases and their differential disks remain untouched by the application. To upgrade a base, run `bash scripts/prepare.sh --system <system> --force` for the chosen system. It warns, saves the old pair in `images/backups/`, builds a new RAW/VDI pair, and restores the old pair if preparation fails. It does not block running VMs, but **replacing a base while an old QCOW2/VDI differential disk depends on it can make that disk unusable on the next launch**. Exit affected hosts first, or migrate their service inside the guest if their disks must be kept. Verify `QEMUWEB_START_EXIT 0` in the Debian guest journal, or the script's expected output on Alpine/OpenWrt serial, before discarding backups. Rebuilding requires the usual source downloads and image preparation tools; it can take substantial time.
 
 The rebuilt `images/alpine.{raw,vdi}`, `images/debian13-cloud.{raw,vdi}` and `images/openwrt.{raw,vdi}` pairs are local artifacts excluded from Git and its tags. Each image is self-contained and has no backing file. `--force` saves the previous pair in `images/backups/` for recovery; those older files can be removed after the new base is accepted and no differential disk needs the old one. Never resume an existing differential disk against a replacement base. VirtualBox validation remains VBH54.
 
 For one system at a time, preferably after exiting its hosts:
 
 ```sh
-bash prepare.sh --system debian13-legacy --force
+bash scripts/prepare.sh --system debian13-legacy --force
 ```
 
 Keep the backup until the new base has passed a boot test. With explicit test approval, run `npm run test:gts16-profiles` for Alpine, Debian Cloud and OpenWrt, and `GTS16_PROFILES=debian13-legacy npm run test:gts16-profiles` for Debian Legacy. The default profile test makes 13 guest boots: three per profile for initial launch, edited Reboot and Stop/Resume; two simultaneous OpenWrt hosts for ISO isolation; and two OpenWrt failure cases for missing script and media. Allow roughly 5–10 minutes with KVM, longer with TCG. The test reads a distinct resource and persistent disk marker after each restart. Missing-media and missing-script behavior on Alpine and Debian Cloud still needs manual verification. `npm run test:gts16-lan2` checks Debian Legacy LAN2 and needs a QEMU build with VDE support.
 
-For an existing differential disk you need to keep, install `scripts/prepare/guest-start.sh` in that guest as `/usr/local/sbin/qemuweb-guest-start` and install the native service shown in its preparation script. That changes only the guest's differential disk. Reboot the host to attach its ISO. New hosts from the old base still require a rebuilt base.
+For an existing differential disk you need to keep, install `scripts/prepare/resources/guest-start.sh` in that guest as `/usr/local/sbin/qemuweb-guest-start` and install the native service shown in its preparation script. That changes only the guest's differential disk. Reboot the host to attach its ISO. New hosts from the old base still require a rebuilt base.
 
-The Debian service now has the shorter name `qemuweb-start.service` and description `Run start.sh`. Existing prepared images keep the old name until their guest service is migrated or the base is rebuilt. To migrate an existing Debian guest without replacing its disk, copy `scripts/prepare/qemuweb-start.service` into the guest as `/etc/systemd/system/qemuweb-start.service`, then run there:
+The Debian service now has the shorter name `qemuweb-start.service` and description `Run start.sh`. Existing prepared images keep the old name until their guest service is migrated or the base is rebuilt. To migrate an existing Debian guest without replacing its disk, copy `scripts/prepare/resources/qemuweb-start.service` into the guest as `/etc/systemd/system/qemuweb-start.service`, then run there:
 
 ```sh
 systemctl disable --now qemuweb-guest-start.service
