@@ -102,6 +102,12 @@
     .setting-row input:disabled, .setting-row select:disabled { opacity: 1; color: #aeb9c6; background-color: #303942; border-color: #46515d; box-shadow: none; cursor: default; -webkit-text-fill-color: #aeb9c6; }
     .setting-row input:not(:disabled):hover, .setting-row select:not(:disabled):hover { border-color: #7395bc; }
     .setting-row input:focus-visible, .setting-row select:focus-visible { outline: 2px solid #74a7e6; outline-offset: 1px; }
+    .setting-with-action { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .setting-with-action input { flex: 1; max-width: none; }
+    .setting-with-action button { display: grid; place-items: center; width: 32px; height: 32px; flex: none; padding: 5px; border: 1px solid #9c4d58; border-radius: 4px; background: #352126; color: #ff8993; }
+    .setting-with-action button:hover, .setting-with-action button[aria-pressed="true"] { background: #71313c; color: #fff; }
+    .setting-with-action button:focus-visible { outline: 2px solid #ff8993; outline-offset: 2px; }
+    .setting-with-action button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
     .settings-commands { margin-top: 16px; }
     .settings-commands summary { cursor: pointer; color: #9fc5ef; }
     .settings-commands pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
@@ -310,10 +316,6 @@
     <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-hardware"></div><div id="settings-editable"></div></section>
     <section class="settings-tab-panel" id="host-panel-storage" role="tabpanel" aria-labelledby="host-tab-storage" data-settings-panel="storage" hidden>
       <div id="settings-storage"></div>
-      <div class="settings-section" id="host-reset-row" hidden>
-        <label class="create-autostart"><input id="host-reset-disk" type="checkbox">Reset working disk on save</label>
-        <p>This deletes the current working disk and all changes made inside this guest.</p>
-      </div>
     </section>
     <section class="settings-tab-panel" id="host-panel-network" role="tabpanel" aria-labelledby="host-tab-network" data-settings-panel="network" hidden><div id="settings-network">
       <div id="settings-network-profile"></div>
@@ -326,12 +328,13 @@
       <label for="guest-start-script">start.sh</label><textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
       <label>Import start.sh <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain"></label>
       <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup CD-ROM</label>
+      <div id="settings-startup-iso"></div>
     </section>
     <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
       <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
       <div class="settings-section settings-commands"><h3>Full launch commands</h3><pre id="options-commands"></pre></div>
     </section>
-    <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><label class="create-autostart" id="host-reboot-row" hidden><input id="host-reboot-now" type="checkbox">Reboot now to apply</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK · Save</button></div>
+    <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><label class="create-autostart" id="host-reboot-row" hidden><input id="host-reboot-now" type="checkbox">Restart automatically</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
     </form>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
@@ -637,8 +640,6 @@
     const hostAutostart = document.getElementById('host-autostart');
     const hostRebootRow = document.getElementById('host-reboot-row');
     const hostRebootNow = document.getElementById('host-reboot-now');
-    const hostResetRow = document.getElementById('host-reset-row');
-    const hostResetDisk = document.getElementById('host-reset-disk');
     const hostPendingStatus = document.getElementById('host-pending-status');
     const confirmHostCreate = document.getElementById('confirm-host-create');
     const cancelHostCreate = document.getElementById('cancel-host-create');
@@ -667,6 +668,7 @@
     const settingsFixed = document.getElementById('settings-fixed');
     const settingsHardware = document.getElementById('settings-hardware');
     const settingsStorage = document.getElementById('settings-storage');
+    const settingsStartupIso = document.getElementById('settings-startup-iso');
     const settingsNetworkProfile = document.getElementById('settings-network-profile');
     const settingsConsole = document.getElementById('settings-console');
     const optionsCommands = document.getElementById('options-commands');
@@ -678,9 +680,16 @@
     let activeId = null;
     let exitAllBusy = false;
     let activePaneIndex = 0;
-    let layoutSize = 1;
+    const viewSettingsKey = 'qemuweb.view-settings';
+    const graphicLayoutKey = 'qemuweb.graphic-layout';
+    let savedViewSettings = {};
+    try {
+      const saved = JSON.parse(localStorage.getItem(viewSettingsKey) || '{}');
+      if (saved && typeof saved === 'object' && !Array.isArray(saved)) savedViewSettings = saved;
+    } catch (_) {}
+    let layoutSize = [1, 2, 4].includes(savedViewSettings.layoutSize) ? savedViewSettings.layoutSize : 1;
     let expandedPaneIndex = null;
-    let showSwitchConsoles = true;
+    let showSwitchConsoles = typeof savedViewSettings.showSwitchConsoles === 'boolean' ? savedViewSettings.showSwitchConsoles : true;
     let pageIndex = 0;
     let selectionToken = 0;
     let workspaceError = null;
@@ -688,16 +697,11 @@
     let createDraft = null;
     let cloneSourceId = null;
     let hostSettingsDraft = null;
-    function updateHostSaveLabel() {
-      confirmHostCreate.textContent = !hostResetRow.hidden && hostResetDisk.checked ? 'OK · Save & Reset disk'
-        : !hostRebootRow.hidden && hostRebootNow.checked ? 'OK · Save & Reboot' : 'OK · Save';
+    function saveViewSettings() {
+      try {
+        localStorage.setItem(viewSettingsKey, JSON.stringify({view: graphicVisible ? 'graphic' : 'terminals', layoutSize, showSwitchConsoles, graphicZoom}));
+      } catch (_) {}
     }
-    hostRebootNow.addEventListener('change', updateHostSaveLabel);
-    hostResetDisk.addEventListener('change', () => {
-      if (hostResetDisk.checked) hostRebootNow.checked = false;
-      hostRebootNow.disabled = hostResetDisk.checked;
-      updateHostSaveLabel();
-    });
     function renderGuestMedia() {
       const machine = settingsMachine();
       if (!machine) return;
@@ -787,11 +791,29 @@
     const graphicZoomIn = document.getElementById('graphic-zoom-in');
     const graphicZoomLevel = document.getElementById('graphic-zoom-level');
     let graphicVisible = false;
-    let graphicZoom = 1;
+    let graphicZoom = [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].includes(savedViewSettings.graphicZoom) ? savedViewSettings.graphicZoom : 1;
     let graphicGraph = null;
     let graphicDrag = null;
     let suppressGraphicClick = false;
     const graphicPositions = new Map();
+    let graphicSessionId = null;
+    function loadGraphicPositions(sessionId) {
+      graphicSessionId = sessionId;
+      graphicPositions.clear();
+      try {
+        const saved = JSON.parse(localStorage.getItem(graphicLayoutKey) || '{}');
+        if (saved.sessionId !== sessionId || !saved.positions || typeof saved.positions !== 'object') return;
+        for (const [id, position] of Object.entries(saved.positions)) {
+          if (Number.isFinite(position?.x) && Number.isFinite(position?.y)) graphicPositions.set(id, position);
+        }
+      } catch (_) {}
+    }
+    function saveGraphicPositions() {
+      if (!graphicSessionId) return;
+      try {
+        localStorage.setItem(graphicLayoutKey, JSON.stringify({sessionId: graphicSessionId, positions: Object.fromEntries(graphicPositions)}));
+      } catch (_) {}
+    }
     function applyGraphicZoom() {
       const svg = graphicCanvas.querySelector('.topology-svg');
       if (svg) {
@@ -853,6 +875,7 @@
       if (graphicDrag.moved) {
         suppressGraphicClick = true;
         setTimeout(() => { suppressGraphicClick = false; }, 0);
+        saveGraphicPositions();
       }
       graphicDrag = null;
       delete graphicCanvas.dataset.dragging;
@@ -863,7 +886,7 @@
     graphicCanvas.addEventListener('click', event => {
       if (suppressGraphicClick) { event.preventDefault(); event.stopPropagation(); }
     }, true);
-    function setGraphicView(visible) {
+    function setGraphicView(visible, persist = true) {
       graphicVisible = visible;
       document.body.dataset.view = visible ? 'graphic' : 'terminals';
       workspace.hidden = visible;
@@ -872,11 +895,13 @@
       graphicToggle.setAttribute('aria-label', visible ? 'Show Terminals view' : 'Show Graphic view');
       if (visible) renderGraphic();
       else requestAnimationFrame(fitTerminals);
+      if (persist) saveViewSettings();
     }
     graphicToggle.addEventListener('click', () => setGraphicView(!graphicVisible));
-    graphicZoomOut.addEventListener('click', () => { graphicZoom = Math.max(0.5, graphicZoom - 0.25); applyGraphicZoom(); });
-    graphicZoomIn.addEventListener('click', () => { graphicZoom = Math.min(2, graphicZoom + 0.25); applyGraphicZoom(); });
+    graphicZoomOut.addEventListener('click', () => { graphicZoom = Math.max(0.5, graphicZoom - 0.25); applyGraphicZoom(); saveViewSettings(); });
+    graphicZoomIn.addEventListener('click', () => { graphicZoom = Math.min(2, graphicZoom + 0.25); applyGraphicZoom(); saveViewSettings(); });
     applyGraphicZoom();
+    setGraphicView(savedViewSettings.view === 'graphic', false);
 
     function finishReplay(pane, generation, id) {
       if (generation !== pane.replayGeneration || id !== pane.machineId || pane.view !== 'console') return;
@@ -1105,6 +1130,7 @@
         ? '<path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/>'
         : '<path d="m3 3 18 18"/><path d="M10.6 5.1A11.8 11.8 0 0 1 12 5c6.5 0 10 7 10 7a16.7 16.7 0 0 1-3.1 3.8M6.2 6.2C3.5 8 2 12 2 12s3.5 7 10 7c1.4 0 2.7-.3 3.8-.8"/><path d="M9.9 9.9a3 3 0 0 0 4.2 4.2"/>';
     }
+    updateSwitchConsoleToggle();
     function updateWorkspaceLayout() {
       workspace.dataset.columns = String(expandedPaneIndex === null ? layoutSize : 1);
       const nextSize = layoutSize === 1 ? 2 : layoutSize === 2 ? 4 : 1;
@@ -1135,6 +1161,7 @@
       fitTerminals();
       requestAnimationFrame(fitTerminals);
     }
+    updateWorkspaceLayout();
     function togglePaneExpansion(pane) {
       if (!pane.machineId || (layoutSize === 1 && expandedPaneIndex === null)) return;
       expandedPaneIndex = expandedPaneIndex === pane.index ? null : pane.index;
@@ -1293,8 +1320,38 @@
     }
     function renderStorageSettings(storage, diskBus) {
       settingsStorage.replaceChildren();
+      settingsStartupIso.replaceChildren();
       if (diskBus) addSettingRow(settingsStorage, 'Disk bus', diskBus);
-      for (const disk of storage || []) addSettingRow(settingsStorage, disk.label, disk.path);
+      for (const disk of storage || []) {
+        const input = addSettingRow(disk.label === 'Guest CD-ROM ISO' ? settingsStartupIso : settingsStorage, disk.label, disk.path);
+        const machine = settingsMachine();
+        if (disk.label !== 'Working disk (QCOW2 overlay)' || !machine || machine.isNew || !machine.hasLaunched || !machine.engine.startsWith('qemu')) continue;
+        const value = document.createElement('div');
+        value.className = 'setting-with-action';
+        input.replaceWith(value);
+        const reset = document.createElement('button');
+        reset.type = 'button';
+        reset.title = 'Reset working disk at restart';
+        reset.setAttribute('aria-label', reset.title);
+        reset.setAttribute('aria-pressed', String(!!machine.resetWorkingDiskAtRestart));
+        reset.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
+        reset.addEventListener('click', () => {
+          if (!machine.resetWorkingDiskAtRestart) machine.restartBeforeReset = hostRebootNow.checked;
+          machine.resetWorkingDiskAtRestart = !machine.resetWorkingDiskAtRestart;
+          reset.setAttribute('aria-pressed', String(machine.resetWorkingDiskAtRestart));
+          hostRebootNow.disabled = machine.resetWorkingDiskAtRestart;
+          hostRebootRow.hidden = !machine.resetWorkingDiskAtRestart && !machine.running;
+          hostRebootNow.checked = machine.resetWorkingDiskAtRestart || (machine.running && !!machine.restartBeforeReset);
+          updateHostPendingStatus(machine);
+        });
+        value.append(input, reset);
+      }
+    }
+    function updateHostPendingStatus(machine) {
+      hostPendingStatus.textContent = machine.resetWorkingDiskAtRestart
+        ? 'The working disk will be reset after OK. Guest changes will be lost.'
+        : 'Pending restart: saved settings will apply at the next Play, Reboot or Reset.';
+      hostPendingStatus.hidden = !machine.resetWorkingDiskAtRestart && !(machine.pendingRestart && machine.running);
     }
     function showIsoPreviewStatus(machine) {
       const needsRestart = machine.autoBuildGuestCdrom && autoCdromSupported && !isoPreviewSupported;
@@ -1308,13 +1365,14 @@
       const request = ++optionsRequest;
       optionsStatus.hidden = true;
       optionsStatus.textContent = '';
-      hostPendingStatus.hidden = !(machine.pendingRestart && machine.running);
+      updateHostPendingStatus(machine);
       const image = images.find(item => item.id === machine.imageId);
       settingsTitle.textContent = creating ? 'Add a new host' : `Host Settings · ${machineDialogName(machine)}`;
       settingsEditable.replaceChildren();
       settingsFixed.replaceChildren();
       settingsHardware.replaceChildren();
       settingsStorage.replaceChildren();
+      settingsStartupIso.replaceChildren();
       settingsNetworkProfile.replaceChildren();
       settingsConsole.replaceChildren();
       optionsCommands.textContent = '';
@@ -1546,7 +1604,8 @@
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
-        guestMedia: {script: '#!/bin/sh\n', resources: []}, autoBuildGuestCdrom: false
+        guestMedia: {script: '#!/bin/sh\n', resources: []}, autoBuildGuestCdrom: false,
+        resetWorkingDiskAtRestart: false
       };
       hostAutostart.checked = true;
       hostCreateActions.hidden = false;
@@ -1554,9 +1613,6 @@
       hostRebootRow.hidden = true;
       hostRebootNow.checked = false;
       hostRebootNow.disabled = false;
-      hostResetRow.hidden = true;
-      hostResetDisk.checked = false;
-      updateHostSaveLabel();
       hostPendingStatus.hidden = true;
       settingsTitle.textContent = 'Add a new host';
       qemuOptionsPanel.showModal();
@@ -1632,6 +1688,7 @@
       if (machine?.kind === 'switch' && !showSwitchConsoles) {
         showSwitchConsoles = true;
         updateSwitchConsoleToggle();
+        saveViewSettings();
       }
       const index = consoleSessions().findIndex(item => item.id === id);
       if (index < 0) return;
@@ -1753,6 +1810,7 @@
       }).catch(error => ({error: error.message}))
     ]).then(([items, config, sessionSettings, existing, schemes]) => {
       generalSettings.engine = sessionSettings.engine;
+      loadGraphicPositions(sessionSettings.sessionId);
       images = items;
       qemuConfig = config;
       namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};
@@ -1939,6 +1997,7 @@
     toggleConsoleColumns.addEventListener('click', () => {
       const selected = activeId;
       layoutSize = layoutSize === 1 ? 2 : layoutSize === 2 ? 4 : 1;
+      saveViewSettings();
       const index = consoleSessions().findIndex(machine => machine.id === selected);
       pageIndex = index >= 0 ? Math.floor(index / layoutSize) : 0;
       showPage(selected);
@@ -1949,6 +2008,7 @@
       const selected = activeId;
       showSwitchConsoles = !showSwitchConsoles;
       updateSwitchConsoleToggle();
+      saveViewSettings();
       const index = consoleSessions().findIndex(machine => machine.id === selected);
       pageIndex = index >= 0 ? Math.floor(index / layoutSize) : Math.min(pageIndex, Math.max(0, Math.ceil(consoleSessions().length / layoutSize) - 1));
       showPage(index >= 0 ? selected : null);
@@ -1985,16 +2045,15 @@
           engine: data.engine, interfaces: [...data.interfaces], networkInterfaces: data.networkInterfaces,
           settings: {...data.settings}, settingsLoaded: true,
           guestMedia: structuredClone(data.guestMedia), autoBuildGuestCdrom: data.autoBuildGuestCdrom,
-          running: data.running, hasLaunched: data.hasLaunched, pendingRestart: data.pendingRestart, busy: source.busy
+          running: data.running, hasLaunched: data.hasLaunched, pendingRestart: data.pendingRestart, busy: source.busy,
+          resetWorkingDiskAtRestart: false,
+          restartBeforeReset: false
         };
         hostCreateActions.hidden = false;
         hostAutostart.closest('label').hidden = true;
         hostRebootRow.hidden = !data.running;
         hostRebootNow.checked = false;
         hostRebootNow.disabled = false;
-        hostResetRow.hidden = !data.engine.startsWith('qemu') || !data.hasLaunched;
-        hostResetDisk.checked = false;
-        updateHostSaveLabel();
         qemuOptionsPanel.showModal();
         selectSettingsTab('general');
         renderGuestMedia();
@@ -2048,10 +2107,10 @@
       const name = settingsFixed.querySelector('input')?.value.trim();
       if (!name) return;
       const autostart = draft.isNew && hostAutostart.checked;
-      const resetDisk = !draft.isNew && draft.engine.startsWith('qemu') && draft.hasLaunched && hostResetDisk.checked;
-      const rebootNow = !resetDisk && !draft.isNew && hostRebootNow.checked;
+      const resetDisk = !draft.isNew && draft.resetWorkingDiskAtRestart;
+      const rebootNow = !draft.isNew && hostRebootNow.checked;
       if (resetDisk) {
-        const confirmed = await confirmAction('Reset working disk', `Save settings and reset ${name} from its base image?\n\nThe current working disk will be deleted. All files and changes made inside this guest will be lost. This cannot be undone.`, 'Save & Reset disk');
+        const confirmed = await confirmAction('Reset working disk', `Save settings and restart ${name} from its base image?\n\nThe current working disk will be deleted. All files and changes made inside this guest will be lost. This cannot be undone.`, 'Reset working disk');
         if (!confirmed || hostSettingsDraft !== draft || !qemuOptionsPanel.open) return;
       }
       confirmHostCreate.disabled = true;
@@ -2087,7 +2146,6 @@
             machine.pendingRestart = data.pendingRestart;
           }
           draft.pendingRestart = data.pendingRestart;
-          hostPendingStatus.hidden = !(data.pendingRestart && data.running);
           if (resetDisk) {
             const resetResponse = await fetch(`/api/reset/${encodeURIComponent(draft.id)}`, {method: 'POST'});
             const resetResult = await resetResponse.json();
