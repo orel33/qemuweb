@@ -2,6 +2,8 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
+const {TextDecoder} = require('util');
 const {execFileSync} = require('child_process');
 
 const LABEL = 'QWEBSTART';
@@ -16,18 +18,24 @@ function validateResourcePath(value) {
       value.endsWith('/') || value.split('/').some(part => !part || part === '.' || part === '..')) {
     throw new Error('Resource paths must be relative ASCII paths without empty, dot or parent segments.');
   }
-  if (['start.sh', '.qemuweb-media'].some(reserved => value === reserved || value.startsWith(`${reserved}/`))) {
+  if (value === 'start.sh' || value.startsWith('start.sh/')) {
     throw new Error(`${value} uses a reserved path.`);
   }
   return value;
 }
 
-function validateBootFiles(value) {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid startup files.');
-  if (typeof value.script !== 'string' || Buffer.byteLength(value.script, 'utf8') > MAX_SCRIPT_BYTES) {
+function validateScript(script) {
+  if (typeof script !== 'string' || Buffer.byteLength(script, 'utf8') > MAX_SCRIPT_BYTES ||
+      Buffer.from(script, 'utf8').toString('utf8') !== script) {
     throw new Error('start.sh must be UTF-8 text of at most 64 KiB.');
   }
-  if (value.script.includes('\0')) throw new Error('start.sh cannot contain NUL bytes.');
+  if (script.includes('\0')) throw new Error('start.sh cannot contain NUL bytes.');
+  return script;
+}
+
+function validateBootFiles(value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid startup files.');
+  validateScript(value.script);
   if (!Array.isArray(value.resources) || value.resources.length > MAX_FILES) {
     throw new Error(`At most ${MAX_FILES} companion files are allowed.`);
   }
@@ -53,33 +61,118 @@ function validateBootFiles(value) {
   return {script: value.script, resources};
 }
 
-function createGuestIso({files, destination, genisoimage, onCommand, stagingDirectory}) {
-  const source = validateBootFiles(files);
-  const stage = stagingDirectory || fs.mkdtempSync(path.join(path.dirname(destination), '.qemuweb-iso-'));
-  try {
-    if (stagingDirectory) {
-      fs.rmSync(stage, {recursive: true, force: true});
-      fs.mkdirSync(stage, {recursive: true, mode: 0o700});
+function checkStartupDirectory(directory) {
+  const stat = fs.lstatSync(directory);
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new Error('Startup source must be a directory, not a symlink.');
+}
+
+function readStartupFiles(directory) {
+  checkStartupDirectory(directory);
+  const resources = [];
+  let script = '';
+  let total = 0;
+  let files = 0;
+  function walk(folder, prefix = '') {
+    for (const name of fs.readdirSync(folder).sort()) {
+      const relative = prefix ? `${prefix}/${name}` : name;
+      if (relative !== 'start.sh') validateResourcePath(relative);
+      const absolute = path.join(folder, name);
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink()) throw new Error(`Symlinks are not allowed in startup/: ${relative}.`);
+      if (stat.isDirectory()) {
+        if (relative === 'start.sh') throw new Error('start.sh must be a regular file.');
+        walk(absolute, relative);
+        continue;
+      }
+      if (!stat.isFile()) throw new Error(`Only regular files are allowed in startup/: ${relative}.`);
+      files += 1;
+      if (files > MAX_FILES + 1) throw new Error(`At most ${MAX_FILES} companion files are allowed.`);
+      if (relative === 'start.sh' && stat.size > MAX_SCRIPT_BYTES) throw new Error('start.sh must be UTF-8 text of at most 64 KiB.');
+      if (relative !== 'start.sh' && stat.size > MAX_FILE_BYTES) throw new Error(`${relative} exceeds 1 MiB.`);
+      total += stat.size;
+      if (total > MAX_TOTAL_BYTES) throw new Error('Startup files exceed 4 MiB in total.');
+      const content = fs.readFileSync(absolute);
+      if (relative === 'start.sh') {
+        try { script = new TextDecoder('utf-8', {fatal: true}).decode(content); }
+        catch (_) { throw new Error('start.sh must be UTF-8 text of at most 64 KiB.'); }
+        validateScript(script);
+      } else resources.push({path: relative, contentBase64: content.toString('base64')});
     }
-    fs.rmSync(destination, {force: true});
-    fs.writeFileSync(path.join(stage, '.qemuweb-media'), 'QemuWeb guest startup media\n');
+  }
+  walk(directory);
+  return validateBootFiles({script, resources});
+}
+
+function writeStartupScript(directory, script, {keepEmpty = false} = {}) {
+  validateScript(script);
+  checkStartupDirectory(directory);
+  // Inspect the existing tree before changing the one file the Web editor owns.
+  readStartupFiles(directory);
+  const target = path.join(directory, 'start.sh');
+  if (!script && !keepEmpty) {
+    fs.rmSync(target, {force: true});
+    return;
+  }
+  const temporary = path.join(directory, `.start-${crypto.randomBytes(8).toString('hex')}.tmp`);
+  try {
+    fs.writeFileSync(temporary, script, {encoding: 'utf8', mode: 0o755, flag: 'wx'});
+    fs.renameSync(temporary, target);
+  } catch (error) {
+    fs.rmSync(temporary, {force: true});
+    throw error;
+  }
+}
+
+function writeStartupFiles(directory, files) {
+  const source = validateBootFiles(files);
+  const parent = path.dirname(directory);
+  const stage = fs.mkdtempSync(path.join(parent, '.startup-stage-'));
+  const backup = path.join(parent, `.startup-backup-${crypto.randomBytes(8).toString('hex')}`);
+  let moved = false;
+  try {
     if (source.script) fs.writeFileSync(path.join(stage, 'start.sh'), source.script, {mode: 0o755});
     for (const entry of source.resources) {
       const target = path.join(stage, entry.path);
       fs.mkdirSync(path.dirname(target), {recursive: true});
       fs.writeFileSync(target, Buffer.from(entry.contentBase64, 'base64'));
     }
-    const args = ['-quiet', '-R', '-J', '-V', LABEL, '-o', destination, stage];
+    readStartupFiles(stage);
+    let existing = false;
+    try { fs.lstatSync(directory); existing = true; }
+    catch (error) { if (error.code !== 'ENOENT') throw error; }
+    if (existing) {
+      readStartupFiles(directory);
+      fs.renameSync(directory, backup);
+      moved = true;
+    }
+    try { fs.renameSync(stage, directory); }
+    catch (error) {
+      if (moved) fs.renameSync(backup, directory);
+      throw error;
+    }
+    if (moved) fs.rmSync(backup, {recursive: true, force: true});
+  } finally {
+    fs.rmSync(stage, {recursive: true, force: true});
+  }
+}
+
+function createGuestIso({directory, destination, genisoimage, onCommand}) {
+  readStartupFiles(directory);
+  const relative = path.relative(directory, destination);
+  if (!relative || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))) {
+    throw new Error('Generated ISO must be outside startup/.');
+  }
+  fs.rmSync(destination, {force: true});
+  try {
+    const args = ['-quiet', '-R', '-J', '-V', LABEL, '-o', destination, directory];
     if (onCommand) onCommand(genisoimage, args);
     execFileSync(genisoimage, args, {stdio: 'pipe'});
     fs.chmodSync(destination, 0o444);
   } catch (error) {
     fs.rmSync(destination, {force: true});
     throw error;
-  } finally {
-    fs.rmSync(stage, {recursive: true, force: true});
   }
   return destination;
 }
 
-module.exports = {LABEL, validateBootFiles, createGuestIso};
+module.exports = {LABEL, validateBootFiles, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso};
