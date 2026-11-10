@@ -33,6 +33,11 @@ function validateScript(script) {
   return script;
 }
 
+function normalizeScript(script) {
+  validateScript(script);
+  return validateScript(script && !script.endsWith('\n') ? `${script}\n` : script);
+}
+
 function validateBootFiles(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid startup files.');
   validateScript(value.script);
@@ -103,19 +108,19 @@ function readStartupFiles(directory) {
   return validateBootFiles({script, resources});
 }
 
-function writeStartupScript(directory, script, {keepEmpty = false} = {}) {
-  validateScript(script);
+function writeStartupScript(directory, script, {keepEmpty = false, preserveExact = false} = {}) {
+  const savedScript = preserveExact ? validateScript(script) : normalizeScript(script);
   checkStartupDirectory(directory);
   // Inspect the existing tree before changing the one file the Web editor owns.
   readStartupFiles(directory);
   const target = path.join(directory, 'start.sh');
-  if (!script && !keepEmpty) {
+  if (!savedScript && !keepEmpty) {
     fs.rmSync(target, {force: true});
     return;
   }
   const temporary = path.join(directory, `.start-${crypto.randomBytes(8).toString('hex')}.tmp`);
   try {
-    fs.writeFileSync(temporary, script, {encoding: 'utf8', mode: 0o755, flag: 'wx'});
+    fs.writeFileSync(temporary, savedScript, {encoding: 'utf8', mode: 0o755, flag: 'wx'});
     fs.renameSync(temporary, target);
   } catch (error) {
     fs.rmSync(temporary, {force: true});
@@ -124,7 +129,8 @@ function writeStartupScript(directory, script, {keepEmpty = false} = {}) {
 }
 
 function writeStartupFiles(directory, files) {
-  const source = validateBootFiles(files);
+  const validated = validateBootFiles(files);
+  const source = validateBootFiles({...validated, script: normalizeScript(validated.script)});
   const parent = path.dirname(directory);
   const stage = fs.mkdtempSync(path.join(parent, '.startup-stage-'));
   const backup = path.join(parent, `.startup-backup-${crypto.randomBytes(8).toString('hex')}`);
@@ -156,23 +162,46 @@ function writeStartupFiles(directory, files) {
   }
 }
 
-function createGuestIso({directory, destination, genisoimage, onCommand}) {
-  readStartupFiles(directory);
+function shellQuote(value) {
+  const text = String(value);
+  return /^[a-zA-Z0-9_./:=,+-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+function createGuestIso({directory, destination, genisoimage, hostname, onCommand}) {
+  const source = readStartupFiles(directory);
   const relative = path.relative(directory, destination);
   if (!relative || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))) {
     throw new Error('Generated ISO must be outside startup/.');
   }
-  fs.rmSync(destination, {force: true});
+  const stage = path.join(path.dirname(directory), '.iso-stage');
+  if (source.script.includes('@HOSTNAME@') && typeof hostname !== 'string') {
+    throw new Error('A host name is required to build an ISO with @HOSTNAME@.');
+  }
   try {
-    const args = ['-quiet', '-R', '-J', '-V', LABEL, '-o', destination, directory];
+    fs.rmSync(stage, {recursive: true, force: true});
+    fs.mkdirSync(stage);
+    if (source.script) {
+      const script = source.script.includes('@HOSTNAME@')
+        ? source.script.replaceAll('@HOSTNAME@', shellQuote(hostname)) : source.script;
+      fs.writeFileSync(path.join(stage, 'start.sh'), script, {mode: 0o755});
+    }
+    for (const entry of source.resources) {
+      const target = path.join(stage, entry.path);
+      fs.mkdirSync(path.dirname(target), {recursive: true});
+      fs.writeFileSync(target, Buffer.from(entry.contentBase64, 'base64'));
+    }
+    fs.rmSync(destination, {force: true});
+    const args = ['-quiet', '-R', '-J', '-V', LABEL, '-o', destination, stage];
     if (onCommand) onCommand(genisoimage, args);
     execFileSync(genisoimage, args, {stdio: 'pipe'});
     fs.chmodSync(destination, 0o444);
   } catch (error) {
     fs.rmSync(destination, {force: true});
     throw error;
+  } finally {
+    fs.rmSync(stage, {recursive: true, force: true});
   }
   return destination;
 }
 
-module.exports = {LABEL, validateBootFiles, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso};
+module.exports = {LABEL, validateBootFiles, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso};

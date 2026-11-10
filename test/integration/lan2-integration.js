@@ -308,7 +308,7 @@ async function run() {
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
     cwd: root,
-    env: {...process.env, PORT: String(port)},
+    env: {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1'},
     stdio: ['ignore', 'pipe', 'pipe']
   });
   child.stdout.on('data', rememberServerOutput);

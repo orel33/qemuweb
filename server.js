@@ -14,7 +14,7 @@ const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
-const {LABEL: GUEST_ISO_LABEL, validateBootFiles, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./guest-media');
+const {LABEL: GUEST_ISO_LABEL, validateBootFiles, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./guest-media');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -26,6 +26,8 @@ const runtime = path.join(root, 'runtime');
 const sessionId = crypto.randomBytes(8).toString('hex');
 const runtimeInstance = path.join(runtime, sessionId);
 const sessionFile = path.join(runtimeInstance, 'session.json');
+const currentSessionLink = path.join(runtime, 'current');
+const ephemeralServer = process.env.QEMUWEB_TEST_SERVER === '1';
 const configPath = path.join(root, 'config.json');
 const qemuProfileFields = ['machine', 'cpuKvm', 'cpuTcg', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
 const qemuFields = [...qemuProfileFields, 'memory', 'smp', 'rtcBase'];
@@ -43,6 +45,88 @@ let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
 let sessionEngine = readConfig().session.defaults.engine;
 
+function pointCurrentSession(id) {
+  const temporary = path.join(runtime, `.current-${sessionId}`);
+  try {
+    fs.symlinkSync(id, temporary, 'dir');
+    fs.renameSync(temporary, currentSessionLink);
+  } catch (error) {
+    try { fs.unlinkSync(temporary); } catch (_) {}
+    console.warn(`Cannot update runtime/current: ${error.message}`);
+  }
+}
+
+function linkCurrentSession() {
+  if (!ephemeralServer) pointCurrentSession(sessionId);
+}
+
+function removeCurrentSessionLink() {
+  if (ephemeralServer) return;
+  try {
+    if (fs.readlinkSync(currentSessionLink) !== sessionId) return;
+    const fallback = fs.readdirSync(runtime).filter(name => /^[0-9a-f]{16}$/.test(name) && name !== sessionId)
+      .map(name => {
+        try {
+          const directory = path.join(runtime, name);
+          const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'session.json'), 'utf8'));
+          if (metadata.ephemeral || !Number.isSafeInteger(metadata.pid) || !Number.isSafeInteger(metadata.port)) return null;
+          if (fs.readFileSync(path.join(runtime, `server-${metadata.port}.pid`), 'utf8').trim() !== String(metadata.pid)) return null;
+          process.kill(metadata.pid, 0);
+          return {name, started: fs.statSync(directory).birthtimeMs};
+        } catch (_) { return null; }
+      }).filter(Boolean).sort((a, b) => b.started - a.started)[0];
+    if (fallback) pointCurrentSession(fallback.name);
+    else fs.unlinkSync(currentSessionLink);
+  } catch (error) { if (error.code !== 'ENOENT') console.warn(`Cannot remove runtime/current: ${error.message}`); }
+}
+
+function removeEmptyRuntimeSession() {
+  if (sessions.size) return;
+  try {
+    for (const name of ['hosts', 'switches']) {
+      try { fs.rmdirSync(path.join(runtimeInstance, name)); }
+      catch (error) { if (error.code !== 'ENOENT' && error.code !== 'ENOTEMPTY') throw error; }
+    }
+    if (fs.readdirSync(runtimeInstance).some(name => name !== 'session.json')) return;
+    const saved = JSON.parse(fs.readFileSync(sessionFile, 'utf8'));
+    if (!Array.isArray(saved.hosts) || saved.hosts.length || !Array.isArray(saved.switches) || saved.switches.length) return;
+    fs.unlinkSync(sessionFile);
+    fs.rmdirSync(runtimeInstance);
+  } catch (_) { /* Keep incomplete sessions for inspection or later recovery. */ }
+}
+
+function pruneEmptyRuntimeSessions() {
+  const livePids = new Set();
+  for (const name of fs.readdirSync(runtime)) {
+    if (!/^server-\d+\.pid$/.test(name)) continue;
+    let pid;
+    try { pid = Number(fs.readFileSync(path.join(runtime, name), 'utf8').trim()); }
+    catch (_) { continue; }
+    if (!Number.isSafeInteger(pid) || pid <= 0) continue;
+    try {
+      process.kill(pid, 0);
+      livePids.add(pid);
+    } catch (error) { if (error.code === 'EPERM') livePids.add(pid); }
+  }
+  let removed = 0;
+  for (const name of fs.readdirSync(runtime)) {
+    if (!/^[0-9a-f]{16}$/.test(name)) continue;
+    const directory = path.join(runtime, name);
+    try {
+      const stat = fs.lstatSync(directory);
+      if (!stat.isDirectory() || stat.isSymbolicLink() || Date.now() - stat.mtimeMs < 30000) continue;
+      if (fs.readdirSync(directory).join() !== 'session.json') continue;
+      const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'session.json'), 'utf8'));
+      if (!Array.isArray(metadata.hosts) || metadata.hosts.length || !Array.isArray(metadata.switches) || metadata.switches.length) continue;
+      if (metadata.pid ? livePids.has(metadata.pid) : livePids.size) continue;
+      fs.unlinkSync(path.join(directory, 'session.json'));
+      fs.rmdirSync(directory);
+      removed++;
+    } catch (_) { /* Preserve unexpected runtime contents. */ }
+  }
+  if (removed) console.log(`Removed ${removed} empty runtime session${removed === 1 ? '' : 's'}.`);
+}
+
 function writeJsonAtomic(file, value) {
   const temporary = `${file}.${crypto.randomBytes(8).toString('hex')}.tmp`;
   try {
@@ -58,7 +142,7 @@ function saveSessionMetadata(engine = sessionEngine) {
   const ids = kind => [...sessions.values()]
     .filter(session => session.kind === kind && session.hostname && (kind === 'switch' || session.selectedImage))
     .map(session => session.id).sort();
-  writeJsonAtomic(sessionFile, {schemaVersion: 1, id: sessionId, engine,
+  writeJsonAtomic(sessionFile, {schemaVersion: 1, id: sessionId, pid: process.pid, port, ephemeral: ephemeralServer, engine,
     hosts: ids('vm'), switches: ids('switch')});
 }
 
@@ -137,6 +221,10 @@ resourceTimer.unref();
 function shellQuote(value) {
   const text = String(value);
   return /^[a-zA-Z0-9_./:=,+-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`;
+}
+
+function defaultStartupScript() {
+  return '#!/bin/sh\nhostname @HOSTNAME@\n\n';
 }
 
 function sessionPaths(id, kind = 'vm') {
@@ -551,6 +639,7 @@ function startupDirectory(session) {
 function buildGuestIso(session, destination = tempFile(session, `startup-${crypto.randomUUID()}.iso`)) {
   const next = destination;
   createGuestIso({directory: startupDirectory(session), destination: next, genisoimage: commands.GENISOIMAGE,
+    hostname: session.hostname,
     onCommand: (command, args) => appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`)});
   const previous = session.guestIso;
   session.guestMedia = readStartupFiles(startupDirectory(session));
@@ -662,7 +751,7 @@ function validateNetworkInterfaces(value, engine, requireRunning = true) {
   return value.map((switchId, index) => {
     if (switchId === null) return null;
     const sw = getSession(switchId);
-    if (!sw || sw.kind !== 'switch' || (requireRunning && !sw.machine)) throw new Error(`Interface ${index + 1}: start its VDE switch first.`);
+    if (!sw || sw.kind !== 'switch' || (requireRunning && !sw.machine)) throw new Error(`Ethernet ${index}: start its VDE switch first.`);
     return sw;
   });
 }
@@ -943,7 +1032,7 @@ app.get('/api/options/:sessionId', (req, res) => {
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
       : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.nic};
     const isoCommands = attachGuestCdrom
-      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, 'startup')]]
+      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, '.iso-stage')]]
       : [];
     const vboxDetachCommand = launched && !isQemu && session.activeGuestIso
       ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']]
@@ -966,7 +1055,7 @@ app.get('/api/options/:sessionId', (req, res) => {
           {label: 'Base image (VDI)', path: path.relative(root, imagePath(image.images.vdi))},
           {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, 'disk.vdi'))}
         ];
-    storage.push({label: 'Guest CD-ROM ISO', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
+    storage.push({label: 'Startup disk (cd-rom)', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
     res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: previewInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
@@ -1384,6 +1473,8 @@ app.post('/api/topology', async (req, res) => {
       const session = getSession(id, true, 'vm'); created.push(id);
       setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
       session.networkInterfaces = interfaces; session.launchSettings = launchSettingsFor(host.system);
+      writeStartupScript(startupDirectory(session), defaultStartupScript());
+      session.guestMedia = readStartupFiles(startupDirectory(session));
       session.lastMessage = 'Host ready to start';
       persistHostConfiguration(session);
     }
@@ -1448,7 +1539,7 @@ app.post('/api/hosts', (req, res) => {
     if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
     const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
     const launchSettings = launchSettingsFor(image.id, settings || {});
-    const validatedMedia = guestMedia === undefined ? {script: '#!/bin/sh\n', resources: []} : validateBootFiles(guestMedia);
+    const validatedMedia = guestMedia === undefined ? {script: defaultStartupScript(), resources: []} : validateBootFiles(guestMedia);
     if (typeof createGuestCdrom !== 'boolean' || typeof attachGuestCdrom !== 'boolean' || (attachGuestCdrom && !createGuestCdrom) ||
       (autoBuildGuestCdrom !== undefined && typeof autoBuildGuestCdrom !== 'boolean')) throw new Error('Invalid guest CD-ROM options.');
     const session = getSession(id, true, 'vm');
@@ -1458,7 +1549,7 @@ app.post('/api/hosts', (req, res) => {
     session.launchSettings = launchSettings;
     try {
       writeStartupFiles(startupDirectory(session), validatedMedia);
-      session.guestMedia = validatedMedia;
+      session.guestMedia = readStartupFiles(startupDirectory(session));
       setSessionHostname(session, hostname);
       if (createGuestCdrom) buildGuestIso(session);
       session.guestIsoAttached = autoBuildGuestCdrom === undefined ? attachGuestCdrom : autoBuildGuestCdrom;
@@ -1502,6 +1593,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name)) throw new Error('Host name already exists.');
     const settings = validateLaunchSettings(body.settings);
     const media = validateBootFiles(body.guestMedia);
+    const script = normalizeScript(media.script);
     if (typeof body.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
     const resetWorkingDiskAtRestart = body.resetWorkingDiskAtRestart === undefined
       ? session.resetWorkingDiskAtRestart : body.resetWorkingDiskAtRestart;
@@ -1515,13 +1607,13 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
       ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
     const previousName = session.hostname;
     const previousMedia = readStartupFiles(startupDirectory(session));
-    validateBootFiles({script: media.script, resources: previousMedia.resources});
-    const scriptChanged = media.script !== previousMedia.script;
+    validateBootFiles({script, resources: previousMedia.resources});
+    const scriptChanged = script !== previousMedia.script;
     const scriptPath = path.join(startupDirectory(session), 'start.sh');
     const hadScript = fs.existsSync(scriptPath);
     if (name !== previousName) setSessionHostname(session, name);
     try {
-      if (scriptChanged) writeStartupScript(startupDirectory(session), media.script);
+      if (scriptChanged) writeStartupScript(startupDirectory(session), script);
       writeJsonAtomic(tempFile(session, 'host.json'), {
         schemaVersion: 1, id: session.id, name, systemId: body.systemId, engine: body.engine,
         settings, networkInterfaces: interfaces, autoBuildGuestCdrom: body.autoBuildGuestCdrom,
@@ -1529,7 +1621,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
       });
     } catch (error) {
       if (scriptChanged) {
-        if (hadScript) writeStartupScript(startupDirectory(session), previousMedia.script, {keepEmpty: true});
+        if (hadScript) writeStartupScript(startupDirectory(session), previousMedia.script, {keepEmpty: true, preserveExact: true});
         else fs.rmSync(scriptPath, {force: true});
       }
       if (name !== previousName) setSessionHostname(session, previousName);
@@ -1540,7 +1632,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     session.guestMedia = readStartupFiles(startupDirectory(session));
     session.guestIsoAttached = body.autoBuildGuestCdrom;
     session.resetWorkingDiskAtRestart = resetWorkingDiskAtRestart;
-    if (scriptChanged) session.guestIsoOutdated = !!session.guestIso;
+    if (scriptChanged || name !== previousName) session.guestIsoOutdated = !!session.guestIso;
     if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});
     io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message: stateMessage(session)});
     res.json(hostConfigurationResponse(session));
@@ -1561,7 +1653,7 @@ app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
     writeStartupFiles(startupDirectory(session), media);
-    session.guestMedia = media;
+    session.guestMedia = readStartupFiles(startupDirectory(session));
     session.guestIsoOutdated = !!session.guestIso;
     appendLog(session, '# Guest startup files saved; create the CD-ROM to include these changes.');
     res.json({ok: true, files: session.guestMedia.resources.length, guestCdrom: guestIsoStatus(session)});
@@ -1574,7 +1666,7 @@ app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
     writeStartupFiles(startupDirectory(session), media);
-    session.guestMedia = media;
+    session.guestMedia = readStartupFiles(startupDirectory(session));
     const status = buildGuestIso(session);
     res.json({ok: true, guestCdrom: status});
   } catch (error) { res.status(400).json({error: error.message}); }
@@ -1769,9 +1861,11 @@ server.on('error', error => {
   process.exitCode = 1;
 });
 server.listen(port, '127.0.0.1', () => {
+  pruneEmptyRuntimeSessions();
   fs.mkdirSync(runtimeInstance, {recursive: true});
   saveSessionMetadata();
   fs.writeFileSync(serverPidFile, `${process.pid}\n`, {mode: 0o600});
+  linkCurrentSession();
   console.log('\nQemuWeb is ready.');
   console.log(`  Web interface      http://127.0.0.1:${port}`);
   console.log(`  Session ID         ${sessionId}`);
@@ -1780,10 +1874,11 @@ server.listen(port, '127.0.0.1', () => {
 });
 
 process.on('exit', () => {
+  removeCurrentSessionLink();
   try {
     if (fs.readFileSync(serverPidFile, 'utf8').trim() === String(process.pid)) fs.rmSync(serverPidFile, {force: true});
   } catch (_) {}
-  try { fs.rmdirSync(runtimeInstance); } catch (_) {}
+  removeEmptyRuntimeSession();
 });
 
 let shuttingDown = false;

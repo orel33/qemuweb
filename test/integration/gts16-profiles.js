@@ -163,7 +163,7 @@ async function run() {
   for (const profile of profiles) assert.ok(fs.existsSync(path.join(root, 'images', `${profile}.raw`)), `Missing prepared ${profile} RAW base`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
-  child = spawn(process.execPath, ['server.js'], {cwd: root, env: {...process.env, PORT: String(port)}, stdio: ['ignore', 'pipe', 'pipe']});
+  child = spawn(process.execPath, ['server.js'], {cwd: root, env: {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1'}, stdio: ['ignore', 'pipe', 'pipe']});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data.toString()).slice(-12000); });
   await waitFor('server startup', () => serverOutput.includes('QemuWeb is ready.'), 30000);
   await request('/api/general-settings', 'PUT', {engine});

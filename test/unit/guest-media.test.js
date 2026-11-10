@@ -23,8 +23,10 @@ test('filesystem startup source keeps companion files on script save and rejects
   const host = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-startup-test-'));
   const startup = path.join(host, 'startup');
   try {
-    writeStartupFiles(startup, {script: '#!/bin/sh\n', resources: [{path: 'config/message.txt', contentBase64: 'b2xk'}]});
-    writeStartupScript(startup, '#!/bin/sh\necho updated\n');
+    writeStartupFiles(startup, {script: '#!/bin/sh', resources: [{path: 'config/message.txt', contentBase64: 'b2xk'}]});
+    assert.equal(readStartupFiles(startup).script, '#!/bin/sh\n');
+    writeStartupScript(startup, '#!/bin/sh\necho updated');
+    assert.equal(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), '#!/bin/sh\necho updated\n');
     assert.equal(fs.readFileSync(path.join(startup, 'config/message.txt'), 'utf8'), 'old');
     fs.writeFileSync(path.join(startup, 'config', 'added.txt'), 'external');
     assert.deepEqual(readStartupFiles(startup).resources.map(entry => entry.path), ['config/added.txt', 'config/message.txt']);
@@ -45,15 +47,17 @@ test('separate read-only ISOs include external companion files under each host',
       const host = path.join(root, name);
       fs.mkdirSync(host);
       const startup = path.join(host, 'startup');
-      writeStartupFiles(startup, {script: `#!/bin/sh\necho ${name}\ncat config/message.txt\n`, resources: []});
+      writeStartupFiles(startup, {script: `#!/bin/sh\nhostname @HOSTNAME@\necho ${name}\ncat config/message.txt\n`, resources: []});
       fs.mkdirSync(path.join(startup, 'config'));
       fs.writeFileSync(path.join(startup, 'config', 'message.txt'), name);
       const iso = path.join(host, 'startup-1.iso');
-      createGuestIso({directory: startup, destination: iso, genisoimage: '/usr/bin/genisoimage'});
+      createGuestIso({directory: startup, destination: iso, genisoimage: '/usr/bin/genisoimage', hostname: name});
       assert.match(execFileSync('/usr/bin/isoinfo', ['-d', '-i', iso], {encoding: 'utf8'}), new RegExp(`Volume id: ${LABEL}`));
       assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-f', '-i', iso], {encoding: 'utf8'}), /\/config\/message\.txt/);
       assert.equal(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/config/message.txt'], {encoding: 'utf8'}), name);
       assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`echo ${name}`));
+      assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`hostname ${name}`));
+      assert.match(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), /hostname @HOSTNAME@/);
       assert.equal(fs.statSync(iso).mode & 0o222, 0);
     }
   } finally { fs.rmSync(root, {recursive: true, force: true}); }

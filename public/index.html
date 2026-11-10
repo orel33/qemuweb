@@ -326,16 +326,17 @@
     </div></section>
     <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
       <div class="startup-script-header"><label for="guest-start-script">start.sh</label><button id="load-start-script" type="button">Load file</button></div>
+      <p class="settings-description">Template value: <code>@HOSTNAME@</code> — the host name. Replaced when the startup disk is built.</p>
       <textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
       <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain" hidden>
-      <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup CD-ROM</label>
+      <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup disk</label>
       <div id="settings-startup-iso"></div>
     </section>
     <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
       <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
       <div class="settings-section settings-commands"><h3>Full launch commands</h3><pre id="options-commands"></pre></div>
     </section>
-    <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><label class="create-autostart" id="host-reboot-row" hidden><input id="host-reboot-now" type="checkbox">Restart automatically</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
+    <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
     </form>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
@@ -540,6 +541,7 @@
         button.title = change < 0 ? 'Decrease terminal font size' : 'Increase terminal font size';
         button.setAttribute('aria-label', button.title);
         button.hidden = true;
+        button.addEventListener('mousedown', event => event.preventDefault());
         button.addEventListener('click', () => changePaneFontSize(pane, change));
         return button;
       });
@@ -645,8 +647,6 @@
       .catch(() => { guestAttachCdrom.disabled = true; });
     const hostCreateActions = document.getElementById('host-create-actions');
     const hostAutostart = document.getElementById('host-autostart');
-    const hostRebootRow = document.getElementById('host-reboot-row');
-    const hostRebootNow = document.getElementById('host-reboot-now');
     const hostPendingStatus = document.getElementById('host-pending-status');
     const confirmHostCreate = document.getElementById('confirm-host-create');
     const cancelHostCreate = document.getElementById('cancel-host-create');
@@ -718,6 +718,9 @@
       guestAttachCdrom.checked = !!machine.autoBuildGuestCdrom;
       guestAttachCdrom.disabled = !autoCdromSupported;
     }
+    function defaultStartScript() {
+      return '#!/bin/sh\nhostname @HOSTNAME@\n\n';
+    }
     guestStartScript.addEventListener('input', () => {
       const machine = settingsMachine();
       if (!machine) return;
@@ -770,7 +773,7 @@
       const current = pane.fontSizeOverride ?? generalSettings.consoleFontSize;
       pane.fontSizeOverride = Math.max(11, Math.min(24, current + change));
       applyPaneFontSize(pane);
-      requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
+      requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.scrollToBottom(); pane.terminal.focus(); });
     }
     function applyConsoleAppearance(resetPaneSizes = false) {
       const root = document.documentElement;
@@ -1332,7 +1335,7 @@
       settingsStartupIso.replaceChildren();
       if (diskBus) addSettingRow(settingsStorage, 'Disk bus', diskBus);
       for (const disk of storage || []) {
-        const input = addSettingRow(disk.label === 'Guest CD-ROM ISO' ? settingsStartupIso : settingsStorage, disk.label, disk.path);
+        const input = addSettingRow(disk.label === 'Startup disk (cd-rom)' ? settingsStartupIso : settingsStorage, disk.label, disk.path);
         const machine = settingsMachine();
         if (disk.label !== 'Working disk (QCOW2 overlay)' || !machine || machine.isNew || !machine.hasLaunched || !machine.engine.startsWith('qemu')) continue;
         const value = document.createElement('div');
@@ -1393,7 +1396,10 @@
         const hostName = addSettingRow(settingsFixed, 'Host name', machine.hostname, false);
         hostName.maxLength = 64;
         hostName.required = true;
-        hostName.oninput = () => { machine.hostname = hostName.value.trim(); };
+        hostName.oninput = () => {
+          const name = hostName.value.trim();
+          machine.hostname = name;
+        };
         for (const [key, field] of Object.entries(body.fields || {})) {
           const row = document.createElement('div');
           row.className = 'setting-row';
@@ -1554,8 +1560,8 @@
       addButton.disabled = locked || (machine.interfaces || []).length >= 4;
       for (const [index, selected] of (machine.interfaces || []).entries()) {
         const row = document.createElement('div'); row.className = 'nic-row';
-        const label = document.createElement('span'); label.textContent = `Ethernet ${index + 1}`;
-        const select = document.createElement('select'); select.setAttribute('aria-label', `Ethernet interface ${index + 1} switch`); select.disabled = locked;
+        const label = document.createElement('span'); label.textContent = `Ethernet ${index}`;
+        const select = document.createElement('select'); select.setAttribute('aria-label', `Ethernet interface ${index} switch`); select.disabled = locked;
         const disconnected = document.createElement('option'); disconnected.value = ''; disconnected.textContent = 'Disconnected'; select.append(disconnected);
         for (const sw of machines.values()) if (sw.kind === 'switch') {
           const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
@@ -1563,7 +1569,7 @@
         select.value = selected || '';
         select.onchange = () => { machine.interfaces[index] = select.value || null; meta.textContent = ''; renderGraphic(); onChange(); };
         const meta = document.createElement('span'); meta.className = 'nic-meta';
-        const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index + 1}`; remove.disabled = locked;
+        const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index}`; remove.disabled = locked;
         remove.onclick = () => {
           const scrollTop = qemuOptionsPanel.scrollTop;
           machine.interfaces.splice(index, 1);
@@ -1600,21 +1606,19 @@
       const current = activeMachine();
       const imageId = current?.kind === 'vm' ? current.imageId : images[0]?.id;
       const image = images.find(item => item.id === imageId);
+      const hostname = nextMachineName('vm');
       hostSettingsDraft = {
         id: `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
-        isNew: true, kind: 'vm', hostname: nextMachineName('vm'), imageId,
+        isNew: true, kind: 'vm', hostname, imageId,
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
-        guestMedia: {script: '#!/bin/sh\n', resources: []}, autoBuildGuestCdrom: false,
+        guestMedia: {script: defaultStartScript(), resources: []}, autoBuildGuestCdrom: false,
         resetWorkingDiskAtRestart: false
       };
       hostAutostart.checked = true;
       hostCreateActions.hidden = false;
       hostAutostart.closest('label').hidden = false;
-      hostRebootRow.hidden = true;
-      hostRebootNow.checked = false;
-      hostRebootNow.disabled = false;
       hostPendingStatus.hidden = true;
       settingsTitle.textContent = 'Add a new host';
       qemuOptionsPanel.showModal();
@@ -2068,9 +2072,6 @@
         };
         hostCreateActions.hidden = false;
         hostAutostart.closest('label').hidden = true;
-        hostRebootRow.hidden = !data.running;
-        hostRebootNow.checked = false;
-        hostRebootNow.disabled = false;
         qemuOptionsPanel.showModal();
         selectSettingsTab('general');
         renderGuestMedia();
@@ -2125,14 +2126,14 @@
       if (!name) return;
       const autostart = draft.isNew && hostAutostart.checked;
       const resetDisk = !draft.isNew && draft.resetWorkingDiskAtRestart;
-      let restartNow = !draft.isNew && hostRebootNow.checked;
+      let restartNow = false;
       const payload = draft.isNew ? null : {name, systemId: draft.imageId, engine: draft.engine, settings: getMachineSettings(draft),
         interfaces: [...draft.interfaces], guestMedia: draft.guestMedia,
         autoBuildGuestCdrom: draft.autoBuildGuestCdrom, resetWorkingDiskAtRestart: resetDisk};
       const restartConfigChanged = payload && JSON.stringify({settings: payload.settings, interfaces: payload.interfaces,
         guestMedia: payload.guestMedia, autoBuildGuestCdrom: payload.autoBuildGuestCdrom}) !== draft.initialRestartConfig;
       const resetNewlyScheduled = resetDisk && !draft.initialResetWorkingDiskAtRestart;
-      if (draft.running && !restartNow && (restartConfigChanged || resetNewlyScheduled)) {
+      if (draft.running && (restartConfigChanged || resetNewlyScheduled)) {
         const choice = await chooseRestartTiming(resetDisk);
         if (choice === 'cancel' || hostSettingsDraft !== draft || !qemuOptionsPanel.open) return;
         restartNow = choice === 'now';
@@ -2140,6 +2141,7 @@
       confirmHostCreate.disabled = true;
       cancelHostCreate.disabled = true;
       optionsStatus.hidden = true;
+      let dialogClosed = false;
       try {
         if (draft.isNew) {
           const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine,
@@ -2147,6 +2149,7 @@
             autoBuildGuestCdrom: draft.autoBuildGuestCdrom, select: false});
           hostSettingsDraft = null;
           qemuOptionsPanel.close();
+          dialogClosed = true;
           selectMachine(machine.id);
           if (autostart) await startActiveMachine();
         } else {
@@ -2170,6 +2173,11 @@
           draft.pendingRestart = data.pendingRestart;
           draft.resetWorkingDiskAtRestart = data.resetWorkingDiskAtRestart;
           updateHostPendingStatus(draft);
+          hostSettingsDraft = null;
+          qemuOptionsPanel.close();
+          dialogClosed = true;
+          renderTabs();
+          renderGraphic();
           if (restartNow) {
             const endpoint = data.running ? `/api/reboot/${encodeURIComponent(draft.id)}` : '/api/start';
             const body = data.running ? undefined : JSON.stringify({sessionId: draft.id, engine: draft.engine, imageId: draft.imageId});
@@ -2183,14 +2191,10 @@
             draft.resetWorkingDiskAtRestart = false;
             scheduleSessionSync();
           }
-          hostSettingsDraft = null;
-          qemuOptionsPanel.close();
-          renderTabs();
-          renderGraphic();
         }
       } catch (error) {
-        optionsStatus.textContent = error.message;
-        optionsStatus.hidden = false;
+        if (dialogClosed) showStatusError(error.message);
+        else { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
         if (!draft.isNew) { renderTabs(); scheduleSessionSync(); }
       } finally {
         confirmHostCreate.disabled = false;
