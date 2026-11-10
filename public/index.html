@@ -70,7 +70,7 @@
     .create-autostart input { width: 16px; height: 16px; accent-color: #70a8ff; }
     .create-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
     .host-create-actions { position: sticky; bottom: -18px; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 18px -18px -18px; padding: 14px 18px; border-top: 1px solid #35404c; background: #10151c; }
-    .host-create-actions .create-autostart { margin-right: auto; }
+    .host-action-options { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
     #host-settings-form { padding-bottom: 24px; }
     .create-network { margin-top: 0; }
     #create-error, #clone-error, #topology-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
@@ -80,7 +80,6 @@
     #qemu-options-panel .settings-sticky { position: sticky; top: -18px; z-index: 4; margin: -18px -18px 0; padding: 0 18px; background: #10151c; }
     #qemu-options-panel .settings-heading { position: static; flex-wrap: wrap; margin: 0 -18px; }
     #qemu-options-panel .settings-tabs { margin: 0 -18px; padding: 12px 18px 0; background: #10151c; }
-    .settings-heading-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
     .settings-tabs { display: flex; gap: 4px; margin-top: 16px; overflow-x: auto; border-bottom: 1px solid #35404c; }
     .settings-tab { flex: 0 0 auto; padding: 10px 14px; border: 1px solid transparent; border-radius: 6px 6px 0 0; background: transparent; color: #bdc8d6; font-weight: 600; }
     .settings-tab:hover { color: #e7edf5; background: #1a2633; }
@@ -227,6 +226,7 @@
     @media (max-width: 850px) { main[data-columns="2"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } }
     @media (max-width: 850px) { .nic-row { grid-template-columns: 95px minmax(0, 1fr) 36px; gap: 6px; } .nic-row .nic-meta { grid-column: 2; grid-row: 2; } .nic-row button { grid-column: 3; grid-row: 1; } }
     @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } #graphic-workspace { margin: 10px; } .graphic-heading { flex-wrap: wrap; gap: 4px 12px; padding: 12px; } }
+    @media (max-width: 600px) { .host-create-actions { flex-wrap: wrap; } .host-action-options { flex-basis: 100%; } }
   </style>
 </head>
 <body>
@@ -294,10 +294,11 @@
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
     <form id="host-settings-form" novalidate>
     <div class="settings-sticky">
-    <div class="settings-heading"><h2 id="settings-title">Host Settings</h2><div class="settings-heading-actions"><button id="close-settings" type="button">Close</button></div></div>
+    <div class="settings-heading"><h2 id="settings-title">Host Settings</h2></div>
     <div class="settings-tabs" role="tablist" aria-label="Host settings sections">
       <button class="settings-tab" id="host-tab-general" type="button" role="tab" aria-controls="host-panel-general" aria-selected="true" tabindex="0" data-settings-tab="general">General</button>
       <button class="settings-tab" id="host-tab-resources" type="button" role="tab" aria-controls="host-panel-resources" aria-selected="false" tabindex="-1" data-settings-tab="resources">Hardware</button>
+      <button class="settings-tab" id="host-tab-storage" type="button" role="tab" aria-controls="host-panel-storage" aria-selected="false" tabindex="-1" data-settings-tab="storage">Storage</button>
       <button class="settings-tab" id="host-tab-network" type="button" role="tab" aria-controls="host-panel-network" aria-selected="false" tabindex="-1" data-settings-tab="network">Network</button>
       <button class="settings-tab" id="host-tab-startup" type="button" role="tab" aria-controls="host-panel-startup" aria-selected="false" tabindex="-1" data-settings-tab="startup">Startup</button>
       <button class="settings-tab" id="host-tab-expert" type="button" role="tab" aria-controls="host-panel-expert" aria-selected="false" tabindex="-1" data-settings-tab="expert">Expert</button>
@@ -307,7 +308,15 @@
     <p id="host-pending-status" class="settings-description" hidden>Pending restart: saved settings will apply at the next Play, Reboot or Reset.</p>
     <section class="settings-tab-panel" id="host-panel-general" role="tabpanel" aria-labelledby="host-tab-general" data-settings-panel="general"><div id="settings-fixed"></div></section>
     <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-hardware"></div><div id="settings-editable"></div></section>
+    <section class="settings-tab-panel" id="host-panel-storage" role="tabpanel" aria-labelledby="host-tab-storage" data-settings-panel="storage" hidden>
+      <div id="settings-storage"></div>
+      <div class="settings-section" id="host-reset-row" hidden>
+        <label class="create-autostart"><input id="host-reset-disk" type="checkbox">Reset working disk on save</label>
+        <p>This deletes the current working disk and all changes made inside this guest.</p>
+      </div>
+    </section>
     <section class="settings-tab-panel" id="host-panel-network" role="tabpanel" aria-labelledby="host-tab-network" data-settings-panel="network" hidden><div id="settings-network">
+      <div id="settings-network-profile"></div>
       <section class="network-controls" id="network-controls" aria-label="Ethernet interfaces">
         <div class="network-controls-head"><button id="add-nic" type="button">+ Interface</button></div>
         <div id="nic-list"></div>
@@ -319,11 +328,10 @@
       <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup CD-ROM</label>
     </section>
     <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
-      <div class="settings-section"><h3>Storage</h3><div id="settings-storage"></div></div>
       <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
       <div class="settings-section settings-commands"><h3>Full launch commands</h3><pre id="options-commands"></pre></div>
     </section>
-    <div class="host-create-actions" id="host-create-actions" hidden><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><label class="create-autostart" id="host-reboot-row" hidden><input id="host-reboot-now" type="checkbox">Reboot now to apply</label><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
+    <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label><label class="create-autostart" id="host-reboot-row" hidden><input id="host-reboot-now" type="checkbox">Reboot now to apply</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK · Save</button></div>
     </form>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
@@ -629,10 +637,11 @@
     const hostAutostart = document.getElementById('host-autostart');
     const hostRebootRow = document.getElementById('host-reboot-row');
     const hostRebootNow = document.getElementById('host-reboot-now');
+    const hostResetRow = document.getElementById('host-reset-row');
+    const hostResetDisk = document.getElementById('host-reset-disk');
     const hostPendingStatus = document.getElementById('host-pending-status');
     const confirmHostCreate = document.getElementById('confirm-host-create');
     const cancelHostCreate = document.getElementById('cancel-host-create');
-    const closeHostSettings = document.getElementById('close-settings');
     const settingsTabs = [...qemuOptionsPanel.querySelectorAll('[data-settings-tab]')];
     const settingsPanels = [...qemuOptionsPanel.querySelectorAll('[data-settings-panel]')];
     const showGeneralSettings = document.getElementById('show-general-settings');
@@ -658,6 +667,7 @@
     const settingsFixed = document.getElementById('settings-fixed');
     const settingsHardware = document.getElementById('settings-hardware');
     const settingsStorage = document.getElementById('settings-storage');
+    const settingsNetworkProfile = document.getElementById('settings-network-profile');
     const settingsConsole = document.getElementById('settings-console');
     const optionsCommands = document.getElementById('options-commands');
     let optionsRequest = 0;
@@ -678,6 +688,16 @@
     let createDraft = null;
     let cloneSourceId = null;
     let hostSettingsDraft = null;
+    function updateHostSaveLabel() {
+      confirmHostCreate.textContent = !hostResetRow.hidden && hostResetDisk.checked ? 'OK · Save & Reset disk'
+        : !hostRebootRow.hidden && hostRebootNow.checked ? 'OK · Save & Reboot' : 'OK · Save';
+    }
+    hostRebootNow.addEventListener('change', updateHostSaveLabel);
+    hostResetDisk.addEventListener('change', () => {
+      if (hostResetDisk.checked) hostRebootNow.checked = false;
+      hostRebootNow.disabled = hostResetDisk.checked;
+      updateHostSaveLabel();
+    });
     function renderGuestMedia() {
       const machine = settingsMachine();
       if (!machine) return;
@@ -1271,8 +1291,9 @@
       const hiddenPixels = select.getBoundingClientRect().bottom - visibleBottom;
       if (hiddenPixels > 0) qemuOptionsPanel.scrollTop += hiddenPixels;
     }
-    function renderStorageSettings(storage) {
+    function renderStorageSettings(storage, diskBus) {
       settingsStorage.replaceChildren();
+      if (diskBus) addSettingRow(settingsStorage, 'Disk bus', diskBus);
       for (const disk of storage || []) addSettingRow(settingsStorage, disk.label, disk.path);
     }
     function showIsoPreviewStatus(machine) {
@@ -1294,6 +1315,7 @@
       settingsFixed.replaceChildren();
       settingsHardware.replaceChildren();
       settingsStorage.replaceChildren();
+      settingsNetworkProfile.replaceChildren();
       settingsConsole.replaceChildren();
       optionsCommands.textContent = '';
       networkControls.hidden = machine.engine === 'virtualbox';
@@ -1367,11 +1389,12 @@
         addSettingTextRow(settingsFixed, 'Base image', image?.images?.[machine.engine === 'virtualbox' ? 'vdi' : 'raw'] || 'Unavailable');
         addSettingTextRow(settingsFixed, 'Description', image?.description || 'No image available; run bash prepare.sh.');
         addSettingTextRow(settingsFixed, 'Login', image?.login || 'Unavailable');
-        const fixedLabels = {machine: 'Machine type', diskBus: 'Disk bus', networkCard: 'Network card', osType: 'Guest profile'};
+        const fixedLabels = {machine: 'Machine type', osType: 'Guest profile'};
         for (const [key, value] of Object.entries(body.fixed || {})) {
-          if (key !== 'engine') addSettingRow(settingsHardware, fixedLabels[key] || key, value);
+          if (key === 'networkCard') addSettingRow(settingsNetworkProfile, 'Network card', value);
+          else if (key !== 'engine' && key !== 'diskBus') addSettingRow(settingsHardware, fixedLabels[key] || key, value);
         }
-        renderStorageSettings(body.storage);
+        renderStorageSettings(body.storage, body.fixed?.diskBus);
         addSettingRow(settingsConsole, 'VM serial port', body.console?.guest || 'ttyS0 · 115200 baud');
         addSettingRow(settingsConsole, 'Console socket', body.console?.socket || '');
         if (body.monitor) addSettingRow(settingsConsole, 'Monitor socket', body.monitor);
@@ -1393,7 +1416,7 @@
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine !== settingsMachine() || !qemuOptionsPanel.open) return;
         updateNicMetadata(body.interfaces);
-        renderStorageSettings(body.storage);
+        renderStorageSettings(body.storage, body.fixed?.diskBus);
         keepFocusedNicVisible();
         optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
         showIsoPreviewStatus(machine);
@@ -1530,8 +1553,11 @@
       hostAutostart.closest('label').hidden = false;
       hostRebootRow.hidden = true;
       hostRebootNow.checked = false;
+      hostRebootNow.disabled = false;
+      hostResetRow.hidden = true;
+      hostResetDisk.checked = false;
+      updateHostSaveLabel();
       hostPendingStatus.hidden = true;
-      closeHostSettings.hidden = true;
       settingsTitle.textContent = 'Add a new host';
       qemuOptionsPanel.showModal();
       selectSettingsTab('general');
@@ -1965,7 +1991,10 @@
         hostAutostart.closest('label').hidden = true;
         hostRebootRow.hidden = !data.running;
         hostRebootNow.checked = false;
-        closeHostSettings.hidden = false;
+        hostRebootNow.disabled = false;
+        hostResetRow.hidden = !data.engine.startsWith('qemu') || !data.hasLaunched;
+        hostResetDisk.checked = false;
+        updateHostSaveLabel();
         qemuOptionsPanel.showModal();
         selectSettingsTab('general');
         renderGuestMedia();
@@ -1996,7 +2025,6 @@
         selectSettingsTab(next.dataset.settingsTab, true);
       });
     }
-    closeHostSettings.addEventListener('click', () => { if (!confirmHostCreate.disabled) qemuOptionsPanel.close(); });
     cancelHostCreate.addEventListener('click', () => qemuOptionsPanel.close());
     qemuOptionsPanel.addEventListener('cancel', event => { if (confirmHostCreate.disabled) event.preventDefault(); });
     qemuOptionsPanel.addEventListener('close', () => {
@@ -2020,10 +2048,14 @@
       const name = settingsFixed.querySelector('input')?.value.trim();
       if (!name) return;
       const autostart = draft.isNew && hostAutostart.checked;
-      const rebootNow = !draft.isNew && hostRebootNow.checked;
+      const resetDisk = !draft.isNew && draft.engine.startsWith('qemu') && draft.hasLaunched && hostResetDisk.checked;
+      const rebootNow = !resetDisk && !draft.isNew && hostRebootNow.checked;
+      if (resetDisk) {
+        const confirmed = await confirmAction('Reset working disk', `Save settings and reset ${name} from its base image?\n\nThe current working disk will be deleted. All files and changes made inside this guest will be lost. This cannot be undone.`, 'Save & Reset disk');
+        if (!confirmed || hostSettingsDraft !== draft || !qemuOptionsPanel.open) return;
+      }
       confirmHostCreate.disabled = true;
       cancelHostCreate.disabled = true;
-      closeHostSettings.disabled = true;
       optionsStatus.hidden = true;
       try {
         if (draft.isNew) {
@@ -2056,7 +2088,15 @@
           }
           draft.pendingRestart = data.pendingRestart;
           hostPendingStatus.hidden = !(data.pendingRestart && data.running);
-          if (rebootNow && data.running && data.pendingRestart) {
+          if (resetDisk) {
+            const resetResponse = await fetch(`/api/reset/${encodeURIComponent(draft.id)}`, {method: 'POST'});
+            const resetResult = await resetResponse.json();
+            if (!resetResponse.ok) throw new Error(`Settings saved, but disk reset failed: ${resetResult.error || 'unknown error'}`);
+            if (machine) machine.pendingRestart = false;
+            draft.pendingRestart = false;
+            scheduleSessionSync();
+          } else if (rebootNow) {
+            if (!data.running) throw new Error('Settings saved, but the host stopped before reboot; use Play to apply them.');
             const rebootResponse = await fetch(`/api/reboot/${encodeURIComponent(draft.id)}`, {method: 'POST'});
             const rebootResult = await rebootResponse.json();
             if (!rebootResponse.ok) throw new Error(`Settings saved, but reboot failed: ${rebootResult.error || 'unknown error'}`);
@@ -2072,10 +2112,10 @@
       } catch (error) {
         optionsStatus.textContent = error.message;
         optionsStatus.hidden = false;
+        if (!draft.isNew) { renderTabs(); scheduleSessionSync(); }
       } finally {
         confirmHostCreate.disabled = false;
         cancelHostCreate.disabled = false;
-        closeHostSettings.disabled = false;
       }
     });
     function attachPaneSocket(pane) {
