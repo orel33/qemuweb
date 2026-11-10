@@ -102,12 +102,10 @@
     .setting-row input:disabled, .setting-row select:disabled { opacity: 1; color: #aeb9c6; background-color: #303942; border-color: #46515d; box-shadow: none; cursor: default; -webkit-text-fill-color: #aeb9c6; }
     .setting-row input:not(:disabled):hover, .setting-row select:not(:disabled):hover { border-color: #7395bc; }
     .setting-row input:focus-visible, .setting-row select:focus-visible { outline: 2px solid #74a7e6; outline-offset: 1px; }
-    .setting-with-action { display: flex; align-items: center; gap: 8px; min-width: 0; }
-    .setting-with-action input { flex: 1; max-width: none; }
-    .setting-with-action button { display: grid; place-items: center; width: 32px; height: 32px; flex: none; padding: 5px; border: 1px solid #9c4d58; border-radius: 4px; background: #352126; color: #ff8993; }
-    .setting-with-action button:hover, .setting-with-action button[aria-pressed="true"] { background: #71313c; color: #fff; }
-    .setting-with-action button:focus-visible { outline: 2px solid #ff8993; outline-offset: 2px; }
-    .setting-with-action button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; }
+    .setting-with-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
+    .setting-with-action input[type="text"] { flex: 1 1 220px; max-width: none; }
+    .setting-with-action .reset-working-disk { flex: 0 1 auto; }
+    .setting-with-action input[type="checkbox"] { appearance: auto; flex: none; width: 16px; height: 16px; min-width: 16px; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; accent-color: #70a8ff; }
     .settings-commands { margin-top: 16px; }
     .settings-commands summary { cursor: pointer; color: #9fc5ef; }
     .settings-commands pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
@@ -1329,22 +1327,21 @@
         const value = document.createElement('div');
         value.className = 'setting-with-action';
         input.replaceWith(value);
-        const reset = document.createElement('button');
-        reset.type = 'button';
-        reset.title = 'Reset working disk at restart';
-        reset.setAttribute('aria-label', reset.title);
-        reset.setAttribute('aria-pressed', String(!!machine.resetWorkingDiskAtRestart));
-        reset.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>';
-        reset.addEventListener('click', () => {
+        const resetLabel = document.createElement('label');
+        resetLabel.className = 'create-autostart reset-working-disk';
+        const reset = document.createElement('input');
+        reset.type = 'checkbox';
+        reset.checked = !!machine.resetWorkingDiskAtRestart;
+        resetLabel.append(reset, 'Reset working disk at restart');
+        reset.addEventListener('change', () => {
           if (!machine.resetWorkingDiskAtRestart) machine.restartBeforeReset = hostRebootNow.checked;
-          machine.resetWorkingDiskAtRestart = !machine.resetWorkingDiskAtRestart;
-          reset.setAttribute('aria-pressed', String(machine.resetWorkingDiskAtRestart));
+          machine.resetWorkingDiskAtRestart = reset.checked;
           hostRebootNow.disabled = machine.resetWorkingDiskAtRestart;
           hostRebootRow.hidden = !machine.resetWorkingDiskAtRestart && !machine.running;
           hostRebootNow.checked = machine.resetWorkingDiskAtRestart || (machine.running && !!machine.restartBeforeReset);
           updateHostPendingStatus(machine);
         });
-        value.append(input, reset);
+        value.append(input, resetLabel);
       }
     }
     function updateHostPendingStatus(machine) {
