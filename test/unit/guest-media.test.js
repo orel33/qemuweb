@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {execFileSync} = require('child_process');
-const {validateBootFiles, createGuestIso, LABEL} = require('../guest-media');
+const {validateBootFiles, createGuestIso, LABEL} = require('../../guest-media');
 
 test('guest startup media rejects traversal, duplicate names, oversized files and path collisions', () => {
   const basic = {script: '#!/bin/sh\n', resources: []};

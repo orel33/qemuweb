@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const sessionLog = require('../public/session-log');
+const sessionLog = require('../../public/session-log');
 
 test('session logs replay as terminal lines and refresh after appends', () => {
   const machine = {logs: ['QEMU started']};

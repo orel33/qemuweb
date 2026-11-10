@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {parseTopology, formatTopology} = require('../topology');
+const {parseTopology, formatTopology} = require('../../topology');
 
 test('example topologies preserve ordered links on roundtrip', () => {
   for (const file of ['topo/lan.topo', 'topo/gw.topo']) {

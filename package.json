@@ -5,10 +5,10 @@
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test",
-    "test:lan2": "node scripts/lan2-integration.js",
-    "test:gts16-lan2": "LAN2_GTS16=1 node scripts/lan2-integration.js",
-    "test:gts16-profiles": "node scripts/gts16-profiles.js"
+    "test": "node --test test/unit/*.test.js",
+    "test:lan2": "node test/integration/lan2-integration.js",
+    "test:gts16-lan2": "LAN2_GTS16=1 node test/integration/lan2-integration.js",
+    "test:gts16-profiles": "node test/integration/gts16-profiles.js"
   },
   "engines": {
     "node": ">=18"

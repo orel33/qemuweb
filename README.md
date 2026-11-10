@@ -340,21 +340,9 @@ PORT=3003 npm start
 
 ## Tests
 
-Use `./run-tests.sh --list` to see the available tests. The script runs only the test you name, for example `./run-tests.sh unit`, `./run-tests.sh lan2` or `./run-tests.sh gts16-profiles`. Run `./run-tests.sh web` to start the application on port 3003 for manual interface testing; set `PORT` to choose another port. To save live output, use `./run-tests.sh lan2 2>&1 | tee lan2.log`.
+Tests are organized under [`test/unit/`](test/unit/) and [`test/integration/`](test/integration/). [`test/TESTS.md`](test/TESTS.md) describes each test, its prerequisites, and its command. `npm test` runs only the unit tests; integration tests are selected separately because they boot prepared guest images.
 
-Run the Node test suite for the UI, naming, console views, and session logs:
-
-```sh
-npm test
-```
-
-Run the LAN2 integration test to start two Debian 13 Legacy hosts on one VDE switch, check their serial consoles and bidirectional pings, then verify Stop/Resume:
-
-```sh
-npm run test:lan2
-```
-
-LAN2 requires `images/debian13-legacy.raw` and the QemuWeb system dependencies. It uses KVM when available and falls back to TCG. To force TCG, run `LAN2_ENGINE=qemu-tcg npm run test:lan2`. Its live command and guest output can also be saved with `npm run test:lan2 2>&1 | tee lan2.log`.
+Use `./run-tests.sh --list` to see the scenarios, then run one by name, for example `./run-tests.sh unit`, `./run-tests.sh lan2`, or `./run-tests.sh gts16-profiles`. The runner prints a short description before starting each test. `./run-tests.sh web` starts the application on port 3003 for manual interface testing; set `PORT` to choose another port. To keep live output, use `./run-tests.sh lan2 2>&1 | tee lan2.log`.
 
 ## Official images
 

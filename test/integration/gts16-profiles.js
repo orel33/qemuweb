@@ -9,7 +9,7 @@ const http = require('node:http');
 const path = require('node:path');
 const io = require('socket.io-client');
 
-const root = path.resolve(__dirname, '..');
+const root = path.resolve(__dirname, '../..');
 const profiles = process.env.GTS16_PROFILES ? process.env.GTS16_PROFILES.split(',') : ['alpine', 'debian13-cloud', 'openwrt'];
 const engine = process.env.GTS16_ENGINE || 'qemu';
 const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;

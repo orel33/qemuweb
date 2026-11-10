@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {parseTopology} = require('../topology');
-const {buildGraph, stateOf} = require('../public/topology-graphic');
+const {parseTopology} = require('../../topology');
+const {buildGraph, stateOf} = require('../../public/topology-graphic');
 
 function sessionsFromFixture(file) {
   const topology = parseTopology(fs.readFileSync(file, 'utf8'), ['debian13-legacy']);

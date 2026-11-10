@@ -9,7 +9,7 @@ const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const io = require('socket.io-client');
 
-const root = path.resolve(__dirname, '..');
+const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
 const kvmAvailable = (() => {
   try {

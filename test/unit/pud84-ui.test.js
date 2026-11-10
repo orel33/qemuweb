@@ -3,7 +3,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const html = fs.readFileSync(path.join(__dirname, '..', 'public', 'index.html'), 'utf8');
+const html = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'index.html'), 'utf8');
 
 test('Exit All follows Clone at the end of the bottom-left button group', () => {
   const navigation = html.match(/<nav class="machines"[\s\S]*?<\/nav>/)?.[0] || '';

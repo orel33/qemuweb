@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('../resource-metrics');
+const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('../../resource-metrics');
 
 test('Linux process counters yield host CPU percentage and resident bytes', () => {
   const fields = Array(50).fill('0');
