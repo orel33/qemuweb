@@ -2,6 +2,7 @@
 
 // Boot prepared OS bases with isolated guest media.
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -11,7 +12,8 @@ const io = require('socket.io-client');
 const root = path.resolve(__dirname, '..');
 const profiles = process.env.GTS16_PROFILES ? process.env.GTS16_PROFILES.split(',') : ['alpine', 'debian13-cloud', 'openwrt'];
 const engine = process.env.GTS16_ENGINE || 'qemu';
-const ids = profiles.map((_, index) => `gts16-profile-${process.pid}-${index}`);
+const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;
+const ids = profiles.map(() => newHostId());
 let child;
 let baseUrl;
 let serverOutput = '';
@@ -119,7 +121,7 @@ printf 'GTS16_JOURNAL_CHECK_%s\\n' "$?"`;
 
 async function verifyConcurrentIsolation() {
   const hosts = [0, 1].map(index => ({
-    id: `gts16-isolated-${process.pid}-${index}`,
+    id: newHostId(),
     media: mediaFor('openwrt', 1, `openwrt_isolated_${index}`)
   }));
   for (const host of hosts) {
@@ -208,7 +210,7 @@ async function run() {
       {suffix: 'media', script: '#!/bin/sh\n', attach: false, error: 'QEMUWEB_START_ERROR ISO label QWEBSTART missing'}
     ];
     for (const scenario of missingCases) {
-      const id = `gts16-missing-${scenario.suffix}-${process.pid}`;
+      const id = newHostId();
       ids.push(id);
       await request('/api/hosts', 'POST', {id, name: `GTS16 missing ${scenario.suffix}`, imageId: 'openwrt', engine: 'qemu', interfaces: [], guestMedia: {script: scenario.script, resources: []}});
       if (scenario.attach) {

@@ -54,13 +54,22 @@ function writeJsonAtomic(file, value) {
 }
 
 function saveSessionMetadata(engine = sessionEngine) {
-  const references = kind => [...sessions.values()]
+  const ids = kind => [...sessions.values()]
     .filter(session => session.kind === kind && session.hostname && (kind === 'switch' || session.selectedImage))
-    .map(session => ({id: session.id, path: path.relative(runtimeInstance,
-      path.join(session.runtimeDir, kind === 'switch' ? 'switch.json' : 'host.json'))}))
-    .sort((left, right) => left.id.localeCompare(right.id));
+    .map(session => session.id).sort();
   writeJsonAtomic(sessionFile, {schemaVersion: 1, id: sessionId, engine,
-    hosts: references('vm'), switches: references('switch')});
+    hosts: ids('vm'), switches: ids('switch')});
+}
+
+function entityKind(id, expectedKind) {
+  if (typeof id !== 'string' || !/^[hs]-[0-9a-f]{16}$/.test(id)) throw new Error('Invalid host or switch ID; expected h- or s- followed by 16 lowercase hex characters.');
+  const kind = id[0] === 'h' ? 'vm' : 'switch';
+  if (expectedKind && kind !== expectedKind) throw new Error(`Expected a ${expectedKind === 'vm' ? 'host' : 'switch'} ID.`);
+  return kind;
+}
+
+function newEntityId(kind) {
+  return `${kind === 'switch' ? 's' : 'h'}-${crypto.randomBytes(8).toString('hex')}`;
 }
 
 function requireSessionEngine(engine) {
@@ -130,11 +139,11 @@ function shellQuote(value) {
 }
 
 function sessionPaths(id, kind = 'vm') {
-  const runtimeId = `${kind === 'switch' ? 's' : 'h'}-${crypto.createHash('sha256').update(id).digest('hex').slice(0, 16)}`;
-  const runtimeDir = path.join(runtimeInstance, runtimeId);
+  entityKind(id, kind);
+  const runtimeDir = path.join(runtimeInstance, id);
   const paths = {
     runtimeDir,
-    vmName: `qemuweb-${process.pid}-${runtimeId}`,
+    vmName: `qemuweb-${process.pid}-${id}`,
     socketPath: path.join(runtimeDir, 'serial.sock'),
     monitorPath: path.join(runtimeDir, 'mon.sock'),
     socketDir: kind === 'switch' ? path.join(runtimeDir, 'vde') : null,
@@ -177,12 +186,12 @@ function removeHostnameAlias(session) {
   try { fs.rmdirSync(path.dirname(alias)); } catch (_) {}
 }
 
-function getSession(id, create = false, kind = 'vm') {
-  if (typeof id !== 'string' || !/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error('Invalid session ID.');
+function getSession(id, create = false, expectedKind = null) {
+  const kind = entityKind(id, expectedKind);
   if (!sessions.has(id) && create) {
     const paths = sessionPaths(id, kind);
-    if ([...sessions.values()].some(session => session.runtimeDir === paths.runtimeDir)) throw new Error('Runtime ID collision; retry with another host or switch ID.');
-    fs.mkdirSync(paths.runtimeDir, {recursive: true});
+    if (fs.existsSync(paths.runtimeDir)) throw new Error('Runtime directory already exists for this ID.');
+    fs.mkdirSync(paths.runtimeDir);
     sessions.set(id, {
       id,
       kind,
@@ -809,7 +818,7 @@ function virtualBoxCommands(session, image) {
 app.get('/api/options/:sessionId', (req, res) => {
   try {
     const id = req.params.sessionId;
-    if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id)) throw new Error('Invalid session ID.');
+    entityKind(id, 'vm');
     const existing = getSession(id);
     const launched = !!(existing && existing.everStarted && existing.selectedImage);
     const image = launched ? existing.selectedImage : imageById(req.query.system);
@@ -886,7 +895,8 @@ function spawnVirtualBox(session, image) {
 }
 
 function start(sessionId, selectedEngine, imageId, options = {}) {
-  const session = getSession(sessionId, true);
+  const session = getSession(sessionId);
+  if (!session) throw new Error('Unknown host configuration.');
   if (session.kind !== 'vm') throw new Error('This tab is a VDE switch.');
   if (session.action && !options.reset && !(options.resume && session.action === 'reboot')) throw new Error('An action is already in progress for this host.');
   if (session.machine) throw new Error('This host is already running.');
@@ -1242,14 +1252,14 @@ app.post('/api/topology', async (req, res) => {
     if (closePrevious) await exitAllSessions();
     const switchIds = new Map();
     for (const sw of topology.switches) {
-      const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+      const id = newEntityId('switch');
       const session = getSession(id, true, 'switch'); created.push(id);
       setSessionHostname(session, sw.name); session.lastMessage = 'VDE switch ready to start';
       persistSwitchConfiguration(session);
       switchIds.set(sw.name, id);
     }
     for (const host of topology.hosts) {
-      const id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+      const id = newEntityId('vm');
       const interfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(host.switches.map(name => switchIds.get(name)), engine, false));
       const session = getSession(id, true, 'vm'); created.push(id);
       setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
@@ -1307,6 +1317,7 @@ app.get('/api/topology', (_req, res) => {
 app.post('/api/hosts', (req, res) => {
   try {
     const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, createGuestCdrom = false, attachGuestCdrom = false, autoBuildGuestCdrom} = req.body || {};
+    entityKind(id, 'vm');
     if (sessions.has(id)) throw new Error('Host ID already exists.');
     const image = imageById(imageId || Object.keys(readConfig().systems)[0]);
     if (!image) throw new Error('Unknown system in config.json.');
@@ -1455,6 +1466,7 @@ app.post('/api/switches', async (req, res) => {
   try {
     const {id, name, autostart = true} = req.body || {};
     if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)) throw new Error('Switch name must be 1–32 letters, digits, underscores or hyphens.');
+    entityKind(id, 'switch');
     if (sessions.has(id) || [...sessions.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
     session = getSession(id, true, 'switch');
     setSessionHostname(session, name);

@@ -1,6 +1,7 @@
 'use strict';
 
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const {spawn} = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
@@ -21,8 +22,8 @@ const timeoutMs = Number(process.env.LAN2_TIMEOUT_MS || (engine === 'qemu-tcg' ?
 const addresses = ['192.0.2.101', '192.0.2.102'];
 const verifyGuestMedia = process.env.LAN2_GTS16 === '1';
 const nonce = `${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
-const switchId = `lan2-sw-${nonce}`;
-const hostIds = [`lan2-a-${nonce}`, `lan2-b-${nonce}`];
+const switchId = `s-${crypto.randomBytes(8).toString('hex')}`;
+const hostIds = Array.from({length: 2}, () => `h-${crypto.randomBytes(8).toString('hex')}`);
 const serverOutput = [];
 let child;
 let baseUrl;

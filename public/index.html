@@ -1507,7 +1507,7 @@
       const imageId = current?.kind === 'vm' ? current.imageId : images[0]?.id;
       const image = images.find(item => item.id === imageId);
       hostSettingsDraft = {
-        id: `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`,
+        id: `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
         isNew: true, kind: 'vm', hostname: nextMachineName('vm'), imageId,
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
@@ -1568,7 +1568,7 @@
       cloneName.focus();
       cloneName.select();
     }
-    async function addHost({id = `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom = false, select = true}) {
+    async function addHost({id = `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom = false, select = true}) {
       const image = images.find(item => item.id === imageId);
       const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom})});
       const body = await response.json();
@@ -1580,7 +1580,7 @@
       return machine;
     }
     async function addSwitch({name, autostart}) {
-      const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
+      const id = `s-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`;
       const response = await fetch('/api/switches', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, autostart})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create switch');
