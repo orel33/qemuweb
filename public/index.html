@@ -60,6 +60,7 @@
     #network-controls { gap: 10px; margin-top: 10px; padding: 0; border: 0; background: transparent; }
     #network-controls .network-controls-head { justify-content: flex-end; }
     .qemu-options { width: min(1000px, 94vw); max-width: 94vw; max-height: 85vh; overflow: auto; padding: 18px; border: 1px solid #506176; border-radius: 10px; color: #e7edf5; background: #10151c; box-shadow: 0 16px 60px #000a; }
+    #qemu-options-panel { box-sizing: border-box; height: min(640px, 85vh); scrollbar-gutter: stable; }
     .qemu-options::backdrop { background: #000a; }
     .create-dialog { width: min(520px, 94vw); }
     .create-fields { display: grid; gap: 16px; padding-top: 18px; }
@@ -71,7 +72,9 @@
     .create-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
     .host-create-actions { position: sticky; bottom: -18px; z-index: 2; display: flex; align-items: center; justify-content: flex-end; gap: 10px; margin: 18px -18px -18px; padding: 14px 18px; border-top: 1px solid #35404c; background: #10151c; }
     .host-action-options { display: flex; flex: 1; flex-wrap: wrap; align-items: center; gap: 8px 18px; }
-    #host-settings-form { padding-bottom: 24px; }
+    #host-settings-form { box-sizing: border-box; display: flex; flex-direction: column; min-height: 100%; }
+    #qemu-options-panel .host-create-actions { margin-top: auto; }
+    .startup-script-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
     .create-network { margin-top: 0; }
     #create-error, #clone-error, #topology-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
     #topology-error { white-space: pre-line; }
@@ -102,9 +105,8 @@
     .setting-row input:disabled, .setting-row select:disabled { opacity: 1; color: #aeb9c6; background-color: #303942; border-color: #46515d; box-shadow: none; cursor: default; -webkit-text-fill-color: #aeb9c6; }
     .setting-row input:not(:disabled):hover, .setting-row select:not(:disabled):hover { border-color: #7395bc; }
     .setting-row input:focus-visible, .setting-row select:focus-visible { outline: 2px solid #74a7e6; outline-offset: 1px; }
-    .setting-with-action { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; min-width: 0; }
-    .setting-with-action input[type="text"] { flex: 1 1 220px; max-width: none; }
-    .setting-with-action .reset-working-disk { flex: 0 1 auto; }
+    .setting-with-action { display: grid; gap: 8px; min-width: 0; }
+    .setting-with-action input[type="text"] { max-width: 460px; }
     .setting-with-action input[type="checkbox"] { appearance: auto; flex: none; width: 16px; height: 16px; min-width: 16px; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; accent-color: #70a8ff; }
     .settings-commands { margin-top: 16px; }
     .settings-commands summary { cursor: pointer; color: #9fc5ef; }
@@ -323,8 +325,9 @@
       </section>
     </div></section>
     <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
-      <label for="guest-start-script">start.sh</label><textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
-      <label>Import start.sh <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain"></label>
+      <div class="startup-script-header"><label for="guest-start-script">start.sh</label><button id="load-start-script" type="button">Load file</button></div>
+      <textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
+      <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain" hidden>
       <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup CD-ROM</label>
       <div id="settings-startup-iso"></div>
     </section>
@@ -339,6 +342,11 @@
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
     <p id="confirm-message"></p>
     <form method="dialog" class="confirm-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-accept" value="confirm">Continue</button></form>
+  </dialog>
+  <dialog class="confirm-dialog" id="restart-choice-dialog" aria-labelledby="restart-choice-title" aria-describedby="restart-choice-message">
+    <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><h2 id="restart-choice-title">Restart required</h2></div>
+    <p id="restart-choice-message"></p>
+    <form method="dialog" class="confirm-actions"><button value="cancel">Cancel</button><button value="later" autofocus>Later</button><button value="now">Restart now</button></form>
   </dialog>
   <svg width="0" height="0" style="position:absolute" aria-hidden="true">
     <symbol id="pane-host-icon" viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></symbol>
@@ -623,6 +631,7 @@
     const hostSettingsForm = document.getElementById('host-settings-form');
     const guestStartScript = document.getElementById('guest-start-script');
     const guestScriptFile = document.getElementById('guest-script-file');
+    document.getElementById('load-start-script').addEventListener('click', () => guestScriptFile.click());
     const guestAttachCdrom = document.getElementById('guest-attach-cdrom');
     let autoCdromSupported = false;
     let isoPreviewSupported = false;
@@ -658,6 +667,8 @@
     const nextPage = document.getElementById('next-page');
     const pagePosition = document.getElementById('page-position');
     const confirmDialog = document.getElementById('confirm-dialog');
+    const restartChoiceDialog = document.getElementById('restart-choice-dialog');
+    const restartChoiceMessage = document.getElementById('restart-choice-message');
     const confirmTitle = document.getElementById('confirm-title');
     const confirmMessage = document.getElementById('confirm-message');
     const confirmAccept = document.getElementById('confirm-accept');
@@ -1334,21 +1345,15 @@
         reset.checked = !!machine.resetWorkingDiskAtRestart;
         resetLabel.append(reset, 'Reset working disk at restart');
         reset.addEventListener('change', () => {
-          if (!machine.resetWorkingDiskAtRestart) machine.restartBeforeReset = hostRebootNow.checked;
           machine.resetWorkingDiskAtRestart = reset.checked;
-          hostRebootNow.disabled = machine.resetWorkingDiskAtRestart;
-          hostRebootRow.hidden = !machine.resetWorkingDiskAtRestart && !machine.running;
-          hostRebootNow.checked = machine.resetWorkingDiskAtRestart || (machine.running && !!machine.restartBeforeReset);
           updateHostPendingStatus(machine);
         });
         value.append(input, resetLabel);
       }
     }
     function updateHostPendingStatus(machine) {
-      hostPendingStatus.textContent = machine.resetWorkingDiskAtRestart
-        ? 'The working disk will be reset after OK. Guest changes will be lost.'
-        : 'Pending restart: saved settings will apply at the next Play, Reboot or Reset.';
-      hostPendingStatus.hidden = !machine.resetWorkingDiskAtRestart && !(machine.pendingRestart && machine.running);
+      hostPendingStatus.textContent = 'Pending restart: saved settings will apply at the next Play, Reboot or Reset.';
+      hostPendingStatus.hidden = !!machine.resetWorkingDiskAtRestart || !(machine.pendingRestart && machine.running);
     }
     function showIsoPreviewStatus(machine) {
       const needsRestart = machine.autoBuildGuestCdrom && autoCdromSupported && !isoPreviewSupported;
@@ -1708,6 +1713,19 @@
         confirmDialog.showModal();
       });
     }
+    function chooseRestartTiming(resetDisk) {
+      if (restartChoiceDialog.open) return Promise.resolve('cancel');
+      restartChoiceMessage.textContent = resetDisk
+        ? 'These changes need a restart. The working disk will be deleted when the host restarts. Restart now after saving, or later?'
+        : 'These changes need a restart to take effect. Restart now after saving, or later?';
+      restartChoiceDialog.returnValue = '';
+      return new Promise(resolve => {
+        restartChoiceDialog.addEventListener('close', () => {
+          resolve(['now', 'later'].includes(restartChoiceDialog.returnValue) ? restartChoiceDialog.returnValue : 'cancel');
+        }, {once: true});
+        restartChoiceDialog.showModal();
+      });
+    }
     async function closeMachine(id) {
       const machine = machines.get(id);
       if (!machine || machine.busy) return;
@@ -2043,8 +2061,10 @@
           settings: {...data.settings}, settingsLoaded: true,
           guestMedia: structuredClone(data.guestMedia), autoBuildGuestCdrom: data.autoBuildGuestCdrom,
           running: data.running, hasLaunched: data.hasLaunched, pendingRestart: data.pendingRestart, busy: source.busy,
-          resetWorkingDiskAtRestart: false,
-          restartBeforeReset: false
+          resetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
+          initialResetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
+          initialRestartConfig: JSON.stringify({settings: data.settings, interfaces: data.interfaces,
+            guestMedia: data.guestMedia, autoBuildGuestCdrom: data.autoBuildGuestCdrom})
         };
         hostCreateActions.hidden = false;
         hostAutostart.closest('label').hidden = true;
@@ -2105,10 +2125,17 @@
       if (!name) return;
       const autostart = draft.isNew && hostAutostart.checked;
       const resetDisk = !draft.isNew && draft.resetWorkingDiskAtRestart;
-      const rebootNow = !draft.isNew && hostRebootNow.checked;
-      if (resetDisk) {
-        const confirmed = await confirmAction('Reset working disk', `Save settings and restart ${name} from its base image?\n\nThe current working disk will be deleted. All files and changes made inside this guest will be lost. This cannot be undone.`, 'Reset working disk');
-        if (!confirmed || hostSettingsDraft !== draft || !qemuOptionsPanel.open) return;
+      let restartNow = !draft.isNew && hostRebootNow.checked;
+      const payload = draft.isNew ? null : {name, systemId: draft.imageId, engine: draft.engine, settings: getMachineSettings(draft),
+        interfaces: [...draft.interfaces], guestMedia: draft.guestMedia,
+        autoBuildGuestCdrom: draft.autoBuildGuestCdrom, resetWorkingDiskAtRestart: resetDisk};
+      const restartConfigChanged = payload && JSON.stringify({settings: payload.settings, interfaces: payload.interfaces,
+        guestMedia: payload.guestMedia, autoBuildGuestCdrom: payload.autoBuildGuestCdrom}) !== draft.initialRestartConfig;
+      const resetNewlyScheduled = resetDisk && !draft.initialResetWorkingDiskAtRestart;
+      if (draft.running && !restartNow && (restartConfigChanged || resetNewlyScheduled)) {
+        const choice = await chooseRestartTiming(resetDisk);
+        if (choice === 'cancel' || hostSettingsDraft !== draft || !qemuOptionsPanel.open) return;
+        restartNow = choice === 'now';
       }
       confirmHostCreate.disabled = true;
       cancelHostCreate.disabled = true;
@@ -2123,9 +2150,6 @@
           selectMachine(machine.id);
           if (autostart) await startActiveMachine();
         } else {
-          const payload = {name, systemId: draft.imageId, engine: draft.engine, settings: getMachineSettings(draft),
-            interfaces: [...draft.interfaces], guestMedia: draft.guestMedia,
-            autoBuildGuestCdrom: draft.autoBuildGuestCdrom};
           const response = await fetch(`/api/hosts/${encodeURIComponent(draft.id)}/config`, {
             method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
           });
@@ -2140,23 +2164,23 @@
             machine.networkInterfaces = data.networkInterfaces;
             machine.guestMedia = data.guestMedia;
             machine.autoBuildGuestCdrom = data.autoBuildGuestCdrom;
+            machine.resetWorkingDiskAtRestart = data.resetWorkingDiskAtRestart;
             machine.pendingRestart = data.pendingRestart;
           }
           draft.pendingRestart = data.pendingRestart;
-          if (resetDisk) {
-            const resetResponse = await fetch(`/api/reset/${encodeURIComponent(draft.id)}`, {method: 'POST'});
-            const resetResult = await resetResponse.json();
-            if (!resetResponse.ok) throw new Error(`Settings saved, but disk reset failed: ${resetResult.error || 'unknown error'}`);
+          draft.resetWorkingDiskAtRestart = data.resetWorkingDiskAtRestart;
+          updateHostPendingStatus(draft);
+          if (restartNow) {
+            const endpoint = data.running ? `/api/reboot/${encodeURIComponent(draft.id)}` : '/api/start';
+            const body = data.running ? undefined : JSON.stringify({sessionId: draft.id, engine: draft.engine, imageId: draft.imageId});
+            const restartResponse = await fetch(endpoint, {method: 'POST',
+              ...(body ? {headers: {'Content-Type': 'application/json'}, body} : {})});
+            const restartResult = await restartResponse.json();
+            if (!restartResponse.ok) throw new Error(`Settings saved, but restart failed: ${restartResult.error || 'unknown error'}`);
             if (machine) machine.pendingRestart = false;
+            if (machine) machine.resetWorkingDiskAtRestart = false;
             draft.pendingRestart = false;
-            scheduleSessionSync();
-          } else if (rebootNow) {
-            if (!data.running) throw new Error('Settings saved, but the host stopped before reboot; use Play to apply them.');
-            const rebootResponse = await fetch(`/api/reboot/${encodeURIComponent(draft.id)}`, {method: 'POST'});
-            const rebootResult = await rebootResponse.json();
-            if (!rebootResponse.ok) throw new Error(`Settings saved, but reboot failed: ${rebootResult.error || 'unknown error'}`);
-            if (machine) machine.pendingRestart = false;
-            draft.pendingRestart = false;
+            draft.resetWorkingDiskAtRestart = false;
             scheduleSessionSync();
           }
           hostSettingsDraft = null;

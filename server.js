@@ -223,6 +223,7 @@ function getSession(id, create = false, expectedKind = null) {
       guestIsoFiles: new Set(),
       networkInterfaces: [],
       activeConfig: null,
+      resetWorkingDiskAtRestart: false,
       mgmtAliasPath: null,
       switchTerminal: null
     });
@@ -553,7 +554,8 @@ function activeConfiguration(session) {
 function pendingRestart(session) {
   if (session?.kind !== 'vm' || !session.machine || !session.activeConfig) return false;
   const active = session.activeConfig;
-  return ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
+  return session.resetWorkingDiskAtRestart ||
+    ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
     JSON.stringify(session.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
     JSON.stringify(session.guestMedia) !== JSON.stringify(active.guestMedia) ||
     session.guestIsoAttached !== active.autoBuildGuestCdrom;
@@ -569,12 +571,20 @@ function hostConfiguration(session) {
     settings: session.launchSettings,
     networkInterfaces: session.networkInterfaces,
     guestMedia: session.guestMedia,
-    autoBuildGuestCdrom: session.guestIsoAttached
+    autoBuildGuestCdrom: session.guestIsoAttached,
+    resetWorkingDiskAtRestart: session.resetWorkingDiskAtRestart
   };
 }
 
 function persistHostConfiguration(session) {
   writeJsonAtomic(tempFile(session, 'host.json'), hostConfiguration(session));
+}
+
+function completePendingDiskReset(session, publish = true) {
+  if (!session.resetWorkingDiskAtRestart) return;
+  session.resetWorkingDiskAtRestart = false;
+  persistHostConfiguration(session);
+  if (publish) publishState(session);
 }
 
 function hostConfigurationResponse(session) {
@@ -1103,6 +1113,7 @@ function validateRestartPrerequisites(session) {
 }
 
 async function reboot(session, startup = {}) {
+  if (session?.resetWorkingDiskAtRestart) return reset(session, null, startup);
   if (session?.kind === 'switch') throw new Error('Reboot applies only to hosts.');
   if (!session || !session.everStarted) throw new Error('This host has not started yet.');
   if (!session.machine) throw new Error('The host is stopped; use Play to resume from its current disk.');
@@ -1140,6 +1151,7 @@ async function reset(session, settings, startup = {}) {
     if (session.action !== 'reset' || !sessions.has(session.id)) throw new Error('The session was deleted during reset.');
     discardSessionDisk(session);
     session.everStarted = false;
+    completePendingDiskReset(session, false);
     start(session.id, engine, imageId, {reset: true, settings: launchSettings, ...startup});
   } catch (error) {
     session.everStarted = !!session.runDisk;
@@ -1273,16 +1285,20 @@ async function exitAllSessions() {
   }
 }
 
-app.post('/api/start', (req, res) => {
+app.post('/api/start', async (req, res) => {
   try {
     const configured = getSession(req.body?.sessionId);
     if (!configured || configured.kind !== 'vm' || !configured.selectedImage) throw new Error('Unknown host configuration.');
     if (req.body.engine !== configured.engine || req.body.imageId !== configured.selectedImage.id) throw new Error('Host system and engine differ from the saved configuration.');
-    const session = start(configured.id, configured.engine, configured.selectedImage.id, {
-      interfaces: configured.networkInterfaces.map(nic => nic.switchId), settings: configured.launchSettings,
-      guestMedia: configured.guestMedia, autoBuildGuestCdrom: configured.guestIsoAttached
-    });
-    res.json({ok: true, sessionId: session.id, name: session.hostname});
+    if (configured.resetWorkingDiskAtRestart && configured.everStarted) await reset(configured);
+    else {
+      start(configured.id, configured.engine, configured.selectedImage.id, {
+        interfaces: configured.networkInterfaces.map(nic => nic.switchId), settings: configured.launchSettings,
+        guestMedia: configured.guestMedia, autoBuildGuestCdrom: configured.guestIsoAttached
+      });
+      completePendingDiskReset(configured);
+    }
+    res.json({ok: true, sessionId: configured.id, name: configured.hostname});
   } catch (error) {
     const message = error.stderr ? error.stderr.toString().trim() : error.message;
     console.error(message);
@@ -1441,8 +1457,9 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     if (session.action) throw new Error('Wait for the current host action to finish.');
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid host configuration.');
-    const allowed = ['name', 'systemId', 'engine', 'settings', 'interfaces', 'guestMedia', 'autoBuildGuestCdrom'];
-    if (Object.keys(body).some(key => !allowed.includes(key)) || allowed.some(key => !Object.hasOwn(body, key))) throw new Error('Incomplete host configuration.');
+    const required = ['name', 'systemId', 'engine', 'settings', 'interfaces', 'guestMedia', 'autoBuildGuestCdrom'];
+    const allowed = [...required, 'resetWorkingDiskAtRestart'];
+    if (Object.keys(body).some(key => !allowed.includes(key)) || required.some(key => !Object.hasOwn(body, key))) throw new Error('Incomplete host configuration.');
     if (body.systemId !== session.selectedImage.id || body.engine !== session.engine) throw new Error('System and engine are read-only for an existing host.');
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(body.name)) throw new Error('Invalid host name (1 to 64 characters).');
     const name = body.name.trim();
@@ -1450,6 +1467,12 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     const settings = validateLaunchSettings(body.settings);
     const media = validateBootFiles(body.guestMedia);
     if (typeof body.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
+    const resetWorkingDiskAtRestart = body.resetWorkingDiskAtRestart === undefined
+      ? session.resetWorkingDiskAtRestart : body.resetWorkingDiskAtRestart;
+    if (typeof resetWorkingDiskAtRestart !== 'boolean' ||
+      (resetWorkingDiskAtRestart && (!session.engine.startsWith('qemu') || !session.everStarted))) {
+      throw new Error('Working disk reset requires a previously launched QEMU host.');
+    }
     const switches = validateNetworkInterfaces(body.interfaces, session.engine, false);
     const oldSwitches = session.networkInterfaces.map(nic => nic.switchId);
     const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
@@ -1460,7 +1483,8 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     try {
       writeJsonAtomic(tempFile(session, 'host.json'), {
         schemaVersion: 1, id: session.id, name, systemId: body.systemId, engine: body.engine,
-        settings, networkInterfaces: interfaces, guestMedia: media, autoBuildGuestCdrom: body.autoBuildGuestCdrom
+        settings, networkInterfaces: interfaces, guestMedia: media, autoBuildGuestCdrom: body.autoBuildGuestCdrom,
+        resetWorkingDiskAtRestart
       });
     } catch (error) {
       if (name !== previousName) setSessionHostname(session, previousName);
@@ -1470,6 +1494,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     session.networkInterfaces = interfaces;
     session.guestMedia = media;
     session.guestIsoAttached = body.autoBuildGuestCdrom;
+    session.resetWorkingDiskAtRestart = resetWorkingDiskAtRestart;
     if (JSON.stringify(media) !== JSON.stringify(previousMedia)) session.guestIsoOutdated = !!session.guestIso;
     if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});
     io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message: stateMessage(session)});
