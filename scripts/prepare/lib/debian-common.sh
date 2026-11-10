@@ -101,11 +101,15 @@ write_files:
     permissions: '0644'
     encoding: b64
     content: $unit_b64
+  - path: /etc/default/grub.d/99-qemuweb-ifnames.cfg
+    permissions: '0644'
+    content: |
+      GRUB_CMDLINE_LINUX="\${GRUB_CMDLINE_LINUX:+\$GRUB_CMDLINE_LINUX }net.ifnames=0"
   - path: /etc/systemd/network/20-qemunet.network
     permissions: '0644'
     content: |
       [Match]
-      Name=en*
+      Name=eth*
       [Network]
       DHCP=yes
 runcmd:
@@ -115,14 +119,15 @@ runcmd:
   - [systemctl, enable, systemd-networkd.service]
   - [systemctl, enable, qemuweb-start.service]
   - [touch, /etc/cloud/cloud-init.disabled]
-  - [sh, -c, 'if test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null; then echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_PACKAGE_CHECK_FAILED >/dev/ttyS0; exit 1; fi']
+  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null; then echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
 CLOUD_CONFIG
     cat > "$meta_data" <<EOF_META
 instance-id: qemuweb-$id-$(date +%s)
 local-hostname: qemuweb
 EOF_META
     cat > "$network_config" <<'NETWORK_CONFIG'
-# Cloud-init's NoCloud seed also supplies DHCP configuration for matching NICs.
+# The first preparation boot still uses predictable en* names. After GRUB is
+# updated, subsequent boots use eth* and the persistent networkd file above.
 version: 2
 ethernets:
   all-interfaces:
@@ -141,7 +146,7 @@ NETWORK_CONFIG
     qemu_pid=$!
     local prepared=0
     for _ in $(seq 1 1800); do
-      if grep -q QEMUNET_PACKAGE_CHECK_FAILED "$serial_log" 2>/dev/null; then break; fi
+      if grep -q QEMUNET_IMAGE_SETUP_FAILED "$serial_log" 2>/dev/null; then break; fi
       if grep -q 'QEMUNET_IMAGE_PREPARED' "$serial_log" 2>/dev/null && grep -q 'Cloud-init v.* finished at' "$serial_log" 2>/dev/null; then prepared=1; break; fi
       if ! kill -0 "$qemu_pid" 2>/dev/null; then break; fi
       sleep 1
