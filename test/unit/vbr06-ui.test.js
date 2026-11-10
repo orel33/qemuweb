@@ -52,7 +52,7 @@ test('each console pane owns an in-place Console/Monitor/Log switch and one xter
 });
 
 test('Log is read-only and exposes Monitor only when the selected machine supports QEMU HMP', () => {
-  assert.match(html, /pane\.view === 'console'\) pane\.socket\.emit\('input', data\)/);
+  assert.match(html, /else if \(pane\.view === 'console'\) \{[\s\S]*?if \(input\) pane\.socket\.emit\('input', input\)/);
   assert.match(html, /if \(view === 'monitor' && !MonitorTerminal\.isSupported\(machine\)\) return/);
   assert.match(html, /button\.dataset\.view === 'monitor'\) button\.hidden = !monitorSupported/);
   assert.match(html, /pane\.view === 'log'\) renderLogView\(pane\)/);

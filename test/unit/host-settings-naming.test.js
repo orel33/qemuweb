@@ -33,14 +33,16 @@ test('classic naming remains sequential', () => {
   assert.equal(nextName({scheme: {prefixes: {vm: 'h'}}, machines: ['h1']}), 'h2');
 });
 
-test('Add a new host hides Close while Host Settings restores it', () => {
+test('Add a new host and Host Settings share a dialog with Cancel and OK', () => {
   const createStart = html.indexOf('async function openHostSettingsCreate()');
   const createEnd = html.indexOf('function openCreateDialog', createStart);
   const settingsStart = html.indexOf('function openHostSettings()');
-  const settingsEnd = html.indexOf("closeHostSettings.addEventListener('click'", settingsStart);
+  const settingsEnd = html.indexOf('function selectSettingsTab(', settingsStart);
 
   assert.ok(createStart >= 0 && createEnd > createStart);
   assert.ok(settingsStart >= 0 && settingsEnd > settingsStart);
-  assert.match(html.slice(createStart, createEnd), /closeHostSettings\.hidden = true/);
-  assert.match(html.slice(settingsStart, settingsEnd), /closeHostSettings\.hidden = false/);
+  assert.match(html.slice(createStart, createEnd), /qemuOptionsPanel\.showModal\(\)/);
+  assert.match(html.slice(settingsStart, settingsEnd), /qemuOptionsPanel\.showModal\(\)/);
+  assert.match(html, /id="cancel-host-create"[^>]*>Cancel<\/button>[^<]*<button id="confirm-host-create"[^>]*>OK<\/button>/);
+  assert.doesNotMatch(html, /id="close-host-settings"|closeHostSettings/);
 });
