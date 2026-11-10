@@ -27,7 +27,8 @@ const sessionId = crypto.randomBytes(8).toString('hex');
 const runtimeInstance = path.join(runtime, sessionId);
 const sessionFile = path.join(runtimeInstance, 'session.json');
 const configPath = path.join(root, 'config.json');
-const qemuFields = ['machine', 'cpuKvm', 'cpuTcg', 'memory', 'smp', 'display', 'rtcBase', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
+const qemuProfileFields = ['machine', 'cpuKvm', 'cpuTcg', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
+const qemuFields = [...qemuProfileFields, 'memory', 'smp', 'rtcBase'];
 const port = Number(process.env.PORT || 3002);
 const serverPidFile = path.join(runtime, `server-${port}.pid`);
 const app = express();
@@ -344,6 +345,13 @@ function validateQemuOptions(options, partial = false) {
   return options;
 }
 
+function validateQemuProfile(options, label, complete = false) {
+  validateQemuOptions(options, true);
+  const misplaced = Object.keys(options).find(key => !qemuProfileFields.includes(key));
+  if (misplaced) throw new Error(`${label}.${misplaced} belongs in settings (memory, cpus, clock), not in the QEMU profile.`);
+  if (complete && qemuProfileFields.some(key => !Object.hasOwn(options, key))) throw new Error(`Incomplete ${label} profile.`);
+}
+
 function validateLaunchSettings(settings, partial = false) {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Invalid launch settings.');
   const allowed = ['memory', 'cpus', 'clock'];
@@ -361,7 +369,7 @@ function readConfig() {
   catch (error) { throw new Error(`Cannot read config.json: ${error.message}`); }
   if (!config || !config.qemu || !config.systems || typeof config.systems !== 'object' || Array.isArray(config.systems)) throw new Error('Invalid config.json structure.');
   if (config.schemaVersion !== 1 || !['qemu', 'qemu-tcg', 'virtualbox'].includes(config.session?.defaults?.engine)) throw new Error('Invalid session defaults in config.json.');
-  validateQemuOptions(config.qemu.defaults, true);
+  validateQemuProfile(config.qemu.defaults, 'qemu.defaults', true);
   if (!config.settings || !config.settings.defaults || !config.settings.fields) throw new Error('Missing generic settings in config.json.');
   validateLaunchSettings(config.settings.defaults);
   if (config.qemu.defaults.nic !== 'none') throw new Error('External QEMU networking is disabled; qemu.defaults.nic must be none.');
@@ -373,7 +381,7 @@ function readConfig() {
     for (const format of ['raw', 'vdi']) {
       if (!system.images || typeof system.images[format] !== 'string' || !system.images[format] || /[\x00-\x1f\x7f]/.test(system.images[format])) throw new Error(`Invalid ${format} path for ${id}.`);
     }
-    validateQemuOptions(system.qemu, true);
+    validateQemuProfile(system.qemu, `systems.${id}.qemu`);
     validateLaunchSettings(system.settings || {}, true);
     if (system.qemu.nic && system.qemu.nic !== 'none') throw new Error(`External QEMU networking is disabled for ${id}.`);
     const vbox = system.virtualbox;
@@ -892,10 +900,16 @@ app.get('/api/options/:sessionId', (req, res) => {
     const isoCommands = attachGuestCdrom
       ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, 'iso-stage')]]
       : [];
+    const vboxDetachCommand = launched && !isQemu && session.activeGuestIso
+      ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']]
+      : [];
+    const vboxAttachCommand = launched && !isQemu && attachGuestCdrom
+      ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso]]
+      : [];
     const launchCommands = isQemu
       ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
       : launched
-        ? [[commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off'], ...(attachGuestCdrom ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso]] : []), [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
+        ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off'], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
     const socketLabel = filePath => path.join('runtime', path.relative(runtime, filePath));
     const storage = isQemu
@@ -1076,13 +1090,25 @@ async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
   throw new Error('The host did not respond to the graceful shutdown request.');
 }
 
+function validateRestartPrerequisites(session) {
+  requireSessionEngine(session.engine);
+  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine);
+  else if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
+    throw new Error('VirtualBox cannot start while a QEMU host uses KVM. Stop that host, restart it with QEMU TCG, then start VirtualBox.');
+  }
+  const image = session.selectedImage;
+  if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash prepare.sh.`);
+  if (session.engine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash prepare.sh.`);
+  for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
+}
+
 async function reboot(session, startup = {}) {
   if (session?.kind === 'switch') throw new Error('Reboot applies only to hosts.');
   if (!session || !session.everStarted) throw new Error('This host has not started yet.');
   if (!session.machine) throw new Error('The host is stopped; use Play to resume from its current disk.');
   if (session.action) throw new Error('An action is already in progress for this host.');
   if (!session.runDisk || !fs.existsSync(session.runDisk)) throw new Error('The current host disk was not found.');
-  for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
+  validateRestartPrerequisites(session);
   session.action = 'reboot';
   try {
     publishState(session, 'Graceful shutdown before reboot…');
@@ -1103,11 +1129,11 @@ async function reset(session, settings, startup = {}) {
   if (session?.kind === 'switch') throw new Error('Reset applies only to hosts.');
   if (!session || !session.everStarted || !session.selectedImage) throw new Error('This host has not started yet.');
   if (session.action) throw new Error('An action is already in progress for this host.');
-  for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
-  session.action = 'reset';
+  validateRestartPrerequisites(session);
   const engine = session.engine;
   const imageId = session.selectedImage.id;
   const launchSettings = settings ? validateLaunchSettings({...session.launchSettings, ...settings}) : session.launchSettings;
+  session.action = 'reset';
   try {
     publishState(session, 'Resetting from the base image…');
     if (session.machine) await stop(session, {publish: false});
