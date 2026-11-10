@@ -1509,6 +1509,7 @@ server.listen(port, '127.0.0.1', () => {
   fs.writeFileSync(serverPidFile, `${process.pid}\n`, {mode: 0o600});
   console.log('\nQemuWeb is ready.');
   console.log(`  Web interface      http://127.0.0.1:${port}`);
+  console.log(`  Session ID         ${sessionId}`);
   console.log(`  Session directory  ${runtimeInstance}`);
   console.log('  Stop               Ctrl+C or ./stop.sh\n');
 });
