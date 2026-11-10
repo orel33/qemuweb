@@ -62,9 +62,28 @@ until ip -4 route show default | grep -q 'dev eth1'; do
   sleep 1
 done
 apk -U add tcpdump nano
-for tool in ifconfig ping ip route traceroute nslookup nc tcpdump nano; do
+# The stock image has no hostname command, while the default start.sh uses it.
+# Provide the get/set form needed by the guest startup script and lab console.
+if ! command -v hostname >/dev/null 2>&1; then
+  cat > /usr/bin/hostname <<'HOSTNAME_TOOL'
+#!/bin/sh
+case "$#" in
+  0) cat /proc/sys/kernel/hostname ;;
+  1) printf '%s\n' "$1" > /proc/sys/kernel/hostname ;;
+  *) echo 'Usage: hostname [name]' >&2; exit 2 ;;
+esac
+HOSTNAME_TOOL
+  chmod 755 /usr/bin/hostname
+fi
+for tool in ifconfig ping ip route traceroute nslookup nc tcpdump nano hostname; do
   command -v "$tool" >/dev/null || { echo "Missing OpenWrt tool: $tool" >&2; exit 1; }
 done
+# This lab image has one guest NIC at runtime. Keep its LAN address directly
+# on eth0 instead of OpenWrt's stock br-lan bridge.
+[ "$(uci -q get 'network.@device[0].name')" = br-lan ] || { echo 'Unexpected OpenWrt LAN device layout' >&2; exit 1; }
+uci delete 'network.@device[0]'
+uci set 'network.lan.device=eth0'
+uci commit network
 OPENWRT_PREPARE
   cat >> "$guest_script" <<'OPENWRT_HOOK'
 mkdir -p /usr/local/sbin

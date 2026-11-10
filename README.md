@@ -173,7 +173,7 @@ In the web page, click **Host Settings** to view the selected host's system, res
 
 The **QEMU · KVM / TCG / VirtualBox** choice is in **General Settings** and applies to the entire current application session. The server stores it in `runtime/<session-id>/session.json`. To change it, delete all hosts first; a different engine cannot silently apply to only later hosts. **QEMU · KVM** requires accessible `/dev/kvm` and fails with an error if KVM is unavailable or a VirtualBox VM is running. Select **QEMU · TCG** explicitly to use software emulation. Disk, serial-console, and monitor paths are generated at launch; the QCOW2 working disk format and control sockets are part of the application's operation. Each host's name, resources, interfaces, startup options and pending disk reset live in its `host.json`; startup CD-ROM file contents live under its `startup/` directory. While a host runs, edited launch settings are saved for its next Play, Reboot or Reset; **Restart pending** marks this state. Reboot normally keeps the working disk; a pending reset discards it at the next Play or Reboot.
 
-Every prepared image uses the internal hostname `qemuweb` and provides the same lab credentials: `root` with no password and `toto` / `toto`. The per-tab names (`h1`, `h2`, …, or a user-edited display name) identify concurrent instances in the web interface and do not alter this internal guest hostname.
+Every prepared base image starts with the internal hostname `qemuweb` and declares the lab credentials `root` with no password and `toto` / `toto`. A host name in the Web interface identifies its session; when the startup disk is enabled, the default `start.sh` also attempts to apply that name inside the guest. The image checks below record where this behavior still needs diagnosis.
 
 ### Stopping and cleaning up
 
@@ -276,6 +276,23 @@ The **Load topology** and **Save topology** buttons import `.topo` files and exp
 New QEMU hosts start with one disconnected Ethernet card. In the **Network interfaces** section of **Host Settings**, use **+ Interface** to add up to four cards, remove unwanted cards, or select a VDE switch for each card. Changes saved while the host runs apply on its next Play, Reboot or Reset; no card is attached to the running guest immediately. A stopped switch must be started before its connected host can start. A new switch starts by default; if Autostart is unchecked, click **Play** to start `vde_switch` and its interactive `vdeterm` console in xterm.js. Commands such as `help` and `port/allprint`, command history, completion and asynchronous VDE messages use the persistent terminal session. Each card has its own MAC address; connected cards also receive a VDE port. Debian Legacy uses `e1000`, while Debian Cloud uses `virtio-net-pci`. Newly prepared images of both Debian profiles request `eth0`, `eth1`, and so on; older Cloud bases may still show names such as `enp0s2` (`ip link show` lists the actual names). Start two hosts against the same switch to make a LAN and configure IP addresses inside the guests. Host Settings shows the resulting QEMU launch arguments in Mode Expert.
 
 Host Settings numbers cards from **Ethernet 0** in QEMU device order. This index is not a promise about the Linux name: both Debian image builders now set `net.ifnames=0`, while the kernel assigns `eth0`, `eth1`, and so on in discovery order. Rebuild an existing Debian Cloud base to apply this naming change; previous bases keep their original network names.
+
+### Rebuilt image checks (QEMU/KVM)
+
+The repeatable QEMU/KVM diagnostic passed on all four prepared systems, using two hosts per system on an isolated VDE switch:
+
+| System | LAN interface | Root login without password | `hostname` | Ping both ways |
+|---|---|---|---|---|
+| Debian 13 Legacy | `eth0` | OK | OK | OK |
+| Debian 13 Cloud | `eth0` | OK | OK | OK |
+| Alpine | `eth0` | OK | OK | OK |
+| OpenWrt (rebuilt) | `eth0`, no `br-lan` | OK after Enter | OK | OK |
+
+On Debian 13 Cloud, the active hostname and `hostname -f` returned the new name, while `/etc/hostname` still contained the base name `qemuweb`. The diagnostic also captured ICMP requests and replies with `tcpdump` on both hosts of every system.
+
+The previous OpenWrt image had no `hostname` command and used `br-lan` as its IP interface. Its preparation script now installs a small `hostname` get/set command when needed, removes the stock bridge and assigns the LAN directly to `eth0`. The RAW/VDI pair was rebuilt and the two-host KVM diagnostic passed. The old image's manual ping failure was also not reproduced when addresses were assigned to its former `br-lan` bridge.
+
+Run `./scripts/run-tests.sh guest-network` to repeat the serial root login, interface, `hostname`, static LAN addressing, bidirectional ping and `tcpdump` checks on two guests of each system. It uses a separate server and working disks; details and profile selection are in [test/TESTS.md](test/TESTS.md).
 
 For the guest kernel and image requirements behind the disk and NIC choices, see [QEMU guest buses and drivers](docs/qemu-guest-bus-and-drivers.md).
 
