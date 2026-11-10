@@ -319,6 +319,7 @@ async function run() {
   }, 30000);
   console.log('LAN2: QemuWeb démarré');
   console.log(`LAN2: moteur ${engine === 'qemu' ? 'QEMU/KVM' : 'QEMU/TCG'}`);
+  await request('/api/general-settings', {method: 'PUT', body: {engine}});
 
   const switchName = `lan2sw${nonce.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
   const sw = await request('/api/switches', {method: 'POST', body: {id: switchId, name: switchName, autostart: true}});

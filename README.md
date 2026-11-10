@@ -340,6 +340,8 @@ PORT=3003 npm start
 
 ## Tests
 
+Use `./run-tests.sh --list` to see the available tests. The script runs only the test you name, for example `./run-tests.sh unit`, `./run-tests.sh lan2` or `./run-tests.sh gts16-profiles`. Run `./run-tests.sh web` to start the application on port 3003 for manual interface testing; set `PORT` to choose another port. To save live output, use `./run-tests.sh lan2 2>&1 | tee lan2.log`.
+
 Run the Node test suite for the UI, naming, console views, and session logs:
 
 ```sh

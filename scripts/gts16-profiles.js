@@ -164,6 +164,7 @@ async function run() {
   child = spawn(process.execPath, ['server.js'], {cwd: root, env: {...process.env, PORT: String(port)}, stdio: ['ignore', 'pipe', 'pipe']});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data.toString()).slice(-12000); });
   await waitFor('server startup', () => serverOutput.includes('QemuWeb is ready.'), 30000);
+  await request('/api/general-settings', 'PUT', {engine});
   for (let index = 0; index < profiles.length; index++) {
     const profile = profiles[index];
     const id = ids[index];
