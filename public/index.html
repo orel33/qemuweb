@@ -673,51 +673,6 @@
     let createDraft = null;
     let cloneSourceId = null;
     let hostSettingsDraft = null;
-    const startupStoragePrefix = 'qemuweb.startup.';
-    function storedStartup(machine) {
-      try {
-        const value = JSON.parse(localStorage.getItem(startupStoragePrefix + machine.id) || 'null');
-        return value && typeof value.script === 'string' && typeof value.autoBuild === 'boolean' ? value : null;
-      } catch (_) { return null; }
-    }
-    function restoreStartup(machine, serverMedia, serverAutoBuild) {
-      const saved = storedStartup(machine);
-      machine.guestMedia = serverMedia || machine.guestMedia || {script: '#!/bin/sh\n', resources: []};
-      if (saved) machine.guestMedia.script = saved.script;
-      machine.autoBuildGuestCdrom = saved ? saved.autoBuild : !!serverAutoBuild;
-    }
-    function saveStartupLocally(machine) {
-      if (machine === hostSettingsDraft) return;
-      try {
-        localStorage.setItem(startupStoragePrefix + machine.id, JSON.stringify({
-          script: machine.guestMedia.script, autoBuild: !!machine.autoBuildGuestCdrom
-        }));
-      } catch (error) {
-        optionsStatus.textContent = `Cannot save start.sh in this browser: ${error.message}`;
-        optionsStatus.hidden = false;
-      }
-    }
-    function forgetStartupLocally(machine) {
-      if (machine?.kind !== 'vm') return;
-      try { localStorage.removeItem(startupStoragePrefix + machine.id); } catch (_) {}
-    }
-    async function startupPayload(machine) {
-      const saved = storedStartup(machine);
-      if (!machine.guestMedia) {
-        const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`);
-        const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Cannot load startup files.');
-        restoreStartup(machine, {script: data.script, resources: data.resources}, data.guestCdrom?.attached);
-      }
-      if (saved) {
-        machine.guestMedia.script = saved.script;
-        machine.autoBuildGuestCdrom = saved.autoBuild;
-      }
-      return {
-        guestMedia: machine.guestMedia,
-        autoBuildGuestCdrom: !!machine.autoBuildGuestCdrom
-      };
-    }
     function renderGuestMedia() {
       const machine = settingsMachine();
       if (!machine) return;
@@ -730,7 +685,6 @@
       if (!machine) return;
       if (!machine.guestMedia) machine.guestMedia = {script: '', resources: []};
       machine.guestMedia.script = guestStartScript.value;
-      saveStartupLocally(machine);
     });
     guestScriptFile.addEventListener('change', async () => {
       const file = guestScriptFile.files?.[0];
@@ -743,7 +697,6 @@
         if (machine) {
           if (!machine.guestMedia) machine.guestMedia = {script: '', resources: []};
           machine.guestMedia.script = script;
-          saveStartupLocally(machine);
           renderGuestMedia();
         }
       } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
@@ -753,7 +706,6 @@
       const machine = settingsMachine();
       if (!machine) return;
       machine.autoBuildGuestCdrom = guestAttachCdrom.checked;
-      saveStartupLocally(machine);
       refreshLaunchPreview(machine);
     });
     let namingSchemes = null;
@@ -1234,24 +1186,16 @@
     function defaultSettings(machine) {
       return {...(qemuConfig?.settings?.defaults || {}), ...(qemuConfig?.systems?.[machine.imageId]?.settings || {})};
     }
-    function settingsKey(machine) { return `qemuweb.settings.${machine.imageId}`; }
     function getMachineSettings(machine) {
-      if (machine.settingsLoaded) return {...machine.settings};
-      let saved = {};
-      try {
-        if (!machine.running) {
-          const stored = JSON.parse(localStorage.getItem(settingsKey(machine)) || '{}');
-          if (stored && typeof stored === 'object' && !Array.isArray(stored)) saved = stored;
-        }
-      } catch (_) {}
-      machine.settings = {...defaultSettings(machine), ...(machine.settings || {}), ...saved};
-      machine.settingsLoaded = true;
+      if (!machine.settingsLoaded) {
+        machine.settings = {...defaultSettings(machine), ...(machine.settings || {})};
+        machine.settingsLoaded = true;
+      }
       return {...machine.settings};
     }
     function saveMachineSettings(machine, settings) {
       machine.settings = {...settings};
       machine.settingsLoaded = true;
-      try { localStorage.setItem(settingsKey(machine), JSON.stringify(machine.settings)); } catch (_) {}
     }
     function addSettingRow(container, label, value, disabled = true) {
       const row = document.createElement('div');
@@ -1334,7 +1278,7 @@
     async function renderQemuOptions() {
       const machine = settingsMachine();
       if (!machine || machine.kind === 'switch' || !qemuOptionsPanel.open) return;
-      const creating = machine === hostSettingsDraft;
+      const creating = !!machine.isNew;
       const request = ++optionsRequest;
       optionsStatus.hidden = true;
       optionsStatus.textContent = '';
@@ -1361,26 +1305,7 @@
         const hostName = addSettingRow(settingsFixed, 'Host name', machine.hostname, false);
         hostName.maxLength = 64;
         hostName.required = true;
-        if (creating) hostName.oninput = () => {
-          machine.hostname = hostName.value.trim();
-        };
-        else hostName.onchange = async () => {
-          const name = hostName.value.trim();
-          if (name === machine.hostname) return;
-          try {
-            const response = await fetch(`/api/sessions/${encodeURIComponent(machine.id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
-            const result = await response.json();
-            if (!response.ok) throw new Error(result.error || 'Cannot rename host');
-            machine.hostname = result.name;
-            hostName.value = result.name;
-            settingsTitle.textContent = `Host Settings · ${machineDialogName(machine)}`;
-            renderTabs();
-          } catch (error) {
-            hostName.value = machine.hostname;
-            optionsStatus.textContent = error.message;
-            optionsStatus.hidden = false;
-          }
-        };
+        hostName.oninput = () => { machine.hostname = hostName.value.trim(); };
         for (const [key, field] of Object.entries(body.fields || {})) {
           const row = document.createElement('div');
           row.className = 'setting-row';
@@ -1409,13 +1334,12 @@
           if (field.type === 'number') input.required = true;
           input.onchange = () => {
             if (field.type === 'number' && !input.reportValidity()) {
-              input.value = settings[key];
+              input.value = getMachineSettings(machine)[key];
               return;
             }
-            const next = {...settings};
+            const next = getMachineSettings(machine);
             next[key] = field.type === 'number' ? Number(input.value) : input.value;
-            if (creating) { machine.settings = next; machine.settingsLoaded = true; }
-            else saveMachineSettings(machine, next);
+            saveMachineSettings(machine, next);
             refreshLaunchPreview(machine);
           };
           row.append(label, input);
@@ -1430,9 +1354,6 @@
             machine.osHint = selectedImage?.label || 'System';
             machine.hasDifferentialDisk = !!selectedImage?.hasDifferentialDisk;
             renderQemuOptions();
-          } else {
-            imageSelect.value = value;
-            imageSelect.dispatchEvent(new Event('change'));
           }
         });
         addSettingTextRow(settingsFixed, 'System ID', machine.imageId);
@@ -1542,7 +1463,7 @@
         const label = document.createElement('span'); label.textContent = `Ethernet ${index + 1}`;
         const select = document.createElement('select'); select.setAttribute('aria-label', `Ethernet interface ${index + 1} switch`); select.disabled = locked;
         const disconnected = document.createElement('option'); disconnected.value = ''; disconnected.textContent = 'Disconnected'; select.append(disconnected);
-        for (const sw of machines.values()) if (sw.kind === 'switch' && (sw.running || sw.id === selected)) {
+        for (const sw of machines.values()) if (sw.kind === 'switch') {
           const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
         }
         select.value = selected || '';
@@ -1587,7 +1508,7 @@
       const image = images.find(item => item.id === imageId);
       hostSettingsDraft = {
         id: `vm-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`,
-        kind: 'vm', hostname: nextMachineName('vm'), imageId,
+        isNew: true, kind: 'vm', hostname: nextMachineName('vm'), imageId,
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
@@ -1595,6 +1516,7 @@
       };
       hostAutostart.checked = true;
       hostCreateActions.hidden = false;
+      hostAutostart.closest('label').hidden = false;
       closeHostSettings.hidden = true;
       settingsTitle.textContent = 'Add a new host';
       qemuOptionsPanel.showModal();
@@ -1651,9 +1573,8 @@
       const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: guestMedia || {script: '#!/bin/sh\n', resources: []}, autoBuildGuestCdrom, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, autoBuildGuestCdrom: body.autoBuildGuestCdrom, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
-      saveStartupLocally(machine);
       if (select) selectMachine(id);
       else renderGraphic();
       return machine;
@@ -1709,7 +1630,6 @@
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to close session');
         machines.delete(id);
-        forgetStartupLocally(machine);
         showPage(activeId !== id ? activeId : null);
       } catch (error) { showStatusError(`Cannot close session: ${error.message}`); }
     }
@@ -1754,6 +1674,7 @@
       current.message = session.message;
       current.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
       current.networkInterfaces = session.networkInterfaces || [];
+      if (session.kind === 'vm' && session.settings) { current.settings = session.settings; current.settingsLoaded = true; }
       if (!(qemuOptionsPanel.open && settingsMachine()?.id === session.id)) {
         const image = images.find(item => item.id === session.imageId);
         current.imageId = image ? image.id : (session.imageId || images[0]?.id || '');
@@ -1931,12 +1852,11 @@
           await addSwitch({name: cloneName.value.trim(), autostart});
         } else {
           const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked ? [] : [...source.interfaces];
-          const mediaResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/guest-media`);
-          if (!mediaResponse.ok) throw new Error('Cannot copy guest startup files.');
-          const media = await mediaResponse.json();
-          const saved = storedStartup(source);
-          if (saved) media.script = saved.script;
-          await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine, interfaces, settings: getMachineSettings(source), guestMedia: media, autoBuildGuestCdrom: saved?.autoBuild ?? source.autoBuildGuestCdrom ?? media.guestCdrom?.attached ?? false});
+          const configResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
+          const config = await configResponse.json();
+          if (!configResponse.ok) throw new Error(config.error || 'Cannot copy host configuration.');
+          await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine,
+            interfaces, settings: config.settings, guestMedia: config.guestMedia, autoBuildGuestCdrom: config.autoBuildGuestCdrom});
           startHost = autostart;
         }
         cloneDialog.close();
@@ -2010,36 +1930,30 @@
       createDraft.interfaces.push(null);
       renderCreateNicControls();
     });
-    imageSelect.addEventListener('change', () => {
-      if (createDialog.open) return;
-      const machine = activeMachine();
-      if (!machine) return;
-      machine.imageId = imageSelect.value;
-      machine.settings = null;
-      machine.settingsLoaded = false;
-      const image = images.find(item => item.id === machine.imageId);
-      machine.osHint = image?.label || 'System';
-      machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
-      updateControls();
-      renderQemuOptions();
-      renderTabs();
-    });
     async function openHostSettings() {
-      if (activeMachine()?.kind !== 'vm') return;
-      hostSettingsDraft = null;
-      hostCreateActions.hidden = true;
-      closeHostSettings.hidden = false;
-      if (!qemuOptionsPanel.open) qemuOptionsPanel.showModal();
-      selectSettingsTab('general');
+      const source = activeMachine();
+      if (source?.kind !== 'vm') return;
       try {
-        const machine = activeMachine();
-        const response = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/guest-media`);
+        const response = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
         const data = await response.json();
-        if (!response.ok) throw new Error(data.error || 'Cannot load startup files.');
-        restoreStartup(machine, {script: data.script, resources: data.resources}, data.guestCdrom?.attached);
+        if (!response.ok) throw new Error(data.error || 'Cannot load host configuration.');
+        if (!machines.has(source.id) || activeId !== source.id) return;
+        hostSettingsDraft = {
+          id: source.id, isNew: false, kind: 'vm', hostname: data.name,
+          imageId: data.systemId, osHint: source.osHint, hasDifferentialDisk: source.hasDifferentialDisk,
+          engine: data.engine, interfaces: [...data.interfaces], networkInterfaces: data.networkInterfaces,
+          settings: {...data.settings}, settingsLoaded: true,
+          guestMedia: structuredClone(data.guestMedia), autoBuildGuestCdrom: data.autoBuildGuestCdrom,
+          running: source.running, hasLaunched: source.hasLaunched, busy: source.busy
+        };
+        hostCreateActions.hidden = false;
+        hostAutostart.closest('label').hidden = true;
+        closeHostSettings.hidden = false;
+        qemuOptionsPanel.showModal();
+        selectSettingsTab('general');
         renderGuestMedia();
-      } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
-      renderQemuOptions();
+        await renderQemuOptions();
+      } catch (error) { showStatusError(error.message); }
     }
     function selectSettingsTab(name, focus = false) {
       const selected = settingsTabs.find(tab => tab.dataset.settingsTab === name && !tab.hidden);
@@ -2088,17 +2002,44 @@
       }
       const name = settingsFixed.querySelector('input')?.value.trim();
       if (!name) return;
-      const autostart = hostAutostart.checked;
+      const autostart = draft.isNew && hostAutostart.checked;
       confirmHostCreate.disabled = true;
       cancelHostCreate.disabled = true;
       closeHostSettings.disabled = true;
       optionsStatus.hidden = true;
       try {
-        const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine, interfaces: [...draft.interfaces], settings: getMachineSettings(draft), guestMedia: draft.guestMedia, autoBuildGuestCdrom: draft.autoBuildGuestCdrom, select: false});
-        hostSettingsDraft = null;
-        qemuOptionsPanel.close();
-        selectMachine(machine.id);
-        if (autostart) await startActiveMachine();
+        if (draft.isNew) {
+          const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine,
+            interfaces: [...draft.interfaces], settings: getMachineSettings(draft), guestMedia: draft.guestMedia,
+            autoBuildGuestCdrom: draft.autoBuildGuestCdrom, select: false});
+          hostSettingsDraft = null;
+          qemuOptionsPanel.close();
+          selectMachine(machine.id);
+          if (autostart) await startActiveMachine();
+        } else {
+          const payload = {name, systemId: draft.imageId, engine: draft.engine, settings: getMachineSettings(draft),
+            interfaces: [...draft.interfaces], guestMedia: draft.guestMedia,
+            autoBuildGuestCdrom: draft.autoBuildGuestCdrom};
+          const response = await fetch(`/api/hosts/${encodeURIComponent(draft.id)}/config`, {
+            method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
+          });
+          const data = await response.json();
+          if (!response.ok) throw new Error(data.error || 'Cannot save host configuration.');
+          const machine = machines.get(draft.id);
+          if (machine) {
+            machine.hostname = data.name;
+            machine.settings = data.settings;
+            machine.settingsLoaded = true;
+            machine.interfaces = data.interfaces;
+            machine.networkInterfaces = data.networkInterfaces;
+            machine.guestMedia = data.guestMedia;
+            machine.autoBuildGuestCdrom = data.autoBuildGuestCdrom;
+          }
+          hostSettingsDraft = null;
+          qemuOptionsPanel.close();
+          renderTabs();
+          renderGraphic();
+        }
       } catch (error) {
         optionsStatus.textContent = error.message;
         optionsStatus.hidden = false;
@@ -2236,8 +2177,6 @@
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       machine.message = 'Starting…';
-      const launchSettings = getMachineSettings(machine);
-      saveMachineSettings(machine, launchSettings);
       updateControls();
       renderQemuOptions();
       renderTabs();
@@ -2254,14 +2193,22 @@
           pane.token = ++selectionToken;
           pane.socket.emit('select-session', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
         });
-        const startup = await startupPayload(machine);
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId, interfaces: machine.interfaces, settings: launchSettings, ...startup})});
+        const configResponse = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/config`, {cache: 'no-store'});
+        const config = await configResponse.json();
+        if (!configResponse.ok) throw new Error(config.error || 'Cannot load host configuration.');
+        machine.settings = config.settings;
+        machine.settingsLoaded = true;
+        machine.interfaces = config.interfaces;
+        machine.networkInterfaces = config.networkInterfaces;
+        machine.guestMedia = config.guestMedia;
+        machine.autoBuildGuestCdrom = config.autoBuildGuestCdrom;
+        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to start');
         machine.hostname = body.name;
         machine.hasLaunched = true;
         machine.running = true;
-        machine.settings = launchSettings;
         scheduleSessionSync();
         renderQemuOptions();
         if (pane.view === 'console') pane.terminal.focus();
@@ -2302,11 +2249,7 @@
         const response = await fetch('/api/sessions', {method: 'DELETE'});
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to exit all sessions');
-        for (const id of result.removed) {
-          const machine = machines.get(id);
-          machines.delete(id);
-          forgetStartupLocally(machine);
-        }
+        for (const id of result.removed) machines.delete(id);
         showPage();
       } catch (error) { showStatusError(`Cannot exit all sessions: ${error.message}`); }
       finally { exitAllBusy = false; updateControls(); }
@@ -2320,8 +2263,7 @@
       machine.message = 'Rebooting…';
       updateControls();
       try {
-        const startup = await startupPayload(machine);
-        const response = await fetch(`/api/reboot/${encodeURIComponent(machine.id)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(startup)});
+        const response = await fetch(`/api/reboot/${encodeURIComponent(machine.id)}`, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reboot');
       } catch (error) { machine.message = error.message; machine.error = error.message; }
@@ -2338,8 +2280,7 @@
       machine.message = 'Resetting from base image…';
       updateControls();
       try {
-        const startup = await startupPayload(machine);
-        const response = await fetch(`/api/reset/${encodeURIComponent(machine.id)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({settings: getMachineSettings(machine), ...startup})});
+        const response = await fetch(`/api/reset/${encodeURIComponent(machine.id)}`, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reset');
         machine.hasLaunched = true;

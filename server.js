@@ -54,7 +54,13 @@ function writeJsonAtomic(file, value) {
 }
 
 function saveSessionMetadata(engine = sessionEngine) {
-  writeJsonAtomic(sessionFile, {schemaVersion: 1, id: sessionId, engine});
+  const references = kind => [...sessions.values()]
+    .filter(session => session.kind === kind && session.hostname && (kind === 'switch' || session.selectedImage))
+    .map(session => ({id: session.id, path: path.relative(runtimeInstance,
+      path.join(session.runtimeDir, kind === 'switch' ? 'switch.json' : 'host.json'))}))
+    .sort((left, right) => left.id.localeCompare(right.id));
+  writeJsonAtomic(sessionFile, {schemaVersion: 1, id: sessionId, engine,
+    hosts: references('vm'), switches: references('switch')});
 }
 
 function requireSessionEngine(engine) {
@@ -512,6 +518,33 @@ function cleanupGuestIsoFiles(session) {
   session.activeGuestIso = null;
 }
 
+function persistSwitchConfiguration(session) {
+  writeJsonAtomic(tempFile(session, 'switch.json'), {schemaVersion: 1, id: session.id, name: session.hostname, kind: 'vde'});
+}
+
+function hostConfiguration(session) {
+  return {
+    schemaVersion: 1,
+    id: session.id,
+    name: session.hostname,
+    systemId: session.selectedImage.id,
+    engine: session.engine,
+    settings: session.launchSettings,
+    networkInterfaces: session.networkInterfaces,
+    guestMedia: session.guestMedia,
+    autoBuildGuestCdrom: session.guestIsoAttached
+  };
+}
+
+function persistHostConfiguration(session) {
+  writeJsonAtomic(tempFile(session, 'host.json'), hostConfiguration(session));
+}
+
+function hostConfigurationResponse(session) {
+  return {...hostConfiguration(session), interfaces: session.networkInterfaces.map(nic => nic.switchId),
+    running: !!session.machine, hasLaunched: session.everStarted, guestCdrom: guestIsoStatus(session)};
+}
+
 function imagePath(file) { return path.resolve(root, file); }
 
 function qemuArgs(session, image, overlay) {
@@ -885,7 +918,10 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (resume || options.reset) {
     for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], selectedEngine);
   } else {
-    session.networkInterfaces = assignNetworkInterfaces(session, validateNetworkInterfaces(options.interfaces, selectedEngine));
+    const switches = validateNetworkInterfaces(options.interfaces, selectedEngine);
+    const saved = session.networkInterfaces.map(nic => nic.switchId);
+    session.networkInterfaces = JSON.stringify(options.interfaces) === JSON.stringify(saved)
+      ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
   }
   const displayName = session.hostname || allocateName('h');
   if (fs.existsSync(session.socketPath)) fs.unlinkSync(session.socketPath);
@@ -1106,6 +1142,7 @@ async function destroySession(session) {
     removeHostnameAlias(session);
     sessions.delete(session.id);
     fs.rmSync(session.runtimeDir, {recursive: true, force: true});
+    saveSessionMetadata();
     return;
   }
   session.action = 'destroy';
@@ -1139,6 +1176,7 @@ async function destroySession(session) {
   removeHostnameAlias(session);
   sessions.delete(session.id);
   fs.rmSync(session.runtimeDir, {recursive: true, force: true});
+  saveSessionMetadata();
 }
 
 async function exitAllSessions() {
@@ -1158,8 +1196,13 @@ async function exitAllSessions() {
 
 app.post('/api/start', (req, res) => {
   try {
-    const session = start(req.body.sessionId, req.body.engine, req.body.imageId, {interfaces: req.body.interfaces, settings: req.body.settings,
-      guestMedia: req.body.guestMedia, autoBuildGuestCdrom: req.body.autoBuildGuestCdrom});
+    const configured = getSession(req.body?.sessionId);
+    if (!configured || configured.kind !== 'vm' || !configured.selectedImage) throw new Error('Unknown host configuration.');
+    if (req.body.engine !== configured.engine || req.body.imageId !== configured.selectedImage.id) throw new Error('Host system and engine differ from the saved configuration.');
+    const session = start(configured.id, configured.engine, configured.selectedImage.id, {
+      interfaces: configured.networkInterfaces.map(nic => nic.switchId), settings: configured.launchSettings,
+      guestMedia: configured.guestMedia, autoBuildGuestCdrom: configured.guestIsoAttached
+    });
     res.json({ok: true, sessionId: session.id, name: session.hostname});
   } catch (error) {
     const message = error.stderr ? error.stderr.toString().trim() : error.message;
@@ -1202,6 +1245,7 @@ app.post('/api/topology', async (req, res) => {
       const id = `sw-${crypto.randomUUID().replaceAll('-', '').slice(0, 24)}`;
       const session = getSession(id, true, 'switch'); created.push(id);
       setSessionHostname(session, sw.name); session.lastMessage = 'VDE switch ready to start';
+      persistSwitchConfiguration(session);
       switchIds.set(sw.name, id);
     }
     for (const host of topology.hosts) {
@@ -1209,8 +1253,11 @@ app.post('/api/topology', async (req, res) => {
       const interfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(host.switches.map(name => switchIds.get(name)), engine, false));
       const session = getSession(id, true, 'vm'); created.push(id);
       setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
-      session.networkInterfaces = interfaces; session.lastMessage = 'Host ready to start';
+      session.networkInterfaces = interfaces; session.launchSettings = launchSettingsFor(host.system);
+      session.lastMessage = 'Host ready to start';
+      persistHostConfiguration(session);
     }
+    saveSessionMetadata();
     const errors = [];
     if (autostart) {
       for (const id of created) {
@@ -1269,7 +1316,7 @@ app.post('/api/hosts', (req, res) => {
     const hostname = name === undefined ? allocateName('h') : name.trim();
     if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
     const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
-    const launchSettings = settings ? launchSettingsFor(image.id, settings) : null;
+    const launchSettings = launchSettingsFor(image.id, settings || {});
     const validatedMedia = guestMedia === undefined ? {script: '#!/bin/sh\n', resources: []} : validateBootFiles(guestMedia);
     if (typeof createGuestCdrom !== 'boolean' || typeof attachGuestCdrom !== 'boolean' || (attachGuestCdrom && !createGuestCdrom) ||
       (autoBuildGuestCdrom !== undefined && typeof autoBuildGuestCdrom !== 'boolean')) throw new Error('Invalid guest CD-ROM options.');
@@ -1283,6 +1330,8 @@ app.post('/api/hosts', (req, res) => {
       setSessionHostname(session, hostname);
       if (createGuestCdrom) buildGuestIso(session, validatedMedia);
       session.guestIsoAttached = autoBuildGuestCdrom === undefined ? attachGuestCdrom : autoBuildGuestCdrom;
+      persistHostConfiguration(session);
+      saveSessionMetadata();
     } catch (error) {
       cleanupGuestIsoFiles(session);
       removeHostnameAlias(session);
@@ -1292,7 +1341,61 @@ app.post('/api/hosts', (req, res) => {
     }
     session.lastMessage = 'Host ready to start';
     io.emit('sessions-changed', {sessionId: id, running: false, hasLaunched: false, message: session.lastMessage});
-    res.json({id, name: hostname, imageId: image.id, engine, interfaces: networkInterfaces.map(nic => nic.switchId), networkInterfaces, settings: launchSettings, guestCdrom: guestIsoStatus(session)});
+    res.json({...hostConfigurationResponse(session), imageId: image.id});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
+app.get('/api/hosts/:sessionId/config', (req, res) => {
+  try {
+    const session = getSession(req.params.sessionId);
+    if (!session || session.kind !== 'vm' || !session.selectedImage) throw new Error('Unknown host.');
+    res.set('Cache-Control', 'no-store');
+    res.json(hostConfigurationResponse(session));
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+
+app.put('/api/hosts/:sessionId/config', (req, res) => {
+  try {
+    const session = getSession(req.params.sessionId);
+    if (!session || session.kind !== 'vm' || !session.selectedImage) throw new Error('Unknown host.');
+    if (session.action) throw new Error('Wait for the current host action to finish.');
+    const body = req.body;
+    if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid host configuration.');
+    const allowed = ['name', 'systemId', 'engine', 'settings', 'interfaces', 'guestMedia', 'autoBuildGuestCdrom'];
+    if (Object.keys(body).some(key => !allowed.includes(key)) || allowed.some(key => !Object.hasOwn(body, key))) throw new Error('Incomplete host configuration.');
+    if (body.systemId !== session.selectedImage.id || body.engine !== session.engine) throw new Error('System and engine are read-only for an existing host.');
+    if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(body.name)) throw new Error('Invalid host name (1 to 64 characters).');
+    const name = body.name.trim();
+    if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name)) throw new Error('Host name already exists.');
+    const settings = validateLaunchSettings(body.settings);
+    if (session.machine && ['memory', 'cpus', 'clock'].some(key => settings[key] !== session.launchSettings[key])) throw new Error('Resource settings are locked while this host runs until CMZ38 β3.');
+    const media = validateBootFiles(body.guestMedia);
+    if (typeof body.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
+    const switches = validateNetworkInterfaces(body.interfaces, session.engine, false);
+    const oldSwitches = session.networkInterfaces.map(nic => nic.switchId);
+    if (session.everStarted && JSON.stringify(body.interfaces) !== JSON.stringify(oldSwitches)) throw new Error('Network interfaces are locked after the first launch until CMZ38 β3.');
+    const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
+      ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
+    const previousName = session.hostname;
+    const previousMedia = session.guestMedia;
+    if (name !== previousName) setSessionHostname(session, name);
+    try {
+      writeJsonAtomic(tempFile(session, 'host.json'), {
+        schemaVersion: 1, id: session.id, name, systemId: body.systemId, engine: body.engine,
+        settings, networkInterfaces: interfaces, guestMedia: media, autoBuildGuestCdrom: body.autoBuildGuestCdrom
+      });
+    } catch (error) {
+      if (name !== previousName) setSessionHostname(session, previousName);
+      throw error;
+    }
+    session.launchSettings = settings;
+    session.networkInterfaces = interfaces;
+    session.guestMedia = media;
+    session.guestIsoAttached = body.autoBuildGuestCdrom;
+    if (JSON.stringify(media) !== JSON.stringify(previousMedia)) session.guestIsoOutdated = !!session.guestIso;
+    if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});
+    io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, message: stateMessage(session)});
+    res.json(hostConfigurationResponse(session));
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -1308,7 +1411,11 @@ app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
-    session.guestMedia = validateBootFiles(req.body);
+    const media = validateBootFiles(req.body);
+    const previous = session.guestMedia;
+    session.guestMedia = media;
+    try { persistHostConfiguration(session); }
+    catch (error) { session.guestMedia = previous; throw error; }
     session.guestIsoOutdated = !!session.guestIso;
     appendLog(session, '# Guest startup files saved; create the CD-ROM to include these changes.');
     res.json({ok: true, files: session.guestMedia.resources.length, guestCdrom: guestIsoStatus(session)});
@@ -1319,7 +1426,12 @@ app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
-    const status = buildGuestIso(session, req.body);
+    const media = validateBootFiles(req.body);
+    const previous = session.guestMedia;
+    session.guestMedia = media;
+    try { persistHostConfiguration(session); }
+    catch (error) { session.guestMedia = previous; throw error; }
+    const status = buildGuestIso(session, media);
     res.json({ok: true, guestCdrom: status});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
@@ -1330,7 +1442,10 @@ app.patch('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     if (typeof req.body?.attached !== 'boolean') throw new Error('Invalid CD-ROM attachment option.');
     if (req.body.attached && !guestIsoStatus(session).created) throw new Error('Create the CD-ROM before attaching it.');
+    const previous = session.guestIsoAttached;
     session.guestIsoAttached = req.body.attached;
+    try { persistHostConfiguration(session); }
+    catch (error) { session.guestIsoAttached = previous; throw error; }
     res.json({ok: true, guestCdrom: guestIsoStatus(session)});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
@@ -1344,6 +1459,8 @@ app.post('/api/switches', async (req, res) => {
     session = getSession(id, true, 'switch');
     setSessionHostname(session, name);
     session.lastMessage = 'VDE switch ready to start';
+    persistSwitchConfiguration(session);
+    saveSessionMetadata();
     if (autostart) await startSwitch(session);
     io.emit('sessions-changed', {sessionId: id, running: !!session.machine, hasLaunched: session.everStarted, message: stateMessage(session)});
     res.json({id, name, running: !!session.machine, message: stateMessage(session)});
@@ -1390,12 +1507,12 @@ app.post('/api/stop/:sessionId', async (req, res) => {
 });
 
 app.post('/api/reboot/:sessionId', async (req, res) => {
-  try { await reboot(getSession(req.params.sessionId), {guestMedia: req.body?.guestMedia, autoBuildGuestCdrom: req.body?.autoBuildGuestCdrom}); res.json({ok: true}); }
+  try { await reboot(getSession(req.params.sessionId)); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
 app.post('/api/reset/:sessionId', async (req, res) => {
-  try { await reset(getSession(req.params.sessionId), req.body?.settings, {guestMedia: req.body?.guestMedia, autoBuildGuestCdrom: req.body?.autoBuildGuestCdrom}); res.json({ok: true}); }
+  try { await reset(getSession(req.params.sessionId)); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
@@ -1419,7 +1536,10 @@ app.patch('/api/sessions/:sessionId', (req, res) => {
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
     if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
+    const previous = session.hostname;
     setSessionHostname(session, name.trim());
+    try { persistHostConfiguration(session); }
+    catch (error) { setSessionHostname(session, previous); throw error; }
     io.emit('session-renamed', {sessionId: session.id, name: session.hostname});
     res.json({name: session.hostname});
   } catch (error) { res.status(400).json({error: error.message}); }
