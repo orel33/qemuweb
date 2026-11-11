@@ -73,8 +73,11 @@ When preparation succeeds, the script:
 2. makes the RAW base read-only (`0444`);
 3. derives a read-only VDI base from the same RAW content.
 
-Existing non-empty bases are reused. Remove the two `debian13-legacy` base
-files before deliberately rebuilding this profile.
+Existing non-empty bases are reused. Use
+`bash scripts/prepare.sh --system debian13-legacy --force` after stopping
+dependent hosts to deliberately rebuild this profile. Its base has an empty
+`/etc/machine-id` and `/var/lib/dbus/machine-id` links to it; see the
+[shared image contract](image-contract.md).
 
 ## Runtime virtual hardware
 

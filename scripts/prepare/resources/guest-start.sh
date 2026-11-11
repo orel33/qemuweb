@@ -1,6 +1,16 @@
 #!/bin/sh
 # Installed inside each prepared guest. Run again manually after remounting media.
 set -u
+# Alpine and OpenWrt do not run systemd. Debian normally fills the empty
+# template file earlier in boot; this also covers a missing systemd commit.
+if [ ! -s /etc/machine-id ]; then
+  machine_id=$(tr -d '-' < /proc/sys/kernel/random/uuid)
+  case "$machine_id" in
+    *[!0-9a-f]*|'') echo 'QEMUWEB_START_ERROR cannot generate machine ID'; exit 1 ;;
+  esac
+  [ "${#machine_id}" -eq 32 ] || { echo 'QEMUWEB_START_ERROR invalid machine ID'; exit 1; }
+  printf '%s\n' "$machine_id" > /etc/machine-id || { echo 'QEMUWEB_START_ERROR cannot save machine ID'; exit 1; }
+fi
 target=/mnt/cdrom
 label=QWEBSTART
 mkdir -p "$target"

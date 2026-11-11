@@ -114,6 +114,14 @@ systemctl enable qemuweb-start.service
 # Refresh boot artifacts after changing GRUB and console/kernel settings.
 update-grub
 update-initramfs -u -k all
+# The installed image is a template: systemd must choose a new identity in
+# each host's working disk, rather than cloning the installer's machine ID.
+: > /etc/machine-id
+mkdir -p /var/lib/dbus
+rm -f /var/lib/dbus/machine-id
+ln -s /etc/machine-id /var/lib/dbus/machine-id
+test ! -s /etc/machine-id
+test "$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id
 echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0 || true
 SETUP
   chmod +x "$temp_dir/legacy-setup.sh"

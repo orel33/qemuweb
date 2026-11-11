@@ -4,7 +4,7 @@ QEMU presents virtual hardware to the guest. The guest kernel needs a matching d
 
 ## Debian 13 cloud and legacy profiles
 
-The `debian13-cloud` VM uses VirtIO for both its system disk and LAN NIC. An earlier test boot with `virtio-net-pci` showed `enp0s2`. The preparation now writes `net.ifnames=0` into GRUB and matches `eth*` in its persistent `systemd-networkd` configuration, as the Legacy profile does. A rebuilt Cloud image is intended to present `eth0`, `eth1`, and so on; guest boot validation remains to be run. The profile keeps `diskInterface: virtio` and `networkModel: virtio-net-pci`.
+The `debian13-cloud` VM uses VirtIO for both its system disk and LAN NIC. An earlier test boot with `virtio-net-pci` showed `enp0s2`. The preparation now writes `net.ifnames=0` into GRUB and matches `eth*` in its persistent `systemd-networkd` configuration, as the Legacy profile does. The rebuilt Cloud image presented `eth0` in the two-host KVM diagnostic; additional cards are intended to appear as `eth1` and so on. The profile keeps `diskInterface: virtio` and `networkModel: virtio-net-pci`.
 
 The separate `debian13-legacy` profile is installed from the official Debian 13 netinst ISO, not from a cloud image. Its preparation installs `linux-image-amd64` and the network/debug toolkit, and configures the boot command line with `root=/dev/sda1 console=tty0 console=ttyS0,115200 net.ifnames=0`. It also enables the GRUB console on serial and VGA. The profile uses an IDE disk and `e1000`; Debian mounts `/dev/sda1`, loads the Intel driver, reaches the serial login prompt, and names its cards `eth0`, `eth1`, and so on.
 
@@ -30,7 +30,7 @@ Qemuweb uses `-drive if=virtio` for the Debian cloud system disk and `-drive if=
 | `virtio-net-pci` | `virtio_pci` and `virtio_net` | Virtualization-aware device with lower emulation overhead; recommended for the current Debian image. |
 | `e1000` | `e1000` | Emulates an Intel network card; useful for compatibility when the guest kernel has this driver. |
 
-The NIC driver can load after Debian has mounted its local root disk, so it normally does not need to be in the initramfs. A missing NIC driver means QEMU can show a connected card while the guest only lists `lo`. The Debian 13 cloud image used by Qemuweb had no usable `e1000` driver; its selected card was therefore changed to `virtio-net-pci`. The earlier `enp0s2` observation came from a base built before the `net.ifnames=0` change. Qemuweb's “NIC 1” is a device index; the guest assigns its Linux interface name.
+The NIC driver can load after Debian has mounted its local root disk, so it normally does not need to be in the initramfs. A missing NIC driver means QEMU can show a connected card while the guest only lists `lo`. The Debian 13 cloud image used by Qemuweb had no usable `e1000` driver; its selected card was therefore changed to `virtio-net-pci`. The earlier `enp0s2` observation came from a base built before the `net.ifnames=0` change. QemuWeb's “Ethernet 0” is a device index; the guest assigns its Linux interface name.
 
 Both NIC models can connect to the same VDE switch. The NIC model does not determine whether the guest gets an IP address. VDE provides layer 2 switching, not DHCP; configure addresses in the guests or provide a DHCP service on the LAN.
 

@@ -103,6 +103,10 @@ start() { ebegin "QemuWeb guest startup"; /usr/local/sbin/qemuweb-guest-start >/
 INIT_HOOK
 chmod 755 "$target/usr/local/sbin/qemuweb-guest-start" "$target/etc/init.d/qemuweb-guest-start"
 ln -sf /etc/init.d/qemuweb-guest-start "$target/etc/runlevels/default/qemuweb-guest-start"
+# Keep the published image generic. The guest hook fills this file on the
+# first boot of each host's separate working disk.
+: > "$target/etc/machine-id"
+test ! -s "$target/etc/machine-id"
 umount "$target"
 sync
 echo QEMUNET_ALPINE_PREPARED

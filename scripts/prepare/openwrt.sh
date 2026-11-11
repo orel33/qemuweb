@@ -84,6 +84,18 @@ done
 uci delete 'network.@device[0]'
 uci set 'network.lan.device=eth0'
 uci commit network
+# A plain lab image must not hand out addresses on a static-IP-only LAN.
+# Keep OpenWrt's LAN interface, but disable its stock DHCPv4, DHCPv6 and RA.
+if uci -q get dhcp.lan >/dev/null; then
+  uci set 'dhcp.lan.ignore=1'
+  uci set 'dhcp.lan.dhcpv6=disabled'
+  uci set 'dhcp.lan.ra=disabled'
+fi
+if uci -q get 'dhcp.@dnsmasq[0]' >/dev/null; then
+  uci set 'dhcp.@dnsmasq[0].port=0'
+fi
+uci commit dhcp
+/etc/init.d/odhcpd disable
 OPENWRT_PREPARE
   cat >> "$guest_script" <<'OPENWRT_HOOK'
 mkdir -p /usr/local/sbin
@@ -99,6 +111,10 @@ start() { /usr/local/sbin/qemuweb-guest-start >/dev/ttyS0 2>&1; }
 INIT_HOOK
 chmod 755 /usr/local/sbin/qemuweb-guest-start /etc/init.d/qemuweb-guest-start
 /etc/init.d/qemuweb-guest-start enable
+# OpenWrt has no systemd machine-id generator; the guest hook creates a
+# per-host value on the first boot from this generic image.
+: > /etc/machine-id
+test ! -s /etc/machine-id
 sync
 echo QEMUWEB_OPENWRT_PREPARED
 OPENWRT_HOOK
