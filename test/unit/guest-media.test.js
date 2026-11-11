@@ -6,7 +6,21 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {execFileSync} = require('child_process');
-const {validateBootFiles, readStartupFiles, writeStartupFiles, writeStartupScript, createGuestIso, LABEL} = require('../../guest-media');
+const {validateBootFiles, validateStartupTemplate, readStartupFiles, writeStartupFiles, writeStartupScript, createGuestIso, LABEL} = require('../../guest-media');
+
+test('startup template validation catches missing interfaces and malformed tokens before ISO creation', () => {
+  const connected = [{switchId: 's1', port: 2}];
+  const disconnected = [{switchId: null, port: null}];
+  const script = '#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n';
+  assert.equal(validateStartupTemplate(script, connected, true), script);
+  assert.equal(validateStartupTemplate('printf "%s\\n" "$@"\n', [], true), 'printf "%s\\n" "$@"\n');
+  assert.throws(() => validateStartupTemplate(script, []), /@IFNAME0@ requires Ethernet 0/);
+  assert.throws(() => validateStartupTemplate(script, disconnected, true), /@SWPORT0@ requires Ethernet 0 to be connected/);
+  assert.equal(validateStartupTemplate(script, disconnected), script);
+  assert.throws(() => validateStartupTemplate('echo @IFNAME0\n', connected), /Malformed start.sh template/);
+  assert.throws(() => validateStartupTemplate('echo @IFNAME4@\n', connected), /@IFNAME4@ is unknown/);
+  assert.throws(() => validateStartupTemplate('echo @WRONG@\n', connected), /@WRONG@ is unknown/);
+});
 
 test('guest startup media rejects traversal, duplicate names, oversized files and path collisions', () => {
   const basic = {script: '#!/bin/sh\n', resources: []};

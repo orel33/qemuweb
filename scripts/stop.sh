@@ -8,8 +8,10 @@ if [[ ! "$port" =~ ^[0-9]+$ ]]; then
   exit 2
 fi
 pid_file="$root/runtime/server-$port.pid"
+session_file="$root/runtime/server-$port.session"
 
 if [[ ! -f "$pid_file" ]]; then
+  rm -f -- "$session_file"
   echo "No QemuWeb server tracked on port $port."
   exit 0
 fi
@@ -17,6 +19,7 @@ fi
 read -r pid < "$pid_file"
 if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
   rm -f -- "$pid_file"
+  rm -f -- "$session_file"
   echo "No QemuWeb server running on port $port (stale PID removed)."
   exit 0
 fi
@@ -32,6 +35,7 @@ kill -TERM "$pid"
 for _ in {1..60}; do
   if ! kill -0 "$pid" 2>/dev/null; then
     rm -f -- "$pid_file"
+    rm -f -- "$session_file"
     echo 'QemuWeb stopped.'
     exit 0
   fi

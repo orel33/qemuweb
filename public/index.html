@@ -745,6 +745,23 @@
       return '#!/bin/sh\nhostname @HOSTNAME@\n' +
         (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n' : '');
     }
+    function validateStartScriptDraft(machine) {
+      const script = machine.guestMedia?.script || '';
+      const interfaces = machine.interfaces || [];
+      const remaining = script.replace(/@([A-Za-z][A-Za-z0-9_]*)@/g, (token, key) => {
+        if (key === 'HOSTNAME') return '';
+        const match = /^(IFNAME|SWPORT)([0-3])$/.exec(key);
+        if (!match) throw new Error(`start.sh template ${token} is unknown. Use @HOSTNAME@, @IFNAME0@…@IFNAME3@ or @SWPORT0@…@SWPORT3@.`);
+        const index = Number(match[2]);
+        if (index >= interfaces.length) throw new Error(`start.sh template ${token} requires Ethernet ${index}. Add that interface in Network.`);
+        if (match[1] === 'SWPORT' && machine.autoBuildGuestCdrom && !interfaces[index]) {
+          throw new Error(`start.sh template ${token} requires Ethernet ${index} to be connected to a switch in Network.`);
+        }
+        return '';
+      });
+      const malformed = /@(?:HOSTNAME|IFNAME\d*|SWPORT\d*)(?![A-Za-z0-9_@])|\b(?:HOSTNAME|IFNAME\d+|SWPORT\d+)@/.exec(remaining);
+      if (malformed) throw new Error(`Malformed start.sh template near ${malformed[0]}. Use a complete @NAME@ token.`);
+    }
     guestStartScript.addEventListener('input', () => {
       const machine = settingsMachine();
       if (!machine) return;
@@ -1990,7 +2007,8 @@
         if (source.kind === 'switch') {
           await addSwitch({name: cloneName.value.trim(), autostart});
         } else {
-          const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked ? [] : [...source.interfaces];
+          const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked
+            ? (generalSettings.engine === 'virtualbox' ? [] : [null]) : [...source.interfaces];
           const configResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
           const config = await configResponse.json();
           if (!configResponse.ok) throw new Error(config.error || 'Cannot copy host configuration.');
@@ -2145,6 +2163,13 @@
       }
       const name = settingsFixed.querySelector('input')?.value.trim();
       if (!name) return;
+      try { validateStartScriptDraft(draft); }
+      catch (error) {
+        selectSettingsTab(error.message.includes('requires Ethernet') ? 'network' : 'startup');
+        optionsStatus.textContent = error.message;
+        optionsStatus.hidden = false;
+        return;
+      }
       const autostart = draft.isNew && hostAutostart.checked;
       const resetDisk = !draft.isNew && draft.resetWorkingDiskAtRestart;
       let restartNow = false;
@@ -2214,7 +2239,13 @@
         }
       } catch (error) {
         if (dialogClosed) showStatusError(error.message);
-        else { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
+        else {
+          if (/^(?:start\.sh template|Malformed start\.sh template)/.test(error.message)) {
+            selectSettingsTab(error.message.includes('requires Ethernet') ? 'network' : 'startup');
+          }
+          optionsStatus.textContent = error.message;
+          optionsStatus.hidden = false;
+        }
         if (!draft.isNew) { renderTabs(); scheduleSessionSync(); }
       } finally {
         confirmHostCreate.disabled = false;

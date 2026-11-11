@@ -38,6 +38,27 @@ function normalizeScript(script) {
   return validateScript(script && !script.endsWith('\n') ? `${script}\n` : script);
 }
 
+function validateStartupTemplate(script, interfaces = [], requireConnectedPorts = false) {
+  validateScript(script);
+  const remaining = script.replace(/@([A-Za-z][A-Za-z0-9_]*)@/g, (token, key) => {
+    if (key === 'HOSTNAME') return '';
+    const match = /^(IFNAME|SWPORT)([0-3])$/.exec(key);
+    if (!match) throw new Error(`start.sh template ${token} is unknown. Use @HOSTNAME@, @IFNAME0@…@IFNAME3@ or @SWPORT0@…@SWPORT3@.`);
+    const index = Number(match[2]);
+    if (index >= interfaces.length) throw new Error(`start.sh template ${token} requires Ethernet ${index}. Add that interface in Network.`);
+    if (match[1] === 'SWPORT' && requireConnectedPorts) {
+      const nic = interfaces[index];
+      if (!nic?.switchId || !Number.isInteger(nic.port) || nic.port < 1 || nic.port > 32) {
+        throw new Error(`start.sh template ${token} requires Ethernet ${index} to be connected to a switch in Network.`);
+      }
+    }
+    return '';
+  });
+  const malformed = /@(?:HOSTNAME|IFNAME\d*|SWPORT\d*)(?![A-Za-z0-9_@])|\b(?:HOSTNAME|IFNAME\d+|SWPORT\d+)@/.exec(remaining);
+  if (malformed) throw new Error(`Malformed start.sh template near ${malformed[0]}. Use a complete @NAME@ token.`);
+  return script;
+}
+
 function validateBootFiles(value) {
   if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('Invalid startup files.');
   validateScript(value.script);
@@ -168,6 +189,7 @@ function shellQuote(value) {
 }
 
 function substituteStartupValues(script, hostname, interfaces) {
+  validateStartupTemplate(script, interfaces, true);
   return script.replace(/@(HOSTNAME|IFNAME\d+|SWPORT\d+)@/g, (token, key) => {
     if (key === 'HOSTNAME') {
       if (typeof hostname !== 'string') throw new Error('A host name is required to build an ISO with @HOSTNAME@.');
@@ -218,4 +240,4 @@ function createGuestIso({directory, destination, genisoimage, hostname, interfac
   return destination;
 }
 
-module.exports = {LABEL, validateBootFiles, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso};
+module.exports = {LABEL, validateBootFiles, validateStartupTemplate, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso};

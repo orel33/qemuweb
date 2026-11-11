@@ -11,7 +11,7 @@ From this worktree, run `PORT=3003 npm start` and open `http://127.0.0.1:3003`. 
 1. Open **General Settings**, choose **QEMU · TCG**, and close the dialog.
 2. Add two hosts. In each Host Settings dialog, inspect the read-only system ID, base image, disk bus, network card, description and login hint. The creation dialog still lets you select a system. Uncheck **Autostart** if you only want to inspect configuration.
 3. Reopen **General Settings** and confirm the engine remains **QEMU · TCG**. Both host dialogs must show the same engine.
-4. Refresh the page and confirm the engine and both host entries remain. Inspect `runtime/<session-id>/session.json` for the ID and engine.
+4. Refresh the page and confirm the engine and both host entries remain. Inspect `runtime/<session-id>/session.json` for the engine and host IDs; the session ID is the enclosing directory name. PID and port are process details outside this JSON.
 5. Try choosing another engine with hosts present. The UI must show that the hosts must be deleted first, then restore the previous selection.
 
 Host Settings persistence, transactional OK/Cancel, per-host and switch JSON, and applying edits at the next guest start belong to β2–β4. Full restoration after a server restart remains a later roadmap stage; a new server process starts a new session. No automated unit or integration tests were run for this beta.
