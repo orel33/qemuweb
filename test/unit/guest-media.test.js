@@ -14,12 +14,12 @@ test('startup template validation catches missing interfaces and malformed token
   const script = '#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n';
   assert.equal(validateStartupTemplate(script, connected, true), script);
   assert.equal(validateStartupTemplate('printf "%s\\n" "$@"\n', [], true), 'printf "%s\\n" "$@"\n');
-  assert.throws(() => validateStartupTemplate(script, []), /@IFNAME0@ requires Ethernet 0/);
-  assert.throws(() => validateStartupTemplate(script, disconnected, true), /@SWPORT0@ requires Ethernet 0 to be connected/);
+  assert.throws(() => validateStartupTemplate(script, []), /Error: unresolved variables in start\.sh: @IFNAME0@, @SWPORT0@/);
+  assert.throws(() => validateStartupTemplate(script, disconnected, true), /Error: unresolved variables in start\.sh: @SWPORT0@/);
   assert.equal(validateStartupTemplate(script, disconnected), script);
-  assert.throws(() => validateStartupTemplate('echo @IFNAME0\n', connected), /Malformed start.sh template/);
-  assert.throws(() => validateStartupTemplate('echo @IFNAME4@\n', connected), /@IFNAME4@ is unknown/);
-  assert.throws(() => validateStartupTemplate('echo @WRONG@\n', connected), /@WRONG@ is unknown/);
+  assert.throws(() => validateStartupTemplate('echo @IFNAME0\n', connected), /Error: malformed variables in start\.sh: @IFNAME0/);
+  assert.throws(() => validateStartupTemplate('echo @IFNAME4@\n', connected), /Error: unresolved variables in start\.sh: @IFNAME4@/);
+  assert.throws(() => validateStartupTemplate('echo @WRONG@\n', connected), /Error: unresolved variables in start\.sh: @WRONG@/);
 });
 
 test('guest startup media rejects traversal, duplicate names, oversized files and path collisions', () => {
@@ -77,7 +77,7 @@ test('separate read-only ISOs include external companion files under each host',
       assert.match(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), /ifconfig @IFNAME0@ 192\.168\.0\.@SWPORT0@\/24/);
       assert.throws(() => createGuestIso({directory: startup, destination: path.join(host, 'disconnected.iso'),
         genisoimage: '/usr/bin/genisoimage', hostname: name, interfaces: [{switchId: null, port: null}]}),
-      /@SWPORT0@ requires Ethernet 0 to be connected/);
+      /Error: unresolved variables in start\.sh: @SWPORT0@/);
       assert.equal(fs.statSync(iso).mode & 0o222, 0);
     }
   } finally { fs.rmSync(root, {recursive: true, force: true}); }

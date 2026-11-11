@@ -79,6 +79,9 @@
     .startup-template-values div { display: flex; gap: 8px; min-width: 0; }
     .startup-template-values code { color: #a9c4ff; }
     .startup-template-values span { overflow: hidden; color: #bdc8d6; text-overflow: ellipsis; white-space: nowrap; }
+    #host-panel-startup { display: flex; flex: 1; flex-direction: column; }
+    .startup-template-error { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 12px 14px; border: 1px solid #806333; border-radius: 6px; background: #2b241b; color: #ffd17c; font-size: 13px; overflow-wrap: anywhere; }
+    .startup-template-error svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .create-network { margin-top: 0; }
     #create-error, #clone-error, #topology-error { margin: 14px 0 0; color: #ffb2b4; font-size: 13px; }
     #topology-error { white-space: pre-line; }
@@ -334,6 +337,7 @@
       <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain" hidden>
       <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup disk</label>
       <div id="settings-startup-iso"></div>
+      <div id="startup-template-error" class="startup-template-error" role="alert" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span id="startup-template-error-text"></span></div>
     </section>
     <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
       <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
@@ -681,6 +685,8 @@
     const settingsStorage = document.getElementById('settings-storage');
     const settingsStartupIso = document.getElementById('settings-startup-iso');
     const startupTemplateValues = document.getElementById('startup-template-values');
+    const startupTemplateError = document.getElementById('startup-template-error');
+    const startupTemplateErrorText = document.getElementById('startup-template-error-text');
     const settingsNetworkProfile = document.getElementById('settings-network-profile');
     const settingsConsole = document.getElementById('settings-console');
     const optionsCommands = document.getElementById('options-commands');
@@ -746,27 +752,45 @@
         (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n' : '');
     }
     function validateStartScriptDraft(machine) {
+      if (!machine.autoBuildGuestCdrom) return;
       const script = machine.guestMedia?.script || '';
       const interfaces = machine.interfaces || [];
+      const unresolved = new Set();
       const remaining = script.replace(/@([A-Za-z][A-Za-z0-9_]*)@/g, (token, key) => {
         if (key === 'HOSTNAME') return '';
         const match = /^(IFNAME|SWPORT)([0-3])$/.exec(key);
-        if (!match) throw new Error(`start.sh template ${token} is unknown. Use @HOSTNAME@, @IFNAME0@…@IFNAME3@ or @SWPORT0@…@SWPORT3@.`);
+        if (!match) { unresolved.add(token); return ''; }
         const index = Number(match[2]);
-        if (index >= interfaces.length) throw new Error(`start.sh template ${token} requires Ethernet ${index}. Add that interface in Network.`);
-        if (match[1] === 'SWPORT' && machine.autoBuildGuestCdrom && !interfaces[index]) {
-          throw new Error(`start.sh template ${token} requires Ethernet ${index} to be connected to a switch in Network.`);
+        if (index >= interfaces.length) { unresolved.add(token); return ''; }
+        if (match[1] === 'SWPORT' && !interfaces[index]) {
+          unresolved.add(token);
         }
         return '';
       });
-      const malformed = /@(?:HOSTNAME|IFNAME\d*|SWPORT\d*)(?![A-Za-z0-9_@])|\b(?:HOSTNAME|IFNAME\d+|SWPORT\d+)@/.exec(remaining);
-      if (malformed) throw new Error(`Malformed start.sh template near ${malformed[0]}. Use a complete @NAME@ token.`);
+      const malformed = new Set([...remaining.matchAll(/@(?:HOSTNAME|IFNAME\d*|SWPORT\d*)(?![A-Za-z0-9_@])|\b(?:HOSTNAME|IFNAME\d+|SWPORT\d+)@/g)]
+        .map(match => match[0]));
+      const problems = [];
+      if (unresolved.size) problems.push(`unresolved variables in start.sh: ${[...unresolved].join(', ')}`);
+      if (malformed.size) problems.push(`malformed variables in start.sh: ${[...malformed].join(', ')}`);
+      if (problems.length) throw new Error(`Error: ${problems.join('; ')}.`);
+    }
+    function showStartupTemplateError(message) {
+      optionsStatus.hidden = true;
+      optionsStatus.textContent = '';
+      startupTemplateErrorText.textContent = message;
+      startupTemplateError.hidden = false;
+      startupTemplateError.scrollIntoView({block: 'nearest'});
+    }
+    function clearStartupTemplateError() {
+      startupTemplateError.hidden = true;
+      startupTemplateErrorText.textContent = '';
     }
     guestStartScript.addEventListener('input', () => {
       const machine = settingsMachine();
       if (!machine) return;
       if (!machine.guestMedia) machine.guestMedia = {script: '', resources: []};
       machine.guestMedia.script = guestStartScript.value;
+      clearStartupTemplateError();
     });
     guestScriptFile.addEventListener('change', async () => {
       const file = guestScriptFile.files?.[0];
@@ -780,6 +804,7 @@
           if (!machine.guestMedia) machine.guestMedia = {script: '', resources: []};
           machine.guestMedia.script = script;
           renderGuestMedia();
+          clearStartupTemplateError();
         }
       } catch (error) { optionsStatus.textContent = error.message; optionsStatus.hidden = false; }
       guestScriptFile.value = '';
@@ -788,6 +813,7 @@
       const machine = settingsMachine();
       if (!machine) return;
       machine.autoBuildGuestCdrom = guestAttachCdrom.checked;
+      clearStartupTemplateError();
       refreshLaunchPreview(machine);
     });
     let namingSchemes = null;
@@ -1406,6 +1432,7 @@
       const request = ++optionsRequest;
       optionsStatus.hidden = true;
       optionsStatus.textContent = '';
+      clearStartupTemplateError();
       const image = images.find(item => item.id === machine.imageId);
       settingsTitle.textContent = creating ? 'Add a new host' : `Host Settings · ${machineDialogName(machine)}`;
       settingsEditable.replaceChildren();
@@ -1592,7 +1619,7 @@
         engineSelect.value = machine.engine;
       }
     }
-    function renderNicControls(machine, list = nicList, addButton = addNic, onChange = () => refreshLaunchPreview(machine)) {
+    function renderNicControls(machine, list = nicList, addButton = addNic, onChange = () => { clearStartupTemplateError(); refreshLaunchPreview(machine); }) {
       list.replaceChildren();
       const locked = machine.busy || machine.engine === 'virtualbox';
       addButton.disabled = locked || (machine.interfaces || []).length >= 4;
@@ -2076,6 +2103,7 @@
       if (!machine || machine.kind !== 'vm' || machine.busy || machine.engine === 'virtualbox' || machine.interfaces.length >= 4) return;
       const scrollTop = qemuOptionsPanel.scrollTop;
       machine.interfaces.push(null);
+      clearStartupTemplateError();
       renderGraphic();
       renderNicControls(machine);
       qemuOptionsPanel.scrollTop = scrollTop;
@@ -2165,9 +2193,8 @@
       if (!name) return;
       try { validateStartScriptDraft(draft); }
       catch (error) {
-        selectSettingsTab(error.message.includes('requires Ethernet') ? 'network' : 'startup');
-        optionsStatus.textContent = error.message;
-        optionsStatus.hidden = false;
+        selectSettingsTab('startup');
+        showStartupTemplateError(error.message);
         return;
       }
       const autostart = draft.isNew && hostAutostart.checked;
@@ -2240,11 +2267,13 @@
       } catch (error) {
         if (dialogClosed) showStatusError(error.message);
         else {
-          if (/^(?:start\.sh template|Malformed start\.sh template)/.test(error.message)) {
-            selectSettingsTab(error.message.includes('requires Ethernet') ? 'network' : 'startup');
+          if (/^Error: (?:unresolved|malformed) variables in start\.sh/.test(error.message)) {
+            selectSettingsTab('startup');
+            showStartupTemplateError(error.message);
+          } else {
+            optionsStatus.textContent = error.message;
+            optionsStatus.hidden = false;
           }
-          optionsStatus.textContent = error.message;
-          optionsStatus.hidden = false;
         }
         if (!draft.isNew) { renderTabs(); scheduleSessionSync(); }
       } finally {

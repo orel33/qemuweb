@@ -263,7 +263,7 @@ function sessionPaths(id, kind = 'vm') {
     socketPath: path.join(runtimeDir, 'serial.sock'),
     monitorPath: path.join(runtimeDir, 'mon.sock'),
     socketDir: kind === 'switch' ? path.join(runtimeDir, 'vde') : null,
-    mgmtPath: null
+    mgmtPath: kind === 'switch' ? path.join(runtimeDir, 'mgmt.sock') : null
   };
   if ([paths.socketPath, paths.monitorPath, paths.mgmtPath].some(name => name && Buffer.byteLength(name) > 107)) {
     throw new Error('Runtime socket path is too long; move the project to a shorter directory.');
@@ -279,19 +279,7 @@ function hostnameAliasPath(session, name) {
   return path.join(runtimeInstance, session.kind === 'switch' ? 'switches' : 'hosts', component);
 }
 
-function switchManagementPath(session, name) {
-  const available = 107 - Buffer.byteLength(session.runtimeDir) - 1;
-  if (available < 2) throw new Error('Runtime socket path is too long; move the project to a shorter directory.');
-  const preferred = name === 'vde' ? '@vde' : name;
-  const socketName = Buffer.byteLength(preferred) <= available ? preferred : `@${name.slice(0, available - 1)}`;
-  return path.join(session.runtimeDir, socketName);
-}
-
 function setSessionHostname(session, name) {
-  const managementPath = session.kind === 'switch' ? switchManagementPath(session, name) : null;
-  if (managementPath && session.machine && session.mgmtPath !== managementPath) {
-    throw new Error('Stop the switch before changing its name.');
-  }
   const alias = hostnameAliasPath(session, name);
   if (alias !== session.hostnameAliasPath) {
     fs.mkdirSync(path.dirname(alias), {recursive: true});
@@ -304,7 +292,6 @@ function setSessionHostname(session, name) {
     session.hostnameAliasPath = alias;
   }
   session.hostname = name;
-  if (managementPath) session.mgmtPath = managementPath;
 }
 
 function removeHostnameAlias(session) {
@@ -1558,7 +1545,9 @@ app.post('/api/hosts', (req, res) => {
     const validatedMedia = guestMedia === undefined ? {script: defaultStartupScript(networkInterfaces), resources: []} : validateBootFiles(guestMedia);
     if (typeof createGuestCdrom !== 'boolean' || typeof attachGuestCdrom !== 'boolean' || (attachGuestCdrom && !createGuestCdrom) ||
       (autoBuildGuestCdrom !== undefined && typeof autoBuildGuestCdrom !== 'boolean')) throw new Error('Invalid guest CD-ROM options.');
-    validateStartupTemplate(validatedMedia.script, networkInterfaces, createGuestCdrom || (autoBuildGuestCdrom ?? attachGuestCdrom));
+    if (createGuestCdrom || (autoBuildGuestCdrom ?? attachGuestCdrom)) {
+      validateStartupTemplate(validatedMedia.script, networkInterfaces, true);
+    }
     const session = getSession(id, true, 'vm');
     session.selectedImage = image;
     session.engine = engine;
@@ -1622,7 +1611,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     const oldSwitches = session.networkInterfaces.map(nic => nic.switchId);
     const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
       ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
-    validateStartupTemplate(script, interfaces, body.autoBuildGuestCdrom);
+    if (body.autoBuildGuestCdrom) validateStartupTemplate(script, interfaces, true);
     const previousName = session.hostname;
     const previousMedia = readStartupFiles(startupDirectory(session));
     validateBootFiles({script, resources: previousMedia.resources});
@@ -1669,7 +1658,7 @@ app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
-    validateStartupTemplate(media.script, session.networkInterfaces, session.guestIsoAttached);
+    if (session.guestIsoAttached) validateStartupTemplate(media.script, session.networkInterfaces, true);
     writeStartupFiles(startupDirectory(session), media);
     session.guestMedia = readStartupFiles(startupDirectory(session));
     session.guestIsoOutdated = !!session.guestIso;

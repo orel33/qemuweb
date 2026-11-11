@@ -40,22 +40,27 @@ function normalizeScript(script) {
 
 function validateStartupTemplate(script, interfaces = [], requireConnectedPorts = false) {
   validateScript(script);
+  const unresolved = new Set();
   const remaining = script.replace(/@([A-Za-z][A-Za-z0-9_]*)@/g, (token, key) => {
     if (key === 'HOSTNAME') return '';
     const match = /^(IFNAME|SWPORT)([0-3])$/.exec(key);
-    if (!match) throw new Error(`start.sh template ${token} is unknown. Use @HOSTNAME@, @IFNAME0@…@IFNAME3@ or @SWPORT0@…@SWPORT3@.`);
+    if (!match) { unresolved.add(token); return ''; }
     const index = Number(match[2]);
-    if (index >= interfaces.length) throw new Error(`start.sh template ${token} requires Ethernet ${index}. Add that interface in Network.`);
+    if (index >= interfaces.length) { unresolved.add(token); return ''; }
     if (match[1] === 'SWPORT' && requireConnectedPorts) {
       const nic = interfaces[index];
       if (!nic?.switchId || !Number.isInteger(nic.port) || nic.port < 1 || nic.port > 32) {
-        throw new Error(`start.sh template ${token} requires Ethernet ${index} to be connected to a switch in Network.`);
+        unresolved.add(token);
       }
     }
     return '';
   });
-  const malformed = /@(?:HOSTNAME|IFNAME\d*|SWPORT\d*)(?![A-Za-z0-9_@])|\b(?:HOSTNAME|IFNAME\d+|SWPORT\d+)@/.exec(remaining);
-  if (malformed) throw new Error(`Malformed start.sh template near ${malformed[0]}. Use a complete @NAME@ token.`);
+  const malformed = new Set([...remaining.matchAll(/@(?:HOSTNAME|IFNAME\d*|SWPORT\d*)(?![A-Za-z0-9_@])|\b(?:HOSTNAME|IFNAME\d+|SWPORT\d+)@/g)]
+    .map(match => match[0]));
+  const problems = [];
+  if (unresolved.size) problems.push(`unresolved variables in start.sh: ${[...unresolved].join(', ')}`);
+  if (malformed.size) problems.push(`malformed variables in start.sh: ${[...malformed].join(', ')}`);
+  if (problems.length) throw new Error(`Error: ${problems.join('; ')}.`);
   return script;
 }
 
@@ -190,20 +195,13 @@ function shellQuote(value) {
 
 function substituteStartupValues(script, hostname, interfaces) {
   validateStartupTemplate(script, interfaces, true);
-  return script.replace(/@(HOSTNAME|IFNAME\d+|SWPORT\d+)@/g, (token, key) => {
+  return script.replace(/@(HOSTNAME|IFNAME\d+|SWPORT\d+)@/g, (_token, key) => {
     if (key === 'HOSTNAME') {
       if (typeof hostname !== 'string') throw new Error('A host name is required to build an ISO with @HOSTNAME@.');
       return shellQuote(hostname);
     }
-    const match = /^(IFNAME|SWPORT)(\d+)$/.exec(key);
-    const index = Number(match[2]);
-    if (index > 3 || index >= interfaces.length) throw new Error(`${token} requires Ethernet ${index} on this host.`);
-    if (match[1] === 'IFNAME') return `eth${index}`;
-    const nic = interfaces[index];
-    if (!nic || !nic.switchId || !Number.isInteger(nic.port) || nic.port < 1 || nic.port > 32) {
-      throw new Error(`${token} requires Ethernet ${index} to be connected to a switch.`);
-    }
-    return String(nic.port);
+    const index = Number(key.match(/\d+$/)[0]);
+    return key.startsWith('IFNAME') ? `eth${index}` : String(interfaces[index].port);
   });
 }
 
