@@ -7,6 +7,7 @@
     "start": "node server.js",
     "test": "node --test test/unit/*.test.js",
     "test:lan2": "node test/integration/lan2-integration.js",
+    "test:lan4-startup": "node test/integration/lan4-startup-templates.js",
     "test:gts16-lan2": "LAN2_GTS16=1 node test/integration/lan2-integration.js",
     "test:gts16-profiles": "node test/integration/gts16-profiles.js",
     "test:guest-network": "node test/integration/guest-network.js"

@@ -11,6 +11,7 @@ Available tests:
   unit            Unit tests: topology, UI helpers, guest media and metrics
   lan2            Two Debian Legacy hosts: VDE, ping and Stop/Resume
   lan2-tcg        Same LAN2 scenario using QEMU software emulation
+  lan4-startup    Four Debian Legacy hosts configured by start.sh templates
   gts16-lan2      LAN2 plus per-host startup ISO, resources and Reboot
   gts16-profiles  Startup ISO on Alpine, Debian Cloud and OpenWrt
   guest-network   Two guests per system: login, hostname, LAN ping and tcpdump
@@ -33,6 +34,7 @@ case "${1:-}" in
   unit) run_test 'Unit tests: topology, UI helpers, guest media and metrics' npm test ;;
   lan2) run_test 'Debian Legacy LAN2: VDE, ping and Stop/Resume' npm run test:lan2 ;;
   lan2-tcg) run_test 'Debian Legacy LAN2 using QEMU/TCG' env LAN2_ENGINE=qemu-tcg npm run test:lan2 ;;
+  lan4-startup) run_test 'Four Debian Legacy hosts: startup templates and full LAN ping' npm run test:lan4-startup ;;
   gts16-lan2) run_test 'Debian Legacy LAN2 with per-host startup ISO and Reboot' npm run test:gts16-lan2 ;;
   gts16-profiles) run_test 'Startup ISO on Alpine, Debian Cloud and OpenWrt' npm run test:gts16-profiles ;;
   guest-network) run_test 'Four-system QEMU/KVM guest network diagnostic' npm run test:guest-network ;;

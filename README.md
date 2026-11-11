@@ -365,7 +365,7 @@ PORT=3003 npm start
 
 Tests are organized under [`test/unit/`](test/unit/) and [`test/integration/`](test/integration/). [`test/TESTS.md`](test/TESTS.md) describes each test, its prerequisites, and its command. `npm test` runs only the unit tests; integration tests are selected separately because they boot prepared guest images.
 
-Use `./scripts/run-tests.sh --list` to see the scenarios, then run one by name, for example `./scripts/run-tests.sh unit`, `./scripts/run-tests.sh lan2`, or `./scripts/run-tests.sh gts16-profiles`. The runner prints a short description before starting each test. `./scripts/run-tests.sh web` starts the application on port 3003 for manual interface testing; set `PORT` to choose another port. To keep live output, use `./scripts/run-tests.sh lan2 2>&1 | tee lan2.log`.
+Use `./scripts/run-tests.sh --list` to see the scenarios, then run one by name, for example `./scripts/run-tests.sh unit`, `./scripts/run-tests.sh lan2`, `./scripts/run-tests.sh lan4-startup`, or `./scripts/run-tests.sh gts16-profiles`. The LAN4 scenario checks four Debian 13 Legacy hosts configured automatically by `start.sh` template values and all pairwise ping paths. The runner prints a short description before starting each test. `./scripts/run-tests.sh web` starts the application on port 3003 for manual interface testing; set `PORT` to choose another port. To keep live output, use `./scripts/run-tests.sh lan4-startup 2>&1 | tee lan4-startup.log`.
 
 ## Official images
 
