@@ -223,8 +223,9 @@ function shellQuote(value) {
   return /^[a-zA-Z0-9_./:=,+-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
-function defaultStartupScript() {
-  return '#!/bin/sh\nhostname @HOSTNAME@\n\n';
+function defaultStartupScript(interfaces) {
+  return '#!/bin/sh\nhostname @HOSTNAME@\n' +
+    (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n' : '');
 }
 
 function sessionPaths(id, kind = 'vm') {
@@ -637,7 +638,7 @@ function startupDirectory(session) {
 function buildGuestIso(session, destination = tempFile(session, `startup-${crypto.randomUUID()}.iso`)) {
   const next = destination;
   createGuestIso({directory: startupDirectory(session), destination: next, genisoimage: commands.GENISOIMAGE,
-    hostname: session.hostname,
+    hostname: session.hostname, interfaces: session.networkInterfaces,
     onCommand: (command, args) => appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`)});
   const previous = session.guestIso;
   session.guestMedia = readStartupFiles(startupDirectory(session));
@@ -1471,7 +1472,7 @@ app.post('/api/topology', async (req, res) => {
       const session = getSession(id, true, 'vm'); created.push(id);
       setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
       session.networkInterfaces = interfaces; session.launchSettings = launchSettingsFor(host.system);
-      writeStartupScript(startupDirectory(session), defaultStartupScript());
+      writeStartupScript(startupDirectory(session), defaultStartupScript(interfaces));
       session.guestMedia = readStartupFiles(startupDirectory(session));
       session.lastMessage = 'Host ready to start';
       persistHostConfiguration(session);
@@ -1537,7 +1538,7 @@ app.post('/api/hosts', (req, res) => {
     if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
     const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
     const launchSettings = launchSettingsFor(image.id, settings || {});
-    const validatedMedia = guestMedia === undefined ? {script: defaultStartupScript(), resources: []} : validateBootFiles(guestMedia);
+    const validatedMedia = guestMedia === undefined ? {script: defaultStartupScript(networkInterfaces), resources: []} : validateBootFiles(guestMedia);
     if (typeof createGuestCdrom !== 'boolean' || typeof attachGuestCdrom !== 'boolean' || (attachGuestCdrom && !createGuestCdrom) ||
       (autoBuildGuestCdrom !== undefined && typeof autoBuildGuestCdrom !== 'boolean')) throw new Error('Invalid guest CD-ROM options.');
     const session = getSession(id, true, 'vm');

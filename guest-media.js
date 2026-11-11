@@ -167,22 +167,36 @@ function shellQuote(value) {
   return /^[a-zA-Z0-9_./:=,+-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`;
 }
 
-function createGuestIso({directory, destination, genisoimage, hostname, onCommand}) {
+function substituteStartupValues(script, hostname, interfaces) {
+  return script.replace(/@(HOSTNAME|IFNAME\d+|SWPORT\d+)@/g, (token, key) => {
+    if (key === 'HOSTNAME') {
+      if (typeof hostname !== 'string') throw new Error('A host name is required to build an ISO with @HOSTNAME@.');
+      return shellQuote(hostname);
+    }
+    const match = /^(IFNAME|SWPORT)(\d+)$/.exec(key);
+    const index = Number(match[2]);
+    if (index > 3 || index >= interfaces.length) throw new Error(`${token} requires Ethernet ${index} on this host.`);
+    if (match[1] === 'IFNAME') return `eth${index}`;
+    const nic = interfaces[index];
+    if (!nic || !nic.switchId || !Number.isInteger(nic.port) || nic.port < 1 || nic.port > 32) {
+      throw new Error(`${token} requires Ethernet ${index} to be connected to a switch.`);
+    }
+    return String(nic.port);
+  });
+}
+
+function createGuestIso({directory, destination, genisoimage, hostname, interfaces = [], onCommand}) {
   const source = readStartupFiles(directory);
   const relative = path.relative(directory, destination);
   if (!relative || (!relative.startsWith('..' + path.sep) && relative !== '..' && !path.isAbsolute(relative))) {
     throw new Error('Generated ISO must be outside startup/.');
   }
   const stage = path.join(path.dirname(directory), '.iso-stage');
-  if (source.script.includes('@HOSTNAME@') && typeof hostname !== 'string') {
-    throw new Error('A host name is required to build an ISO with @HOSTNAME@.');
-  }
   try {
     fs.rmSync(stage, {recursive: true, force: true});
     fs.mkdirSync(stage);
     if (source.script) {
-      const script = source.script.includes('@HOSTNAME@')
-        ? source.script.replaceAll('@HOSTNAME@', shellQuote(hostname)) : source.script;
+      const script = substituteStartupValues(source.script, hostname, interfaces);
       fs.writeFileSync(path.join(stage, 'start.sh'), script, {mode: 0o755});
     }
     for (const entry of source.resources) {

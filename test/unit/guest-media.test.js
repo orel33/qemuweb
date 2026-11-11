@@ -43,21 +43,27 @@ test('filesystem startup source keeps companion files on script save and rejects
 test('separate read-only ISOs include external companion files under each host', {skip: !fs.existsSync('/usr/bin/genisoimage') || !fs.existsSync('/usr/bin/isoinfo')}, () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-media-test-'));
   try {
-    for (const name of ['marie', 'anne']) {
+    for (const [index, name] of ['marie', 'anne'].entries()) {
       const host = path.join(root, name);
       fs.mkdirSync(host);
       const startup = path.join(host, 'startup');
-      writeStartupFiles(startup, {script: `#!/bin/sh\nhostname @HOSTNAME@\necho ${name}\ncat config/message.txt\n`, resources: []});
+      writeStartupFiles(startup, {script: `#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\necho ${name}\ncat config/message.txt\n`, resources: []});
       fs.mkdirSync(path.join(startup, 'config'));
       fs.writeFileSync(path.join(startup, 'config', 'message.txt'), name);
       const iso = path.join(host, 'startup-1.iso');
-      createGuestIso({directory: startup, destination: iso, genisoimage: '/usr/bin/genisoimage', hostname: name});
+      const interfaces = [{switchId: 's1', port: index + 1}];
+      createGuestIso({directory: startup, destination: iso, genisoimage: '/usr/bin/genisoimage', hostname: name, interfaces});
       assert.match(execFileSync('/usr/bin/isoinfo', ['-d', '-i', iso], {encoding: 'utf8'}), new RegExp(`Volume id: ${LABEL}`));
       assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-f', '-i', iso], {encoding: 'utf8'}), /\/config\/message\.txt/);
       assert.equal(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/config/message.txt'], {encoding: 'utf8'}), name);
       assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`echo ${name}`));
       assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`hostname ${name}`));
+      assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`ifconfig eth0 192\\.168\\.0\\.${index + 1}/24`));
       assert.match(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), /hostname @HOSTNAME@/);
+      assert.match(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), /ifconfig @IFNAME0@ 192\.168\.0\.@SWPORT0@\/24/);
+      assert.throws(() => createGuestIso({directory: startup, destination: path.join(host, 'disconnected.iso'),
+        genisoimage: '/usr/bin/genisoimage', hostname: name, interfaces: [{switchId: null, port: null}]}),
+      /@SWPORT0@ requires Ethernet 0 to be connected/);
       assert.equal(fs.statSync(iso).mode & 0o222, 0);
     }
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
