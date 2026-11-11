@@ -10,7 +10,6 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 |---|---|
 | `guest-media.test.js` | Validate startup files and resource paths; check that separate read-only ISOs contain the right script and resources when `genisoimage` and `isoinfo` are available. |
 | `host-settings-naming.test.js` | Check automatic host names and the Host Settings Close button. |
-| `openwrt-lan-role.test.js` | Check RHV62 subnet/pool/domain and switch exclusivity validation plus generated UCI commands. |
 | `pud84-ui.test.js` | Check the position of Exit All in the host/switch toolbar. |
 | `resource-metrics.test.js` | Parse CPU and memory metrics for Linux processes and VirtualBox. |
 | `session-log.test.js` | Check log replay, clearing and history limits. |
@@ -33,5 +32,3 @@ These scenarios require QEMU and prepared RAW images. The LAN2 scenarios also re
 To run the profile scenario for Debian Legacy alone, use `GTS16_PROFILES=debian13-legacy npm run test:gts16-profiles`. To keep a live LAN2 log, use `./scripts/run-tests.sh lan2 2>&1 | tee lan2.log`.
 
 To narrow the network diagnostic, set `GUEST_NETWORK_PROFILES` to comma-separated IDs, for example `GUEST_NETWORK_PROFILES=openwrt ./scripts/run-tests.sh guest-network`. Set `GUEST_NETWORK_ENGINE=qemu-tcg` for software emulation or `GUEST_NETWORK_TIMEOUT_MS` for slower boots. Keep the command and guest output with `./scripts/run-tests.sh guest-network 2>&1 | tee guest-network.log`. This test uses only temporary working disks and an isolated test server; it does not rebuild or overwrite the base images.
-
-RHV62 guest validation remains manual until explicitly approved: see [OpenWrt LAN DHCP/DNS role](../docs/guest-startup.md#openwrt-lan-dhcpdns-role-rhv62) for the two-client lease, local name, reboot and disable checks. The unit command is `node --test test/unit/openwrt-lan-role.test.js`.

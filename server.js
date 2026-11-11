@@ -15,7 +15,6 @@ const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
 const {LABEL: GUEST_ISO_LABEL, validateBootFiles, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./guest-media');
-const {DEFAULT_ROLE, validateDhcpDns, preStartScript} = require('./openwrt-lan-role');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -313,7 +312,6 @@ function getSession(id, create = false, expectedKind = null) {
       activeGuestIso: null,
       guestIsoFiles: new Set(),
       networkInterfaces: [],
-      dhcpDns: {...DEFAULT_ROLE},
       activeConfig: null,
       resetWorkingDiskAtRestart: false,
       mgmtAliasPath: null,
@@ -672,8 +670,7 @@ function activeConfiguration(session) {
     settings: {...session.launchSettings},
     networkInterfaces: session.networkInterfaces.map(nic => ({...nic})),
     guestMedia: readStartupFiles(startupDirectory(session)),
-    autoBuildGuestCdrom: session.guestIsoAttached,
-    dhcpDns: {...session.dhcpDns}
+    autoBuildGuestCdrom: session.guestIsoAttached
   };
 }
 
@@ -684,8 +681,7 @@ function pendingRestart(session) {
     ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
     JSON.stringify(session.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
     JSON.stringify(readStartupFiles(startupDirectory(session))) !== JSON.stringify(active.guestMedia) ||
-    session.guestIsoAttached !== active.autoBuildGuestCdrom ||
-    JSON.stringify(session.dhcpDns) !== JSON.stringify(active.dhcpDns);
+    session.guestIsoAttached !== active.autoBuildGuestCdrom;
 }
 
 function hostConfiguration(session) {
@@ -698,33 +694,8 @@ function hostConfiguration(session) {
     settings: session.launchSettings,
     networkInterfaces: session.networkInterfaces,
     autoBuildGuestCdrom: session.guestIsoAttached,
-    dhcpDns: session.dhcpDns,
     resetWorkingDiskAtRestart: session.resetWorkingDiskAtRestart
   };
-}
-
-function mediaWithManagedPreStart(media, role, previousRole = DEFAULT_ROLE) {
-  if (!role.enabled && !previousRole.enabled) return validateBootFiles(media);
-  const resources = media.resources.filter(entry => entry.path !== 'pre-start.sh');
-  const script = preStartScript(role);
-  if (script) resources.push({path: 'pre-start.sh', contentBase64: Buffer.from(script).toString('base64')});
-  return validateBootFiles({...media, resources});
-}
-
-function writePreStartContent(directory, content) {
-  const target = path.join(directory, 'pre-start.sh');
-  const temporary = path.join(directory, `.pre-start-${crypto.randomBytes(8).toString('hex')}.tmp`);
-  try {
-    if (content !== null) {
-      fs.writeFileSync(temporary, content, {mode: 0o755, flag: 'wx'});
-      fs.renameSync(temporary, target);
-    } else fs.rmSync(target, {force: true});
-  } finally { fs.rmSync(temporary, {force: true}); }
-}
-
-function writeManagedPreStart(directory, role) {
-  const script = preStartScript(role);
-  writePreStartContent(directory, script === null ? null : Buffer.from(script));
 }
 
 function persistHostConfiguration(session) {
@@ -1128,7 +1099,6 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (selectedEngine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
   session.guestMedia = readStartupFiles(startupDirectory(session));
   if (options.autoBuildGuestCdrom !== undefined) {
-    if (session.dhcpDns?.enabled && !options.autoBuildGuestCdrom) throw new Error('DHCP/DNS requires automatic startup ISO attachment.');
     if (typeof options.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
     session.guestIsoAttached = options.autoBuildGuestCdrom;
   }
@@ -1145,10 +1115,6 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
     const saved = session.networkInterfaces.map(nic => nic.switchId);
     session.networkInterfaces = JSON.stringify(options.interfaces) === JSON.stringify(saved)
       ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
-  }
-  if (session.dhcpDns?.enabled) {
-    validateDhcpDns(session.dhcpDns, {imageId: image.id, interfaces: session.networkInterfaces, hostId: session.id, sessions});
-    if (!session.guestIsoAttached) throw new Error('DHCP/DNS requires automatic startup ISO attachment.');
   }
   const displayName = session.hostname || allocateName('h');
   if (fs.existsSync(session.socketPath)) fs.unlinkSync(session.socketPath);
@@ -1559,7 +1525,7 @@ app.get('/api/topology', (_req, res) => {
 
 app.post('/api/hosts', (req, res) => {
   try {
-    const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, dhcpDns, createGuestCdrom = false, attachGuestCdrom = false, autoBuildGuestCdrom} = req.body || {};
+    const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, createGuestCdrom = false, attachGuestCdrom = false, autoBuildGuestCdrom} = req.body || {};
     entityKind(id, 'vm');
     if (sessions.has(id)) throw new Error('Host ID already exists.');
     const image = imageById(imageId || Object.keys(readConfig().systems)[0]);
@@ -1571,23 +1537,20 @@ app.post('/api/hosts', (req, res) => {
     if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
     const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
     const launchSettings = launchSettingsFor(image.id, settings || {});
-    const role = validateDhcpDns(dhcpDns, {imageId: image.id, interfaces: networkInterfaces, hostId: id, sessions});
     const validatedMedia = guestMedia === undefined ? {script: defaultStartupScript(), resources: []} : validateBootFiles(guestMedia);
     if (typeof createGuestCdrom !== 'boolean' || typeof attachGuestCdrom !== 'boolean' || (attachGuestCdrom && !createGuestCdrom) ||
       (autoBuildGuestCdrom !== undefined && typeof autoBuildGuestCdrom !== 'boolean')) throw new Error('Invalid guest CD-ROM options.');
-    if (role.enabled && autoBuildGuestCdrom === false) throw new Error('DHCP/DNS requires automatic startup ISO attachment.');
     const session = getSession(id, true, 'vm');
     session.selectedImage = image;
     session.engine = engine;
     session.networkInterfaces = networkInterfaces;
     session.launchSettings = launchSettings;
-    session.dhcpDns = role;
     try {
-      writeStartupFiles(startupDirectory(session), mediaWithManagedPreStart(validatedMedia, role));
+      writeStartupFiles(startupDirectory(session), validatedMedia);
       session.guestMedia = readStartupFiles(startupDirectory(session));
       setSessionHostname(session, hostname);
       if (createGuestCdrom) buildGuestIso(session);
-      session.guestIsoAttached = role.enabled ? true : (autoBuildGuestCdrom === undefined ? attachGuestCdrom : autoBuildGuestCdrom);
+      session.guestIsoAttached = autoBuildGuestCdrom === undefined ? attachGuestCdrom : autoBuildGuestCdrom;
       persistHostConfiguration(session);
       saveSessionMetadata();
     } catch (error) {
@@ -1620,7 +1583,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid host configuration.');
     const required = ['name', 'systemId', 'engine', 'settings', 'interfaces', 'guestMedia', 'autoBuildGuestCdrom'];
-    const allowed = [...required, 'resetWorkingDiskAtRestart', 'dhcpDns'];
+    const allowed = [...required, 'resetWorkingDiskAtRestart'];
     if (Object.keys(body).some(key => !allowed.includes(key)) || required.some(key => !Object.hasOwn(body, key))) throw new Error('Incomplete host configuration.');
     if (body.systemId !== session.selectedImage.id || body.engine !== session.engine) throw new Error('System and engine are read-only for an existing host.');
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(body.name)) throw new Error('Invalid host name (1 to 64 characters).');
@@ -1637,47 +1600,37 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
       throw new Error('Working disk reset requires a previously launched QEMU host.');
     }
     const switches = validateNetworkInterfaces(body.interfaces, session.engine, false);
-    const role = validateDhcpDns(body.dhcpDns, {imageId: session.selectedImage.id, interfaces: switches, hostId: session.id, sessions});
-    if (role.enabled && !body.autoBuildGuestCdrom) throw new Error('DHCP/DNS requires automatic startup ISO attachment.');
     const oldSwitches = session.networkInterfaces.map(nic => nic.switchId);
     const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
       ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
     const previousName = session.hostname;
     const previousMedia = readStartupFiles(startupDirectory(session));
-    const previousRole = session.dhcpDns;
-    mediaWithManagedPreStart({script, resources: previousMedia.resources}, role, previousRole);
+    validateBootFiles({script, resources: previousMedia.resources});
     const scriptChanged = script !== previousMedia.script;
     const scriptPath = path.join(startupDirectory(session), 'start.sh');
     const hadScript = fs.existsSync(scriptPath);
     if (name !== previousName) setSessionHostname(session, name);
     try {
       if (scriptChanged) writeStartupScript(startupDirectory(session), script);
-      if (role.enabled || previousRole.enabled) writeManagedPreStart(startupDirectory(session), role);
-      readStartupFiles(startupDirectory(session));
       writeJsonAtomic(tempFile(session, 'host.json'), {
         schemaVersion: 1, id: session.id, name, systemId: body.systemId, engine: body.engine,
         settings, networkInterfaces: interfaces, autoBuildGuestCdrom: body.autoBuildGuestCdrom,
-        dhcpDns: role, resetWorkingDiskAtRestart
+        resetWorkingDiskAtRestart
       });
     } catch (error) {
       if (scriptChanged) {
         if (hadScript) writeStartupScript(startupDirectory(session), previousMedia.script, {keepEmpty: true, preserveExact: true});
         else fs.rmSync(scriptPath, {force: true});
       }
-      if (role.enabled || previousRole.enabled) {
-        const previousPreStart = previousMedia.resources.find(entry => entry.path === 'pre-start.sh');
-        writePreStartContent(startupDirectory(session), previousPreStart ? Buffer.from(previousPreStart.contentBase64, 'base64') : null);
-      }
       if (name !== previousName) setSessionHostname(session, previousName);
       throw error;
     }
     session.launchSettings = settings;
     session.networkInterfaces = interfaces;
-    session.dhcpDns = role;
     session.guestMedia = readStartupFiles(startupDirectory(session));
     session.guestIsoAttached = body.autoBuildGuestCdrom;
     session.resetWorkingDiskAtRestart = resetWorkingDiskAtRestart;
-    if (scriptChanged || name !== previousName || JSON.stringify(role) !== JSON.stringify(previousRole)) session.guestIsoOutdated = !!session.guestIso;
+    if (scriptChanged || name !== previousName) session.guestIsoOutdated = !!session.guestIso;
     if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});
     io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message: stateMessage(session)});
     res.json(hostConfigurationResponse(session));
@@ -1697,7 +1650,7 @@ app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
-    writeStartupFiles(startupDirectory(session), mediaWithManagedPreStart(media, session.dhcpDns));
+    writeStartupFiles(startupDirectory(session), media);
     session.guestMedia = readStartupFiles(startupDirectory(session));
     session.guestIsoOutdated = !!session.guestIso;
     appendLog(session, '# Guest startup files saved; create the CD-ROM to include these changes.');
@@ -1710,7 +1663,7 @@ app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
-    writeStartupFiles(startupDirectory(session), mediaWithManagedPreStart(media, session.dhcpDns));
+    writeStartupFiles(startupDirectory(session), media);
     session.guestMedia = readStartupFiles(startupDirectory(session));
     const status = buildGuestIso(session);
     res.json({ok: true, guestCdrom: status});
@@ -1722,7 +1675,6 @@ app.patch('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
     const session = getSession(req.params.sessionId);
     if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
     if (typeof req.body?.attached !== 'boolean') throw new Error('Invalid CD-ROM attachment option.');
-    if (!req.body.attached && session.dhcpDns?.enabled) throw new Error('DHCP/DNS requires automatic startup ISO attachment.');
     if (req.body.attached && !guestIsoStatus(session).created) throw new Error('Create the CD-ROM before attaching it.');
     const previous = session.guestIsoAttached;
     session.guestIsoAttached = req.body.attached;

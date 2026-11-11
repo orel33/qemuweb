@@ -83,19 +83,7 @@ done
 [ "$(uci -q get 'network.@device[0].name')" = br-lan ] || { echo 'Unexpected OpenWrt LAN device layout' >&2; exit 1; }
 uci delete 'network.@device[0]'
 uci set 'network.lan.device=eth0'
-uci set 'network.lan.proto=none'
-uci -q delete 'network.lan.ipaddr' || true
-uci -q delete 'network.lan.netmask' || true
 uci commit network
-# A bare lab image must offer no DHCPv4, DNS or IPv6 router advertisements.
-# Do not retain a disabled DHCP section on eth0: it would emit
-# no-dhcp-interface=eth0 even for a later, separate dnsmasq instance.
-uci -q delete dhcp.lan || true
-uci set 'dhcp.@dnsmasq[0].port=0'
-uci commit dhcp
-/etc/init.d/odhcpd disable
-/etc/init.d/odhcpd stop || true
-/etc/init.d/dnsmasq restart
 OPENWRT_PREPARE
   cat >> "$guest_script" <<'OPENWRT_HOOK'
 mkdir -p /usr/local/sbin
@@ -104,27 +92,12 @@ OPENWRT_HOOK
   cat "$ROOT/scripts/prepare/resources/guest-start.sh" >> "$guest_script"
   cat >> "$guest_script" <<'OPENWRT_HOOK'
 GUEST_HOOK
-cat > /etc/init.d/qemuweb-lan-cleanup <<'EARLY_HOOK'
-#!/bin/sh /etc/rc.common
-# Remove the previous managed role before dnsmasq and network start.
-START=09
-start() {
-  [ -f /etc/qemuweb-dhcp-dns-managed ] || return 0
-  uci -q delete network.qemuweb_lan || true
-  uci -q delete dhcp.qemuweb_lan || true
-  uci -q delete dhcp.qemuweb_dns || true
-  uci commit network
-  uci commit dhcp
-  rm -f /etc/qemuweb-dhcp-dns-managed
-}
-EARLY_HOOK
 cat > /etc/init.d/qemuweb-guest-start <<'INIT_HOOK'
 #!/bin/sh /etc/rc.common
 START=99
 start() { /usr/local/sbin/qemuweb-guest-start >/dev/ttyS0 2>&1; }
 INIT_HOOK
-chmod 755 /usr/local/sbin/qemuweb-guest-start /etc/init.d/qemuweb-guest-start /etc/init.d/qemuweb-lan-cleanup
-/etc/init.d/qemuweb-lan-cleanup enable
+chmod 755 /usr/local/sbin/qemuweb-guest-start /etc/init.d/qemuweb-guest-start
 /etc/init.d/qemuweb-guest-start enable
 sync
 echo QEMUWEB_OPENWRT_PREPARED

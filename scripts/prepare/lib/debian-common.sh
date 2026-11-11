@@ -112,8 +112,6 @@ write_files:
       Name=eth*
       [Network]
       DHCP=yes
-      [DHCPv4]
-      ClientIdentifier=mac
 runcmd:
   - [passwd, -d, root]
   - [systemctl, enable, serial-getty@ttyS0.service]

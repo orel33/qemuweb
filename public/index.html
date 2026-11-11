@@ -323,18 +323,6 @@
         <div class="network-controls-head"><button id="add-nic" type="button">+ Interface</button></div>
         <div id="nic-list"></div>
       </section>
-      <section id="openwrt-dhcp-dns" class="network-controls" hidden>
-        <h3>OpenWrt LAN DHCP/DNS</h3>
-        <label class="create-autostart"><input id="openwrt-dhcp-dns-enabled" type="checkbox"> Serve DHCP and local DNS on Ethernet 0</label>
-        <p id="openwrt-dhcp-dns-switch" class="settings-description"></p>
-        <div id="openwrt-dhcp-dns-fields" class="create-fields" hidden>
-          <label class="create-field">DHCP/DNS server IPv4 address/prefix<input id="openwrt-lan-address" type="text" placeholder="192.168.10.1/24"></label>
-          <label class="create-field">DHCP pool first address<input id="openwrt-pool-start" type="text" placeholder="192.168.10.100"></label>
-          <label class="create-field">DHCP pool last address<input id="openwrt-pool-end" type="text" placeholder="192.168.10.199"></label>
-          <label class="create-field">Local DNS domain<input id="openwrt-domain" type="text" placeholder="lab.test"></label>
-        </div>
-        <p class="settings-description">Other DHCP servers on this switch cannot be detected reliably. This role does not provide a default gateway or external DNS forwarding.</p>
-      </section>
     </div></section>
     <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
       <div class="startup-script-header"><label for="guest-start-script">start.sh</label><button id="load-start-script" type="button">Load file</button></div>
@@ -647,12 +635,6 @@
     const guestScriptFile = document.getElementById('guest-script-file');
     document.getElementById('load-start-script').addEventListener('click', () => guestScriptFile.click());
     const guestAttachCdrom = document.getElementById('guest-attach-cdrom');
-    const dhcpDnsPanel = document.getElementById('openwrt-dhcp-dns');
-    const dhcpDnsEnabled = document.getElementById('openwrt-dhcp-dns-enabled');
-    const dhcpDnsFields = document.getElementById('openwrt-dhcp-dns-fields');
-    const dhcpDnsSwitch = document.getElementById('openwrt-dhcp-dns-switch');
-    const dhcpDnsInputs = {lanAddress: document.getElementById('openwrt-lan-address'), poolStart: document.getElementById('openwrt-pool-start'), poolEnd: document.getElementById('openwrt-pool-end'), domain: document.getElementById('openwrt-domain')};
-    const defaultDhcpDns = () => ({enabled: false, lanAddress: '192.168.10.1/24', poolStart: '192.168.10.100', poolEnd: '192.168.10.199', domain: 'lab.test'});
     let autoCdromSupported = false;
     let isoPreviewSupported = false;
     fetch('/api/guest-cdrom-capability', {cache: 'no-store'})
@@ -660,7 +642,7 @@
       .then(capabilities => {
         autoCdromSupported = capabilities?.autoBuild === true;
         isoPreviewSupported = capabilities?.previewIso === true;
-        guestAttachCdrom.disabled = !autoCdromSupported || !!settingsMachine()?.dhcpDns?.enabled;
+        guestAttachCdrom.disabled = !autoCdromSupported;
       })
       .catch(() => { guestAttachCdrom.disabled = true; });
     const hostCreateActions = document.getElementById('host-create-actions');
@@ -734,37 +716,8 @@
       if (!machine) return;
       guestStartScript.value = machine.guestMedia?.script || '';
       guestAttachCdrom.checked = !!machine.autoBuildGuestCdrom;
-      guestAttachCdrom.disabled = !autoCdromSupported || !!machine.dhcpDns?.enabled;
+      guestAttachCdrom.disabled = !autoCdromSupported;
     }
-    function renderDhcpDnsRole(machine) {
-      const openwrt = machine?.imageId === 'openwrt' && machine.engine?.startsWith('qemu');
-      dhcpDnsPanel.hidden = !openwrt;
-      if (!openwrt) return;
-      if (!machine.dhcpDns) machine.dhcpDns = defaultDhcpDns();
-      dhcpDnsEnabled.checked = !!machine.dhcpDns.enabled;
-      const switchId = machine.interfaces?.[0];
-      const chosenSwitch = machines.get(switchId);
-      dhcpDnsSwitch.textContent = `Ethernet 0 switch: ${chosenSwitch?.hostname || 'Disconnected'}`;
-      dhcpDnsFields.hidden = !machine.dhcpDns.enabled;
-      for (const [key, input] of Object.entries(dhcpDnsInputs)) {
-        input.value = machine.dhcpDns[key] || '';
-        input.required = !!machine.dhcpDns.enabled;
-      }
-      if (machine.dhcpDns.enabled) machine.autoBuildGuestCdrom = true;
-      guestAttachCdrom.checked = !!machine.autoBuildGuestCdrom;
-      guestAttachCdrom.disabled = !autoCdromSupported || !!machine.dhcpDns.enabled;
-    }
-    dhcpDnsEnabled.addEventListener('change', () => {
-      const machine = settingsMachine();
-      if (!machine) return;
-      machine.dhcpDns = {...(machine.dhcpDns || defaultDhcpDns()), enabled: dhcpDnsEnabled.checked};
-      renderDhcpDnsRole(machine);
-      refreshLaunchPreview(machine);
-    });
-    for (const [key, input] of Object.entries(dhcpDnsInputs)) input.addEventListener('input', () => {
-      const machine = settingsMachine();
-      if (machine) machine.dhcpDns[key] = input.value.trim();
-    });
     function defaultStartScript() {
       return '#!/bin/sh\nhostname @HOSTNAME@\n\n';
     }
@@ -1430,7 +1383,6 @@
       optionsCommands.textContent = '';
       networkControls.hidden = machine.engine === 'virtualbox';
       if (!networkControls.hidden) renderNicControls(machine);
-      renderDhcpDnsRole(machine);
       try {
         const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), guestCdrom: String(!!machine.autoBuildGuestCdrom)});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
@@ -1490,7 +1442,6 @@
         addSettingSelectRow(settingsFixed, 'System', images.map(image => [image.id, image.label]), machine.imageId, !creating || identityLocked, value => {
           if (creating) {
             machine.imageId = value;
-            if (value !== 'openwrt' && machine.dhcpDns) machine.dhcpDns.enabled = false;
             machine.settings = null;
             machine.settingsLoaded = false;
             const selectedImage = images.find(item => item.id === value);
@@ -1614,7 +1565,7 @@
           const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
         }
         select.value = selected || '';
-        select.onchange = () => { machine.interfaces[index] = select.value || null; meta.textContent = ''; renderGraphic(); renderDhcpDnsRole(machine); onChange(); };
+        select.onchange = () => { machine.interfaces[index] = select.value || null; meta.textContent = ''; renderGraphic(); onChange(); };
         const meta = document.createElement('span'); meta.className = 'nic-meta';
         const remove = document.createElement('button'); remove.type = 'button'; remove.textContent = '×'; remove.title = `Remove Ethernet interface ${index}`; remove.disabled = locked;
         remove.onclick = () => {
@@ -1622,7 +1573,6 @@
           machine.interfaces.splice(index, 1);
           renderGraphic();
           renderNicControls(machine, list, addButton, onChange);
-          renderDhcpDnsRole(machine);
           qemuOptionsPanel.scrollTop = scrollTop;
           (list.children[index]?.querySelector('select') || list.lastElementChild?.querySelector('select') || addButton).focus({preventScroll: true});
           onChange();
@@ -1661,7 +1611,7 @@
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null],
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
-        guestMedia: {script: defaultStartScript(), resources: []}, autoBuildGuestCdrom: false, dhcpDns: defaultDhcpDns(),
+        guestMedia: {script: defaultStartScript(), resources: []}, autoBuildGuestCdrom: false,
         resetWorkingDiskAtRestart: false
       };
       hostAutostart.checked = true;
@@ -1718,12 +1668,12 @@
       cloneName.focus();
       cloneName.select();
     }
-    async function addHost({id = `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom = false, dhcpDns, select = true}) {
+    async function addHost({id = `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom = false, select = true}) {
       const image = images.find(item => item.id === imageId);
-      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom, dhcpDns})});
+      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, autoBuildGuestCdrom: body.autoBuildGuestCdrom, dhcpDns: body.dhcpDns, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, autoBuildGuestCdrom: body.autoBuildGuestCdrom, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       if (select) selectMachine(id);
       else renderGraphic();
@@ -2021,11 +1971,8 @@
           const configResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
           const config = await configResponse.json();
           if (!configResponse.ok) throw new Error(config.error || 'Cannot copy host configuration.');
-          const cloneMedia = structuredClone(config.guestMedia);
-          if (config.dhcpDns?.enabled) cloneMedia.resources = cloneMedia.resources.filter(file => file.path !== 'pre-start.sh');
           await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine,
-            interfaces, settings: config.settings, guestMedia: cloneMedia, autoBuildGuestCdrom: config.autoBuildGuestCdrom,
-            dhcpDns: {...(config.dhcpDns || defaultDhcpDns()), enabled: false}});
+            interfaces, settings: config.settings, guestMedia: config.guestMedia, autoBuildGuestCdrom: config.autoBuildGuestCdrom});
           startHost = autostart;
         }
         cloneDialog.close();
@@ -2090,7 +2037,6 @@
       machine.interfaces.push(null);
       renderGraphic();
       renderNicControls(machine);
-      renderDhcpDnsRole(machine);
       qemuOptionsPanel.scrollTop = scrollTop;
       const select = nicList.lastElementChild?.querySelector('select');
       select?.focus({preventScroll: true});
@@ -2115,12 +2061,12 @@
           imageId: data.systemId, osHint: source.osHint, hasDifferentialDisk: source.hasDifferentialDisk,
           engine: data.engine, interfaces: [...data.interfaces], networkInterfaces: data.networkInterfaces,
           settings: {...data.settings}, settingsLoaded: true,
-          guestMedia: structuredClone(data.guestMedia), autoBuildGuestCdrom: data.autoBuildGuestCdrom, dhcpDns: structuredClone(data.dhcpDns || defaultDhcpDns()),
+          guestMedia: structuredClone(data.guestMedia), autoBuildGuestCdrom: data.autoBuildGuestCdrom,
           running: data.running, hasLaunched: data.hasLaunched, pendingRestart: data.pendingRestart, busy: source.busy,
           resetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
           initialResetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
           initialRestartConfig: JSON.stringify({settings: data.settings, interfaces: data.interfaces,
-            guestMedia: data.guestMedia, autoBuildGuestCdrom: data.autoBuildGuestCdrom, dhcpDns: data.dhcpDns})
+            guestMedia: data.guestMedia, autoBuildGuestCdrom: data.autoBuildGuestCdrom})
         };
         hostCreateActions.hidden = false;
         hostAutostart.closest('label').hidden = true;
@@ -2181,9 +2127,9 @@
       let restartNow = false;
       const payload = draft.isNew ? null : {name, systemId: draft.imageId, engine: draft.engine, settings: getMachineSettings(draft),
         interfaces: [...draft.interfaces], guestMedia: draft.guestMedia,
-        autoBuildGuestCdrom: draft.autoBuildGuestCdrom, dhcpDns: draft.dhcpDns, resetWorkingDiskAtRestart: resetDisk};
+        autoBuildGuestCdrom: draft.autoBuildGuestCdrom, resetWorkingDiskAtRestart: resetDisk};
       const restartConfigChanged = payload && JSON.stringify({settings: payload.settings, interfaces: payload.interfaces,
-        guestMedia: payload.guestMedia, autoBuildGuestCdrom: payload.autoBuildGuestCdrom, dhcpDns: payload.dhcpDns}) !== draft.initialRestartConfig;
+        guestMedia: payload.guestMedia, autoBuildGuestCdrom: payload.autoBuildGuestCdrom}) !== draft.initialRestartConfig;
       const resetNewlyScheduled = resetDisk && !draft.initialResetWorkingDiskAtRestart;
       if (draft.running && (restartConfigChanged || resetNewlyScheduled)) {
         const choice = await chooseRestartTiming(resetDisk);
@@ -2198,7 +2144,7 @@
         if (draft.isNew) {
           const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine,
             interfaces: [...draft.interfaces], settings: getMachineSettings(draft), guestMedia: draft.guestMedia,
-            autoBuildGuestCdrom: draft.autoBuildGuestCdrom, dhcpDns: draft.dhcpDns, select: false});
+            autoBuildGuestCdrom: draft.autoBuildGuestCdrom, select: false});
           hostSettingsDraft = null;
           qemuOptionsPanel.close();
           dialogClosed = true;
@@ -2219,7 +2165,6 @@
             machine.networkInterfaces = data.networkInterfaces;
             machine.guestMedia = data.guestMedia;
             machine.autoBuildGuestCdrom = data.autoBuildGuestCdrom;
-            machine.dhcpDns = data.dhcpDns;
             machine.resetWorkingDiskAtRestart = data.resetWorkingDiskAtRestart;
             machine.pendingRestart = data.pendingRestart;
           }

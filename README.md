@@ -370,5 +370,3 @@ Use `./scripts/run-tests.sh --list` to see the scenarios, then run one by name, 
 - [Alpine Linux virt](https://dl-cdn.alpinelinux.org/alpine/v3.24/releases/x86_64/)
 - [Debian cloud images](https://cloud.debian.org/images/cloud/)
 - [OpenWrt x86-64 images](https://downloads.openwrt.org/releases/25.12.6/targets/x86/64/)
-
-OpenWrt hosts can optionally serve DHCPv4 and local DNS for one switch from **Host Settings → Network**. Ethernet 0 must be connected to that switch. The role stores validated settings in `host.json` and generates `startup/pre-start.sh`, which runs before the user's `start.sh` on the next start or reboot. It requires automatic startup ISO attachment. The role sends the OpenWrt LAN address as DNS and no default gateway. See [OpenWrt LAN DHCP/DNS role](docs/guest-startup.md#openwrt-lan-dhcpdns-role-rhv62) for setup, image rebuild and validation.
