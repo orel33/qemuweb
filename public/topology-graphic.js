@@ -1,5 +1,5 @@
-// Topology overview. Node positions are local to this browser session;
-// no graph state is saved to .topo or sent to the server.
+// Topology overview. Node positions are browser-local during ordinary use;
+// the explicit session archive can carry them to another browser.
 (function (root, factory) {
   const api = factory();
   if (typeof module === 'object' && module.exports) module.exports = api;

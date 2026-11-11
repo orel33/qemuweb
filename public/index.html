@@ -346,6 +346,14 @@
     <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
     </form>
   </dialog>
+  <dialog class="confirm-dialog" id="session-archive-dialog" aria-labelledby="session-archive-title">
+    <h2 id="session-archive-title">Save session</h2>
+    <p>Save hosts, switches, cabling, startup files and this view. Machines load stopped; running RAM is never saved.</p>
+    <label><input id="include-working-disks" type="checkbox"> Include working disks (QEMU hosts must be stopped)</label>
+    <p id="session-archive-estimate" role="status"></p>
+    <p id="session-archive-error" role="alert" hidden></p>
+    <div class="confirm-actions"><button id="cancel-session-archive" type="button">Cancel</button><button id="confirm-session-archive" type="button">Download ZIP</button></div>
+  </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
     <p id="confirm-message"></p>
@@ -394,6 +402,9 @@
     <input id="topology-file" type="file" accept=".topo" hidden>
     <button id="load-topology" class="icon-button" type="button" title="Load topology" aria-label="Load topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
     <button id="save-topology" class="icon-button" type="button" title="Save topology" aria-label="Save topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
+    <input id="session-archive-file" type="file" accept=".zip,application/zip" hidden>
+    <button id="load-session-archive" class="icon-button" type="button" title="Load session ZIP" aria-label="Load session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4"/><path d="M4 16v4h16v-4"/><path d="M4 3h6"/></svg></button>
+    <button id="save-session-archive" class="icon-button" type="button" title="Save session ZIP" aria-label="Save session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M4 16v4h16v-4"/><path d="M4 4h6"/></svg></button>
     <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20.5 2v6M18 5h5"/></svg></button>
     <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20.5 2v6M18 5h5"/></svg></button>
     <button id="clone-machine" class="icon-button" type="button" disabled title="Clone selected host or switch" aria-label="Clone selected host or switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>
@@ -1913,6 +1924,80 @@
       for (const session of existing) mergeSession(session);
       showPage();
     }).catch(error => { showStatusError(`System list unavailable: ${error.message}`); });
+
+    const archiveDialog = document.getElementById('session-archive-dialog');
+    const archiveChoice = document.getElementById('include-working-disks');
+    const archiveEstimate = document.getElementById('session-archive-estimate');
+    const archiveError = document.getElementById('session-archive-error');
+    const archiveConfirm = document.getElementById('confirm-session-archive');
+    const archiveFile = document.getElementById('session-archive-file');
+    const formatBytes = bytes => `${(bytes / (1024 * 1024)).toFixed(bytes < 1024 * 1024 ? 2 : 1)} MiB`;
+    async function updateArchiveEstimate() {
+      archiveConfirm.disabled = true;
+      archiveError.hidden = true;
+      archiveEstimate.textContent = 'Estimating archive size…';
+      try {
+        const response = await fetch(`/api/session-archive/estimate?includeDisks=${archiveChoice.checked}`, {cache: 'no-store'});
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error || 'Cannot estimate session archive.');
+        archiveEstimate.textContent = `Estimated compressed ZIP: ${formatBytes(data.bytes)} (source logical ${formatBytes(data.logicalBytes)}, allocated ${formatBytes(data.allocatedBytes)}; final size may vary) · ${data.hosts} hosts · ${data.switches} switches${archiveChoice.checked ? ' · working disks included where present' : ' · fresh working disks on next Play'}.`;
+        archiveConfirm.disabled = false;
+      } catch (error) { archiveEstimate.textContent = ''; archiveError.textContent = error.message; archiveError.hidden = false; }
+    }
+    document.getElementById('save-session-archive').addEventListener('click', () => {
+      archiveChoice.checked = false;
+      archiveDialog.showModal();
+      updateArchiveEstimate();
+    });
+    archiveChoice.addEventListener('change', updateArchiveEstimate);
+    document.getElementById('cancel-session-archive').addEventListener('click', () => archiveDialog.close());
+    archiveConfirm.addEventListener('click', async () => {
+      archiveConfirm.disabled = true;
+      archiveError.hidden = true;
+      let writable = null;
+      try {
+        if (window.showSaveFilePicker) {
+          const handle = await window.showSaveFilePicker({suggestedName: 'qemuweb-session-v1.zip', types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
+          writable = await handle.createWritable();
+        }
+        const positions = Object.fromEntries([...graphicPositions].filter(([id]) => machines.has(id)));
+        const view = {view: graphicVisible ? 'graphic' : 'terminals', layoutSize, showSwitchConsoles, graphicZoom, positions};
+        archiveEstimate.textContent = 'Creating archive…';
+        const response = await fetch('/api/session-archive/export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({includeDisks: archiveChoice.checked, view})});
+        if (!response.ok) { const data = await response.json(); throw new Error(data.error || 'Cannot save session.'); }
+        if (writable) { await response.body.pipeTo(writable); writable = null; }
+        else {
+          const url = URL.createObjectURL(await response.blob());
+          const link = document.createElement('a'); link.href = url; link.download = 'qemuweb-session-v1.zip'; link.click();
+          setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+        archiveDialog.close();
+      } catch (error) {
+        if (writable) await writable.abort().catch(() => {});
+        await updateArchiveEstimate();
+        archiveError.textContent = error.message; archiveError.hidden = false;
+      }
+    });
+    document.getElementById('load-session-archive').addEventListener('click', () => {
+      if (machines.size) { showStatusError('Load requires an empty session. Exit all hosts and switches first.'); return; }
+      archiveFile.click();
+    });
+    archiveFile.addEventListener('change', async () => {
+      const file = archiveFile.files[0];
+      archiveFile.value = '';
+      if (!file) return;
+      try {
+        if (machines.size) throw new Error('Load requires an empty session.');
+        if (!/\.zip$/i.test(file.name)) throw new Error('Choose a QemuWeb ZIP archive.');
+        const response = await fetch('/api/session-archive/import', {method: 'POST', headers: {'Content-Type': 'application/zip'}, body: file});
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.error || 'Cannot load session.');
+        localStorage.setItem(viewSettingsKey, JSON.stringify({view: result.view.view, layoutSize: result.view.layoutSize,
+          showSwitchConsoles: result.view.showSwitchConsoles, graphicZoom: result.view.graphicZoom}));
+        localStorage.setItem(graphicLayoutKey, JSON.stringify({sessionId: graphicSessionId, positions: result.view.positions}));
+        location.reload();
+      } catch (error) { showStatusError(error.message); }
+    });
 
     const topologyFile = document.getElementById('topology-file');
     const topologyDialog = document.getElementById('topology-dialog');
