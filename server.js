@@ -471,9 +471,7 @@ function readConfig() {
   if (config.qemu.defaults.nic !== 'none') throw new Error('External QEMU networking is disabled; qemu.defaults.nic must be none.');
   for (const [id, system] of Object.entries(config.systems)) {
     if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id) || !system || system.type !== 'linux' || system.mode !== 'text') throw new Error(`Invalid system ${id}: only Linux text-mode profiles are supported.`);
-    for (const key of ['label', 'description', 'login']) {
-      if (typeof system[key] !== 'string' || !system[key].trim()) throw new Error(`Missing ${key} for ${id}.`);
-    }
+    if (typeof system.label !== 'string' || !system.label.trim()) throw new Error(`Missing label for ${id}.`);
     for (const format of ['raw', 'vdi']) {
       if (!system.images || typeof system.images[format] !== 'string' || !system.images[format] || /[\x00-\x1f\x7f]/.test(system.images[format])) throw new Error(`Invalid ${format} path for ${id}.`);
     }
