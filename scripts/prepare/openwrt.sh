@@ -88,9 +88,9 @@ uci -q delete 'network.lan.ipaddr' || true
 uci -q delete 'network.lan.netmask' || true
 uci commit network
 # A bare lab image must offer no DHCPv4, DNS or IPv6 router advertisements.
-uci set 'dhcp.lan.ignore=1'
-uci set 'dhcp.lan.dhcpv6=disabled'
-uci set 'dhcp.lan.ra=disabled'
+# Do not retain a disabled DHCP section on eth0: it would emit
+# no-dhcp-interface=eth0 even for a later, separate dnsmasq instance.
+uci -q delete dhcp.lan || true
 uci set 'dhcp.@dnsmasq[0].port=0'
 uci commit dhcp
 /etc/init.d/odhcpd disable

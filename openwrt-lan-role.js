@@ -59,6 +59,12 @@ touch /etc/qemuweb-dhcp-dns-managed
 uci -q delete network.qemuweb_lan || true
 uci -q delete dhcp.qemuweb_dns || true
 uci -q delete dhcp.qemuweb_lan || true
+# Older prepared images have a disabled dhcp.lan section on eth0. OpenWrt
+# applies its no-dhcp-interface=eth0 rule to every dnsmasq instance, so remove
+# that disabled section before activating the dedicated QemuWeb instance.
+if [ "$(uci -q get dhcp.lan.ignore 2>/dev/null || true)" = 1 ]; then
+  uci -q delete dhcp.lan || true
+fi
 uci set network.qemuweb_lan=interface
 uci set network.qemuweb_lan.device=eth0
 uci set network.qemuweb_lan.proto=static

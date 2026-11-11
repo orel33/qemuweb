@@ -106,6 +106,10 @@ Name=eth*
 
 [Network]
 DHCP=yes
+
+[DHCPv4]
+# Each QemuWeb host has its own MAC, while cloned images share a machine-id.
+ClientIdentifier=mac
 NETWORK
 systemctl enable serial-getty@ttyS0.service getty@tty1.service systemd-networkd.service
 install -m 755 /tmp/guest-start.sh /usr/local/sbin/qemuweb-guest-start
