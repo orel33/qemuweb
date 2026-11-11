@@ -30,8 +30,6 @@
       "type": "linux",
       "mode": "text",
       "label": "Alpine Linux 3.24",
-      "description": "Lightweight Alpine Linux, serial-ready.",
-      "login": "root (no password); toto / toto",
       "images": {
         "raw": "images/alpine.raw",
         "vdi": "images/alpine.vdi"
@@ -47,8 +45,6 @@
       "type": "linux",
       "mode": "text",
       "label": "Debian 13 Cloud",
-      "description": "Debian 13 cloud image with VirtIO hardware.",
-      "login": "root (no password); toto / toto",
       "images": {
         "raw": "images/debian13-cloud.raw",
         "vdi": "images/debian13-cloud.vdi"
@@ -67,8 +63,6 @@
       "type": "linux",
       "mode": "text",
       "label": "Debian 13 Legacy",
-      "description": "Debian 13 networking labs (IDE, e1000, Scapy, Apache).",
-      "login": "root (no password); toto / toto",
       "images": {
         "raw": "images/debian13-legacy.raw",
         "vdi": "images/debian13-legacy.vdi"
@@ -87,8 +81,6 @@
       "type": "linux",
       "mode": "text",
       "label": "OpenWrt 25.12 x86-64",
-      "description": "Lightweight OpenWrt network appliance.",
-      "login": "Press Enter; root (no password); toto / toto",
       "images": {
         "raw": "images/openwrt.raw",
         "vdi": "images/openwrt.vdi"

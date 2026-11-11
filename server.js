@@ -530,7 +530,7 @@ app.get('/api/qemu-config', (_req, res) => {
 app.get('/api/systems', (_req, res) => {
   try {
     const config = readConfig();
-    res.json(Object.entries(config.systems).map(([id, system]) => ({id, label: system.label, description: system.description, login: system.login, images: system.images, vboxNic: system.virtualbox.nic, hasDifferentialDisk: true})));
+    res.json(Object.entries(config.systems).map(([id, system]) => ({id, label: system.label, images: system.images, vboxNic: system.virtualbox.nic, hasDifferentialDisk: true})));
   } catch (error) { res.status(500).json({error: error.message}); }
 });
 

@@ -1453,8 +1453,6 @@
         addSettingTextRow(settingsFixed, 'System ID', machine.imageId);
         addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, true);
         addSettingTextRow(settingsFixed, 'Base image', image?.images?.[machine.engine === 'virtualbox' ? 'vdi' : 'raw'] || 'Unavailable');
-        addSettingTextRow(settingsFixed, 'Description', image?.description || 'No image available; run bash scripts/prepare.sh.');
-        addSettingTextRow(settingsFixed, 'Login', image?.login || 'Unavailable');
         const fixedLabels = {machine: 'Machine type', osType: 'Guest profile'};
         for (const [key, value] of Object.entries(body.fixed || {})) {
           if (key === 'networkCard') addSettingRow(settingsNetworkProfile, 'Network card', value);
