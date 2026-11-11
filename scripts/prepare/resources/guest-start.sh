@@ -2,6 +2,18 @@
 # Installed inside each prepared guest. Run again manually after remounting media.
 set -u
 target=/mnt/cdrom
+# The marker lives on the OpenWrt working disk. Remove only RHV62-owned UCI
+# sections on every boot, including boots with no startup ISO attached.
+if [ -f /etc/qemuweb-dhcp-dns-managed ] && command -v uci >/dev/null 2>&1; then
+  uci -q delete network.qemuweb_lan || true
+  uci -q delete dhcp.qemuweb_lan || true
+  uci -q delete dhcp.qemuweb_dns || true
+  uci commit network
+  uci commit dhcp
+  /etc/init.d/network reload
+  /etc/init.d/dnsmasq restart
+  rm -f /etc/qemuweb-dhcp-dns-managed
+fi
 label=QWEBSTART
 mkdir -p "$target"
 if mountpoint -q "$target" 2>/dev/null || grep -q " $target " /proc/mounts; then
@@ -26,6 +38,16 @@ fi
 if ! mount -t iso9660 -o ro "$device" "$target"; then
   echo "QEMUWEB_START_ERROR cannot mount $device at $target"
   exit 1
+fi
+if [ -f "$target/pre-start.sh" ]; then
+  echo 'QEMUWEB_START_BEGIN /mnt/cdrom/pre-start.sh'
+  (cd "$target" && /bin/sh "$target/pre-start.sh")
+  status=$?
+  echo "QEMUWEB_START_EXIT $status"
+  if [ "$status" -ne 0 ]; then
+    echo 'QEMUWEB_START_ERROR /mnt/cdrom/pre-start.sh failed'
+    exit "$status"
+  fi
 fi
 if [ ! -f "$target/start.sh" ]; then
   echo 'QEMUWEB_START_ERROR /mnt/cdrom/start.sh missing'
