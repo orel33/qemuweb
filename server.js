@@ -14,6 +14,7 @@ const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
+const {writeArchive, readArchive} = require('./session-archive');
 const {LABEL: GUEST_ISO_LABEL, validateBootFiles, validateStartupTemplate, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./guest-media');
 const packageInfo = require('./package.json');
 
@@ -38,6 +39,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
 const sessions = new Map();
+let archiveBusy = false;
 const execFileAsync = promisify(execFile);
 const resourceSamples = new Map();
 const previousProcessSamples = new Map();
@@ -302,13 +304,15 @@ function removeHostnameAlias(session) {
   try { fs.rmdirSync(path.dirname(alias)); } catch (_) {}
 }
 
-function getSession(id, create = false, expectedKind = null) {
+function getSession(id, create = false, expectedKind = null, existingDir = false) {
   const kind = entityKind(id, expectedKind);
   if (!sessions.has(id) && create) {
     const paths = sessionPaths(id, kind);
-    if (fs.existsSync(paths.runtimeDir)) throw new Error('Runtime directory already exists for this ID.');
-    fs.mkdirSync(paths.runtimeDir);
-    if (kind === 'vm') fs.mkdirSync(path.join(paths.runtimeDir, 'startup'));
+    if (fs.existsSync(paths.runtimeDir) !== existingDir) throw new Error('Runtime directory state does not match this ID.');
+    if (!existingDir) {
+      fs.mkdirSync(paths.runtimeDir);
+      if (kind === 'vm') fs.mkdirSync(path.join(paths.runtimeDir, 'startup'));
+    }
     sessions.set(id, {
       id,
       kind,
@@ -415,6 +419,10 @@ function execLogged(session, command, args, options = {stdio: 'pipe'}) {
 }
 
 app.use(express.json({limit: '6mb'}));
+app.use('/api', (req, res, next) => {
+  if (archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
+  next();
+});
 app.use('/vendor', express.static(path.join(root, 'node_modules/xterm')));
 app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/xterm-addon-fit')));
 app.use((req, res, next) => {
@@ -575,6 +583,249 @@ app.get('/api/sessions', (_req, res) => {
     hasDifferentialDisk: !!session.runDisk && fs.existsSync(session.runDisk),
     message: stateMessage(session)
   })));
+});
+
+const MAX_SESSION_ARCHIVE = 0xffffffff;
+function fileSha256(file) {
+  const stat = fs.statSync(file);
+  if (!stat.isFile()) throw new Error(`Base image is not a regular file: ${file}`);
+  const hash = crypto.createHash('sha256');
+  const fd = fs.openSync(file, 'r');
+  const chunk = Buffer.alloc(1024 * 1024);
+  try {
+    let offset = 0;
+    while (offset < stat.size) {
+      const count = fs.readSync(fd, chunk, 0, Math.min(chunk.length, stat.size - offset), offset);
+      if (!count) throw new Error(`Base image changed while reading: ${file}`);
+      hash.update(chunk.subarray(0, count)); offset += count;
+    }
+  } finally { fs.closeSync(fd); }
+  return {size: stat.size, sha256: hash.digest('hex')};
+}
+function archiveView(value, ids) {
+  if (!value || typeof value !== 'object' || Array.isArray(value) ||
+      !['graphic', 'terminals'].includes(value.view) || ![1, 2, 4].includes(value.layoutSize) ||
+      typeof value.showSwitchConsoles !== 'boolean' || ![0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].includes(value.graphicZoom) ||
+      !value.positions || typeof value.positions !== 'object' || Array.isArray(value.positions)) throw new Error('Invalid session view state.');
+  const positions = {};
+  for (const [id, point] of Object.entries(value.positions)) {
+    if (!ids.has(id) || !point || typeof point !== 'object' || !Number.isFinite(point.x) || !Number.isFinite(point.y) ||
+        Math.abs(point.x) > 100000 || Math.abs(point.y) > 100000) throw new Error('Invalid graphic node position.');
+    positions[id] = {x: point.x, y: point.y};
+  }
+  return {view: value.view, layoutSize: value.layoutSize, showSwitchConsoles: value.showSwitchConsoles,
+    graphicZoom: value.graphicZoom, positions};
+}
+function archiveSources(includeDisks) {
+  if (typeof includeDisks !== 'boolean') throw new Error('Invalid working disk option.');
+  if (includeDisks && sessionEngine === 'virtualbox') throw new Error('VirtualBox working disk archives are not supported.');
+  if (includeDisks && [...sessions.values()].some(item => item.kind === 'vm' && (item.machine || item.action))) {
+    throw new Error('Stop every host before saving working disks.');
+  }
+  const all = [...sessions.values()];
+  const sources = [], systems = new Set();
+  const switches = all.filter(item => item.kind === 'switch').map(item => ({id: item.id, name: item.hostname}));
+  const hosts = all.filter(item => item.kind === 'vm').map(item => {
+    const media = readStartupFiles(startupDirectory(item));
+    const startup = path.join(item.runtimeDir, 'startup');
+    if (fs.existsSync(path.join(startup, 'start.sh'))) sources.push({name: `hosts/${item.id}/startup/start.sh`, file: path.join(startup, 'start.sh')});
+    for (const resource of media.resources) sources.push({name: `hosts/${item.id}/startup/${resource.path}`, file: path.join(startup, resource.path)});
+    const disk = includeDisks && !!item.runDisk && fs.existsSync(item.runDisk);
+    if (disk) {
+      if (!item.engine.startsWith('qemu')) throw new Error('VirtualBox working disk archives are not supported.');
+      sources.push({name: `hosts/${item.id}/disk.qcow2`, file: item.runDisk});
+    }
+    systems.add(item.selectedImage.id);
+    const hardware = item.engine.startsWith('qemu')
+      ? Object.fromEntries(qemuProfileFields.map(field => [field, (item.qemuOptions || qemuOptionsFor(item.selectedImage.id, item.launchSettings))[field]]))
+      : {...item.selectedImage.virtualbox};
+    return {...hostConfiguration(item), hardware, disk};
+  });
+  let logicalBytes = 0, allocatedBytes = 0, estimatedBytes = 8192;
+  for (const item of sources) {
+    const stat = fs.lstatSync(item.file);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`Not a regular archive file: ${item.name}`);
+    if (item.name.endsWith('/disk.qcow2') && stat.size > 64 * 1024 * 1024 * 1024) throw new Error('QCOW2 logical size exceeds 64 GiB limit.');
+    logicalBytes += stat.size;
+    allocatedBytes += stat.blocks * 512;
+    estimatedBytes += item.name.endsWith('/disk.qcow2')
+      ? Math.ceil(stat.blocks * 512 * 1.05 + stat.size / 800)
+      : stat.size;
+    estimatedBytes += 200 + Buffer.byteLength(item.name);
+  }
+  if (logicalBytes > 256 * 1024 * 1024 * 1024) throw new Error('Session archive logical size exceeds 256 GiB limit.');
+  return {sources, hosts, switches, systems, logicalBytes, allocatedBytes, estimatedBytes};
+}
+function validateArchiveManifest(manifest, stage) {
+  if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(manifest.engine) ||
+      !Array.isArray(manifest.hosts) || !Array.isArray(manifest.switches) ||
+      !manifest.baseImages || typeof manifest.baseImages !== 'object' || Array.isArray(manifest.baseImages) ||
+      typeof manifest.includesWorkingDisks !== 'boolean' ||
+      (!manifest.includesWorkingDisks && manifest.hosts.some(host => host?.disk))) throw new Error('Invalid session manifest.');
+  const ids = new Set(), names = new Set(), switches = new Set(), macs = new Set(), ports = new Set();
+  for (const sw of manifest.switches) {
+    if (!sw || typeof sw !== 'object') throw new Error('Invalid switch entry.');
+    entityKind(sw.id, 'switch');
+    if (ids.has(sw.id) || typeof sw.name !== 'string' || !sw.name.trim() || sw.name.length > 64 || /[\x00-\x1f\x7f]/.test(sw.name) || names.has(sw.name.toLowerCase())) throw new Error('Invalid or duplicate switch identity.');
+    ids.add(sw.id); switches.add(sw.id); names.add(sw.name.toLowerCase());
+  }
+  const systems = new Set();
+  const expectedFiles = new Set();
+  for (const host of manifest.hosts) {
+    if (!host || typeof host !== 'object') throw new Error('Invalid host entry.');
+    entityKind(host.id, 'vm');
+    if (ids.has(host.id) || typeof host.name !== 'string' || !host.name.trim() || host.name.length > 64 || /[\x00-\x1f\x7f]/.test(host.name) || names.has(host.name.toLowerCase())) throw new Error('Invalid or duplicate host identity.');
+    ids.add(host.id); names.add(host.name.toLowerCase());
+    if (host.schemaVersion !== 1 || host.engine !== manifest.engine || !imageById(host.systemId)) throw new Error(`Unknown system or engine for ${host.name}.`);
+    systems.add(host.systemId);
+    validateLaunchSettings(host.settings);
+    const image = imageById(host.systemId);
+    const hardware = manifest.engine.startsWith('qemu')
+      ? Object.fromEntries(qemuProfileFields.map(field => [field, qemuOptionsFor(host.systemId, host.settings)[field]]))
+      : {...image.virtualbox};
+    if (JSON.stringify(host.hardware) !== JSON.stringify(hardware)) throw new Error(`Machine profile incompatible: ${host.name}.`);
+    if (typeof host.autoBuildGuestCdrom !== 'boolean' || typeof host.disk !== 'boolean' ||
+        !Array.isArray(host.networkInterfaces) || host.networkInterfaces.length > 4 ||
+        (manifest.engine === 'virtualbox' && host.networkInterfaces.length) || (host.disk && !manifest.engine.startsWith('qemu'))) throw new Error(`Invalid host configuration: ${host.name}.`);
+    for (const nic of host.networkInterfaces) {
+      if (!nic || !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(nic.mac) || macs.has(nic.mac)) throw new Error('Invalid or duplicate MAC address.');
+      macs.add(nic.mac);
+      if (nic.switchId === null) { if (nic.port !== null) throw new Error('Disconnected Ethernet must have no port.'); }
+      else {
+        if (!switches.has(nic.switchId) || !Number.isInteger(nic.port) || nic.port < 1 || nic.port > 32) throw new Error('Invalid Ethernet switch or port.');
+        const key = `${nic.switchId}:${nic.port}`;
+        if (ports.has(key)) throw new Error('Duplicate Ethernet switch port.');
+        ports.add(key);
+      }
+    }
+    const startup = path.join(stage, 'hosts', host.id, 'startup');
+    fs.mkdirSync(startup, {recursive: true});
+    const media = readStartupFiles(startup);
+    if (host.autoBuildGuestCdrom) validateStartupTemplate(media.script, host.networkInterfaces, true);
+    if (host.disk) expectedFiles.add(`hosts/${host.id}/disk.qcow2`);
+  }
+  if (Object.keys(manifest.baseImages).length !== systems.size) throw new Error('Base image inventory mismatch.');
+  for (const id of systems) {
+    const expected = manifest.baseImages[id], image = imageById(id);
+    if (!expected || !Number.isSafeInteger(expected.size) || !/^[0-9a-f]{64}$/.test(expected.sha256)) throw new Error(`Invalid base image identity: ${id}.`);
+    if (expected.format !== (manifest.engine === 'virtualbox' ? 'vdi' : 'raw')) throw new Error(`Base image format incompatible: ${id}.`);
+    const actual = fileSha256(imagePath(image.images[expected.format]));
+    if (expected.size !== actual.size || expected.sha256 !== actual.sha256) throw new Error(`Base image incompatible: ${id}.`);
+  }
+  for (const file of manifest.files) {
+    const match = /^hosts\/(h-[0-9a-f]{16})\/startup\/(.+)$/.exec(file.path);
+    if (match && ids.has(match[1])) { expectedFiles.add(file.path); continue; }
+    if (!expectedFiles.has(file.path)) throw new Error(`Unexpected session archive file: ${file.path}`);
+  }
+  if (manifest.files.length !== expectedFiles.size || manifest.files.some(file => !expectedFiles.has(file.path))) throw new Error('Missing session archive files.');
+  const view = archiveView(manifest.view, ids);
+  for (const host of manifest.hosts.filter(item => item.disk)) {
+    const disk = path.join(stage, 'hosts', host.id, 'disk.qcow2');
+    const info = JSON.parse(execFileSync(commands.QEMU_IMG, ['info', '--output=json', disk], {encoding: 'utf8', maxBuffer: 1024 * 1024}));
+    const image = imageById(host.systemId);
+    if (info.format !== 'qcow2' || info.encrypted || info['data-file'] || info['format-specific']?.data?.['data-file'] || info['format-specific']?.data?.['data-file-raw'] || info['backing-filename-format'] !== 'raw' ||
+        !info['backing-filename'] || info['virtual-size'] !== manifest.baseImages[host.systemId].size) throw new Error(`Incompatible QCOW2 overlay for ${host.name}.`);
+    execFileSync(commands.QEMU_IMG, ['rebase', '-u', '-f', 'qcow2', '-F', 'raw', '-b', imagePath(image.images.raw), disk], {maxBuffer: 1024 * 1024});
+    execFileSync(commands.QEMU_IMG, ['check', '-f', 'qcow2', disk], {maxBuffer: 1024 * 1024});
+  }
+  return view;
+}
+function installArchive(manifest, stage) {
+  if (sessions.size) throw new Error('Load requires an empty session.');
+  const oldEngine = sessionEngine, moved = [], created = [];
+  const entries = [...manifest.switches, ...manifest.hosts];
+  for (const entry of entries) if (fs.existsSync(path.join(runtimeInstance, entry.id))) throw new Error(`Runtime directory already exists: ${entry.id}.`);
+  try {
+    for (const entry of entries) {
+      const source = path.join(stage, entry.id[0] === 'h' ? 'hosts' : 'switches', entry.id);
+      fs.mkdirSync(source, {recursive: true});
+      const target = path.join(runtimeInstance, entry.id);
+      fs.renameSync(source, target); moved.push({source, target});
+    }
+    sessionEngine = manifest.engine;
+    for (const entry of manifest.switches) {
+      const item = getSession(entry.id, true, 'switch', true); created.push(item);
+      setSessionHostname(item, entry.name); item.lastMessage = 'VDE switch ready to start';
+      persistSwitchConfiguration(item);
+    }
+    for (const entry of manifest.hosts) {
+      const item = getSession(entry.id, true, 'vm', true); created.push(item);
+      item.selectedImage = imageById(entry.systemId); item.engine = manifest.engine;
+      item.launchSettings = entry.settings; item.networkInterfaces = entry.networkInterfaces;
+      item.guestIsoAttached = entry.autoBuildGuestCdrom;
+      item.guestMedia = readStartupFiles(startupDirectory(item));
+      item.runDisk = entry.disk ? tempFile(item, 'disk.qcow2') : null;
+      item.everStarted = entry.disk;
+      item.qemuOptions = entry.disk ? qemuOptionsFor(entry.systemId, entry.settings) : null;
+      setSessionHostname(item, entry.name); item.lastMessage = entry.disk ? 'Host stopped; current disk kept' : 'Host ready to start';
+      persistHostConfiguration(item);
+    }
+    saveSessionMetadata();
+  } catch (error) {
+    for (const item of created.reverse()) { try { removeHostnameAlias(item); } catch (_) {} sessions.delete(item.id); }
+    for (const {source, target} of moved.reverse()) { try { fs.renameSync(target, source); } catch (_) {} }
+    sessionEngine = oldEngine;
+    try { saveSessionMetadata(oldEngine); } catch (_) {}
+    throw error;
+  }
+  io.emit('general-settings-changed', {sessionId, engine: sessionEngine});
+  io.emit('sessions-changed', {sessionId: null});
+}
+app.get('/api/session-archive/estimate', (req, res) => {
+  try {
+    const includeDisks = req.query.includeDisks === 'true';
+    const {hosts, switches, logicalBytes, allocatedBytes, estimatedBytes: bytes} = archiveSources(includeDisks);
+    res.set('Cache-Control', 'no-store');
+    res.json({bytes, logicalBytes, allocatedBytes, hosts: hosts.length, switches: switches.length, includeDisks, hasWorkingDisks: hosts.some(item => item.disk), format: 'qemuweb-session-v1.zip'});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
+app.post('/api/session-archive/export', async (req, res) => {
+  archiveBusy = true;
+  const archive = path.join(runtimeInstance, `.session-export-${crypto.randomBytes(8).toString('hex')}.zip`);
+  try {
+    const includeDisks = req.body?.includeDisks;
+    const {sources, hosts, switches, systems} = archiveSources(includeDisks);
+    const ids = new Set([...hosts, ...switches].map(item => item.id));
+    const view = archiveView(req.body?.view, ids);
+    const baseImages = {};
+    for (const id of systems) {
+      const format = sessionEngine === 'virtualbox' ? 'vdi' : 'raw';
+      baseImages[id] = {format, ...fileSha256(imagePath(imageById(id).images[format]))};
+    }
+    await writeArchive(archive, sources, {format: 'qemuweb-session', version: 1, engine: sessionEngine,
+      hosts, switches, baseImages, view, includesWorkingDisks: includeDisks});
+    res.set('Cache-Control', 'no-store');
+    res.download(archive, 'qemuweb-session-v1.zip', error => {
+      archiveBusy = false;
+      fs.rmSync(archive, {force: true});
+      if (error && !res.headersSent) res.status(500).json({error: error.message});
+    });
+  } catch (error) { archiveBusy = false; fs.rmSync(archive, {force: true}); res.status(400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to save session archive.' : error.message}); }
+});
+app.post('/api/session-archive/import', async (req, res) => {
+  archiveBusy = true;
+  const upload = path.join(runtimeInstance, `.session-upload-${crypto.randomBytes(8).toString('hex')}.zip`);
+  let stage;
+  try {
+    stage = fs.mkdtempSync(path.join(runtimeInstance, '.session-import-'));
+    if (sessions.size) throw new Error('Load requires an empty session.');
+    if (req.headers['content-type'] !== 'application/zip') throw new Error('Choose a QemuWeb ZIP archive.');
+    const available = fs.statfsSync(runtimeInstance);
+    const declared = Number(req.headers['content-length']);
+    if (Number.isFinite(declared) && declared > 0 && declared + 64 * 1024 * 1024 > available.bavail * available.bsize) throw new Error('Insufficient disk space for session archive upload.');
+    await new Promise((resolve, reject) => {
+      const out = fs.createWriteStream(upload, {flags: 'wx', mode: 0o600});
+      let size = 0;
+      req.on('data', chunk => { size += chunk.length; if (size > MAX_SESSION_ARCHIVE) req.destroy(new Error('Session archive exceeds ZIP v1 total size limit (4 GiB).')); });
+      req.on('error', reject); out.on('error', reject); out.on('finish', resolve); req.pipe(out);
+    });
+    if (sessions.size) throw new Error('Load requires an empty session.');
+    const manifest = await readArchive(upload, stage);
+    const view = validateArchiveManifest(manifest, stage);
+    installArchive(manifest, stage);
+    res.json({ok: true, hosts: manifest.hosts.length, switches: manifest.switches.length, view});
+  } catch (error) { res.status(error.message === 'Load requires an empty session.' ? 409 : 400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to load session archive.' : error.message}); }
+  finally { archiveBusy = false; fs.rmSync(upload, {force: true}); if (stage) fs.rmSync(stage, {recursive: true, force: true}); }
 });
 
 app.get('/api/metrics', (_req, res) => {
