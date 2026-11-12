@@ -188,7 +188,7 @@
     .pane-action-list [data-action="stop"] { color: #ffaf76; }
     .pane-action-list [data-action="reboot"] { color: #70b9ff; }
     .pane-action-list [data-action="reset"] { color: #ffc36b; }
-    .pane-action-list [data-action="exit"] { color: #ff777d; }
+    .pane-action-list [data-action="remove"] { color: #ff777d; }
     .pane-settings-button { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #f2ce79; }
     .pane-settings-button:not(:disabled):hover { border-color: #f2ce79; background: #304256; }
     .pane-settings-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
@@ -371,7 +371,7 @@
     <symbol id="pane-stop-icon" viewBox="0 0 24 24"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></symbol>
     <symbol id="pane-reboot-icon" viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/></symbol>
     <symbol id="pane-reset-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
-    <symbol id="pane-exit-icon" viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/></symbol>
+    <symbol id="pane-remove-icon" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="pane-settings-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></symbol>
     <symbol id="pane-clear-icon" viewBox="0 0 24 24"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></symbol>
   </svg>
@@ -408,7 +408,7 @@
     <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20.5 2v6M18 5h5"/></svg></button>
     <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20.5 2v6M18 5h5"/></svg></button>
     <button id="clone-machine" class="icon-button" type="button" disabled title="Clone selected host or switch" aria-label="Clone selected host or switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>
-    <button id="exit-all" class="icon-button" type="button" disabled title="Exit all hosts and switches" aria-label="Exit all hosts and switches"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 21h12a2 2 0 0 0 2-2V7M7 7l6 6m0-6-6 6"/></svg></button>
+    <button id="exit-all" class="icon-button" type="button" disabled title="Remove all hosts and switches" aria-label="Remove all hosts and switches"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 21h12a2 2 0 0 0 2-2V7M7 7l6 6m0-6-6 6"/></svg></button>
     <div class="page-controls" aria-label="Console pages"><button id="previous-page" class="icon-button" type="button" disabled title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><span id="page-position">0 / 0</span><button id="next-page" class="icon-button" type="button" disabled title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div>
     <button id="toggle-console-columns" class="icon-button" type="button" title="Layout: 1 pane; click for 2" aria-label="Layout: 1 pane; click for 2"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M12 3v18M3 12h18"/></svg><span class="layout-count" id="layout-count">1</span></button>
     <button id="toggle-switch-consoles" class="icon-button" type="button" aria-pressed="true" title="Hide switch consoles" aria-label="Hide switch consoles"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
@@ -485,7 +485,7 @@
       actionList.setAttribute('role', 'group');
       actionList.setAttribute('aria-label', 'Session actions');
       pane.actionButtons = {};
-      for (const [action, label] of [['play', 'Play'], ['stop', 'Stop'], ['reboot', 'Reboot'], ['reset', 'Reset'], ['exit', 'Exit']]) {
+      for (const [action, label] of [['play', 'Play'], ['stop', 'Stop'], ['reboot', 'Reboot'], ['reset', 'Reset'], ['remove', 'Remove']]) {
         const button = document.createElement('button');
         button.type = 'button';
         button.dataset.action = action;
@@ -509,7 +509,7 @@
           if (!sessionId || !machines.has(sessionId)) return;
           focusPane(pane.index);
           if (activeId !== sessionId) return;
-          ({play: startActiveMachine, stop: stopActiveMachine, reboot: rebootActiveMachine, reset: resetActiveMachine, exit: exitActiveMachine})[action]();
+          ({play: startActiveMachine, stop: stopActiveMachine, reboot: rebootActiveMachine, reset: resetActiveMachine, remove: removeActiveMachine})[action]();
         });
         pane.actionButtons[action] = button;
         actionList.append(button);
@@ -1148,7 +1148,7 @@
       pane.actionButtons.reboot.disabled = isSwitch || !machine.running || busy;
       pane.actionButtons.reset.hidden = isSwitch;
       pane.actionButtons.reset.disabled = isSwitch || !machine.hasLaunched || busy;
-      pane.actionButtons.exit.disabled = busy;
+      pane.actionButtons.remove.disabled = busy;
     }
     function updatePaneStates() {
       for (const pane of panes) {
@@ -1596,8 +1596,8 @@
         close.type = 'button';
         close.className = 'machine-close';
         close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-        close.title = machine.kind === 'switch' ? 'Remove VDE switch' : 'Exit host, delete its disk and close the tab';
-        close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Exit host'} ${machine.hostname}`);
+        close.title = machine.kind === 'switch' ? 'Remove switch' : 'Remove host and delete its working disk';
+        close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Remove host'} ${machine.hostname}`);
         close.onclick = () => closeMachine(machine.id);
         if (machine.kind === 'vm' && machine.pendingRestart) {
           const badge = document.createElement('span');
@@ -1809,21 +1809,21 @@
     async function closeMachine(id) {
       const machine = machines.get(id);
       if (!machine || machine.busy) return;
-      const title = machine.kind === 'switch' ? 'Remove switch' : 'Exit host';
+      const title = machine.kind === 'switch' ? 'Remove switch' : 'Remove host';
       const message = machine.kind === 'switch'
         ? `Remove ${machine.hostname}? The switch will stop and its tab will close. Connected host tabs must be closed first.`
         : machine.hasLaunched
-          ? `Exit ${machine.hostname}? This host will stop, its current disk will be deleted, and all changes made in this host will be lost.`
-          : `Close this new host tab?`;
-      if (!await confirmAction(title, message, machine.kind === 'switch' ? 'Remove switch' : 'Exit host')) return;
+          ? `Remove ${machine.hostname}? This host will stop, its current disk will be deleted, and all changes made in this host will be lost.`
+          : `Remove ${machine.hostname} from this session?`;
+      if (!await confirmAction(title, message, title)) return;
       if (machines.get(id) !== machine || machine.busy) return;
       try {
         const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {method: 'DELETE'});
         const body = await response.json();
-        if (!response.ok) throw new Error(body.error || 'Failed to close session');
+        if (!response.ok) throw new Error(body.error || 'Failed to remove host or switch');
         machines.delete(id);
         showPage(activeId !== id ? activeId : null);
-      } catch (error) { showStatusError(`Cannot close session: ${error.message}`); }
+      } catch (error) { showStatusError(`Cannot remove host or switch: ${error.message}`); }
     }
     function appendLog(machine, line) {
       const truncated = SessionLog.append(machine, line);
@@ -1979,7 +1979,7 @@
       }
     });
     document.getElementById('load-session-archive').addEventListener('click', () => {
-      if (machines.size) { showStatusError('Load requires an empty session. Exit all hosts and switches first.'); return; }
+      if (machines.size) { showStatusError('Load requires an empty session. Remove all hosts and switches first.'); return; }
       archiveFile.click();
     });
     archiveFile.addEventListener('change', async () => {
@@ -2559,18 +2559,18 @@
       } catch (error) { machine.message = error.message; machine.error = error.message; }
       finally { machine.busy = false; updateControls(); }
     }
-    function exitActiveMachine() { if (activeId) return closeMachine(activeId); }
+    function removeActiveMachine() { if (activeId) return closeMachine(activeId); }
     exitAllButton.onclick = async () => {
       if (exitAllButton.disabled) return;
-      if (!await confirmAction('Exit all', 'Exit all hosts and switches?\n\nAll working disks will be deleted and their changes lost.', 'Exit all')) return;
+      if (!await confirmAction('Remove all hosts and switches', 'Remove all hosts and switches from this session?\n\nAll working disks will be deleted and their changes lost.', 'Remove all')) return;
       exitAllBusy = true; updateControls();
       try {
         const response = await fetch('/api/sessions', {method: 'DELETE'});
         const result = await response.json();
-        if (!response.ok) throw new Error(result.error || 'Failed to exit all sessions');
+        if (!response.ok) throw new Error(result.error || 'Failed to remove all hosts and switches');
         for (const id of result.removed) machines.delete(id);
         showPage();
-      } catch (error) { showStatusError(`Cannot exit all sessions: ${error.message}`); }
+      } catch (error) { showStatusError(`Cannot remove all hosts and switches: ${error.message}`); }
       finally { exitAllBusy = false; updateControls(); }
     };
     async function rebootActiveMachine() {

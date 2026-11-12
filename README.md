@@ -35,9 +35,9 @@ The same paths, grouped by software location, are detailed below:
 ```text
 ┌─ BROWSER · public/index.html ─────────────────────────────────────────┐
 │ Host tab:   System · Engine · NICs · Play/Resume · Stop · Reboot     │
-│             Reset · Exit · Clear · Settings · Status                  │
+│             Reset · Remove · Clear · Settings · Status                │
 │ Pane bar:   Session · Console/Monitor/Log view · Status                │
-│ Switch tab: Play · Stop · Exit/Remove · Clear · Status                │
+│ Switch tab: Play · Stop · Remove · Clear · Status                     │
 │ Shared interactive display: xterm.js                                 │
 └───────────────────────────────────────────────────────────────────────┘
        │ HTTP/JSON: actions, configuration and QEMU monitor
@@ -93,7 +93,7 @@ The interactive paths are deliberately different because each endpoint provides 
 | VirtualBox VM console | `xterm.js ↔ Socket.IO ↔ server.js ↔ Unix serial socket ↔ VirtualBox UART ↔ guest ttyS0` | Provide the same guest console through VirtualBox's server-mode virtual UART. |
 | VDE switch terminal | `xterm.js ↔ Socket.IO ↔ server.js ↔ node-pty ↔ vdeterm ↔ VDE management socket ↔ vde_switch` | Provide the interactive VDE prompt, including line editing, history, completion and asynchronous switch messages. |
 | QEMU monitor | `xterm.js monitor view ↔ HTTP/JSON ↔ server.js ↔ Unix monitor socket ↔ QEMU HMP` | Send emulator commands such as `info status` in the same pane as the serial console; this controls QEMU and is not a guest shell. |
-| Start, Stop, Reboot, Reset and Exit | `Toolbar ↔ HTTP/JSON ↔ server.js ↔ process/VBoxManage control` | Manage one VM or switch session and its working files. |
+| Start, Stop, Reboot, Reset and Remove | `Toolbar ↔ HTTP/JSON ↔ server.js ↔ process/VBoxManage control` | Manage one host or switch session and its working files. |
 | Logs and status | `server.js ↔ Socket.IO ↔ selected browser tab` | Keep launch commands, process messages, console state and lifecycle state associated with the correct tab. |
 
 VDE uses two separate paths:
@@ -317,7 +317,7 @@ By default, [config.json](config.json) selects `-cpu host` in KVM mode: QEMU exp
 
 The top-right **Graphic** button opens an overview of the current network. It shows hosts, switches, their state, and one curved link per connected Ethernet interface, labeled with its interface and switch port. Drag a host or switch to rearrange the view; links follow the nodes. These positions last for the current browser session and do not change the `.topo` file or network connections. The magnifier buttons zoom the whole graph in or out. Click a node to return to **Terminals** with that session selected. The top-right **Terminals** button also returns without changing running sessions.
 
-The icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Click the framed Host or Switch icon at the left of a terminal to open its action menu. Host Settings and Clear console sit beside that menu. General Settings is the first button in the bottom bar, and Exit All is the last button before the page controls. Actions in a terminal apply to its own session.
+The icons come from [Lucide](https://lucide.dev/icons); their license is kept in [public/icons/LICENSE-lucide.txt](public/icons/LICENSE-lucide.txt). The README uses small, locally stored SVGs in `docs/icons/`, colored to match the interface. Click the framed Host or Switch icon at the left of a terminal to open its action menu. Host Settings and Clear console sit beside that menu. General Settings is the first button in the bottom bar, and Remove all hosts and switches is the last button before the page controls. Actions in a terminal apply to its own host or switch.
 
 | Icon / control | Action | Menu label or hint | Effect |
 |---|---|---|---|
@@ -326,8 +326,8 @@ The icons come from [Lucide](https://lucide.dev/icons); their license is kept in
 | ![Power icon](docs/icons/power.svg) | **Stop** | `Stop` | Request guest shutdown through QEMU's `system_powerdown` or VirtualBox's ACPI power button. If the guest does not stop within 10 seconds, force it off. Keep its disk, tab, logs, and display name. |
 | ![Reboot icon](docs/icons/rotate-cw.svg) | **Reboot** | `Reboot` | Stop and boot again from the same disk with the latest saved settings. Use the same forced-stop fallback if needed. Keep the tab and display name. |
 | ![Reset icon](docs/icons/rotate-ccw.svg) | **Reset** | `Reset` | After a QemuWeb warning dialog, stop the host, delete its current disk, create a fresh one from the base image, and boot with the latest saved settings. Keep the tab and display name. |
-| ![Exit icon](docs/icons/x.svg) | **Exit** | `Exit` | After a QemuWeb warning dialog, force-stop the host, delete its disk, sockets, and logs, then close its tab. The red X on the tab asks for the same confirmation. |
-| **Exit All** | **Exit all** | `Exit all hosts and switches` | After confirmation, close every host and switch and delete their working disks. |
+| ![Remove icon](docs/icons/x.svg) | **Remove** | `Remove` | After a QemuWeb warning dialog, stop the selected host or switch, delete its working files, and close its tab. The red X on the tab asks for the same confirmation. |
+| **Remove all** | **Remove all** | `Remove all hosts and switches` | After confirmation, remove every host and switch from the current session and delete their working disks. |
 | ![Clear icon](docs/icons/eraser.svg) | **Clear** | `Clear console` | Clear this tab's console history while preserving its current prompt or line. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **Host Settings** | `Host Settings` | Edit the selected host's launch settings and network interfaces; the Expert tab shows commands and technical details. |
 | ![Settings icon](docs/icons/sliders-horizontal.svg) | **General Settings** | `General Settings` | Choose the common engine for this application session before creating hosts, plus the browser-local automatic naming scheme and terminal appearance. |
@@ -336,7 +336,7 @@ The icons come from [Lucide](https://lucide.dev/icons); their license is kept in
 | **Console / Monitor / Log** menu | **Terminal view** | Current view icon | Reuse the same xterm area for the selected session's views. QEMU hosts provide all three; VirtualBox hosts and switches provide Console and read-only Log. |
 | **A− / A+** | **Terminal font size** | `Decrease` / `Increase terminal font size` | Adjust only this terminal. General Settings can reset all terminals to a common size. |
 
-A forced Stop can leave the guest filesystem needing repair on the next boot. Exit All affects every session.
+A forced Stop can leave the guest filesystem needing repair on the next boot. Remove all affects every host and switch in the current session.
 
 ### Host status
 
@@ -353,7 +353,7 @@ The badge in each terminal header describes that session:
 | **RESETTING** | The current disk is being replaced and the host is starting from the base image. |
 | **ERROR** | An action failed or the host ended with an error. The error message appears under the toolbar; the disk is retained when it still exists. |
 
-Exit removes the tab, so it has no persistent status. Stopping the server with Ctrl+C force-stops its hosts and removes their temporary sessions and working disks.
+Remove closes the tab, so it has no persistent status. Stopping the server with Ctrl+C force-stops its hosts and removes their temporary sessions and working disks.
 
 Each host pane also shows **CPU** and **RAM** for its VM process on the server, refreshed about every two seconds. CPU uses one logical core as 100% and can exceed 100% for a multicore VM; RAM is the process's resident memory (RSS) in decimal MB. These are host-side consumption figures, not free memory or CPU load inside the guest. QEMU reads Linux `/proc`; VirtualBox uses `VBoxManage metrics`. A dash means the host is stopped, the first CPU sample is still pending, or a metric is unavailable. Switches have no VM metrics.
 
