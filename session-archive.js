@@ -1,10 +1,9 @@
 'use strict';
 
-// QemuWeb ZIP v1: UTF-8 files, data descriptors, Deflate for QCOW2 payloads,
+// QemuWeb session ZIP: UTF-8 files, data descriptors, Deflate for QCOW2 payloads,
 // ZIP64 entry sizes when necessary, and a 32-bit archive/central directory.
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const zlib = require('zlib');
 const {Readable, Transform, Writable} = require('stream');
 const {pipeline} = require('stream/promises');
@@ -52,12 +51,12 @@ function zip64Extra(size, compressed) {
   extra.writeBigUInt64LE(BigInt(size), 4); extra.writeBigUInt64LE(BigInt(compressed), 12);
   return extra;
 }
-async function writeArchive(destination, sources, manifestData) {
-  if (!Array.isArray(sources) || sources.length + 1 > 10000) throw new Error('Too many session archive files.');
+async function writeArchive(destination, sources) {
+  if (!Array.isArray(sources) || sources.length > 10000) throw new Error('Too many session archive files.');
   const fd = fs.openSync(destination, 'wx', 0o600);
-  const records = [], inventory = [];
+  const records = [];
   let offset = 0;
-  function append(buffer) { put(fd, buffer); offset += buffer.length; if (offset > MAX32) throw new Error('Session archive exceeds ZIP v1 total size limit (4 GiB).'); }
+  function append(buffer) { put(fd, buffer); offset += buffer.length; if (offset > MAX32) throw new Error('Session archive exceeds ZIP total size limit (4 GiB).'); }
   async function add(name, source) {
     safeName(name);
     if (records.some(item => item.name === name)) throw new Error(`Duplicate archive path: ${name}`);
@@ -81,9 +80,8 @@ async function writeArchive(destination, sources, manifestData) {
     append(header); append(nameBytes); append(extra);
     const start = offset;
     let crc = 0xffffffff, copied = 0;
-    const hash = crypto.createHash('sha256');
     const tap = new Transform({transform(chunk, _encoding, callback) {
-      copied += chunk.length; crc = crc32(chunk, crc); hash.update(chunk); callback(null, chunk);
+      copied += chunk.length; crc = crc32(chunk, crc); callback(null, chunk);
     }});
     const sink = new Writable({write(chunk, _encoding, callback) {
       try { append(chunk); callback(); } catch (error) { callback(error); }
@@ -100,14 +98,9 @@ async function writeArchive(destination, sources, manifestData) {
     else { descriptor.writeUInt32LE(compressed, 8); descriptor.writeUInt32LE(size, 12); }
     append(descriptor);
     records.push({name, nameBytes, size, compressed, crc, localOffset, method, flags, zip64});
-    return {path: name, size, sha256: hash.digest('hex')};
   }
   try {
-    for (const item of sources) inventory.push(await add(item.name, item.file));
-    const manifest = {...manifestData, files: inventory};
-    const manifestBytes = Buffer.from(`${JSON.stringify(manifest, null, 2)}\n`);
-    if (manifestBytes.length > 4 * 1024 * 1024) throw new Error('Session manifest exceeds 4 MiB limit.');
-    await add('manifest.json', manifestBytes);
+    for (const item of sources) await add(item.name, item.file);
     const centralOffset = offset;
     for (const item of records) {
       const extra = item.zip64 ? zip64Extra(item.size, item.compressed) : Buffer.alloc(0);
@@ -118,7 +111,7 @@ async function writeArchive(destination, sources, manifestData) {
       h.writeUInt32LE(item.zip64 ? MAX32 : item.compressed, 20);
       h.writeUInt32LE(item.zip64 ? MAX32 : item.size, 24);
       h.writeUInt16LE(item.nameBytes.length, 28); h.writeUInt16LE(extra.length, 30);
-      h.writeUInt32LE(0o100600 << 16, 38); h.writeUInt32LE(item.localOffset, 42);
+      h.writeUInt32LE(0o100600 * 0x10000, 38); h.writeUInt32LE(item.localOffset, 42);
       append(h); append(item.nameBytes); append(extra);
     }
     const centralSize = offset - centralOffset;
@@ -127,7 +120,7 @@ async function writeArchive(destination, sources, manifestData) {
     end.writeUInt32LE(0x06054b50, 0); end.writeUInt16LE(records.length, 8);
     end.writeUInt16LE(records.length, 10); end.writeUInt32LE(centralSize, 12);
     end.writeUInt32LE(centralOffset, 16); append(end);
-    return {manifest, bytes: offset};
+    return {bytes: offset};
   } catch (error) { fs.rmSync(destination, {force: true}); throw error; }
   finally { fs.closeSync(fd); }
 }
@@ -173,6 +166,9 @@ async function readArchive(filename, stage) {
       if (!Buffer.from(name).equals(rawName)) throw new Error('Invalid UTF-8 ZIP path.');
       safeName(name);
       if (method === 8 && !name.endsWith('/disk.qcow2')) throw new Error('Only working disks may be compressed.');
+      if ((name === 'session.json' || /\/(?:host|switch)\.json$/.test(name)) && size > 4 * 1024 * 1024) {
+        throw new Error(`Session metadata exceeds 4 MiB limit: ${name}`);
+      }
       if (entries.has(name)) throw new Error(`Duplicate archive path: ${name}`);
       const zip64 = compressed === MAX32 || size === MAX32;
       const extra = central.subarray(p + 46 + n, p + 46 + n + extraLength);
@@ -205,14 +201,12 @@ async function readArchive(filename, stage) {
     spans.sort((a, b) => a[0] - b[0]);
     if (spans[0]?.[0] !== 0) throw new Error('Invalid ZIP entry layout.');
     for (let i = 1; i < spans.length; i++) if (spans[i][0] !== spans[i - 1][1]) throw new Error('Overlapping or hidden ZIP entries.');
-    if (spans.at(-1)?.[1] !== centralOffset || p !== central.length || !entries.has('manifest.json')) throw new Error('Invalid session ZIP directory.');
+    if (spans.at(-1)?.[1] !== centralOffset || p !== central.length || !entries.has('session.json')) throw new Error('Invalid session ZIP directory.');
     const logicalTotal = [...entries.values()].reduce((sum, item) => sum + item.size, 0);
     if (logicalTotal > MAX_LOGICAL_TOTAL || [...entries].some(([name, item]) => name.endsWith('/disk.qcow2') && item.size > MAX_LOGICAL_DISK)) throw new Error('Session archive logical disk size exceeds supported limit.');
-    async function consume(name, destination, expected) {
+    async function consume(name, destination) {
       const item = entries.get(name);
       if (!item) throw new Error(`Missing archive file: ${name}`);
-      if (expected && item.size !== expected.size) throw new Error(`File size mismatch: ${name}`);
-      const hash = crypto.createHash('sha256');
       let crc = 0xffffffff, copied = 0;
       const output = destination ? fs.openSync(destination, 'wx', 0o600) : null;
       const chunks = destination ? null : [];
@@ -230,36 +224,32 @@ async function readArchive(filename, stage) {
             if (sparse) writeSparse(output, part, copied);
             else put(output, part);
           } else chunks.push(part);
-          hash.update(part); crc = crc32(part, crc); copied += part.length;
+          crc = crc32(part, crc); copied += part.length;
         }
         if (output !== null && sparse) fs.ftruncateSync(output, item.size);
       } finally { if (output !== null) fs.closeSync(output); }
-      if (copied !== item.size || ((crc ^ 0xffffffff) >>> 0) !== item.crc ||
-          expected && hash.digest('hex') !== expected.sha256) throw new Error(`Checksum mismatch: ${name}`);
+      if (copied !== item.size || ((crc ^ 0xffffffff) >>> 0) !== item.crc) throw new Error(`Checksum mismatch: ${name}`);
       return chunks ? Buffer.concat(chunks) : undefined;
     }
-    if (entries.get('manifest.json').size > 4 * 1024 * 1024 || entries.get('manifest.json').method !== 0) throw new Error('Invalid session manifest entry.');
-    const manifest = JSON.parse((await consume('manifest.json')).toString('utf8'));
-    if (!manifest || manifest.format !== 'qemuweb-session' || manifest.version !== 1 || !Array.isArray(manifest.files)) throw new Error('Unsupported session archive version.');
-    const expected = new Map();
-    for (const item of manifest.files) {
-      if (!item || typeof item !== 'object') throw new Error('Invalid manifest file inventory.');
-      safeName(item.path);
-      if (item.path === 'manifest.json' || expected.has(item.path) || !Number.isSafeInteger(item.size) || item.size < 0 || !/^[0-9a-f]{64}$/.test(item.sha256)) throw new Error('Invalid manifest file inventory.');
-      expected.set(item.path, item);
+    const session = entries.get('session.json');
+    if (session.size > 4 * 1024 * 1024 || session.method !== 0) throw new Error('Invalid session metadata entry.');
+    const names = [...entries.keys()];
+    for (const name of names) {
+      if (name !== 'session.json' && !/^[hs]-[0-9a-f]{16}\/(?:host\.json|switch\.json|disk\.qcow2|startup\/.+)$/.test(name)) {
+        throw new Error(`Unexpected session archive file: ${name}`);
+      }
     }
-    if (expected.size + 1 !== entries.size) throw new Error('Manifest file inventory does not match ZIP entries.');
-    const required = [...expected].reduce((sum, [name, item]) => sum + (name.endsWith('/disk.qcow2') ? entries.get(name).compressed : item.size), 0);
+    const required = names.reduce((sum, name) => sum + (name.endsWith('/disk.qcow2') ? entries.get(name).compressed : entries.get(name).size), 0);
     const free = fs.statfsSync(stage);
     if (required + 64 * 1024 * 1024 > free.bavail * free.bsize) throw new Error('Insufficient disk space to load session archive.');
-    for (const [name, item] of expected) {
+    for (const name of names) {
       const target = path.join(stage, name);
       fs.mkdirSync(path.dirname(target), {recursive: true});
-      await consume(name, target, item);
+      await consume(name, target);
     }
     const after = fs.statfsSync(stage);
     if (after.bavail * after.bsize < 64 * 1024 * 1024) throw new Error('Insufficient disk space to finish session import.');
-    return manifest;
+    return names;
   } finally { fs.closeSync(fd); }
 }
 module.exports = {writeArchive, readArchive, safeName};

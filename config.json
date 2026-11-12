@@ -37,7 +37,7 @@
       "settings": {},
       "qemu": {},
       "virtualbox": {
-        "nic": "none",
+        "networkModel": "82540EM",
         "osType": "Linux_64"
       }
     },
@@ -55,7 +55,7 @@
         "networkModel": "virtio-net-pci"
       },
       "virtualbox": {
-        "nic": "none",
+        "networkModel": "82540EM",
         "osType": "Linux_64"
       }
     },
@@ -73,7 +73,7 @@
         "networkModel": "e1000"
       },
       "virtualbox": {
-        "nic": "none",
+        "networkModel": "82540EM",
         "osType": "Linux_64"
       }
     },
@@ -90,7 +90,7 @@
         "nic": "none"
       },
       "virtualbox": {
-        "nic": "none",
+        "networkModel": "82540EM",
         "osType": "Linux_64"
       }
     }

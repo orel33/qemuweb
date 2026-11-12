@@ -126,6 +126,16 @@
     .confirm-heading svg { flex: none; width: 26px; height: 26px; color: #ffc36b; }
     .confirm-heading h2 { margin: 0; font-size: 18px; }
     .confirm-dialog p { margin: 16px 0 20px; color: #d7e1ee; line-height: 1.5; white-space: pre-line; }
+    .archive-progress { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; color: #b8d8ff; font-size: 13px; }
+    .archive-progress-spinner { flex: none; width: 17px; height: 17px; border: 2px solid #526781; border-top-color: #9cc8ff; border-radius: 50%; animation: archive-spin .8s linear infinite; }
+    .archive-progress-track { height: 6px; margin: -8px 0 18px; overflow: hidden; border-radius: 6px; background: #26374c; }
+    .archive-progress-track::after { content: ""; display: block; width: 38%; height: 100%; border-radius: inherit; background: #9cc8ff; animation: archive-sweep 1.4s ease-in-out infinite alternate; }
+    .archive-load-option { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-size: 13px; }
+    .archive-warning { display: flex; align-items: flex-start; gap: 8px; margin: 9px 0 0; color: #ffc36b; font-size: 13px; line-height: 1.4; }
+    .archive-warning svg { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+    @keyframes archive-spin { to { transform: rotate(360deg); } }
+    @keyframes archive-sweep { from { transform: translateX(0); } to { transform: translateX(163%); } }
+    @media (prefers-reduced-motion: reduce) { .archive-progress-spinner, .archive-progress-track::after { animation: none; } }
     .confirm-actions { display: flex; justify-content: flex-end; gap: 10px; }
     #confirm-accept { border-color: #a65058; background: #613039; color: #fff; }
     #confirm-accept:hover { background: #803943; }
@@ -219,7 +229,6 @@
     .pane-view-menu .console-view-toggle button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: -2px; }
     .console-view-toggle svg, .pane-view-menu summary svg { flex: none; width: 18px; height: 18px; }
     .console-pane-state { display: inline-flex; flex: none; align-items: center; height: 32px; padding: 0 7px; border: 1px solid #405166; border-radius: 5px; background: #101820; color: #bdc8d6; font-size: 11px; white-space: nowrap; }
-    .console-pane-state[data-state="new"] { color: #9fc5ef; }
     .console-pane-state[data-state="running"] { color: #7ae4a3; }
     .console-pane-state[data-state="stopped"] { color: #ffd17c; }
     .console-pane-state[data-state="starting"], .console-pane-state[data-state="stopping"], .console-pane-state[data-state="rebooting"], .console-pane-state[data-state="resetting"] { color: #ffd17c; }
@@ -348,11 +357,21 @@
   </dialog>
   <dialog class="confirm-dialog" id="session-archive-dialog" aria-labelledby="session-archive-title">
     <h2 id="session-archive-title">Save session</h2>
-    <p>Save hosts, switches, cabling, startup files and this view. Machines load stopped; running RAM is never saved.</p>
-    <label><input id="include-working-disks" type="checkbox"> Include working disks (QEMU hosts must be stopped)</label>
+    <p id="session-archive-intro">Save your current session.</p>
+    <label><input id="include-working-disks" type="checkbox"> Include working disks</label>
+    <div id="archive-working-disk-warning" class="archive-warning" role="note" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span>All hosts and switches will be stopped before saving.</span></div>
     <p id="session-archive-estimate" role="status"></p>
+    <div id="session-archive-progress" role="status" aria-live="polite" hidden><div class="archive-progress"><span class="archive-progress-spinner" aria-hidden="true"></span><span id="session-archive-progress-text">Creating archive…</span></div><div class="archive-progress-track" aria-hidden="true"></div></div>
     <p id="session-archive-error" role="alert" hidden></p>
     <div class="confirm-actions"><button id="cancel-session-archive" type="button">Cancel</button><button id="confirm-session-archive" type="button">Download ZIP</button></div>
+  </dialog>
+  <dialog class="confirm-dialog" id="session-archive-load-dialog" aria-labelledby="session-archive-load-title">
+    <h2 id="session-archive-load-title">Load session</h2>
+    <p id="session-archive-load-file"></p>
+    <label class="archive-load-option"><input id="session-archive-autostart" type="checkbox" checked> Start/resume hosts and switches automatically</label>
+    <div id="session-archive-load-progress" role="status" aria-live="polite" hidden><div class="archive-progress"><span class="archive-progress-spinner" aria-hidden="true"></span><span id="session-archive-load-progress-text">Uploading and restoring session…</span></div><div class="archive-progress-track" aria-hidden="true"></div></div>
+    <p id="session-archive-load-error" role="alert" hidden></p>
+    <div class="confirm-actions"><button id="cancel-session-archive-load" type="button">Cancel</button><button id="confirm-session-archive-load" type="button">Load session</button></div>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
@@ -403,8 +422,8 @@
     <button id="load-topology" class="icon-button" type="button" title="Load topology" aria-label="Load topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
     <button id="save-topology" class="icon-button" type="button" title="Save topology" aria-label="Save topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
     <input id="session-archive-file" type="file" accept=".zip,application/zip" hidden>
-    <button id="load-session-archive" class="icon-button" type="button" title="Load session ZIP" aria-label="Load session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12m-4-4 4 4 4-4"/><path d="M4 16v4h16v-4"/><path d="M4 3h6"/></svg></button>
-    <button id="save-session-archive" class="icon-button" type="button" title="Save session ZIP" aria-label="Save session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M4 16v4h16v-4"/><path d="M4 4h6"/></svg></button>
+    <button id="load-session-archive" class="icon-button" type="button" title="Load session ZIP" aria-label="Load session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2M20 8v11a2 2 0 0 1-2 2h-2m-7-6 3-3 3 3m-3-3v9"/></svg></button>
+    <button id="save-session-archive" class="icon-button" type="button" title="Save session ZIP" aria-label="Save session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h.343M20 8v11a2 2 0 0 1-2 2h-.343M9 18l3 3 3-3m-3-6v9"/></svg></button>
     <button id="new-host" class="icon-button" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="15" height="12" rx="2"/><path d="M6 20h7M9.5 15v5"/><path d="M20.5 2v6M18 5h5"/></svg></button>
     <button id="new-switch" class="icon-button" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="15" width="5" height="5" rx="1"/><rect x="10" y="2" width="5" height="5" rx="1"/><rect x="16" y="15" width="5" height="5" rx="1"/><path d="M4.5 15v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3M12.5 11V7M20.5 2v6M18 5h5"/></svg></button>
     <button id="clone-machine" class="icon-button" type="button" disabled title="Clone selected host or switch" aria-label="Clone selected host or switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>
@@ -1165,11 +1184,11 @@
           pane.kindIcon.querySelector('use').setAttribute('href', machine.kind === 'switch' ? '#pane-switch-icon' : '#pane-host-icon');
         }
         const state = machine
-          ? machine.error ? 'error' : machine.busy ? (machine.operation || 'starting') : machine.running ? 'running' : machine.hasLaunched ? 'stopped' : 'new'
+          ? machine.error ? 'error' : machine.busy ? (machine.operation || 'starting') : machine.running ? 'running' : 'stopped'
           : workspaceError && pane.index === activePaneIndex ? 'error' : 'empty';
         pane.state.dataset.state = state;
         pane.state.hidden = state === 'empty';
-        pane.state.textContent = state === 'new' ? 'READY' : state.toUpperCase();
+        pane.state.textContent = state.toUpperCase();
         pane.state.title = machine ? (machine.error || machine.message || '') : (state === 'error' ? workspaceError : '');
         pane.metrics.hidden = !machine || machine.kind !== 'vm';
         if (!pane.metrics.hidden) {
@@ -1454,8 +1473,8 @@
       settingsNetworkProfile.replaceChildren();
       settingsConsole.replaceChildren();
       optionsCommands.textContent = '';
-      networkControls.hidden = machine.engine === 'virtualbox';
-      if (!networkControls.hidden) renderNicControls(machine);
+      networkControls.hidden = false;
+      renderNicControls(machine);
       try {
         const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), guestCdrom: String(!!machine.autoBuildGuestCdrom)});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
@@ -1632,7 +1651,7 @@
     }
     function renderNicControls(machine, list = nicList, addButton = addNic, onChange = () => { clearStartupTemplateError(); refreshLaunchPreview(machine); }) {
       list.replaceChildren();
-      const locked = machine.busy || machine.engine === 'virtualbox';
+      const locked = machine.busy;
       addButton.disabled = locked || (machine.interfaces || []).length >= 4;
       for (const [index, selected] of (machine.interfaces || []).entries()) {
         const row = document.createElement('div'); row.className = 'nic-row';
@@ -1683,7 +1702,7 @@
       const imageId = current?.kind === 'vm' ? current.imageId : images[0]?.id;
       const image = images.find(item => item.id === imageId);
       const hostname = nextMachineName('vm');
-      const interfaces = generalSettings.engine === 'virtualbox' ? [] : [null];
+      const interfaces = [null];
       hostSettingsDraft = {
         id: `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
         isNew: true, kind: 'vm', hostname, imageId,
@@ -1718,8 +1737,8 @@
       const current = activeMachine();
       imageSelect.value = host && current?.kind === 'vm' ? current.imageId : (images[0]?.id || '');
       engineSelect.value = generalSettings.engine;
-      createDraft = host ? {engine: generalSettings.engine, interfaces: generalSettings.engine === 'virtualbox' ? [] : [null], hasLaunched: false, busy: false} : null;
-      createNetwork.hidden = !host || generalSettings.engine === 'virtualbox';
+      createDraft = host ? {engine: generalSettings.engine, interfaces: [null], hasLaunched: false, busy: false} : null;
+      createNetwork.hidden = !host;
       if (host) renderCreateNicControls();
       createAutostart.checked = true;
       document.getElementById('create-autostart-row').hidden = false;
@@ -1737,7 +1756,7 @@
       cloneName.maxLength = isSwitch ? 32 : 64;
       if (isSwitch) cloneName.pattern = '[a-zA-Z][a-zA-Z0-9_-]{0,31}';
       else cloneName.removeAttribute('pattern');
-      cloneNetworkRow.hidden = isSwitch || generalSettings.engine === 'virtualbox' || !source.interfaces?.length;
+      cloneNetworkRow.hidden = isSwitch || !source.interfaces?.length;
       cloneNetwork.checked = !cloneNetworkRow.hidden;
       cloneAutostart.checked = true;
       cloneError.hidden = true;
@@ -1865,7 +1884,7 @@
       current.hasLaunched = session.hasLaunched;
       current.pendingRestart = !!session.pendingRestart;
       current.message = session.message;
-      current.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
+      current.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
       current.networkInterfaces = session.networkInterfaces || [];
       if (session.kind === 'vm' && session.settings) { current.settings = session.settings; current.settingsLoaded = true; }
       if (!(qemuOptionsPanel.open && settingsMachine()?.id === session.id)) {
@@ -1927,48 +1946,83 @@
 
     const archiveDialog = document.getElementById('session-archive-dialog');
     const archiveChoice = document.getElementById('include-working-disks');
+    const archiveWorkingDiskWarning = document.getElementById('archive-working-disk-warning');
+    const archiveIntro = document.getElementById('session-archive-intro');
     const archiveEstimate = document.getElementById('session-archive-estimate');
+    const archiveProgress = document.getElementById('session-archive-progress');
+    const archiveProgressText = document.getElementById('session-archive-progress-text');
     const archiveError = document.getElementById('session-archive-error');
     const archiveConfirm = document.getElementById('confirm-session-archive');
     const archiveFile = document.getElementById('session-archive-file');
-    const formatBytes = bytes => `${(bytes / (1024 * 1024)).toFixed(bytes < 1024 * 1024 ? 2 : 1)} MiB`;
+    const archiveLoadDialog = document.getElementById('session-archive-load-dialog');
+    const archiveLoadFileLabel = document.getElementById('session-archive-load-file');
+    const archiveLoadAutoStart = document.getElementById('session-archive-autostart');
+    const archiveLoadProgress = document.getElementById('session-archive-load-progress');
+    const archiveLoadProgressText = document.getElementById('session-archive-load-progress-text');
+    const archiveLoadError = document.getElementById('session-archive-load-error');
+    const archiveLoadCancel = document.getElementById('cancel-session-archive-load');
+    const archiveLoadConfirm = document.getElementById('confirm-session-archive-load');
+    let selectedArchiveFile = null;
+    let archiveLoadBusy = false;
+    let archiveLoadImported = false;
+    archiveLoadDialog.addEventListener('cancel', event => { if (archiveLoadBusy) event.preventDefault(); });
+    archiveLoadDialog.addEventListener('close', () => {
+      selectedArchiveFile = null;
+      if (archiveLoadImported) location.reload();
+    });
+    let archiveEstimateRequest = 0;
     async function updateArchiveEstimate() {
+      const request = ++archiveEstimateRequest;
       archiveConfirm.disabled = true;
       archiveError.hidden = true;
       archiveEstimate.textContent = 'Estimating archive size…';
       try {
-        const response = await fetch(`/api/session-archive/estimate?includeDisks=${archiveChoice.checked}`, {cache: 'no-store'});
+        const includeDisks = archiveChoice.checked;
+        const response = await fetch(`/api/session-archive/estimate?includeDisks=${includeDisks}`, {cache: 'no-store'});
         const data = await response.json();
+        if (request !== archiveEstimateRequest) return;
         if (!response.ok) throw new Error(data.error || 'Cannot estimate session archive.');
-        archiveEstimate.textContent = `Estimated compressed ZIP: ${formatBytes(data.bytes)} (source logical ${formatBytes(data.logicalBytes)}, allocated ${formatBytes(data.allocatedBytes)}; final size may vary) · ${data.hosts} hosts · ${data.switches} switches${archiveChoice.checked ? ' · working disks included where present' : ' · fresh working disks on next Play'}.`;
+        archiveIntro.textContent = `Save your current session: ${data.hosts} ${data.hosts === 1 ? 'host' : 'hosts'} and ${data.switches} ${data.switches === 1 ? 'switch' : 'switches'}.`;
+        archiveEstimate.textContent = `Estimated compressed ZIP: ${(data.bytes / 1e6).toFixed(2)} MB`;
         archiveConfirm.disabled = false;
-      } catch (error) { archiveEstimate.textContent = ''; archiveError.textContent = error.message; archiveError.hidden = false; }
+      } catch (error) {
+        if (request !== archiveEstimateRequest) return;
+        archiveEstimate.textContent = ''; archiveError.textContent = error.message; archiveError.hidden = false;
+      }
     }
     document.getElementById('save-session-archive').addEventListener('click', () => {
       archiveChoice.checked = false;
+      archiveWorkingDiskWarning.hidden = true;
+      archiveIntro.textContent = 'Save your current session.';
+      archiveProgress.hidden = true;
       archiveDialog.showModal();
       updateArchiveEstimate();
     });
-    archiveChoice.addEventListener('change', updateArchiveEstimate);
+    archiveChoice.addEventListener('change', () => {
+      archiveWorkingDiskWarning.hidden = !archiveChoice.checked;
+      updateArchiveEstimate();
+    });
     document.getElementById('cancel-session-archive').addEventListener('click', () => archiveDialog.close());
     archiveConfirm.addEventListener('click', async () => {
       archiveConfirm.disabled = true;
       archiveError.hidden = true;
       let writable = null;
       try {
+        const includeDisks = archiveChoice.checked;
         if (window.showSaveFilePicker) {
-          const handle = await window.showSaveFilePicker({suggestedName: 'qemuweb-session-v1.zip', types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
+          const handle = await window.showSaveFilePicker({suggestedName: 'qemuweb-session-v2.zip', types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
           writable = await handle.createWritable();
         }
-        const positions = Object.fromEntries([...graphicPositions].filter(([id]) => machines.has(id)));
-        const view = {view: graphicVisible ? 'graphic' : 'terminals', layoutSize, showSwitchConsoles, graphicZoom, positions};
-        archiveEstimate.textContent = 'Creating archive…';
-        const response = await fetch('/api/session-archive/export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({includeDisks: archiveChoice.checked, view})});
+        archiveProgressText.textContent = includeDisks ? 'Stopping session and creating archive…' : 'Creating archive…';
+        archiveProgress.hidden = false;
+        archiveDialog.setAttribute('aria-busy', 'true');
+        const response = await fetch('/api/session-archive/export', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({includeDisks})});
         if (!response.ok) { const data = await response.json(); throw new Error(data.error || 'Cannot save session.'); }
+        archiveProgressText.textContent = 'Downloading ZIP…';
         if (writable) { await response.body.pipeTo(writable); writable = null; }
         else {
           const url = URL.createObjectURL(await response.blob());
-          const link = document.createElement('a'); link.href = url; link.download = 'qemuweb-session-v1.zip'; link.click();
+          const link = document.createElement('a'); link.href = url; link.download = 'qemuweb-session-v2.zip'; link.click();
           setTimeout(() => URL.revokeObjectURL(url), 60000);
         }
         archiveDialog.close();
@@ -1976,27 +2030,70 @@
         if (writable) await writable.abort().catch(() => {});
         await updateArchiveEstimate();
         archiveError.textContent = error.message; archiveError.hidden = false;
+      } finally {
+        archiveProgress.hidden = true;
+        archiveDialog.removeAttribute('aria-busy');
       }
     });
     document.getElementById('load-session-archive').addEventListener('click', () => {
       if (machines.size) { showStatusError('Load requires an empty session. Remove all hosts and switches first.'); return; }
       archiveFile.click();
     });
-    archiveFile.addEventListener('change', async () => {
+    archiveFile.addEventListener('change', () => {
       const file = archiveFile.files[0];
       archiveFile.value = '';
       if (!file) return;
+      if (machines.size) { showStatusError('Load requires an empty session.'); return; }
+      if (!/\.zip$/i.test(file.name)) { showStatusError('Choose a QemuWeb ZIP archive.'); return; }
+      selectedArchiveFile = file;
+      archiveLoadImported = false;
+      archiveLoadFileLabel.textContent = file.name;
+      archiveLoadAutoStart.checked = true;
+      archiveLoadProgress.hidden = true;
+      archiveLoadError.hidden = true;
+      archiveLoadCancel.textContent = 'Cancel';
+      archiveLoadConfirm.hidden = false;
+      archiveLoadDialog.showModal();
+    });
+    archiveLoadCancel.addEventListener('click', () => archiveLoadDialog.close());
+    archiveLoadConfirm.addEventListener('click', async () => {
+      if (!selectedArchiveFile || archiveLoadBusy) return;
+      archiveLoadBusy = true;
+      archiveLoadCancel.disabled = true;
+      archiveLoadConfirm.disabled = true;
+      archiveLoadAutoStart.disabled = true;
+      archiveLoadError.hidden = true;
+      archiveLoadProgressText.textContent = archiveLoadAutoStart.checked ? 'Uploading, restoring and starting session…' : 'Uploading and restoring session…';
+      archiveLoadProgress.hidden = false;
+      archiveLoadDialog.setAttribute('aria-busy', 'true');
       try {
-        if (machines.size) throw new Error('Load requires an empty session.');
-        if (!/\.zip$/i.test(file.name)) throw new Error('Choose a QemuWeb ZIP archive.');
-        const response = await fetch('/api/session-archive/import', {method: 'POST', headers: {'Content-Type': 'application/zip'}, body: file});
+        const autoStart = archiveLoadAutoStart.checked;
+        const response = await fetch(`/api/session-archive/import?autoStart=${autoStart}`, {
+          method: 'POST', headers: {'Content-Type': 'application/zip'}, body: selectedArchiveFile
+        });
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Cannot load session.');
-        localStorage.setItem(viewSettingsKey, JSON.stringify({view: result.view.view, layoutSize: result.view.layoutSize,
-          showSwitchConsoles: result.view.showSwitchConsoles, graphicZoom: result.view.graphicZoom}));
-        localStorage.setItem(graphicLayoutKey, JSON.stringify({sessionId: graphicSessionId, positions: result.view.positions}));
-        location.reload();
-      } catch (error) { showStatusError(error.message); }
+        archiveLoadImported = true;
+        graphicZoom = 1;
+        saveViewSettings();
+        localStorage.removeItem(graphicLayoutKey);
+        if (result.startErrors?.length) {
+          archiveLoadError.textContent = `Session loaded, but some instances could not start:\n${result.startErrors.join('\n')}`;
+          archiveLoadError.hidden = false;
+          archiveLoadCancel.textContent = 'Close';
+          archiveLoadConfirm.hidden = true;
+        } else archiveLoadDialog.close();
+      } catch (error) {
+        archiveLoadError.textContent = error.message;
+        archiveLoadError.hidden = false;
+      } finally {
+        archiveLoadBusy = false;
+        archiveLoadCancel.disabled = false;
+        archiveLoadConfirm.disabled = false;
+        archiveLoadAutoStart.disabled = false;
+        archiveLoadProgress.hidden = true;
+        archiveLoadDialog.removeAttribute('aria-busy');
+      }
     });
 
     const topologyFile = document.getElementById('topology-file');
@@ -2120,7 +2217,7 @@
           await addSwitch({name: cloneName.value.trim(), autostart});
         } else {
           const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked
-            ? (generalSettings.engine === 'virtualbox' ? [] : [null]) : [...source.interfaces];
+            ? [null] : [...source.interfaces];
           const configResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
           const config = await configResponse.json();
           if (!configResponse.ok) throw new Error(config.error || 'Cannot copy host configuration.');
@@ -2185,7 +2282,7 @@
     });
     addNic.addEventListener('click', () => {
       const machine = settingsMachine();
-      if (!machine || machine.kind !== 'vm' || machine.busy || machine.engine === 'virtualbox' || machine.interfaces.length >= 4) return;
+      if (!machine || machine.kind !== 'vm' || machine.busy || machine.interfaces.length >= 4) return;
       const scrollTop = qemuOptionsPanel.scrollTop;
       machine.interfaces.push(null);
       clearStartupTemplateError();
@@ -2381,7 +2478,7 @@
         machine.running = snapshot.state.running;
         machine.hasLaunched = snapshot.state.hasLaunched;
         machine.message = snapshot.state.message;
-        machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
+        machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
         machine.logs = snapshot.logs || [];
         machine.serial = snapshot.serial || '';
         if (pane.view === 'console') renderConsoleView(pane);
@@ -2432,7 +2529,7 @@
         if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
         if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
         machine.message = event.message;
-        machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
+        machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
         renderTabs();
         if (machine.id === activeId) updateControls();
       });
@@ -2447,7 +2544,7 @@
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
       if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
       machine.message = event.message;
-      machine.error = /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
+      machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
       renderTabs();
       if (machine.id === activeId) updateControls();
       if (graphicVisible) scheduleSessionSync();

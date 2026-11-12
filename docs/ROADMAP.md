@@ -1,6 +1,6 @@
 # QemuNet to Qemuweb roadmap
 
-This plan tracks the migration of QemuNet's virtual networks to QemuWeb. Version 0.3.0 provides local QEMU hosts, VDE switches, browser consoles, `.topo` load/save, and a graphical overview; it does not yet manage a LAN as one durable object. Production at CREMI also requires OpenID Connect authentication, isolated sessions for concurrent users, and a separate remote execution runner. VirtualBox network parity and graphical guests remain later decisions.
+This plan tracks the migration of QemuNet's virtual networks to QemuWeb. Version 0.3.0 provides local QEMU hosts, VDE switches, browser consoles, `.topo` load/save, and a graphical overview; it does not yet manage a LAN as one durable object. Production at CREMI also requires OpenID Connect authentication, isolated sessions for concurrent users, and a separate remote execution runner. VirtualBox VDE cabling is now available locally; graphical guests remain a later decision.
 
 ## Engine roadmap — project direction
 

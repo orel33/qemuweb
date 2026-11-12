@@ -167,11 +167,14 @@ function writeJsonAtomic(file, value) {
 }
 
 function saveSessionMetadata(engine = sessionEngine) {
+  writeJsonAtomic(sessionFile, sessionMetadata(engine));
+}
+
+function sessionMetadata(engine = sessionEngine) {
   const ids = kind => [...sessions.values()]
     .filter(session => session.kind === kind && session.hostname && (kind === 'switch' || session.selectedImage))
     .map(session => session.id).sort();
-  writeJsonAtomic(sessionFile, {schemaVersion: 1, engine,
-    hosts: ids('vm'), switches: ids('switch')});
+  return {schemaVersion: 2, engine, hosts: ids('vm'), switches: ids('switch')};
 }
 
 function entityKind(id, expectedKind) {
@@ -511,8 +514,7 @@ function readConfig() {
     validateLaunchSettings(system.settings || {}, true);
     if (system.qemu.nic && system.qemu.nic !== 'none') throw new Error(`External QEMU networking is disabled for ${id}.`);
     const vbox = system.virtualbox;
-    if (!vbox || typeof vbox.nic !== 'string' || !vbox.nic || typeof vbox.osType !== 'string' || !vbox.osType) throw new Error(`Invalid VirtualBox settings for ${id}.`);
-    if (vbox.nic !== 'none') throw new Error(`External VirtualBox networking is disabled for ${id}.`);
+    if (!vbox || !['82540EM', 'virtio'].includes(vbox.networkModel) || typeof vbox.osType !== 'string' || !vbox.osType) throw new Error(`Invalid VirtualBox settings for ${id}.`);
   }
   return config;
 }
@@ -562,7 +564,7 @@ app.get('/api/qemu-config', (_req, res) => {
 app.get('/api/systems', (_req, res) => {
   try {
     const config = readConfig();
-    res.json(Object.entries(config.systems).map(([id, system]) => ({id, label: system.label, images: system.images, vboxNic: system.virtualbox.nic, hasDifferentialDisk: true})));
+    res.json(Object.entries(config.systems).map(([id, system]) => ({id, label: system.label, images: system.images, vboxNetworkModel: system.virtualbox.networkModel, hasDifferentialDisk: true})));
   } catch (error) { res.status(500).json({error: error.message}); }
 });
 
@@ -602,44 +604,35 @@ function fileSha256(file) {
   } finally { fs.closeSync(fd); }
   return {size: stat.size, sha256: hash.digest('hex')};
 }
-function archiveView(value, ids) {
-  if (!value || typeof value !== 'object' || Array.isArray(value) ||
-      !['graphic', 'terminals'].includes(value.view) || ![1, 2, 4].includes(value.layoutSize) ||
-      typeof value.showSwitchConsoles !== 'boolean' || ![0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].includes(value.graphicZoom) ||
-      !value.positions || typeof value.positions !== 'object' || Array.isArray(value.positions)) throw new Error('Invalid session view state.');
-  const positions = {};
-  for (const [id, point] of Object.entries(value.positions)) {
-    if (!ids.has(id) || !point || typeof point !== 'object' || !Number.isFinite(point.x) || !Number.isFinite(point.y) ||
-        Math.abs(point.x) > 100000 || Math.abs(point.y) > 100000) throw new Error('Invalid graphic node position.');
-    positions[id] = {x: point.x, y: point.y};
-  }
-  return {view: value.view, layoutSize: value.layoutSize, showSwitchConsoles: value.showSwitchConsoles,
-    graphicZoom: value.graphicZoom, positions};
-}
-function archiveSources(includeDisks) {
+function archiveSources(includeDisks, allowRunning = false) {
   if (typeof includeDisks !== 'boolean') throw new Error('Invalid working disk option.');
   if (includeDisks && sessionEngine === 'virtualbox') throw new Error('VirtualBox working disk archives are not supported.');
-  if (includeDisks && [...sessions.values()].some(item => item.kind === 'vm' && (item.machine || item.action))) {
+  const runningHosts = [...sessions.values()].filter(item => item.kind === 'vm' && item.machine);
+  if (includeDisks && [...sessions.values()].some(item => item.kind === 'vm' && item.action)) {
+    throw new Error('Wait for the current host action to finish before saving working disks.');
+  }
+  if (includeDisks && !allowRunning && runningHosts.length) {
     throw new Error('Stop every host before saving working disks.');
   }
   const all = [...sessions.values()];
-  const sources = [], systems = new Set();
-  const switches = all.filter(item => item.kind === 'switch').map(item => ({id: item.id, name: item.hostname}));
+  const sources = [{name: 'session.json', file: sessionFile}], systems = new Set();
+  const switches = all.filter(item => item.kind === 'switch').map(item => {
+    sources.push({name: `${item.id}/switch.json`, file: tempFile(item, 'switch.json')});
+    return {id: item.id, name: item.hostname};
+  });
   const hosts = all.filter(item => item.kind === 'vm').map(item => {
+    sources.push({name: `${item.id}/host.json`, file: tempFile(item, 'host.json')});
     const media = readStartupFiles(startupDirectory(item));
     const startup = path.join(item.runtimeDir, 'startup');
-    if (fs.existsSync(path.join(startup, 'start.sh'))) sources.push({name: `hosts/${item.id}/startup/start.sh`, file: path.join(startup, 'start.sh')});
-    for (const resource of media.resources) sources.push({name: `hosts/${item.id}/startup/${resource.path}`, file: path.join(startup, resource.path)});
+    if (fs.existsSync(path.join(startup, 'start.sh'))) sources.push({name: `${item.id}/startup/start.sh`, file: path.join(startup, 'start.sh')});
+    for (const resource of media.resources) sources.push({name: `${item.id}/startup/${resource.path}`, file: path.join(startup, resource.path)});
     const disk = includeDisks && !!item.runDisk && fs.existsSync(item.runDisk);
     if (disk) {
       if (!item.engine.startsWith('qemu')) throw new Error('VirtualBox working disk archives are not supported.');
-      sources.push({name: `hosts/${item.id}/disk.qcow2`, file: item.runDisk});
+      sources.push({name: `${item.id}/disk.qcow2`, file: item.runDisk});
     }
     systems.add(item.selectedImage.id);
-    const hardware = item.engine.startsWith('qemu')
-      ? Object.fromEntries(qemuProfileFields.map(field => [field, (item.qemuOptions || qemuOptionsFor(item.selectedImage.id, item.launchSettings))[field]]))
-      : {...item.selectedImage.virtualbox};
-    return {...hostConfiguration(item), hardware, disk};
+    return {...hostConfiguration(item), disk};
   });
   let logicalBytes = 0, allocatedBytes = 0, estimatedBytes = 8192;
   for (const item of sources) {
@@ -654,39 +647,38 @@ function archiveSources(includeDisks) {
     estimatedBytes += 200 + Buffer.byteLength(item.name);
   }
   if (logicalBytes > 256 * 1024 * 1024 * 1024) throw new Error('Session archive logical size exceeds 256 GiB limit.');
-  return {sources, hosts, switches, systems, logicalBytes, allocatedBytes, estimatedBytes};
+  return {sources, hosts, switches, systems, logicalBytes, allocatedBytes, estimatedBytes, runningHosts: runningHosts.length};
 }
-function validateArchiveManifest(manifest, stage) {
-  if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(manifest.engine) ||
-      !Array.isArray(manifest.hosts) || !Array.isArray(manifest.switches) ||
-      !manifest.baseImages || typeof manifest.baseImages !== 'object' || Array.isArray(manifest.baseImages) ||
-      typeof manifest.includesWorkingDisks !== 'boolean' ||
-      (!manifest.includesWorkingDisks && manifest.hosts.some(host => host?.disk))) throw new Error('Invalid session manifest.');
+function validateArchiveSession(snapshot, stage) {
+  if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(snapshot.engine) ||
+      !Array.isArray(snapshot.hosts) || !Array.isArray(snapshot.switches) ||
+      !snapshot.baseImages || typeof snapshot.baseImages !== 'object' || Array.isArray(snapshot.baseImages)) {
+    throw new Error('Invalid archived session.');
+  }
   const ids = new Set(), names = new Set(), switches = new Set(), macs = new Set(), ports = new Set();
-  for (const sw of manifest.switches) {
+  const expectedFiles = new Set(['session.json']);
+  for (const sw of snapshot.switches) {
     if (!sw || typeof sw !== 'object') throw new Error('Invalid switch entry.');
     entityKind(sw.id, 'switch');
     if (ids.has(sw.id) || typeof sw.name !== 'string' || !sw.name.trim() || sw.name.length > 64 || /[\x00-\x1f\x7f]/.test(sw.name) || names.has(sw.name.toLowerCase())) throw new Error('Invalid or duplicate switch identity.');
     ids.add(sw.id); switches.add(sw.id); names.add(sw.name.toLowerCase());
+    expectedFiles.add(`${sw.id}/switch.json`);
   }
   const systems = new Set();
-  const expectedFiles = new Set();
-  for (const host of manifest.hosts) {
+  for (const host of snapshot.hosts) {
     if (!host || typeof host !== 'object') throw new Error('Invalid host entry.');
     entityKind(host.id, 'vm');
     if (ids.has(host.id) || typeof host.name !== 'string' || !host.name.trim() || host.name.length > 64 || /[\x00-\x1f\x7f]/.test(host.name) || names.has(host.name.toLowerCase())) throw new Error('Invalid or duplicate host identity.');
     ids.add(host.id); names.add(host.name.toLowerCase());
-    if (host.schemaVersion !== 1 || host.engine !== manifest.engine || !imageById(host.systemId)) throw new Error(`Unknown system or engine for ${host.name}.`);
+    expectedFiles.add(`${host.id}/host.json`);
+    if (host.schemaVersion !== 1 || host.engine !== snapshot.engine || !imageById(host.systemId)) throw new Error(`Unknown system or engine for ${host.name}.`);
     systems.add(host.systemId);
     validateLaunchSettings(host.settings);
-    const image = imageById(host.systemId);
-    const hardware = manifest.engine.startsWith('qemu')
-      ? Object.fromEntries(qemuProfileFields.map(field => [field, qemuOptionsFor(host.systemId, host.settings)[field]]))
-      : {...image.virtualbox};
+    const hardware = hardwareProfile(host.systemId, snapshot.engine, host.settings);
     if (JSON.stringify(host.hardware) !== JSON.stringify(hardware)) throw new Error(`Machine profile incompatible: ${host.name}.`);
     if (typeof host.autoBuildGuestCdrom !== 'boolean' || typeof host.disk !== 'boolean' ||
         !Array.isArray(host.networkInterfaces) || host.networkInterfaces.length > 4 ||
-        (manifest.engine === 'virtualbox' && host.networkInterfaces.length) || (host.disk && !manifest.engine.startsWith('qemu'))) throw new Error(`Invalid host configuration: ${host.name}.`);
+        (host.disk && !snapshot.engine.startsWith('qemu'))) throw new Error(`Invalid host configuration: ${host.name}.`);
     for (const nic of host.networkInterfaces) {
       if (!nic || !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(nic.mac) || macs.has(nic.mac)) throw new Error('Invalid or duplicate MAC address.');
       macs.add(nic.mac);
@@ -698,69 +690,67 @@ function validateArchiveManifest(manifest, stage) {
         ports.add(key);
       }
     }
-    const startup = path.join(stage, 'hosts', host.id, 'startup');
+    const startup = path.join(stage, host.id, 'startup');
     fs.mkdirSync(startup, {recursive: true});
     const media = readStartupFiles(startup);
     if (host.autoBuildGuestCdrom) validateStartupTemplate(media.script, host.networkInterfaces, true);
-    if (host.disk) expectedFiles.add(`hosts/${host.id}/disk.qcow2`);
+    if (host.disk) expectedFiles.add(`${host.id}/disk.qcow2`);
   }
-  if (Object.keys(manifest.baseImages).length !== systems.size) throw new Error('Base image inventory mismatch.');
+  if (Object.keys(snapshot.baseImages).length !== systems.size) throw new Error('Base image inventory mismatch.');
   for (const id of systems) {
-    const expected = manifest.baseImages[id], image = imageById(id);
+    const expected = snapshot.baseImages[id], image = imageById(id);
     if (!expected || !Number.isSafeInteger(expected.size) || !/^[0-9a-f]{64}$/.test(expected.sha256)) throw new Error(`Invalid base image identity: ${id}.`);
-    if (expected.format !== (manifest.engine === 'virtualbox' ? 'vdi' : 'raw')) throw new Error(`Base image format incompatible: ${id}.`);
+    if (expected.format !== (snapshot.engine === 'virtualbox' ? 'vdi' : 'raw')) throw new Error(`Base image format incompatible: ${id}.`);
     const actual = fileSha256(imagePath(image.images[expected.format]));
     if (expected.size !== actual.size || expected.sha256 !== actual.sha256) throw new Error(`Base image incompatible: ${id}.`);
   }
-  for (const file of manifest.files) {
-    const match = /^hosts\/(h-[0-9a-f]{16})\/startup\/(.+)$/.exec(file.path);
-    if (match && ids.has(match[1])) { expectedFiles.add(file.path); continue; }
-    if (!expectedFiles.has(file.path)) throw new Error(`Unexpected session archive file: ${file.path}`);
+  for (const file of snapshot.files) {
+    const match = /^(h-[0-9a-f]{16})\/startup\/(.+)$/.exec(file);
+    if (match && ids.has(match[1])) { expectedFiles.add(file); continue; }
+    if (!expectedFiles.has(file)) throw new Error(`Unexpected session archive file: ${file}`);
   }
-  if (manifest.files.length !== expectedFiles.size || manifest.files.some(file => !expectedFiles.has(file.path))) throw new Error('Missing session archive files.');
-  const view = archiveView(manifest.view, ids);
-  for (const host of manifest.hosts.filter(item => item.disk)) {
-    const disk = path.join(stage, 'hosts', host.id, 'disk.qcow2');
+  if (snapshot.files.length !== expectedFiles.size || snapshot.files.some(file => !expectedFiles.has(file))) throw new Error('Missing session archive files.');
+  for (const host of snapshot.hosts.filter(item => item.disk)) {
+    const disk = path.join(stage, host.id, 'disk.qcow2');
     const info = JSON.parse(execFileSync(commands.QEMU_IMG, ['info', '--output=json', disk], {encoding: 'utf8', maxBuffer: 1024 * 1024}));
     const image = imageById(host.systemId);
     if (info.format !== 'qcow2' || info.encrypted || info['data-file'] || info['format-specific']?.data?.['data-file'] || info['format-specific']?.data?.['data-file-raw'] || info['backing-filename-format'] !== 'raw' ||
-        !info['backing-filename'] || info['virtual-size'] !== manifest.baseImages[host.systemId].size) throw new Error(`Incompatible QCOW2 overlay for ${host.name}.`);
+        !info['backing-filename'] || info['virtual-size'] !== snapshot.baseImages[host.systemId].size) throw new Error(`Incompatible QCOW2 overlay for ${host.name}.`);
     execFileSync(commands.QEMU_IMG, ['rebase', '-u', '-f', 'qcow2', '-F', 'raw', '-b', imagePath(image.images.raw), disk], {maxBuffer: 1024 * 1024});
     execFileSync(commands.QEMU_IMG, ['check', '-f', 'qcow2', disk], {maxBuffer: 1024 * 1024});
   }
-  return view;
 }
-function installArchive(manifest, stage) {
+function installArchive(snapshot, stage) {
   if (sessions.size) throw new Error('Load requires an empty session.');
   const oldEngine = sessionEngine, moved = [], created = [];
-  const entries = [...manifest.switches, ...manifest.hosts];
+  const entries = [...snapshot.switches, ...snapshot.hosts];
   for (const entry of entries) if (fs.existsSync(path.join(runtimeInstance, entry.id))) throw new Error(`Runtime directory already exists: ${entry.id}.`);
   try {
     for (const entry of entries) {
-      const source = path.join(stage, entry.id[0] === 'h' ? 'hosts' : 'switches', entry.id);
+      const source = path.join(stage, entry.id);
       fs.mkdirSync(source, {recursive: true});
       const target = path.join(runtimeInstance, entry.id);
       fs.renameSync(source, target); moved.push({source, target});
     }
-    sessionEngine = manifest.engine;
-    for (const entry of manifest.switches) {
+    sessionEngine = snapshot.engine;
+    for (const entry of snapshot.switches) {
       const item = getSession(entry.id, true, 'switch', true); created.push(item);
-      setSessionHostname(item, entry.name); item.lastMessage = 'VDE switch ready to start';
+      setSessionHostname(item, entry.name); item.lastMessage = 'VDE switch stopped';
       persistSwitchConfiguration(item);
     }
-    for (const entry of manifest.hosts) {
+    for (const entry of snapshot.hosts) {
       const item = getSession(entry.id, true, 'vm', true); created.push(item);
-      item.selectedImage = imageById(entry.systemId); item.engine = manifest.engine;
+      item.selectedImage = imageById(entry.systemId); item.engine = snapshot.engine;
       item.launchSettings = entry.settings; item.networkInterfaces = entry.networkInterfaces;
       item.guestIsoAttached = entry.autoBuildGuestCdrom;
       item.guestMedia = readStartupFiles(startupDirectory(item));
       item.runDisk = entry.disk ? tempFile(item, 'disk.qcow2') : null;
       item.everStarted = entry.disk;
       item.qemuOptions = entry.disk ? qemuOptionsFor(entry.systemId, entry.settings) : null;
-      setSessionHostname(item, entry.name); item.lastMessage = entry.disk ? 'Host stopped; current disk kept' : 'Host ready to start';
+      setSessionHostname(item, entry.name); item.lastMessage = entry.disk ? 'Host stopped; current disk kept' : 'Host stopped; ready to start';
       persistHostConfiguration(item);
     }
-    saveSessionMetadata();
+    fs.copyFileSync(path.join(stage, 'session.json'), sessionFile);
   } catch (error) {
     for (const item of created.reverse()) { try { removeHostnameAlias(item); } catch (_) {} sessions.delete(item.id); }
     for (const {source, target} of moved.reverse()) { try { fs.renameSync(target, source); } catch (_) {} }
@@ -774,9 +764,10 @@ function installArchive(manifest, stage) {
 app.get('/api/session-archive/estimate', (req, res) => {
   try {
     const includeDisks = req.query.includeDisks === 'true';
-    const {hosts, switches, logicalBytes, allocatedBytes, estimatedBytes: bytes} = archiveSources(includeDisks);
+    const {hosts, switches, logicalBytes, allocatedBytes, estimatedBytes: bytes, runningHosts} = archiveSources(includeDisks, includeDisks);
     res.set('Cache-Control', 'no-store');
-    res.json({bytes, logicalBytes, allocatedBytes, hosts: hosts.length, switches: switches.length, includeDisks, hasWorkingDisks: hosts.some(item => item.disk), format: 'qemuweb-session-v1.zip'});
+    res.json({bytes, logicalBytes, allocatedBytes, hosts: hosts.length, switches: switches.length, includeDisks, runningHosts,
+      hasWorkingDisks: hosts.some(item => item.disk), format: 'qemuweb-session-v2.zip'});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 app.post('/api/session-archive/export', async (req, res) => {
@@ -784,18 +775,28 @@ app.post('/api/session-archive/export', async (req, res) => {
   const archive = path.join(runtimeInstance, `.session-export-${crypto.randomBytes(8).toString('hex')}.zip`);
   try {
     const includeDisks = req.body?.includeDisks;
-    const {sources, hosts, switches, systems} = archiveSources(includeDisks);
-    const ids = new Set([...hosts, ...switches].map(item => item.id));
-    const view = archiveView(req.body?.view, ids);
+    const prepared = archiveSources(includeDisks, includeDisks);
     const baseImages = {};
-    for (const id of systems) {
+    for (const id of prepared.systems) {
       const format = sessionEngine === 'virtualbox' ? 'vdi' : 'raw';
       baseImages[id] = {format, ...fileSha256(imagePath(imageById(id).images[format]))};
     }
-    await writeArchive(archive, sources, {format: 'qemuweb-session', version: 1, engine: sessionEngine,
-      hosts, switches, baseImages, view, includesWorkingDisks: includeDisks});
+    if (includeDisks) {
+      for (const host of sessions.values()) if (host.kind === 'vm' && host.machine) {
+        try { await stop(host, {forceOnTimeout: false}); }
+        catch (error) { throw new Error(`Cannot power off ${host.hostname}: ${error.message}. Hosts already stopped remain stopped.`); }
+      }
+      for (const sw of sessions.values()) if (sw.kind === 'switch' && sw.machine) {
+        try { await stopSwitch(sw); }
+        catch (error) { throw new Error(`Cannot stop ${sw.hostname}: ${error.message}. Instances already stopped remain stopped.`); }
+      }
+    }
+    const {sources} = includeDisks ? archiveSources(includeDisks) : prepared;
+    writeJsonAtomic(sessionFile, {...sessionMetadata(), baseImages});
+    await writeArchive(archive, sources);
     res.set('Cache-Control', 'no-store');
-    res.download(archive, 'qemuweb-session-v1.zip', error => {
+    // The temporary archive is dot-prefixed; sendFile ignores dotfiles by default.
+    res.download(archive, 'qemuweb-session-v2.zip', {dotfiles: 'allow'}, error => {
       archiveBusy = false;
       fs.rmSync(archive, {force: true});
       if (error && !res.headersSent) res.status(500).json({error: error.message});
@@ -807,6 +808,8 @@ app.post('/api/session-archive/import', async (req, res) => {
   const upload = path.join(runtimeInstance, `.session-upload-${crypto.randomBytes(8).toString('hex')}.zip`);
   let stage;
   try {
+    const autoStart = req.query.autoStart === 'true';
+    if (req.query.autoStart !== undefined && !['true', 'false'].includes(req.query.autoStart)) throw new Error('Invalid automatic start option.');
     stage = fs.mkdtempSync(path.join(runtimeInstance, '.session-import-'));
     if (sessions.size) throw new Error('Load requires an empty session.');
     if (req.headers['content-type'] !== 'application/zip') throw new Error('Choose a QemuWeb ZIP archive.');
@@ -816,14 +819,31 @@ app.post('/api/session-archive/import', async (req, res) => {
     await new Promise((resolve, reject) => {
       const out = fs.createWriteStream(upload, {flags: 'wx', mode: 0o600});
       let size = 0;
-      req.on('data', chunk => { size += chunk.length; if (size > MAX_SESSION_ARCHIVE) req.destroy(new Error('Session archive exceeds ZIP v1 total size limit (4 GiB).')); });
+      req.on('data', chunk => { size += chunk.length; if (size > MAX_SESSION_ARCHIVE) req.destroy(new Error('Session archive exceeds ZIP total size limit (4 GiB).')); });
       req.on('error', reject); out.on('error', reject); out.on('finish', resolve); req.pipe(out);
     });
     if (sessions.size) throw new Error('Load requires an empty session.');
-    const manifest = await readArchive(upload, stage);
-    const view = validateArchiveManifest(manifest, stage);
-    installArchive(manifest, stage);
-    res.json({ok: true, hosts: manifest.hosts.length, switches: manifest.switches.length, view});
+    const files = await readArchive(upload, stage);
+    const snapshot = archivedSessionFiles(stage, files);
+    validateArchiveSession(snapshot, stage);
+    installArchive(snapshot, stage);
+    const startErrors = [];
+    if (autoStart) {
+      for (const entry of [...snapshot.switches, ...snapshot.hosts]) {
+        const session = sessions.get(entry.id);
+        try {
+          if (session.kind === 'switch') await startSwitch(session);
+          else start(session.id, session.engine, session.selectedImage.id, {
+            interfaces: session.networkInterfaces.map(nic => nic.switchId)
+          });
+        } catch (error) {
+          const message = `Start failed: ${error.message}`;
+          startErrors.push(`${session.hostname}: ${error.message}`);
+          publishState(session, message);
+        }
+      }
+    }
+    res.json({ok: true, hosts: snapshot.hosts.length, switches: snapshot.switches.length, startErrors});
   } catch (error) { res.status(error.message === 'Load requires an empty session.' ? 409 : 400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to load session archive.' : error.message}); }
   finally { archiveBusy = false; fs.rmSync(upload, {force: true}); if (stage) fs.rmSync(stage, {recursive: true, force: true}); }
 });
@@ -883,32 +903,7 @@ function guestIsoStatus(session) {
 }
 
 function startupDirectory(session) {
-  const directory = tempFile(session, 'startup');
-  const configFile = tempFile(session, 'host.json');
-  // Older session files may still contain startup content. Copy it before
-  // rewriting host.json; the directory is the source of truth once present.
-  if (fs.existsSync(configFile)) {
-    const saved = JSON.parse(fs.readFileSync(configFile, 'utf8'));
-    if (Object.hasOwn(saved, 'guestMedia')) {
-      const legacy = validateBootFiles(saved.guestMedia);
-      if (!fs.existsSync(directory)) writeStartupFiles(directory, legacy);
-      else {
-        const current = readStartupFiles(directory);
-        const hadScript = fs.existsSync(path.join(directory, 'start.sh'));
-        const known = new Set(current.resources.map(entry => entry.path));
-        const missing = legacy.resources.filter(entry => !known.has(entry.path));
-        if ((!hadScript && legacy.script) || missing.length) {
-          writeStartupFiles(directory, validateBootFiles({
-            script: hadScript ? current.script : legacy.script,
-            resources: [...current.resources, ...missing]
-          }));
-        }
-      }
-      delete saved.guestMedia;
-      writeJsonAtomic(configFile, saved);
-    }
-  }
-  return directory;
+  return tempFile(session, 'startup');
 }
 
 function buildGuestIso(session, destination = tempFile(session, `startup-${crypto.randomUUID()}.iso`)) {
@@ -962,6 +957,7 @@ function pendingRestart(session) {
 }
 
 function hostConfiguration(session) {
+  const hardware = hardwareProfile(session.selectedImage.id, session.engine, session.launchSettings);
   return {
     schemaVersion: 1,
     id: session.id,
@@ -969,9 +965,44 @@ function hostConfiguration(session) {
     systemId: session.selectedImage.id,
     engine: session.engine,
     settings: session.launchSettings,
+    hardware,
     networkInterfaces: session.networkInterfaces,
     autoBuildGuestCdrom: session.guestIsoAttached
   };
+}
+
+function hardwareProfile(systemId, engine, settings) {
+  if (engine.startsWith('qemu')) {
+    const options = qemuOptionsFor(systemId, settings);
+    return Object.fromEntries(qemuProfileFields.map(field => [field, options[field]]));
+  }
+  const {osType, networkModel} = imageById(systemId).virtualbox;
+  return {osType, networkModel};
+}
+
+function archivedSessionFiles(stage, paths) {
+  const metadata = JSON.parse(fs.readFileSync(path.join(stage, 'session.json'), 'utf8'));
+  if (metadata.schemaVersion !== 2 || !['qemu', 'qemu-tcg', 'virtualbox'].includes(metadata.engine) ||
+      !Array.isArray(metadata.hosts) || !Array.isArray(metadata.switches) ||
+      !metadata.baseImages || typeof metadata.baseImages !== 'object' || Array.isArray(metadata.baseImages)) {
+    throw new Error('Invalid session.json in archive.');
+  }
+  const ids = [...metadata.hosts, ...metadata.switches];
+  if (new Set(ids).size !== ids.length) throw new Error('Duplicate session entity ID.');
+  const readEntity = (id, kind) => {
+    entityKind(id, kind);
+    const file = path.join(stage, id, kind === 'vm' ? 'host.json' : 'switch.json');
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (data.id !== id || data.schemaVersion !== 1) throw new Error(`Invalid configuration for ${id}.`);
+    if (kind === 'switch' && data.kind !== 'vde') throw new Error(`Invalid switch configuration for ${id}.`);
+    return data;
+  };
+  const hosts = metadata.hosts.map(id => {
+    const data = readEntity(id, 'vm');
+    return {...data, disk: paths.includes(`${id}/disk.qcow2`)};
+  });
+  const switches = metadata.switches.map(id => readEntity(id, 'switch'));
+  return {engine: metadata.engine, hosts, switches, baseImages: metadata.baseImages, files: paths};
 }
 
 function persistHostConfiguration(session) {
@@ -1020,8 +1051,8 @@ function qemuArgs(session, image, overlay) {
 }
 
 function validateNetworkInterfaces(value, engine, requireRunning = true) {
-  if (value === undefined) value = engine.startsWith('qemu') ? [null] : [];
-  if (!Array.isArray(value) || value.length > 4 || (value.length && !engine.startsWith('qemu'))) throw new Error('Ethernet interfaces require QEMU (maximum four).');
+  if (value === undefined) value = [null];
+  if (!Array.isArray(value) || value.length > 4) throw new Error('At most four Ethernet interfaces are supported.');
   return value.map((switchId, index) => {
     if (switchId === null) return null;
     const sw = getSession(switchId);
@@ -1225,12 +1256,32 @@ function vbox(session, args) {
   return execLogged(session, commands.VBOXMANAGE, args, {stdio: 'pipe'});
 }
 
+function virtualBoxNetworkArgs(session, image) {
+  const args = [];
+  for (let index = 0; index < 4; index++) {
+    const number = index + 1;
+    const nic = session.networkInterfaces[index];
+    if (!nic) { args.push(`--nic${number}`, 'none'); continue; }
+    args.push(`--nic${number}`, nic.switchId === null ? 'null' : 'generic',
+      `--nictype${number}`, image.virtualbox.networkModel,
+      `--macaddress${number}`, nic.mac.replaceAll(':', '').toUpperCase(),
+      `--cableconnected${number}`, 'on');
+    if (nic.switchId !== null) {
+      const sw = sessions.get(nic.switchId);
+      if (!sw || sw.kind !== 'switch') throw new Error(`Unknown VDE switch for Ethernet ${index}.`);
+      args.push(`--nicgenericdrv${number}`, 'VDE',
+        `--nicproperty${number}`, `network=${sw.socketDir}[${nic.port}]`);
+    }
+  }
+  return args;
+}
+
 function virtualBoxCommands(session, image) {
   const vmDir = tempFile(session, 'vbox-vm');
   const disk = tempFile(session, 'disk.vdi');
   return [
     ['createvm', '--name', session.vmName, '--basefolder', vmDir, '--ostype', image.virtualbox.osType, '--register'],
-    ['modifyvm', session.vmName, '--memory', String(session.launchSettings.memory), '--cpus', String(session.launchSettings.cpus), '--rtcuseutc', session.launchSettings.clock === 'utc' ? 'on' : 'off', '--nic1', image.virtualbox.nic, '--uart1', '0x3F8', '4', '--uartmode1', 'server', session.socketPath],
+    ['modifyvm', session.vmName, '--memory', String(session.launchSettings.memory), '--cpus', String(session.launchSettings.cpus), '--rtcuseutc', session.launchSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(session, image), '--uart1', '0x3F8', '4', '--uartmode1', 'server', session.socketPath],
     ['createmedium', 'disk', '--filename', disk, '--diffparent', imagePath(image.images.vdi), '--format', 'VDI'],
     ['storagectl', session.vmName, '--name', 'SATA', '--add', 'sata', '--controller', 'IntelAhci'],
     ['storageattach', session.vmName, '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', disk],
@@ -1284,7 +1335,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
     const fixed = isQemu
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
-      : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.nic};
+      : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.networkModel};
     const isoCommands = attachGuestCdrom
       ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, '.iso-stage')]]
       : [];
@@ -1297,7 +1348,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     const launchCommands = isQemu
       ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
       : launched
-        ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off'], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
+        ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewSession, image)], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
     const socketLabel = filePath => path.join('runtime', path.relative(runtime, filePath));
     const storage = isQemu
@@ -1398,7 +1449,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (session.guestIsoAttached) appendLog(session, `# Guest setup ISO attached: ${session.guestIso} (read-only)`);
   if (selectedEngine.startsWith('qemu')) spawnQemu(session, image, resume);
   else if (resume) {
-    vbox(session, ['modifyvm', session.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off']);
+    vbox(session, ['modifyvm', session.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(session, image)]);
     if (session.guestIsoAttached) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', session.guestIso]);
     vbox(session, ['startvm', session.vmName, '--type', 'headless']);
     session.machine = {kind: 'virtualbox', vmDir: tempFile(session, 'vbox-vm')};
@@ -1570,6 +1621,7 @@ async function stop(session, options = {}) {
       } catch (error) {
         const state = virtualBoxState(session);
         if (!['poweroff', 'aborted', 'saved'].includes(state)) {
+          if (options.forceOnTimeout === false) throw new Error(`Host did not power off gracefully: ${error.message}`);
           appendLog(session, `# Graceful VirtualBox shutdown failed: ${error.message}; forcing power off`);
           vbox(session, ['controlvm', session.vmName, 'poweroff']);
         }
@@ -1580,6 +1632,7 @@ async function stop(session, options = {}) {
         await sendMonitorCommand(session, 'system_powerdown');
         await waitForQemuExit(current, 10000);
       } catch (error) {
+        if (options.forceOnTimeout === false) throw new Error(`Host did not power off gracefully: ${error.message}`);
         appendLog(session, `# Graceful QEMU shutdown failed: ${error.message}; sending SIGTERM`);
         current.kill('SIGTERM');
         try { await waitForQemuExit(current, 2000); }
@@ -1693,7 +1746,6 @@ function validateTopologyRequest(body) {
   if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
   requireSessionEngine(engine);
   const topology = parseTopology(text, Object.keys(readConfig().systems));
-  if (engine === 'virtualbox' && topology.hosts.some(host => host.switches.length)) throw new Error('Connected interfaces require a QEMU engine.');
   return {topology, engine};
 }
 
@@ -1874,7 +1926,8 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
       if (scriptChanged) writeStartupScript(startupDirectory(session), script);
       writeJsonAtomic(tempFile(session, 'host.json'), {
         schemaVersion: 1, id: session.id, name, systemId: body.systemId, engine: body.engine,
-        settings, networkInterfaces: interfaces, autoBuildGuestCdrom: body.autoBuildGuestCdrom
+        settings, hardware: hardwareProfile(body.systemId, body.engine, settings),
+        networkInterfaces: interfaces, autoBuildGuestCdrom: body.autoBuildGuestCdrom
       });
     } catch (error) {
       if (scriptChanged) {
