@@ -24,14 +24,21 @@ On Ubuntu 24.04, install the distribution packages:
 sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
 ```
 
-If your distribution's QEMU lacks VDE support, see the
-[QEMU installation notes](misc/install-qemu.md). Confirm that your user can
-read and write `/dev/kvm` before starting QEMU hosts. Then, clone the repository
-and prepare one image:
+Clone the repository:
 
 ```sh
 git clone https://github.com/orel33/qemuweb.git
 cd qemuweb
+```
+
+The Ubuntu 24.04 QEMU package installed here does not provide the VDE network
+backend. If `qemu-system-x86_64 -netdev help` does not list `vde`, follow the
+[QEMU installation notes](misc/install-qemu.md) to build a compatible binary
+and select it with `.env.local`. Confirm that your user can read and write
+`/dev/kvm` before starting QEMU hosts. Then install the Node.js dependencies,
+prepare one image, and start QemuWeb:
+
+```sh
 npm ci
 bash scripts/prepare.sh --system alpine
 ./start.sh
