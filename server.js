@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const {spawn, execFileSync, execFile} = require('child_process');
 const {promisify} = require('util');
 const express = require('express');
-const socketIo = require('socket.io');
+const {Server: SocketIoServer} = require('socket.io');
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
@@ -24,6 +24,7 @@ let commands;
 console.log(`QemuWeb ${packageInfo.version}\n`);
 try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
+const availableEngines = commands.VBOXMANAGE ? ['qemu', 'vbox'] : ['qemu'];
 const runtime = path.join(root, 'runtime');
 const sessionId = crypto.randomBytes(8).toString('hex');
 const runtimeInstance = path.join(runtime, sessionId);
@@ -43,7 +44,7 @@ const serverPidFile = path.join(runtime, `server-${port}.pid`);
 const serverSessionFile = path.join(runtime, `server-${port}.session`);
 const app = express();
 const server = http.createServer(app);
-const io = socketIo(server);
+const io = new SocketIoServer(server);
 const sessions = new Map();
 let archiveBusy = false;
 const execFileAsync = promisify(execFile);
@@ -55,7 +56,7 @@ fs.mkdirSync(runtime, {recursive: true});
 readCatalog(configPath);
 let sessionEngine = 'qemu';
 try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible; VirtualBox remains selectable.'); }
+catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
 
 function pointCurrentSession(id) {
   const temporary = path.join(runtime, `.current-${sessionId}`);
@@ -176,6 +177,7 @@ function newEntityId(kind) {
 }
 
 function requireSessionEngine(engine) {
+  if (!availableEngines.includes(engine)) throw new Error(`${engine === 'vbox' ? 'VirtualBox' : 'QEMU'} is unavailable on this server.`);
   if (engine !== sessionEngine) throw new Error(`Engine ${engine} differs from this session's ${sessionEngine} engine. Change General Settings before adding hosts.`);
 }
 
@@ -412,8 +414,8 @@ app.use('/api', (req, res, next) => {
   if (archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
   next();
 });
-app.use('/vendor', express.static(path.join(root, 'node_modules/xterm')));
-app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/xterm-addon-fit')));
+app.use('/vendor', express.static(path.join(root, 'node_modules/@xterm/xterm')));
+app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/@xterm/addon-fit')));
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');
   next();
@@ -507,13 +509,14 @@ function launchSettingsFor(imageId, overrides = {}) {
 
 app.get('/api/general-settings', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({sessionId, engine: sessionEngine});
+  res.json({sessionId, engine: sessionEngine, availableEngines});
 });
 
 app.put('/api/general-settings', (req, res) => {
   try {
     const engine = req.body?.engine;
     if (!['qemu', 'vbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
+    if (!availableEngines.includes(engine)) throw new Error('VirtualBox is unavailable on this server.');
     if (engine !== sessionEngine) {
       if ([...sessions.values()].some(session => session.kind === 'vm')) {
         return res.status(409).json({error: 'Delete existing hosts before changing the session engine.'});
@@ -628,6 +631,7 @@ function validateArchiveSession(snapshot, stage) {
       !snapshot.baseImages || typeof snapshot.baseImages !== 'object' || Array.isArray(snapshot.baseImages)) {
     throw new Error('Invalid archived session.');
   }
+  if (!availableEngines.includes(snapshot.engine)) throw new Error('The archived session requires VirtualBox, which is unavailable on this server.');
   const ids = new Set(), names = new Set(), switches = new Set(), macs = new Set(), ports = new Set();
   const expectedFiles = new Set(['session.json']);
   for (const sw of snapshot.switches) {
@@ -1183,7 +1187,7 @@ function qemuAcceleration(engine, checkAvailability = true) {
   const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'vbox');
   if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
   try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or use VirtualBox.'); }
+  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or select VirtualBox if it is installed.'); }
   return 'kvm';
 }
 
@@ -2092,9 +2096,9 @@ io.on('connection', socket => {
       const session = getSession(id);
       if (!session) throw new Error('Unknown session.');
       if (socket.sessionId && socket.sessionId !== id) {
-        await new Promise((resolve, reject) => socket.leave(socket.sessionId, error => error ? reject(error) : resolve()));
+        await socket.leave(socket.sessionId);
       }
-      await new Promise((resolve, reject) => socket.join(id, error => error ? reject(error) : resolve()));
+      await socket.join(id);
       socket.sessionId = session.id;
       socket.emit('session-snapshot', {
         sessionId: session.id,

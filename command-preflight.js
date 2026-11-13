@@ -4,7 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VBOXMANAGE', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const optionalKeys = ['VBOXMANAGE'];
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU',
   QEMU_IMG: 'QEMU disk tools',
@@ -62,9 +63,9 @@ function resolveCommands(root) {
   if (missing.length) throw new Error(`Missing command defaults in .env: ${missing.join(', ')}`);
   const commands = {};
   const failures = [];
-  const labelWidth = Math.max(...requiredKeys.map(key => commandLabels[key].length));
+  const labelWidth = Math.max(...[...requiredKeys, ...optionalKeys].map(key => commandLabels[key].length));
   console.log('Checking dependencies…');
-  for (const key of requiredKeys) {
+  for (const key of [...requiredKeys, ...optionalKeys]) {
     const defaultCommand = base[key];
     const label = commandLabels[key].padEnd(labelWidth);
     try {
@@ -76,11 +77,23 @@ function resolveCommands(root) {
         if (result.error) throw result.error;
         if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);
       }
+      if (key === 'QEMU_SYSTEM_X86_64') {
+        const result = spawnSync(resolved, ['-netdev', 'help'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
+        if (result.error) throw result.error;
+        if (!/(^|\s)vde(\s|$)/m.test(`${result.stdout}\n${result.stderr}`)) {
+          throw new Error('VDE network backend unavailable; see misc/install-qemu.md');
+        }
+      }
       commands[key] = resolved;
       console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}`);
     } catch (error) {
-      failures.push(key);
-      console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
+      if (requiredKeys.includes(key)) {
+        failures.push(key);
+        console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
+      } else {
+        commands[key] = null;
+        console.log(`  - ${label}  unavailable (${error.message}); VirtualBox hosts disabled`);
+      }
     }
   }
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);

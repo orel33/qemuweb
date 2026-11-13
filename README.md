@@ -7,33 +7,42 @@ consoles, and import or export sessions and network topologies. The
 
 ## Installation
 
-You need a **Linux x86-64** host, **Node.js 18 or newer** with npm, Bash, Python 3,
-QEMU (`qemu-system-x86_64` with VDE support), `qemu-img`, `vde_switch`, `vdeterm`,
-`genisoimage`, and VirtualBox (`VBoxManage`). Startup checks every executable
-listed in `.env`, even if you use only one virtualization engine. QEMU/KVM also
-requires access to `/dev/kvm`. Image preparation downloads official sources and
-uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
+For **Ubuntu 24.04 on x86-64**, install **Node.js 24 LTS** with npm from the
+[official Node.js download page](https://nodejs.org/en/download). Ubuntu 24.04's
+`nodejs` package is older. The repository includes `.nvmrc` for users of nvm.
+Check `node --version` and `npm --version` before installing dependencies;
+npm rejects unsupported Node versions.
 
-On Debian or Ubuntu, install the distribution packages:
+QEMU installations need `qemu-system-x86_64` with VDE support, `qemu-img`,
+`vde_switch`, `vdeterm`, and access to `/dev/kvm`. VirtualBox is optional:
+install it separately to provide `VBoxManage` if you want VirtualBox hosts.
+Image preparation uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
+
+On Ubuntu 24.04, install the distribution packages:
 
 ```sh
-sudo apt install bash build-essential coreutils findutils grep gzip curl git nodejs npm python3 qemu-system-x86 qemu-utils genisoimage vde2
+sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
 ```
 
-Install VirtualBox separately to provide `VBoxManage`. If your distribution's
-QEMU lacks VDE support, see the [QEMU installation notes](misc/install-qemu.md).
-Then, clone the repository and start QemuWeb:
+If your distribution's QEMU lacks VDE support, see the
+[QEMU installation notes](misc/install-qemu.md). Confirm that your user can
+read and write `/dev/kvm` before starting QEMU hosts. Then, clone the repository
+and prepare one image:
 
 ```sh
 git clone https://github.com/orel33/qemuweb.git
 cd qemuweb
 npm ci
-bash scripts/prepare.sh
+bash scripts/prepare.sh --system alpine
 ./start.sh
 ```
 
 Open <http://127.0.0.1:3002>. Press `Ctrl+C` to stop the server. Use
-`PORT=3003 ./start.sh` to choose another port.
+`PORT=3003 ./start.sh` to choose another port. The project's `allowScripts`
+entry lets npm 11 run the pinned `node-pty` install script. VirtualBox is
+disabled in the Web interface when `VBoxManage` is unavailable. Image
+preparation creates both RAW and VDI files with QEMU tools; it does not need
+VirtualBox. Running a QEMU host requires usable `/dev/kvm` access.
 
 ## Try the included LAN demo
 

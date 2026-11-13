@@ -464,7 +464,7 @@
   </nav>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
-  <script src="/vendor-addon-fit/lib/xterm-addon-fit.js"></script>
+  <script src="/vendor-addon-fit/lib/addon-fit.js"></script>
   <script src="/monitor-terminal.js"></script>
   <script src="/session-log.js"></script>
   <script src="/topology-graphic.js"></script>
@@ -1003,7 +1003,7 @@
       const size = pane.fontSizeOverride ?? generalSettings.consoleFontSize;
       if (pane.fontSizeOverride === null) pane.element.style.removeProperty('--console-font-size');
       else pane.element.style.setProperty('--console-font-size', `${size}px`);
-      pane.terminal.setOption('fontSize', size);
+      pane.terminal.options.fontSize = size;
       for (const [index, button] of pane.fontButtons.entries()) {
         button.disabled = index === 0 ? size <= 11 : size >= 24;
         button.title = `${index === 0 ? 'Decrease' : 'Increase'} terminal font size (${size} px)`;
@@ -1024,7 +1024,7 @@
       const fontFamily = style.getPropertyValue('--console-font-family').trim();
       for (const pane of panes) {
         if (resetPaneSizes) pane.fontSizeOverride = null;
-        pane.terminal.setOption('fontFamily', fontFamily);
+        pane.terminal.options.fontFamily = fontFamily;
         applyPaneFontSize(pane);
       }
       requestAnimationFrame(fitTerminals);
@@ -2092,6 +2092,9 @@
       }).catch(error => ({error: error.message}))
     ]).then(([items, sessionSettings, existing, schemes]) => {
       generalSettings.engine = sessionSettings.engine;
+      for (const option of defaultEngineSelect.options) {
+        option.disabled = !sessionSettings.availableEngines?.includes(option.value);
+      }
       loadGraphicPositions(sessionSettings.sessionId);
       images = items;
       namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};
