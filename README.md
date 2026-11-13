@@ -1,30 +1,28 @@
 # QemuWeb
 
-QemuWeb permet de créer et piloter, depuis un navigateur, des machines Linux
-QEMU ou VirtualBox reliées par des commutateurs VDE. Il affiche leurs consoles
-série, permet de gérer les hôtes et les commutateurs, et importe ou exporte des
-sessions et des topologies. Son [architecture](docs/architecture.md) est décrite
-séparément.
+QemuWeb lets you create and control Linux machines running in QEMU or VirtualBox
+from a browser. You can connect them through VDE switches, use their serial
+consoles, and import or export sessions and network topologies. The
+[architecture](docs/architecture.md) is documented separately.
 
 ## Installation
 
-Il faut un hôte **Linux x86-64**, Node.js **18 ou plus** avec npm, Bash, Python 3,
-QEMU (`qemu-system-x86_64` avec prise en charge de VDE), `qemu-img`, `vde_switch`,
-`vdeterm`, `genisoimage` et VirtualBox (`VBoxManage`). Le démarrage vérifie les
-exécutables déclarés dans `.env`, même si un seul moteur est utilisé. Pour QEMU/KVM,
-`/dev/kvm` doit être accessible. La préparation des images télécharge des sources
-officielles ; elle nécessite aussi `curl`, `gzip`, `isoinfo` et les outils Unix
-usuels.
+You need a **Linux x86-64** host, **Node.js 18 or newer** with npm, Bash, Python 3,
+QEMU (`qemu-system-x86_64` with VDE support), `qemu-img`, `vde_switch`, `vdeterm`,
+`genisoimage`, and VirtualBox (`VBoxManage`). Startup checks every executable
+listed in `.env`, even if you use only one virtualization engine. QEMU/KVM also
+requires access to `/dev/kvm`. Image preparation downloads official sources and
+uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
 
-Sur Debian ou Ubuntu, installer les dépendances disponibles dans la distribution :
+On Debian or Ubuntu, install the distribution packages:
 
 ```sh
 sudo apt install bash build-essential coreutils findutils grep gzip curl nodejs npm python3 qemu-system-x86 qemu-utils genisoimage vde2
 ```
 
-Installer également VirtualBox pour `VBoxManage`. Si le QEMU fourni par la
-distribution ne prend pas en charge VDE, voir [l'installation de QEMU](misc/install-qemu.md).
-Puis, à la racine du dépôt :
+Install VirtualBox separately to provide `VBoxManage`. If your distribution's
+QEMU lacks VDE support, see the [QEMU installation notes](misc/install-qemu.md).
+Then, from the repository root:
 
 ```sh
 npm ci
@@ -32,26 +30,26 @@ bash scripts/prepare.sh
 ./start.sh
 ```
 
-Ouvrir <http://127.0.0.1:3002>. `Ctrl+C` arrête le serveur ; `PORT=3003 ./start.sh`
-utilise un autre port.
+Open <http://127.0.0.1:3002>. Press `Ctrl+C` to stop the server. Use
+`PORT=3003 ./start.sh` to choose another port.
 
-## Essayer le réseau local fourni
+## Try the included LAN demo
 
-1. Préparer au moins l'image Debian Legacy avec `bash scripts/prepare.sh --system debian13-legacy`.
-2. Dans la page, choisir le moteur dans **General Settings**, puis cliquer sur **Load session ZIP** et sélectionner [`demo/lan.zip`](demo/lan.zip).
-3. Démarrer les hôtes et le commutateur s'ils ne sont pas déjà lancés. Les quatre hôtes reçoivent des adresses `192.168.0.x` par leur script de démarrage ; ouvrir leurs consoles pour essayer `ping` entre eux.
+1. Prepare at least the Debian Legacy image with `bash scripts/prepare.sh --system debian13-legacy`.
+2. In the Web interface, choose an engine in **General Settings**, click **Load session ZIP**, and select [`demo/lan.zip`](demo/lan.zip).
+3. Start the hosts and switch if they are not running. Their startup scripts assign `192.168.0.x` addresses to the four hosts. Open their consoles and try `ping` between them.
 
-L'archive contient les réglages et scripts, mais aucun disque de travail : les
-hôtes démarrent avec une image neuve. [`topo/lan.topo`](topo/lan.topo) décrit la
-même disposition pour **Load topology**, sans les scripts de démarrage ni les
-adresses IP. Les boutons de la page permettent aussi d'ajouter des hôtes et des
-commutateurs, de les relier, puis de sauvegarder la session en ZIP.
+The archive includes settings and startup scripts, but no working disks, so
+hosts start from fresh images. [`topo/lan.topo`](topo/lan.topo) describes the same
+layout for **Load topology**, without startup scripts or IP addresses. You can
+also add hosts and switches in the Web interface, connect them, and save the
+session as a ZIP archive.
 
-## Images disponibles
+## Prepare the available images
 
-`bash scripts/prepare.sh` prépare les quatre systèmes déclarés dans
-[`config.json`](config.json) : Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy
-et OpenWrt 25.12. Pour n'en préparer qu'un ou voir les images déjà présentes :
+`bash scripts/prepare.sh` prepares the four systems listed in
+[`config.json`](config.json): Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy,
+and OpenWrt 25.12. To prepare one system or list existing images:
 
 ```sh
 bash scripts/prepare.sh --system alpine
@@ -61,23 +59,23 @@ bash scripts/prepare.sh --system openwrt
 bash scripts/prepare.sh --list
 ```
 
-Les téléchargements et leurs contrôles vont dans `sources/<système>/` ; les bases
-RAW (QEMU) et VDI (VirtualBox) sont créées dans `images/`. Une image existante est
-réutilisée. `--force` reconstruit le système choisi en sauvegardant l'ancienne
-paire RAW/VDI dans `images/backups/` ; arrêter d'abord ses machines, car leurs
-disques de travail peuvent dépendre de l'ancienne base.
+Downloads and checksums go to `sources/<system>/`. Preparation creates RAW
+base images for QEMU and VDI base images for VirtualBox in `images/`. Existing
+images are reused. `--force` rebuilds a selected system and saves the previous
+RAW/VDI pair in `images/backups/`. Stop its machines first: their working disks
+may depend on the previous base image.
 
-## Fichiers de configuration
+## Configuration files
 
-| Fichier | Rôle |
+| File | Purpose |
 | --- | --- |
-| [`config.json`](config.json) | Catalogue des systèmes, images, mémoire et options QEMU ou VirtualBox. |
-| `.env` et `.env.local` | Noms des exécutables et chemins locaux prioritaires ; `.env.local` reste propre à la machine. |
-| `runtime/<session>/session.json` | Moteur et inventaire de la session courante. |
-| `runtime/<session>/<hôte>/host.json` et `runtime/<session>/<commutateur>/switch.json` | Réglages sauvegardés des hôtes et commutateurs. |
-| `runtime/<session>/<hôte>/startup/start.sh` | Commandes exécutées au démarrage de l'hôte. |
-| [`topo/lan.topo`](topo/lan.topo) et autres `.topo` | Description textuelle d'une topologie, sans disques ni scripts. |
+| [`config.json`](config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. |
+| `.env` and `.env.local` | Executable names and local path overrides; `.env.local` is specific to your machine. |
+| `runtime/<session>/session.json` | Engine and inventory for the current session. |
+| `runtime/<session>/<host>/host.json` and `runtime/<session>/<switch>/switch.json` | Saved host and switch settings. |
+| `runtime/<session>/<host>/startup/start.sh` | Commands run when a host starts. |
+| [`topo/lan.topo`](topo/lan.topo) and other `.topo` files | Text descriptions of topologies, without disks or startup scripts. |
 
-Les [exemples JSON](docs/samples/) illustrent les formats des fichiers de session.
-`runtime/` contient des fichiers temporaires supprimés avec la session ; utiliser
-**Save session** pour conserver une copie portable.
+The [JSON examples](docs/samples/) show the session file formats. `runtime/`
+contains temporary files that are removed with their session; use **Save session**
+to keep a portable copy.
