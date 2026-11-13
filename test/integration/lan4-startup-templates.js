@@ -13,7 +13,7 @@ const io = require('socket.io-client');
 const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
 const engine = process.env.LAN4_ENGINE || 'qemu';
-const timeoutMs = Number(process.env.LAN4_TIMEOUT_MS || (engine === 'qemu-tcg' ? 300000 : 120000));
+const timeoutMs = Number(process.env.LAN4_TIMEOUT_MS || 120000);
 const newId = prefix => `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
 const switchId = newId('s');
 const hosts = Array.from({length: 4}, (_, index) => ({id: newId('h'), name: `lan4-h${index + 1}`, label: `h${index + 1}`}));
@@ -151,7 +151,7 @@ class GuestConsole {
 
 async function run() {
   assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh --system debian13-legacy first.`);
-  assert.ok(['qemu', 'qemu-tcg'].includes(engine), `Unsupported LAN4_ENGINE: ${engine}`);
+  assert.equal(engine, 'qemu', `Unsupported LAN4_ENGINE: ${engine}`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
@@ -176,12 +176,12 @@ async function run() {
   for (const host of hosts) {
     await request('/api/hosts', 'POST', {
       id: host.id, name: host.name, imageId: 'debian13-legacy', engine, interfaces: [switchId],
-      autoBuildGuestCdrom: true
+      startupDiskEnabled: true
     });
     host.created = true;
     const config = await request(`/api/hosts/${host.id}/config`);
     assert.equal(config.guestMedia.script, expectedScript, `${host.label}: unexpected default start.sh`);
-    assert.equal(config.autoBuildGuestCdrom, true, `${host.label}: automatic startup disk is disabled`);
+    assert.equal(config.startupDiskEnabled, true, `${host.label}: automatic startup disk is disabled`);
     host.console = new GuestConsole(host);
   }
   await Promise.all(hosts.map(host => waitFor(`${host.label} console selection`, () => host.console.selected || host.console.error)));

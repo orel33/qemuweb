@@ -15,6 +15,7 @@ const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
 const {writeArchive, readArchive} = require('./session-archive');
+const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./system-config');
 const {LABEL: GUEST_ISO_LABEL, validateBootFiles, validateStartupTemplate, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./guest-media');
 const packageInfo = require('./package.json');
 
@@ -30,8 +31,13 @@ const sessionFile = path.join(runtimeInstance, 'session.json');
 const currentSessionLink = path.join(runtime, 'current');
 const ephemeralServer = process.env.QEMUWEB_TEST_SERVER === '1';
 const configPath = path.join(root, 'config.json');
-const qemuProfileFields = ['machine', 'cpuKvm', 'cpuTcg', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
-const qemuFields = [...qemuProfileFields, 'memory', 'smp', 'rtcBase'];
+const qemuProfileFields = ['machine', 'cpuKvm', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
+const qemuFields = [...qemuProfileFields, 'extraOptions', 'memory', 'smp', 'rtcBase'];
+const launchSettingFields = {
+  memory: {label: 'Memory', type: 'number', unit: 'MB', min: 64, max: 32768, step: 64},
+  cpus: {label: 'Processors', type: 'number', min: 1, max: 64, step: 1},
+  clock: {label: 'Hardware clock', type: 'select', options: ['utc', 'localtime']}
+};
 const port = Number(process.env.PORT || 3002);
 const serverPidFile = path.join(runtime, `server-${port}.pid`);
 const serverSessionFile = path.join(runtime, `server-${port}.session`);
@@ -46,7 +52,10 @@ const previousProcessSamples = new Map();
 const vboxMetricSetup = new Map();
 let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
-let sessionEngine = readConfig().session.defaults.engine;
+readCatalog(configPath);
+let sessionEngine = 'qemu';
+try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
+catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible; VirtualBox remains selectable.'); }
 
 function pointCurrentSession(id) {
   const temporary = path.join(runtime, `.current-${sessionId}`);
@@ -85,21 +94,10 @@ function removeCurrentSessionLink() {
   try {
     if (fs.readlinkSync(currentSessionLink) !== sessionId) return;
     const live = liveServerSessions();
-    const fallback = fs.readdirSync(runtime).filter(name => /^[0-9a-f]{16}$/.test(name) && name !== sessionId)
+    const fallback = fs.readdirSync(runtime).filter(name => /^[0-9a-f]{16}$/.test(name) && name !== sessionId && live.has(name) && !live.get(name).ephemeral)
       .map(name => {
         try {
-          const directory = path.join(runtime, name);
-          let owner = live.get(name);
-          if (!owner) {
-            // Servers started before the process metadata moved out of session.json.
-            const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'session.json'), 'utf8'));
-            if (!Number.isSafeInteger(metadata.pid) || !Number.isSafeInteger(metadata.port)) return null;
-            if (fs.readFileSync(path.join(runtime, `server-${metadata.port}.pid`), 'utf8').trim() !== String(metadata.pid)) return null;
-            process.kill(metadata.pid, 0);
-            owner = metadata;
-          }
-          if (owner.ephemeral) return null;
-          return {name, started: fs.statSync(directory).birthtimeMs};
+          return {name, started: fs.statSync(path.join(runtime, name)).birthtimeMs};
         } catch (_) { return null; }
       }).filter(Boolean).sort((a, b) => b.started - a.started)[0];
     if (fallback) pointCurrentSession(fallback.name);
@@ -124,18 +122,6 @@ function removeEmptyRuntimeSession() {
 
 function pruneEmptyRuntimeSessions() {
   const liveSessions = liveServerSessions();
-  const livePids = new Set();
-  for (const name of fs.readdirSync(runtime)) {
-    if (!/^server-\d+\.pid$/.test(name)) continue;
-    let pid;
-    try { pid = Number(fs.readFileSync(path.join(runtime, name), 'utf8').trim()); }
-    catch (_) { continue; }
-    if (!Number.isSafeInteger(pid) || pid <= 0) continue;
-    try {
-      process.kill(pid, 0);
-      livePids.add(pid);
-    } catch (error) { if (error.code === 'EPERM') livePids.add(pid); }
-  }
   let removed = 0;
   for (const name of fs.readdirSync(runtime)) {
     if (!/^[0-9a-f]{16}$/.test(name)) continue;
@@ -145,8 +131,9 @@ function pruneEmptyRuntimeSessions() {
       if (!stat.isDirectory() || stat.isSymbolicLink() || Date.now() - stat.mtimeMs < 30000) continue;
       if (fs.readdirSync(directory).join() !== 'session.json') continue;
       const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'session.json'), 'utf8'));
+      if (metadata.schemaVersion !== 4) continue;
       if (!Array.isArray(metadata.hosts) || metadata.hosts.length || !Array.isArray(metadata.switches) || metadata.switches.length) continue;
-      if (liveSessions.has(name) || (metadata.pid && livePids.has(metadata.pid))) continue;
+      if (liveSessions.has(name)) continue;
       fs.unlinkSync(path.join(directory, 'session.json'));
       fs.rmdirSync(directory);
       removed++;
@@ -174,7 +161,7 @@ function sessionMetadata(engine = sessionEngine) {
   const ids = kind => [...sessions.values()]
     .filter(session => session.kind === kind && session.hostname && (kind === 'switch' || session.selectedImage))
     .map(session => session.id).sort();
-  return {schemaVersion: 2, engine, hosts: ids('vm'), switches: ids('switch')};
+  return {schemaVersion: 4, engine, hosts: ids('vm'), switches: ids('switch'), baseImages: {}};
 }
 
 function entityKind(id, expectedKind) {
@@ -224,7 +211,7 @@ async function sampleResources() {
         const ramBytes = parseProcessRss(status);
         if (processCpu && hostCpu) previousProcessSamples.set(session.id, {...processCpu, hostTicks: hostCpu.totalTicks, machine});
         result = resourceResult(cpuPercent, ramBytes);
-      } else if (session.engine === 'virtualbox') {
+      } else if (session.engine === 'vbox') {
         try {
           if (vboxMetricSetup.get(session.id) !== machine) {
             await vboxMetricCommand(['setup', '--period', '2', '--samples', '1', session.vmName, 'CPU/Load,RAM/Usage']);
@@ -435,8 +422,17 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(root, 'public')));
 
 function imageById(id) {
-  const system = readConfig().systems[id];
-  return system ? {id, ...system} : null;
+  const catalog = readConfig();
+  if (!catalog.systems[id] || id === 'default') return null;
+  const qemu = selectedProfile(catalog, id, 'qemu');
+  const vbox = selectedProfile(catalog, id, 'vbox');
+  const active = selectedProfile(catalog, id, sessionEngine);
+  return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled,
+    images: {raw: qemu.image, vdi: vbox.image},
+    virtualbox: {osType: 'Linux_64', networkModel: vbox.networkModel === 'virtio' ? 'virtio' : '82540EM',
+      firmware: vbox.firmware, diskBus: vbox.diskInterface,
+      diskController: 'IntelAhci', cdromBus: vbox.cdromInterface,
+      cdromController: 'PIIX4'}};
 }
 
 function allocateName(prefix) {
@@ -455,6 +451,10 @@ function validateQemuOptions(options, partial = false) {
   }
   if (!partial && qemuFields.some(key => !Object.hasOwn(options, key))) throw new Error('Incomplete QEMU settings.');
   for (const [key, value] of Object.entries(options)) {
+    if (key === 'extraOptions') {
+      if (!Array.isArray(value) || value.some(arg => typeof arg !== 'string' || !arg || /[\x00-\x1f\x7f]/.test(arg))) throw new Error('Invalid QEMU extra options.');
+      continue;
+    }
     if (key === 'memory') {
       if (!Number.isInteger(value) || value < 64 || value > 32768) throw new Error('QEMU memory must be between 64 and 32768 MB.');
       continue;
@@ -476,13 +476,6 @@ function validateQemuOptions(options, partial = false) {
   return options;
 }
 
-function validateQemuProfile(options, label, complete = false) {
-  validateQemuOptions(options, true);
-  const misplaced = Object.keys(options).find(key => !qemuProfileFields.includes(key));
-  if (misplaced) throw new Error(`${label}.${misplaced} belongs in settings (memory, cpus, clock), not in the QEMU profile.`);
-  if (complete && qemuProfileFields.some(key => !Object.hasOwn(options, key))) throw new Error(`Incomplete ${label} profile.`);
-}
-
 function validateLaunchSettings(settings, partial = false) {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Invalid launch settings.');
   const allowed = ['memory', 'cpus', 'clock'];
@@ -495,41 +488,22 @@ function validateLaunchSettings(settings, partial = false) {
 }
 
 function readConfig() {
-  let config;
-  try { config = JSON.parse(fs.readFileSync(configPath, 'utf8')); }
-  catch (error) { throw new Error(`Cannot read config.json: ${error.message}`); }
-  if (!config || !config.qemu || !config.systems || typeof config.systems !== 'object' || Array.isArray(config.systems)) throw new Error('Invalid config.json structure.');
-  if (config.schemaVersion !== 1 || !['qemu', 'qemu-tcg', 'virtualbox'].includes(config.session?.defaults?.engine)) throw new Error('Invalid session defaults in config.json.');
-  validateQemuProfile(config.qemu.defaults, 'qemu.defaults', true);
-  if (!config.settings || !config.settings.defaults || !config.settings.fields) throw new Error('Missing generic settings in config.json.');
-  validateLaunchSettings(config.settings.defaults);
-  if (config.qemu.defaults.nic !== 'none') throw new Error('External QEMU networking is disabled; qemu.defaults.nic must be none.');
-  for (const [id, system] of Object.entries(config.systems)) {
-    if (!/^[a-zA-Z0-9_-]{1,32}$/.test(id) || !system || system.type !== 'linux' || system.mode !== 'text') throw new Error(`Invalid system ${id}: only Linux text-mode profiles are supported.`);
-    if (typeof system.label !== 'string' || !system.label.trim()) throw new Error(`Missing label for ${id}.`);
-    for (const format of ['raw', 'vdi']) {
-      if (!system.images || typeof system.images[format] !== 'string' || !system.images[format] || /[\x00-\x1f\x7f]/.test(system.images[format])) throw new Error(`Invalid ${format} path for ${id}.`);
-    }
-    validateQemuProfile(system.qemu, `systems.${id}.qemu`);
-    validateLaunchSettings(system.settings || {}, true);
-    if (system.qemu.nic && system.qemu.nic !== 'none') throw new Error(`External QEMU networking is disabled for ${id}.`);
-    const vbox = system.virtualbox;
-    if (!vbox || !['82540EM', 'virtio'].includes(vbox.networkModel) || typeof vbox.osType !== 'string' || !vbox.osType) throw new Error(`Invalid VirtualBox settings for ${id}.`);
-  }
-  return config;
+  return readCatalog(configPath);
 }
 
 function qemuOptionsFor(imageId, overrides = {}) {
-  const config = readConfig();
-  const system = config.systems[imageId];
-  const settings = validateLaunchSettings({...config.settings.defaults, ...(system?.settings || {}), ...overrides});
-  return validateQemuOptions({...config.qemu.defaults, ...(system?.qemu || {}), memory: settings.memory, smp: settings.cpus, rtcBase: settings.clock});
+  const p = selectedProfile(readConfig(), imageId, 'qemu');
+  const settings = validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, ...overrides});
+  const extra = Object.fromEntries([0, 2, 4].map(index => [p.extraOptions[index], p.extraOptions[index + 1]]));
+  return validateQemuOptions({machine: extra['-machine'], cpuKvm: extra['-cpu'], display: p.mode === 'text' ? 'none' : null,
+    diskInterface: p.diskInterface, networkModel: p.networkModel === 'virtio' ? 'virtio-net-pci' : 'e1000',
+    bootDisk: 'c', nic: extra['-nic'], extraOptions: [...p.extraOptions],
+    memory: settings.memory, smp: settings.cpus, rtcBase: settings.clock});
 }
 
 function launchSettingsFor(imageId, overrides = {}) {
-  const config = readConfig();
-  const system = config.systems[imageId];
-  return validateLaunchSettings({...config.settings.defaults, ...(system?.settings || {}), ...overrides});
+  const p = selectedProfile(readConfig(), imageId, sessionEngine);
+  return validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, ...overrides});
 }
 
 app.get('/api/general-settings', (_req, res) => {
@@ -540,7 +514,7 @@ app.get('/api/general-settings', (_req, res) => {
 app.put('/api/general-settings', (req, res) => {
   try {
     const engine = req.body?.engine;
-    if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
+    if (!['qemu', 'vbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
     if (engine !== sessionEngine) {
       if ([...sessions.values()].some(session => session.kind === 'vm')) {
         return res.status(409).json({error: 'Delete existing hosts before changing the session engine.'});
@@ -553,18 +527,18 @@ app.put('/api/general-settings', (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.get('/api/qemu-config', (_req, res) => {
-  try {
-    const config = readConfig();
-    res.json({settings: config.settings, systems: Object.fromEntries(Object.entries(config.systems).map(([id, system]) => [id, {qemu: system.qemu, virtualbox: system.virtualbox, settings: system.settings || {}}]))});
-  }
-  catch (error) { res.status(500).json({error: error.message}); }
-});
-
 app.get('/api/systems', (_req, res) => {
   try {
     const config = readConfig();
-    res.json(Object.entries(config.systems).map(([id, system]) => ({id, label: system.label, images: system.images, vboxNetworkModel: system.virtualbox.networkModel, hasDifferentialDisk: true})));
+    res.json(Object.keys(config.systems).filter(id => id !== 'default').map(id => {
+      const p = selectedProfile(config, id, sessionEngine);
+      return {id, label: p.label,
+        images: {raw: config.systems[id].qemu.image, vdi: config.systems[id].vbox.image},
+        memory: p.memory, cpus: p.cpus, clock: p.clock,
+        startupDiskEnabled: p.startupDiskEnabled,
+        vboxNetworkModel: p.networkModel === 'virtio' ? 'virtio' : '82540EM',
+        hasDifferentialDisk: true};
+    }));
   } catch (error) { res.status(500).json({error: error.message}); }
 });
 
@@ -606,7 +580,7 @@ function fileSha256(file) {
 }
 function archiveSources(includeDisks, allowRunning = false) {
   if (typeof includeDisks !== 'boolean') throw new Error('Invalid working disk option.');
-  if (includeDisks && sessionEngine === 'virtualbox') throw new Error('VirtualBox working disk archives are not supported.');
+  if (includeDisks && sessionEngine === 'vbox') throw new Error('VirtualBox working disk archives are not supported.');
   const runningHosts = [...sessions.values()].filter(item => item.kind === 'vm' && item.machine);
   if (includeDisks && [...sessions.values()].some(item => item.kind === 'vm' && item.action)) {
     throw new Error('Wait for the current host action to finish before saving working disks.');
@@ -650,7 +624,7 @@ function archiveSources(includeDisks, allowRunning = false) {
   return {sources, hosts, switches, systems, logicalBytes, allocatedBytes, estimatedBytes, runningHosts: runningHosts.length};
 }
 function validateArchiveSession(snapshot, stage) {
-  if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(snapshot.engine) ||
+  if (!['qemu', 'vbox'].includes(snapshot.engine) ||
       !Array.isArray(snapshot.hosts) || !Array.isArray(snapshot.switches) ||
       !snapshot.baseImages || typeof snapshot.baseImages !== 'object' || Array.isArray(snapshot.baseImages)) {
     throw new Error('Invalid archived session.');
@@ -667,20 +641,27 @@ function validateArchiveSession(snapshot, stage) {
   const systems = new Set();
   for (const host of snapshot.hosts) {
     if (!host || typeof host !== 'object') throw new Error('Invalid host entry.');
+    if (Object.keys(host).some(key => !['schemaVersion', 'id', 'name', 'system', 'engine', 'profileHash', 'config', 'network', 'disk'].includes(key)) ||
+        !host.network || Object.keys(host.network).some(key => key !== 'interfaces')) throw new Error('Unknown host configuration keyword.');
     entityKind(host.id, 'vm');
     if (ids.has(host.id) || typeof host.name !== 'string' || !host.name.trim() || host.name.length > 64 || /[\x00-\x1f\x7f]/.test(host.name) || names.has(host.name.toLowerCase())) throw new Error('Invalid or duplicate host identity.');
     ids.add(host.id); names.add(host.name.toLowerCase());
     expectedFiles.add(`${host.id}/host.json`);
-    if (host.schemaVersion !== 1 || host.engine !== snapshot.engine || !imageById(host.systemId)) throw new Error(`Unknown system or engine for ${host.name}.`);
-    systems.add(host.systemId);
-    validateLaunchSettings(host.settings);
-    const hardware = hardwareProfile(host.systemId, snapshot.engine, host.settings);
-    if (JSON.stringify(host.hardware) !== JSON.stringify(hardware)) throw new Error(`Machine profile incompatible: ${host.name}.`);
-    if (typeof host.autoBuildGuestCdrom !== 'boolean' || typeof host.disk !== 'boolean' ||
-        !Array.isArray(host.networkInterfaces) || host.networkInterfaces.length > 4 ||
+    if (host.schemaVersion !== 3 || host.engine !== snapshot.engine || !imageById(host.system)) throw new Error(`Unknown system or engine for ${host.name}.`);
+    systems.add(host.system);
+    const profile = selectedProfile(readConfig(), host.system, host.engine);
+    if (host.profileHash !== profileHash(profile)) throw new Error(`System profile changed for ${host.name}; restore its original config.json or recreate the host.`);
+    validateOverrides(host.config);
+    if (Object.keys(host.config).some(key => host.config[key] === profile[key])) throw new Error(`Redundant host override for ${host.name}.`);
+    validateLaunchSettings({memory: host.config.memory ?? profile.memory,
+      cpus: host.config.cpus ?? profile.cpus, clock: host.config.clock ?? profile.clock});
+    if (typeof (host.config.startupDiskEnabled ?? profile.startupDiskEnabled) !== 'boolean' || typeof host.disk !== 'boolean' ||
+        !host.network || !Array.isArray(host.network.interfaces) || host.network.interfaces.length > 4 ||
         (host.disk && !snapshot.engine.startsWith('qemu'))) throw new Error(`Invalid host configuration: ${host.name}.`);
-    for (const nic of host.networkInterfaces) {
-      if (!nic || !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(nic.mac) || macs.has(nic.mac)) throw new Error('Invalid or duplicate MAC address.');
+    for (const nic of host.network.interfaces) {
+      if (!nic || typeof nic !== 'object' || Array.isArray(nic) ||
+          Object.keys(nic).some(key => !['switchId', 'port', 'mac'].includes(key)) ||
+          !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(nic.mac) || macs.has(nic.mac)) throw new Error('Invalid or duplicate MAC address.');
       macs.add(nic.mac);
       if (nic.switchId === null) { if (nic.port !== null) throw new Error('Disconnected Ethernet must have no port.'); }
       else {
@@ -693,14 +674,16 @@ function validateArchiveSession(snapshot, stage) {
     const startup = path.join(stage, host.id, 'startup');
     fs.mkdirSync(startup, {recursive: true});
     const media = readStartupFiles(startup);
-    if (host.autoBuildGuestCdrom) validateStartupTemplate(media.script, host.networkInterfaces, true);
+    if (host.config.startupDiskEnabled ?? profile.startupDiskEnabled) validateStartupTemplate(media.script, host.network.interfaces, true);
     if (host.disk) expectedFiles.add(`${host.id}/disk.qcow2`);
   }
   if (Object.keys(snapshot.baseImages).length !== systems.size) throw new Error('Base image inventory mismatch.');
   for (const id of systems) {
     const expected = snapshot.baseImages[id], image = imageById(id);
-    if (!expected || !Number.isSafeInteger(expected.size) || !/^[0-9a-f]{64}$/.test(expected.sha256)) throw new Error(`Invalid base image identity: ${id}.`);
-    if (expected.format !== (snapshot.engine === 'virtualbox' ? 'vdi' : 'raw')) throw new Error(`Base image format incompatible: ${id}.`);
+    if (!expected || typeof expected !== 'object' || Array.isArray(expected) ||
+        Object.keys(expected).some(key => !['format', 'size', 'sha256'].includes(key)) ||
+        !Number.isSafeInteger(expected.size) || !/^[0-9a-f]{64}$/.test(expected.sha256)) throw new Error(`Invalid base image identity: ${id}.`);
+    if (expected.format !== (snapshot.engine === 'vbox' ? 'vdi' : 'raw')) throw new Error(`Base image format incompatible: ${id}.`);
     const actual = fileSha256(imagePath(image.images[expected.format]));
     if (expected.size !== actual.size || expected.sha256 !== actual.sha256) throw new Error(`Base image incompatible: ${id}.`);
   }
@@ -713,9 +696,9 @@ function validateArchiveSession(snapshot, stage) {
   for (const host of snapshot.hosts.filter(item => item.disk)) {
     const disk = path.join(stage, host.id, 'disk.qcow2');
     const info = JSON.parse(execFileSync(commands.QEMU_IMG, ['info', '--output=json', disk], {encoding: 'utf8', maxBuffer: 1024 * 1024}));
-    const image = imageById(host.systemId);
+    const image = imageById(host.system);
     if (info.format !== 'qcow2' || info.encrypted || info['data-file'] || info['format-specific']?.data?.['data-file'] || info['format-specific']?.data?.['data-file-raw'] || info['backing-filename-format'] !== 'raw' ||
-        !info['backing-filename'] || info['virtual-size'] !== snapshot.baseImages[host.systemId].size) throw new Error(`Incompatible QCOW2 overlay for ${host.name}.`);
+        !info['backing-filename'] || info['virtual-size'] !== snapshot.baseImages[host.system].size) throw new Error(`Incompatible QCOW2 overlay for ${host.name}.`);
     execFileSync(commands.QEMU_IMG, ['rebase', '-u', '-f', 'qcow2', '-F', 'raw', '-b', imagePath(image.images.raw), disk], {maxBuffer: 1024 * 1024});
     execFileSync(commands.QEMU_IMG, ['check', '-f', 'qcow2', disk], {maxBuffer: 1024 * 1024});
   }
@@ -740,13 +723,17 @@ function installArchive(snapshot, stage) {
     }
     for (const entry of snapshot.hosts) {
       const item = getSession(entry.id, true, 'vm', true); created.push(item);
-      item.selectedImage = imageById(entry.systemId); item.engine = snapshot.engine;
-      item.launchSettings = entry.settings; item.networkInterfaces = entry.networkInterfaces;
-      item.guestIsoAttached = entry.autoBuildGuestCdrom;
+      item.selectedImage = imageById(entry.system); item.engine = snapshot.engine;
+      item.profileHash = entry.profileHash;
+      const profile = selectedProfile(readConfig(), entry.system, entry.engine);
+      item.launchSettings = validateLaunchSettings({memory: entry.config.memory ?? profile.memory,
+        cpus: entry.config.cpus ?? profile.cpus, clock: entry.config.clock ?? profile.clock});
+      item.networkInterfaces = entry.network.interfaces;
+      item.guestIsoAttached = entry.config.startupDiskEnabled ?? profile.startupDiskEnabled;
       item.guestMedia = readStartupFiles(startupDirectory(item));
       item.runDisk = entry.disk ? tempFile(item, 'disk.qcow2') : null;
       item.everStarted = entry.disk;
-      item.qemuOptions = entry.disk ? qemuOptionsFor(entry.systemId, entry.settings) : null;
+      item.qemuOptions = entry.disk ? qemuOptionsFor(entry.system, item.launchSettings) : null;
       setSessionHostname(item, entry.name); item.lastMessage = entry.disk ? 'Host stopped; current disk kept' : 'Host stopped; ready to start';
       persistHostConfiguration(item);
     }
@@ -767,7 +754,7 @@ app.get('/api/session-archive/estimate', (req, res) => {
     const {hosts, switches, logicalBytes, allocatedBytes, estimatedBytes: bytes, runningHosts} = archiveSources(includeDisks, includeDisks);
     res.set('Cache-Control', 'no-store');
     res.json({bytes, logicalBytes, allocatedBytes, hosts: hosts.length, switches: switches.length, includeDisks, runningHosts,
-      hasWorkingDisks: hosts.some(item => item.disk), format: 'qemuweb-session-v2.zip'});
+      hasWorkingDisks: hosts.some(item => item.disk), format: 'qemuweb-session-v4.zip'});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 app.post('/api/session-archive/export', async (req, res) => {
@@ -778,7 +765,7 @@ app.post('/api/session-archive/export', async (req, res) => {
     const prepared = archiveSources(includeDisks, includeDisks);
     const baseImages = {};
     for (const id of prepared.systems) {
-      const format = sessionEngine === 'virtualbox' ? 'vdi' : 'raw';
+      const format = sessionEngine === 'vbox' ? 'vdi' : 'raw';
       baseImages[id] = {format, ...fileSha256(imagePath(imageById(id).images[format]))};
     }
     if (includeDisks) {
@@ -796,7 +783,7 @@ app.post('/api/session-archive/export', async (req, res) => {
     await writeArchive(archive, sources);
     res.set('Cache-Control', 'no-store');
     // The temporary archive is dot-prefixed; sendFile ignores dotfiles by default.
-    res.download(archive, 'qemuweb-session-v2.zip', {dotfiles: 'allow'}, error => {
+    res.download(archive, 'qemuweb-session-v4.zip', {dotfiles: 'allow'}, error => {
       archiveBusy = false;
       fs.rmSync(archive, {force: true});
       if (error && !res.headersSent) res.status(500).json({error: error.message});
@@ -934,7 +921,7 @@ function cleanupGuestIsoFiles(session) {
 }
 
 function persistSwitchConfiguration(session) {
-  writeJsonAtomic(tempFile(session, 'switch.json'), {schemaVersion: 1, id: session.id, name: session.hostname, kind: 'vde'});
+  writeJsonAtomic(tempFile(session, 'switch.json'), {schemaVersion: 2, id: session.id, name: session.hostname, kind: 'vde'});
 }
 
 function activeConfiguration(session) {
@@ -942,7 +929,7 @@ function activeConfiguration(session) {
     settings: {...session.launchSettings},
     networkInterfaces: session.networkInterfaces.map(nic => ({...nic})),
     guestMedia: readStartupFiles(startupDirectory(session)),
-    autoBuildGuestCdrom: session.guestIsoAttached
+    startupDiskEnabled: session.guestIsoAttached
   };
 }
 
@@ -953,36 +940,33 @@ function pendingRestart(session) {
     ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
     JSON.stringify(session.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
     JSON.stringify(readStartupFiles(startupDirectory(session))) !== JSON.stringify(active.guestMedia) ||
-    session.guestIsoAttached !== active.autoBuildGuestCdrom;
+    session.guestIsoAttached !== active.startupDiskEnabled;
 }
 
-function hostConfiguration(session) {
-  const hardware = hardwareProfile(session.selectedImage.id, session.engine, session.launchSettings);
-  return {
-    schemaVersion: 1,
-    id: session.id,
-    name: session.hostname,
-    systemId: session.selectedImage.id,
-    engine: session.engine,
-    settings: session.launchSettings,
-    hardware,
-    networkInterfaces: session.networkInterfaces,
-    autoBuildGuestCdrom: session.guestIsoAttached
-  };
-}
-
-function hardwareProfile(systemId, engine, settings) {
-  if (engine.startsWith('qemu')) {
-    const options = qemuOptionsFor(systemId, settings);
-    return Object.fromEntries(qemuProfileFields.map(field => [field, options[field]]));
+function hostConfiguration(session, settings = session.launchSettings, interfaces = session.networkInterfaces,
+  startupDiskEnabled = session.guestIsoAttached, name = session.hostname) {
+  const profile = selectedProfile(readConfig(), session.selectedImage.id, session.engine);
+  const hash = profileHash(profile);
+  if (session.profileHash && session.profileHash !== hash) {
+    throw new Error(`System profile changed for ${name}; restore its original config.json or recreate the host.`);
   }
-  const {osType, networkModel} = imageById(systemId).virtualbox;
-  return {osType, networkModel};
+  session.profileHash = hash;
+  return {
+    schemaVersion: 3,
+    id: session.id,
+    name,
+    system: session.selectedImage.id,
+    engine: session.engine,
+    profileHash: hash,
+    config: sparseOverrides(profile, {...settings, startupDiskEnabled}),
+    network: {interfaces}
+  };
 }
 
 function archivedSessionFiles(stage, paths) {
   const metadata = JSON.parse(fs.readFileSync(path.join(stage, 'session.json'), 'utf8'));
-  if (metadata.schemaVersion !== 2 || !['qemu', 'qemu-tcg', 'virtualbox'].includes(metadata.engine) ||
+  if (metadata.schemaVersion !== 4 || !['qemu', 'vbox'].includes(metadata.engine) ||
+      Object.keys(metadata).some(key => !['schemaVersion', 'engine', 'hosts', 'switches', 'baseImages'].includes(key)) ||
       !Array.isArray(metadata.hosts) || !Array.isArray(metadata.switches) ||
       !metadata.baseImages || typeof metadata.baseImages !== 'object' || Array.isArray(metadata.baseImages)) {
     throw new Error('Invalid session.json in archive.');
@@ -993,8 +977,11 @@ function archivedSessionFiles(stage, paths) {
     entityKind(id, kind);
     const file = path.join(stage, id, kind === 'vm' ? 'host.json' : 'switch.json');
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (data.id !== id || data.schemaVersion !== 1) throw new Error(`Invalid configuration for ${id}.`);
-    if (kind === 'switch' && data.kind !== 'vde') throw new Error(`Invalid switch configuration for ${id}.`);
+    if (data.id !== id || data.schemaVersion !== (kind === 'vm' ? 3 : 2)) throw new Error(`Invalid configuration for ${id}.`);
+    if (kind === 'switch' && (data.kind !== 'vde' ||
+        Object.keys(data).some(key => !['schemaVersion', 'id', 'name', 'kind'].includes(key)))) {
+      throw new Error(`Invalid switch configuration for ${id}.`);
+    }
     return data;
   };
   const hosts = metadata.hosts.map(id => {
@@ -1016,7 +1003,9 @@ function completePendingDiskReset(session, publish = true) {
 }
 
 function hostConfigurationResponse(session) {
-  return {...hostConfiguration(session), guestMedia: readStartupFiles(startupDirectory(session)), interfaces: session.networkInterfaces.map(nic => nic.switchId),
+  return {...hostConfiguration(session), systemId: session.selectedImage.id, settings: session.launchSettings,
+    networkInterfaces: session.networkInterfaces, startupDiskEnabled: session.guestIsoAttached,
+    guestMedia: readStartupFiles(startupDirectory(session)), interfaces: session.networkInterfaces.map(nic => nic.switchId),
     running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session),
     resetWorkingDiskAtRestart: session.resetWorkingDiskAtRestart, guestCdrom: guestIsoStatus(session)};
 }
@@ -1026,17 +1015,15 @@ function imagePath(file) { return path.resolve(root, file); }
 function qemuArgs(session, image, overlay) {
   const settings = session.qemuOptions;
   const common = [
-    '-machine', settings.machine, '-accel', session.qemuAcceleration,
-    '-cpu', session.qemuAcceleration === 'kvm' ? settings.cpuKvm : settings.cpuTcg,
-    '-m', String(settings.memory), '-smp', String(settings.smp),
-    '-display', settings.display, '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
+    ...settings.extraOptions, '-accel', session.qemuAcceleration,
+    '-display', settings.display, '-m', String(settings.memory), '-smp', String(settings.smp),
+    '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
     '-serial', `unix:${session.socketPath},server=on,wait=off`
   ];
   // QEMU PC boot notation: c = first hard disk.
   const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
   if (session.guestIsoAttached && session.guestIso) args.push('-drive', `file=${session.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);
-  // Disable QEMU's implicit user-network NIC; explicit -device NICs below remain enabled.
-  args.push('-nic', 'none');
+  // The profile's -nic none disables QEMU's implicit user-network NIC.
   for (const [index, nic] of session.networkInterfaces.entries()) {
     if (nic.switchId === null) {
       args.push('-device', `${settings.networkModel},mac=${nic.mac}`);
@@ -1199,13 +1186,12 @@ async function stopSwitch(session, force = false) {
 }
 
 function qemuAcceleration(engine, checkAvailability = true) {
-  if (engine === 'qemu-tcg') return 'tcg';
   if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
   if (!checkAvailability) return 'kvm';
-  const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'virtualbox');
-  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host or select QEMU · TCG.');
+  const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'vbox');
+  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
   try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Choose QEMU · TCG or enable KVM.'); }
+  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or use VirtualBox.'); }
   return 'kvm';
 }
 
@@ -1281,11 +1267,11 @@ function virtualBoxCommands(session, image) {
   const disk = tempFile(session, 'disk.vdi');
   return [
     ['createvm', '--name', session.vmName, '--basefolder', vmDir, '--ostype', image.virtualbox.osType, '--register'],
-    ['modifyvm', session.vmName, '--memory', String(session.launchSettings.memory), '--cpus', String(session.launchSettings.cpus), '--rtcuseutc', session.launchSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(session, image), '--uart1', '0x3F8', '4', '--uartmode1', 'server', session.socketPath],
+    ['modifyvm', session.vmName, '--memory', String(session.launchSettings.memory), '--cpus', String(session.launchSettings.cpus), '--rtcuseutc', session.launchSettings.clock === 'utc' ? 'on' : 'off', '--firmware', image.virtualbox.firmware, ...virtualBoxNetworkArgs(session, image), '--uart1', '0x3F8', '4', '--uartmode1', 'server', session.socketPath],
     ['createmedium', 'disk', '--filename', disk, '--diffparent', imagePath(image.images.vdi), '--format', 'VDI'],
-    ['storagectl', session.vmName, '--name', 'SATA', '--add', 'sata', '--controller', 'IntelAhci'],
+    ['storagectl', session.vmName, '--name', 'SATA', '--add', image.virtualbox.diskBus, '--controller', image.virtualbox.diskController],
     ['storageattach', session.vmName, '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', disk],
-    ['storagectl', session.vmName, '--name', 'Guest setup', '--add', 'ide', '--controller', 'PIIX4'],
+    ['storagectl', session.vmName, '--name', 'Guest setup', '--add', image.virtualbox.cdromBus, '--controller', image.virtualbox.cdromController],
     ...(session.guestIsoAttached ? [['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', session.guestIso]] : []),
     ['modifyvm', session.vmName, '--boot1', 'disk', '--boot2', 'dvd', '--boot3', 'none', '--boot4', 'none'],
     ['startvm', session.vmName, '--type', 'headless']
@@ -1294,6 +1280,12 @@ function virtualBoxCommands(session, image) {
 
 app.get('/api/options/:sessionId', (req, res) => {
   try {
+    if (Object.keys(req.query).some(key => !['system', 'engine', 'interfaces', 'settings', 'startupDiskEnabled'].includes(key))) {
+      throw new Error('Unknown host preview option.');
+    }
+    if (req.query.startupDiskEnabled !== undefined && !['true', 'false'].includes(req.query.startupDiskEnabled)) {
+      throw new Error('startupDiskEnabled must be true or false.');
+    }
     const id = req.params.sessionId;
     entityKind(id, 'vm');
     const existing = getSession(id);
@@ -1301,10 +1293,9 @@ app.get('/api/options/:sessionId', (req, res) => {
     const image = launched ? existing.selectedImage : imageById(req.query.system);
     const engine = launched ? existing.engine : req.query.engine;
     requireSessionEngine(engine);
-    if (!image || !['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown system or engine.');
+    if (!image || !['qemu', 'vbox'].includes(engine)) throw new Error('Unknown system or engine.');
     const requestedInterfaces = req.query.interfaces !== undefined ? JSON.parse(req.query.interfaces)
-      : req.query.switches ? String(req.query.switches).split(',')
-        : existing?.networkInterfaces.map(nic => nic.switchId);
+      : existing?.networkInterfaces.map(nic => nic.switchId);
     const switches = validateNetworkInterfaces(requestedInterfaces, engine, false);
     const savedInterfaces = existing?.networkInterfaces.map(nic => nic.switchId);
     const previewInterfaces = existing && JSON.stringify(requestedInterfaces) === JSON.stringify(savedInterfaces)
@@ -1317,7 +1308,8 @@ app.get('/api/options/:sessionId', (req, res) => {
       qemuOptions: null,
       networkInterfaces: previewInterfaces
     };
-    const attachGuestCdrom = req.query.guestCdrom === undefined ? !!existing?.guestIsoAttached : req.query.guestCdrom === 'true';
+    const attachGuestCdrom = req.query.startupDiskEnabled === undefined
+      ? (existing?.guestIsoAttached ?? image.startupDiskEnabled) : req.query.startupDiskEnabled === 'true';
     if (!launched) session.guestIso = existing?.guestIso || null;
     const isQemu = engine.startsWith('qemu');
     const draftSettings = req.query.settings ? JSON.parse(req.query.settings) : {};
@@ -1335,7 +1327,8 @@ app.get('/api/options/:sessionId', (req, res) => {
     const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
     const fixed = isQemu
       ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
-      : {engine: 'VirtualBox', osType: image.virtualbox.osType, diskBus: 'SATA', networkCard: image.virtualbox.networkModel};
+      : {engine: 'VirtualBox', osType: image.virtualbox.osType, firmware: image.virtualbox.firmware,
+        diskBus: image.virtualbox.diskBus.toUpperCase(), networkCard: image.virtualbox.networkModel};
     const isoCommands = attachGuestCdrom
       ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, '.iso-stage')]]
       : [];
@@ -1361,7 +1354,7 @@ app.get('/api/options/:sessionId', (req, res) => {
           {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, 'disk.vdi'))}
         ];
     storage.push({label: 'Startup disk (cd-rom)', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
-    res.json({launched, engine, settings: userSettings, fields: readConfig().settings.fields, fixed, storage, interfaces: previewInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
+    res.json({launched, engine, settings: userSettings, fields: launchSettingFields, fixed, storage, interfaces: previewInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -1373,7 +1366,7 @@ function spawnVirtualBox(session, image) {
     image.runFiles = [disk];
     session.runDisk = disk;
     for (const args of virtualBoxCommands(session, image)) vbox(session, args);
-    session.machine = {kind: 'virtualbox', vmDir};
+    session.machine = {kind: 'vbox', vmDir};
   } catch (error) {
     try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {}
     try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
@@ -1393,21 +1386,24 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   const resume = session.everStarted && !options.reset;
   if (resume && (selectedEngine !== session.engine || imageId !== session.selectedImage?.id)) throw new Error('Resume must use the original system and engine.');
   if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current host disk was not found.');
-  if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
+  if (!['qemu', 'vbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
   requireSessionEngine(selectedEngine);
   const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
-  if (selectedEngine === 'virtualbox') {
+  if (selectedEngine === 'vbox') {
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
-    if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU host uses KVM. Stop that host, restart it with QEMU TCG, then start VirtualBox.');
+    if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
   const image = resume ? session.selectedImage : imageById(imageId);
   if (!image) throw new Error('Unknown system in config.json.');
+  if (session.profileHash && session.profileHash !== profileHash(selectedProfile(readConfig(), image.id, selectedEngine))) {
+    throw new Error(`System profile changed for ${session.hostname}; restore its original config.json or recreate the host.`);
+  }
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
-  if (selectedEngine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  if (selectedEngine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
   session.guestMedia = readStartupFiles(startupDirectory(session));
-  if (options.autoBuildGuestCdrom !== undefined) {
-    if (typeof options.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
-    session.guestIsoAttached = options.autoBuildGuestCdrom;
+  if (options.startupDiskEnabled !== undefined) {
+    if (typeof options.startupDiskEnabled !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
+    session.guestIsoAttached = options.startupDiskEnabled;
   }
   const launchSettings = resume
     ? validateLaunchSettings({...session.launchSettings, ...(options.settings || {})})
@@ -1442,7 +1438,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   session.qemuOptions = qemuOptions;
   session.launchSettings = launchSettings;
   if (session.guestIsoAttached) buildGuestIso(session, tempFile(session, `startup-${session.generation}.iso`));
-  if (selectedEngine === 'virtualbox' && resume) {
+  if (selectedEngine === 'vbox' && resume) {
     if (!['poweroff', 'aborted'].includes(virtualBoxState(session))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
     if (session.activeGuestIso) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
   }
@@ -1452,7 +1448,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
     vbox(session, ['modifyvm', session.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(session, image)]);
     if (session.guestIsoAttached) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', session.guestIso]);
     vbox(session, ['startvm', session.vmName, '--type', 'headless']);
-    session.machine = {kind: 'virtualbox', vmDir: tempFile(session, 'vbox-vm')};
+    session.machine = {kind: 'vbox', vmDir: tempFile(session, 'vbox-vm')};
   } else spawnVirtualBox(session, image);
   session.activeGuestIso = session.guestIsoAttached ? session.guestIso : null;
   for (const file of session.guestIsoFiles) if (file !== session.guestIso && file !== session.activeGuestIso) { fs.rmSync(file, {force: true}); session.guestIsoFiles.delete(file); }
@@ -1533,11 +1529,11 @@ function validateRestartPrerequisites(session) {
   requireSessionEngine(session.engine);
   if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine);
   else if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
-    throw new Error('VirtualBox cannot start while a QEMU host uses KVM. Stop that host, restart it with QEMU TCG, then start VirtualBox.');
+    throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
   const image = session.selectedImage;
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
-  if (session.engine === 'virtualbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  if (session.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
   for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
 }
 
@@ -1594,7 +1590,7 @@ async function reset(session, settings, startup = {}) {
 
 function discardSessionDisk(session) {
   const image = session.selectedImage;
-  if (session.engine === 'virtualbox') {
+  if (session.engine === 'vbox') {
     vbox(session, ['unregistervm', session.vmName]);
     for (const file of image.runFiles || []) {
       try { vbox(session, ['closemedium', 'disk', file, '--delete']); }
@@ -1614,7 +1610,7 @@ async function stop(session, options = {}) {
   session.stopping = true;
   const current = session.machine;
   try {
-    if (current.kind === 'virtualbox') {
+    if (current.kind === 'vbox') {
       try {
         vbox(session, ['controlvm', session.vmName, 'acpipowerbutton']);
         await waitForVirtualBoxPowerOff(session, 10000);
@@ -1674,7 +1670,7 @@ async function destroySession(session) {
   const image = session.selectedImage || {};
   session.machine = null;
   session.activeConfig = null;
-  if (session.engine === 'virtualbox' && session.everStarted && session.selectedImage) {
+  if (session.engine === 'vbox' && session.everStarted && session.selectedImage) {
     if (current) { try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {} }
     try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
     for (const file of image.runFiles || []) {
@@ -1725,7 +1721,7 @@ app.post('/api/start', async (req, res) => {
     else {
       start(configured.id, configured.engine, configured.selectedImage.id, {
         interfaces: configured.networkInterfaces.map(nic => nic.switchId), settings: configured.launchSettings,
-        autoBuildGuestCdrom: configured.guestIsoAttached
+        startupDiskEnabled: configured.guestIsoAttached
       });
       completePendingDiskReset(configured);
     }
@@ -1743,9 +1739,9 @@ app.post('/api/start', async (req, res) => {
 
 function validateTopologyRequest(body) {
   const {text, engine = sessionEngine} = body || {};
-  if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
+  if (!['qemu', 'vbox'].includes(engine)) throw new Error('Unknown engine.');
   requireSessionEngine(engine);
-  const topology = parseTopology(text, Object.keys(readConfig().systems));
+  const topology = parseTopology(text, Object.keys(readConfig().systems).filter(id => id !== 'default'));
   return {topology, engine};
 }
 
@@ -1779,6 +1775,7 @@ app.post('/api/topology', async (req, res) => {
       const session = getSession(id, true, 'vm'); created.push(id);
       setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
       session.networkInterfaces = interfaces; session.launchSettings = launchSettingsFor(host.system);
+      session.guestIsoAttached = session.selectedImage.startupDiskEnabled;
       writeStartupScript(startupDirectory(session), defaultStartupScript(interfaces));
       session.guestMedia = readStartupFiles(startupDirectory(session));
       session.lastMessage = 'Host ready to start';
@@ -1826,19 +1823,23 @@ app.get('/api/topology', (_req, res) => {
       })
     }));
     const text = formatTopology({switches, hosts});
-    parseTopology(text, Object.keys(readConfig().systems));
+    parseTopology(text, Object.keys(readConfig().systems).filter(id => id !== 'default'));
     res.type('text/plain').send(text);
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.post('/api/hosts', (req, res) => {
   try {
-    const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, createGuestCdrom = false, attachGuestCdrom = false, autoBuildGuestCdrom} = req.body || {};
+    if (!req.body || typeof req.body !== 'object' || Array.isArray(req.body) ||
+        Object.keys(req.body).some(key => !['id', 'name', 'imageId', 'engine', 'interfaces', 'settings', 'guestMedia', 'startupDiskEnabled'].includes(key))) {
+      throw new Error('Unknown host creation option.');
+    }
+    const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, startupDiskEnabled} = req.body || {};
     entityKind(id, 'vm');
     if (sessions.has(id)) throw new Error('Host ID already exists.');
-    const image = imageById(imageId || Object.keys(readConfig().systems)[0]);
+    const image = imageById(imageId || Object.keys(readConfig().systems).find(id => id !== 'default'));
     if (!image) throw new Error('Unknown system in config.json.');
-    if (!['qemu', 'qemu-tcg', 'virtualbox'].includes(engine)) throw new Error('Unknown engine.');
+    if (!['qemu', 'vbox'].includes(engine)) throw new Error('Unknown engine.');
     requireSessionEngine(engine);
     if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name))) throw new Error('Invalid host name (1 to 64 characters).');
     const hostname = name === undefined ? allocateName('h') : name.trim();
@@ -1846,9 +1847,9 @@ app.post('/api/hosts', (req, res) => {
     const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
     const launchSettings = launchSettingsFor(image.id, settings || {});
     const validatedMedia = guestMedia === undefined ? {script: defaultStartupScript(networkInterfaces), resources: []} : validateBootFiles(guestMedia);
-    if (typeof createGuestCdrom !== 'boolean' || typeof attachGuestCdrom !== 'boolean' || (attachGuestCdrom && !createGuestCdrom) ||
-      (autoBuildGuestCdrom !== undefined && typeof autoBuildGuestCdrom !== 'boolean')) throw new Error('Invalid guest CD-ROM options.');
-    if (createGuestCdrom || (autoBuildGuestCdrom ?? attachGuestCdrom)) {
+    if (startupDiskEnabled !== undefined && typeof startupDiskEnabled !== 'boolean') throw new Error('Invalid startup disk option.');
+    const buildStartupDisk = startupDiskEnabled ?? image.startupDiskEnabled;
+    if (buildStartupDisk) {
       validateStartupTemplate(validatedMedia.script, networkInterfaces, true);
     }
     const session = getSession(id, true, 'vm');
@@ -1860,8 +1861,7 @@ app.post('/api/hosts', (req, res) => {
       writeStartupFiles(startupDirectory(session), validatedMedia);
       session.guestMedia = readStartupFiles(startupDirectory(session));
       setSessionHostname(session, hostname);
-      if (createGuestCdrom) buildGuestIso(session);
-      session.guestIsoAttached = autoBuildGuestCdrom === undefined ? attachGuestCdrom : autoBuildGuestCdrom;
+      session.guestIsoAttached = buildStartupDisk;
       persistHostConfiguration(session);
       saveSessionMetadata();
     } catch (error) {
@@ -1893,7 +1893,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     if (session.action) throw new Error('Wait for the current host action to finish.');
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid host configuration.');
-    const required = ['name', 'systemId', 'engine', 'settings', 'interfaces', 'guestMedia', 'autoBuildGuestCdrom'];
+    const required = ['name', 'systemId', 'engine', 'settings', 'interfaces', 'guestMedia', 'startupDiskEnabled'];
     const allowed = [...required, 'resetWorkingDiskAtRestart'];
     if (Object.keys(body).some(key => !allowed.includes(key)) || required.some(key => !Object.hasOwn(body, key))) throw new Error('Incomplete host configuration.');
     if (body.systemId !== session.selectedImage.id || body.engine !== session.engine) throw new Error('System and engine are read-only for an existing host.');
@@ -1903,7 +1903,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     const settings = validateLaunchSettings(body.settings);
     const media = validateBootFiles(body.guestMedia);
     const script = normalizeScript(media.script);
-    if (typeof body.autoBuildGuestCdrom !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
+    if (typeof body.startupDiskEnabled !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
     const resetWorkingDiskAtRestart = body.resetWorkingDiskAtRestart === undefined
       ? session.resetWorkingDiskAtRestart : body.resetWorkingDiskAtRestart;
     if (typeof resetWorkingDiskAtRestart !== 'boolean' ||
@@ -1914,7 +1914,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     const oldSwitches = session.networkInterfaces.map(nic => nic.switchId);
     const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
       ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
-    if (body.autoBuildGuestCdrom) validateStartupTemplate(script, interfaces, true);
+    if (body.startupDiskEnabled) validateStartupTemplate(script, interfaces, true);
     const previousName = session.hostname;
     const previousMedia = readStartupFiles(startupDirectory(session));
     validateBootFiles({script, resources: previousMedia.resources});
@@ -1924,11 +1924,8 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     if (name !== previousName) setSessionHostname(session, name);
     try {
       if (scriptChanged) writeStartupScript(startupDirectory(session), script);
-      writeJsonAtomic(tempFile(session, 'host.json'), {
-        schemaVersion: 1, id: session.id, name, systemId: body.systemId, engine: body.engine,
-        settings, hardware: hardwareProfile(body.systemId, body.engine, settings),
-        networkInterfaces: interfaces, autoBuildGuestCdrom: body.autoBuildGuestCdrom
-      });
+      writeJsonAtomic(tempFile(session, 'host.json'),
+        hostConfiguration(session, settings, interfaces, body.startupDiskEnabled, name));
     } catch (error) {
       if (scriptChanged) {
         if (hadScript) writeStartupScript(startupDirectory(session), previousMedia.script, {keepEmpty: true, preserveExact: true});
@@ -1940,7 +1937,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
     session.launchSettings = settings;
     session.networkInterfaces = interfaces;
     session.guestMedia = readStartupFiles(startupDirectory(session));
-    session.guestIsoAttached = body.autoBuildGuestCdrom;
+    session.guestIsoAttached = body.startupDiskEnabled;
     session.resetWorkingDiskAtRestart = resetWorkingDiskAtRestart;
     if (scriptChanged || name !== previousName) session.guestIsoOutdated = !!session.guestIso;
     if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});

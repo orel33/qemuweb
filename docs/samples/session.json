@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 4,
+  "engine": "qemu",
+  "hosts": [],
+  "switches": [],
+  "baseImages": {}
+}

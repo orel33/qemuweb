@@ -1,98 +1,55 @@
 {
-  "schemaVersion": 1,
-  "session": {"defaults": {"engine": "qemu"}},
-  "settings": {
-    "defaults": {
+  "schemaVersion": 4,
+  "systems": {
+    "default": {
+      "type": "linux",
+      "arch": "x86_64",
+      "mode": "text",
+      "label": "Default Linux",
       "memory": 512,
       "cpus": 1,
-      "clock": "utc"
-    },
-    "fields": {
-      "memory": {"label": "Memory", "type": "number", "unit": "MB", "min": 64, "max": 32768, "step": 64},
-      "cpus": {"label": "Processors", "type": "number", "min": 1, "max": 64, "step": 1},
-      "clock": {"label": "Hardware clock", "type": "select", "options": ["utc", "localtime"]}
-    }
-  },
-  "qemu": {
-    "defaults": {
-      "machine": "q35",
-      "cpuKvm": "host",
-      "cpuTcg": "qemu64",
-      "display": "none",
-      "diskInterface": "virtio",
-      "networkModel": "virtio-net-pci",
-      "bootDisk": "c",
-      "nic": "none"
-    }
-  },
-  "systems": {
-    "alpine": {
-      "type": "linux",
-      "mode": "text",
-      "label": "Alpine Linux 3.24",
-      "images": {
-        "raw": "images/alpine.raw",
-        "vdi": "images/alpine.vdi"
-      },
-      "settings": {},
-      "qemu": {},
-      "virtualbox": {
-        "networkModel": "82540EM",
-        "osType": "Linux_64"
-      }
-    },
-    "debian13-cloud": {
-      "type": "linux",
-      "mode": "text",
-      "label": "Debian 13 Cloud",
-      "images": {
-        "raw": "images/debian13-cloud.raw",
-        "vdi": "images/debian13-cloud.vdi"
-      },
-      "settings": {"memory": 1024},
-      "qemu": {
-        "diskInterface": "virtio",
-        "networkModel": "virtio-net-pci"
-      },
-      "virtualbox": {
-        "networkModel": "82540EM",
-        "osType": "Linux_64"
-      }
+      "clock": "utc",
+      "startupDiskEnabled": false,
+      "firmware": "bios",
+      "acceleration:qemu": "kvm",
+      "acceleration:vbox": "default",
+      "boot": "disk",
+      "extraOptions:qemu": ["-machine", "q35", "-cpu", "host", "-nic", "none"],
+      "cdromInterface": "ide",
+      "diskInterface:qemu": "virtio",
+      "diskInterface:vbox": "sata",
+      "networkModel": "virtio",
+      "image": null
     },
     "debian13-legacy": {
-      "type": "linux",
-      "mode": "text",
       "label": "Debian 13 Legacy",
-      "images": {
-        "raw": "images/debian13-legacy.raw",
-        "vdi": "images/debian13-legacy.vdi"
-      },
-      "settings": {"memory": 1024},
-      "qemu": {
-        "diskInterface": "ide",
-        "networkModel": "e1000"
-      },
-      "virtualbox": {
-        "networkModel": "82540EM",
-        "osType": "Linux_64"
-      }
+      "basedOn": "default",
+      "memory": 1024,
+      "image:qemu": "images/debian13-legacy.raw",
+      "image:vbox": "images/debian13-legacy.vdi",
+      "diskInterface:qemu": "ide",
+      "networkModel": "e1000"
+    },
+    "alpine": {
+      "basedOn": "default",
+      "label": "Alpine Linux 3.24",
+      "memory": 512,
+      "image:qemu": "images/alpine.raw",
+      "image:vbox": "images/alpine.vdi"
+    },
+    "debian13-cloud": {
+      "basedOn": "default",
+      "label": "Debian 13 Cloud",
+      "memory": 1024,
+      "image:qemu": "images/debian13-cloud.raw",
+      "image:vbox": "images/debian13-cloud.vdi"
     },
     "openwrt": {
-      "type": "linux",
-      "mode": "text",
+      "basedOn": "default",
       "label": "OpenWrt 25.12 x86-64",
-      "images": {
-        "raw": "images/openwrt.raw",
-        "vdi": "images/openwrt.vdi"
-      },
-      "settings": {"memory": 256},
-      "qemu": {
-        "nic": "none"
-      },
-      "virtualbox": {
-        "networkModel": "82540EM",
-        "osType": "Linux_64"
-      }
+      "memory": 256,
+      "image:qemu": "images/openwrt.raw",
+      "image:vbox": "images/openwrt.vdi"
     }
   }
 }

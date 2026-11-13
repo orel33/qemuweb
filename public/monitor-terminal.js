@@ -4,7 +4,7 @@
   else root.MonitorTerminal = api;
 })(typeof globalThis === 'object' ? globalThis : this, function () {
   function isSupported(machine) {
-    return !!(machine && machine.kind === 'vm' && typeof machine.engine === 'string' && machine.engine.startsWith('qemu'));
+    return !!(machine && machine.kind === 'vm' && machine.engine === 'qemu');
   }
 
   function terminalText(value) {

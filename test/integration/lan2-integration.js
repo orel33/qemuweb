@@ -11,14 +11,8 @@ const io = require('socket.io-client');
 
 const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
-const kvmAvailable = (() => {
-  try {
-    fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
-    return true;
-  } catch (_) { return false; }
-})();
-const engine = process.env.LAN2_ENGINE || (kvmAvailable ? 'qemu' : 'qemu-tcg');
-const timeoutMs = Number(process.env.LAN2_TIMEOUT_MS || (engine === 'qemu-tcg' ? 300000 : 120000));
+const engine = process.env.LAN2_ENGINE || 'qemu';
+const timeoutMs = Number(process.env.LAN2_TIMEOUT_MS || 120000);
 const addresses = ['192.0.2.101', '192.0.2.102'];
 const verifyGuestMedia = process.env.LAN2_GTS16 === '1';
 const nonce = `${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
@@ -303,6 +297,8 @@ async function startHost(id) {
 }
 
 async function run() {
+  assert.equal(engine, 'qemu', 'LAN2 requires QEMU/KVM.');
+  fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
   assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh first.`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;

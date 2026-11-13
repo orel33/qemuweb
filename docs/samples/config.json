@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 4,
+  "systems": {
+    "default": {
+      "type": "linux",
+      "arch": "x86_64",
+      "mode": "text",
+      "label": "Default Linux",
+      "memory": 512,
+      "cpus": 1,
+      "clock": "utc",
+      "startupDiskEnabled": false,
+      "firmware": "bios",
+      "acceleration:qemu": "kvm",
+      "acceleration:vbox": "default",
+      "boot": "disk",
+      "extraOptions:qemu": ["-machine", "q35", "-cpu", "host", "-nic", "none"],
+      "cdromInterface": "ide",
+      "diskInterface:qemu": "virtio",
+      "diskInterface:vbox": "sata",
+      "networkModel": "virtio",
+      "image": null
+    },
+    "debian13-legacy": {
+      "label": "Debian 13 Legacy",
+      "basedOn": "default",
+      "memory": 1024,
+      "image:qemu": "images/debian13-legacy.raw",
+      "image:vbox": "images/debian13-legacy.vdi",
+      "diskInterface:qemu": "ide",
+      "networkModel": "e1000"
+    },
+    "alpine": {
+      "basedOn": "default",
+      "label": "Alpine Linux 3.24",
+      "memory": 512,
+      "image:qemu": "images/alpine.raw",
+      "image:vbox": "images/alpine.vdi"
+    },
+    "debian13-cloud": {
+      "basedOn": "default",
+      "label": "Debian 13 Cloud",
+      "memory": 1024,
+      "image:qemu": "images/debian13-cloud.raw",
+      "image:vbox": "images/debian13-cloud.vdi"
+    },
+    "openwrt": {
+      "basedOn": "default",
+      "label": "OpenWrt 25.12 x86-64",
+      "memory": 256,
+      "image:qemu": "images/openwrt.raw",
+      "image:vbox": "images/openwrt.vdi"
+    }
+  }
+}

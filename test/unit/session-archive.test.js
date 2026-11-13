@@ -11,7 +11,7 @@ function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-archive-test-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
   const session = path.join(dir, 'session.json');
-  fs.writeFileSync(session, '{"schemaVersion":2,"engine":"qemu","hosts":[],"switches":[],"baseImages":{}}\n');
+  fs.writeFileSync(session, '{"schemaVersion":4,"engine":"qemu","hosts":[],"switches":[],"baseImages":{}}\n');
   return {dir, session};
 }
 const host = 'h-0123456789abcdef';

@@ -263,7 +263,7 @@
       <div class="create-fields">
         <label class="create-field">Name<input id="create-name" required maxlength="64" autocomplete="off" spellcheck="false"></label>
         <label class="create-field" id="create-system-row">System<select id="os-image" required></select></label>
-        <label class="create-field" id="create-engine-row">Engine<select id="engine" disabled><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
+        <label class="create-field" id="create-engine-row">Engine<select id="engine" disabled><option value="qemu">QEMU · KVM</option><option value="vbox">VirtualBox</option></select></label>
         <section class="network-controls create-network" id="create-network" aria-label="Ethernet interfaces for new host">
           <div class="network-controls-head"><strong>Ethernet interfaces</strong><button id="create-add-nic" type="button">+ Interface</button></div>
           <div id="create-nic-list"></div>
@@ -305,7 +305,7 @@
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
     <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
     <div class="create-fields">
-      <label class="create-field">Session engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="qemu-tcg">QEMU · TCG</option><option value="virtualbox">VirtualBox</option></select></label>
+      <label class="create-field">Session engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="vbox">VirtualBox</option></select></label>
       <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
       <label class="create-field">Console font<select id="console-font-family"><option value="system">Ubuntu Sans Mono (GNOME Terminal)</option><option value="consolas">Consolas</option><option value="menlo">Menlo</option><option value="liberation">Liberation Mono</option><option value="default">Browser default monospace</option></select></label>
       <label class="create-field">Console font size<select id="console-font-size"><option value="11">11 px</option><option value="12">12 px</option><option value="13">13 px</option><option value="14">14 px</option><option value="15">15 px</option><option value="16">16 px</option><option value="17">17 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="22">22 px</option><option value="24">24 px</option></select></label>
@@ -724,7 +724,6 @@
     const resourceMetrics = new Map();
     let resourceRequestPending = false;
     let images = [];
-    let qemuConfig = null;
     let activeId = null;
     let exitAllBusy = false;
     let activePaneIndex = 0;
@@ -755,7 +754,7 @@
       const machine = settingsMachine();
       if (!machine) return;
       guestStartScript.value = machine.guestMedia?.script || '';
-      guestAttachCdrom.checked = !!machine.autoBuildGuestCdrom;
+      guestAttachCdrom.checked = !!machine.startupDiskEnabled;
       guestAttachCdrom.disabled = !autoCdromSupported;
       startupTemplatePreview = machine.networkInterfaces || [];
       renderStartupTemplateValues(machine);
@@ -782,7 +781,7 @@
         (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n' : '');
     }
     function validateStartScriptDraft(machine) {
-      if (!machine.autoBuildGuestCdrom) return;
+      if (!machine.startupDiskEnabled) return;
       const script = machine.guestMedia?.script || '';
       const interfaces = machine.interfaces || [];
       const unresolved = new Set();
@@ -842,7 +841,7 @@
     guestAttachCdrom.addEventListener('change', () => {
       const machine = settingsMachine();
       if (!machine) return;
-      machine.autoBuildGuestCdrom = guestAttachCdrom.checked;
+      machine.startupDiskEnabled = guestAttachCdrom.checked;
       clearStartupTemplateError();
       refreshLaunchPreview(machine);
     });
@@ -1345,7 +1344,8 @@
       else { workspaceError = String(message); updatePaneStates(); }
     }
     function defaultSettings(machine) {
-      return {...(qemuConfig?.settings?.defaults || {}), ...(qemuConfig?.systems?.[machine.imageId]?.settings || {})};
+      const profile = images.find(item => item.id === machine.imageId);
+      return profile ? {memory: profile.memory, cpus: profile.cpus, clock: profile.clock} : {};
     }
     function getMachineSettings(machine) {
       if (!machine.settingsLoaded) {
@@ -1451,7 +1451,7 @@
       }
     }
     function showIsoPreviewStatus(machine) {
-      const needsRestart = machine.autoBuildGuestCdrom && autoCdromSupported && !isoPreviewSupported;
+      const needsRestart = machine.startupDiskEnabled && autoCdromSupported && !isoPreviewSupported;
       optionsStatus.textContent = needsRestart ? 'Restart the QemuWeb server to show the planned ISO path and creation command.' : '';
       optionsStatus.hidden = !needsRestart;
     }
@@ -1476,7 +1476,7 @@
       networkControls.hidden = false;
       renderNicControls(machine);
       try {
-        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), guestCdrom: String(!!machine.autoBuildGuestCdrom)});
+        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), startupDiskEnabled: String(!!machine.startupDiskEnabled)});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
@@ -1547,7 +1547,7 @@
         });
         addSettingTextRow(settingsFixed, 'System ID', machine.imageId);
         addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, true);
-        addSettingTextRow(settingsFixed, 'Base image', image?.images?.[machine.engine === 'virtualbox' ? 'vdi' : 'raw'] || 'Unavailable');
+        addSettingTextRow(settingsFixed, 'Base image', image?.images?.[machine.engine === 'vbox' ? 'vdi' : 'raw'] || 'Unavailable');
         const fixedLabels = {machine: 'Machine type', osType: 'Guest profile'};
         for (const [key, value] of Object.entries(body.fixed || {})) {
           if (key === 'networkCard') addSettingRow(settingsNetworkProfile, 'Network card', value);
@@ -1569,7 +1569,7 @@
     async function refreshLaunchPreview(machine) {
       const request = ++optionsRequest;
       try {
-        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), guestCdrom: String(!!machine.autoBuildGuestCdrom)});
+        const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), startupDiskEnabled: String(!!machine.startupDiskEnabled)});
         const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
@@ -1709,7 +1709,7 @@
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces,
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
-        guestMedia: {script: defaultStartScript(interfaces), resources: []}, autoBuildGuestCdrom: false,
+        guestMedia: {script: defaultStartScript(interfaces), resources: []}, startupDiskEnabled: !!image?.startupDiskEnabled,
         resetWorkingDiskAtRestart: false
       };
       hostAutostart.checked = true;
@@ -1765,12 +1765,12 @@
       cloneName.focus();
       cloneName.select();
     }
-    async function addHost({id = `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom = false, select = true}) {
+    async function addHost({id = `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled = false, select = true}) {
       const image = images.find(item => item.id === imageId);
-      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, autoBuildGuestCdrom})});
+      const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, autoBuildGuestCdrom: body.autoBuildGuestCdrom, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       if (select) selectMachine(id);
       else renderGraphic();
@@ -1915,18 +1915,16 @@
     }
     Promise.all([
       fetch('/api/systems').then(response => response.json()),
-      fetch('/api/qemu-config').then(response => response.ok ? response.json() : null).catch(() => null),
       fetch('/api/general-settings').then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Session settings unavailable'); return body; }),
       fetch('/api/sessions').then(response => response.json()),
       fetch('/resources/naming-schemes.json').then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
       }).catch(error => ({error: error.message}))
-    ]).then(([items, config, sessionSettings, existing, schemes]) => {
+    ]).then(([items, sessionSettings, existing, schemes]) => {
       generalSettings.engine = sessionSettings.engine;
       loadGraphicPositions(sessionSettings.sessionId);
       images = items;
-      qemuConfig = config;
       namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};
       if (schemes?.error || !schemes?.classic?.prefixes) {
         generalSettingsError.textContent = `Naming schemes unavailable: ${schemes?.error || 'invalid resource file'}. Classic naming is available.`;
@@ -2010,7 +2008,7 @@
       try {
         const includeDisks = archiveChoice.checked;
         if (window.showSaveFilePicker) {
-          const handle = await window.showSaveFilePicker({suggestedName: 'qemuweb-session-v2.zip', types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
+          const handle = await window.showSaveFilePicker({suggestedName: 'qemuweb-session-v4.zip', types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
           writable = await handle.createWritable();
         }
         archiveProgressText.textContent = includeDisks ? 'Stopping session and creating archive…' : 'Creating archive…';
@@ -2022,7 +2020,7 @@
         if (writable) { await response.body.pipeTo(writable); writable = null; }
         else {
           const url = URL.createObjectURL(await response.blob());
-          const link = document.createElement('a'); link.href = url; link.download = 'qemuweb-session-v2.zip'; link.click();
+          const link = document.createElement('a'); link.href = url; link.download = 'qemuweb-session-v4.zip'; link.click();
           setTimeout(() => URL.revokeObjectURL(url), 60000);
         }
         archiveDialog.close();
@@ -2222,7 +2220,7 @@
           const config = await configResponse.json();
           if (!configResponse.ok) throw new Error(config.error || 'Cannot copy host configuration.');
           await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine,
-            interfaces, settings: config.settings, guestMedia: config.guestMedia, autoBuildGuestCdrom: config.autoBuildGuestCdrom});
+            interfaces, settings: config.settings, guestMedia: config.guestMedia, startupDiskEnabled: config.startupDiskEnabled});
           startHost = autostart;
         }
         cloneDialog.close();
@@ -2312,12 +2310,12 @@
           imageId: data.systemId, osHint: source.osHint, hasDifferentialDisk: source.hasDifferentialDisk,
           engine: data.engine, interfaces: [...data.interfaces], networkInterfaces: data.networkInterfaces,
           settings: {...data.settings}, settingsLoaded: true,
-          guestMedia: structuredClone(data.guestMedia), autoBuildGuestCdrom: data.autoBuildGuestCdrom,
+          guestMedia: structuredClone(data.guestMedia), startupDiskEnabled: data.startupDiskEnabled,
           running: data.running, hasLaunched: data.hasLaunched, pendingRestart: data.pendingRestart, busy: source.busy,
           resetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
           initialResetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
           initialRestartConfig: JSON.stringify({settings: data.settings, interfaces: data.interfaces,
-            guestMedia: data.guestMedia, autoBuildGuestCdrom: data.autoBuildGuestCdrom})
+            guestMedia: data.guestMedia, startupDiskEnabled: data.startupDiskEnabled})
         };
         hostCreateActions.hidden = false;
         hostAutostart.closest('label').hidden = true;
@@ -2384,9 +2382,9 @@
       let restartNow = false;
       const payload = draft.isNew ? null : {name, systemId: draft.imageId, engine: draft.engine, settings: getMachineSettings(draft),
         interfaces: [...draft.interfaces], guestMedia: draft.guestMedia,
-        autoBuildGuestCdrom: draft.autoBuildGuestCdrom, resetWorkingDiskAtRestart: resetDisk};
+        startupDiskEnabled: draft.startupDiskEnabled, resetWorkingDiskAtRestart: resetDisk};
       const restartConfigChanged = payload && JSON.stringify({settings: payload.settings, interfaces: payload.interfaces,
-        guestMedia: payload.guestMedia, autoBuildGuestCdrom: payload.autoBuildGuestCdrom}) !== draft.initialRestartConfig;
+        guestMedia: payload.guestMedia, startupDiskEnabled: payload.startupDiskEnabled}) !== draft.initialRestartConfig;
       const resetNewlyScheduled = resetDisk && !draft.initialResetWorkingDiskAtRestart;
       if (draft.running && (restartConfigChanged || resetNewlyScheduled)) {
         const choice = await chooseRestartTiming(resetDisk);
@@ -2401,7 +2399,7 @@
         if (draft.isNew) {
           const machine = await addHost({id: draft.id, name, imageId: draft.imageId, engine: draft.engine,
             interfaces: [...draft.interfaces], settings: getMachineSettings(draft), guestMedia: draft.guestMedia,
-            autoBuildGuestCdrom: draft.autoBuildGuestCdrom, select: false});
+            startupDiskEnabled: draft.startupDiskEnabled, select: false});
           hostSettingsDraft = null;
           qemuOptionsPanel.close();
           dialogClosed = true;
@@ -2421,7 +2419,7 @@
             machine.interfaces = data.interfaces;
             machine.networkInterfaces = data.networkInterfaces;
             machine.guestMedia = data.guestMedia;
-            machine.autoBuildGuestCdrom = data.autoBuildGuestCdrom;
+            machine.startupDiskEnabled = data.startupDiskEnabled;
             machine.resetWorkingDiskAtRestart = data.resetWorkingDiskAtRestart;
             machine.pendingRestart = data.pendingRestart;
           }
@@ -2551,7 +2549,7 @@
     });
     socket.on('connect', syncSessionsFromServer);
     socket.on('general-settings-changed', event => {
-      if (event?.engine && ['qemu', 'qemu-tcg', 'virtualbox'].includes(event.engine)) {
+      if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
         generalSettings.engine = event.engine;
         defaultEngineSelect.value = event.engine;
       }
@@ -2617,7 +2615,7 @@
         machine.interfaces = config.interfaces;
         machine.networkInterfaces = config.networkInterfaces;
         machine.guestMedia = config.guestMedia;
-        machine.autoBuildGuestCdrom = config.autoBuildGuestCdrom;
+        machine.startupDiskEnabled = config.startupDiskEnabled;
         const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'},
           body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
         const body = await response.json();

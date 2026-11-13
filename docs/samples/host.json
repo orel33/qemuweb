@@ -1,0 +1,20 @@
+{
+  "schemaVersion": 3,
+  "id": "h-0123456789abcdef",
+  "name": "alice",
+  "system": "debian13-legacy",
+  "engine": "qemu",
+  "profileHash": "cf88d97a8e670257d4af622a610c18f021d9b7ecebafc309b68757c7933aae90",
+  "config": {
+    "memory": 2048
+  },
+  "network": {
+    "interfaces": [
+      {
+        "switchId": "s-0123456789abcdef",
+        "port": 1,
+        "mac": "02:6a:ba:aa:5b:3c"
+      }
+    ]
+  }
+}

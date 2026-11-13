@@ -14,7 +14,7 @@ const root = path.resolve(__dirname, '../..');
 const supported = ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt'];
 const profiles = (process.env.GUEST_NETWORK_PROFILES || supported.join(',')).split(',').map(s => s.trim()).filter(Boolean);
 const engine = process.env.GUEST_NETWORK_ENGINE || 'qemu';
-const timeout = Number(process.env.GUEST_NETWORK_TIMEOUT_MS || (engine === 'qemu-tcg' ? 300000 : 120000));
+const timeout = Number(process.env.GUEST_NETWORK_TIMEOUT_MS || 120000);
 const addresses = ['192.0.2.101', '192.0.2.102'];
 const newId = prefix => `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
 const switchId = newId('s');
@@ -176,7 +176,7 @@ async function runProfile(profile) {
       await request('/api/hosts', 'POST', {
         id: host.id, name: host.name, imageId: profile, engine, interfaces: [switchId],
         guestMedia: {script: '#!/bin/sh\nhostname @HOSTNAME@\n', resources: []},
-        autoBuildGuestCdrom: true
+        startupDiskEnabled: true
       });
       created.push(host.id);
       host.console = new GuestConsole(host.id, host.label);
@@ -254,8 +254,8 @@ async function runProfile(profile) {
 async function run() {
   assert.ok(profiles.length && profiles.every(profile => supported.includes(profile)),
     `GUEST_NETWORK_PROFILES must contain only: ${supported.join(', ')}.`);
-  assert.ok(['qemu', 'qemu-tcg'].includes(engine), 'Use QEMU/KVM or QEMU/TCG for this VDE diagnostic.');
-  if (engine === 'qemu') fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
+  assert.equal(engine, 'qemu', 'Use QEMU/KVM for this VDE diagnostic.');
+  fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
   for (const profile of profiles) {
     assert.ok(fs.existsSync(path.join(root, 'images', `${profile}.raw`)), `Missing images/${profile}.raw; prepare the image first.`);
   }

@@ -57,7 +57,7 @@ fi
 config_ids=$(node - "$ROOT/config.json" <<'NODE'
 const fs = require('fs');
 const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
-const ids = Object.keys(config.systems || {});
+const ids = Object.keys(config.systems || {}).filter(id => id !== 'default');
 if (!ids.length) throw new Error('No systems declared in config.json.');
 for (const id of ids) {
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error(`Unsafe system ID in config.json: ${id}`);
@@ -71,12 +71,13 @@ if [[ "$list_only" == true ]]; then
 const fs = require('fs');
 const path = require('path');
 const [configFile, root] = process.argv.slice(2);
-const systems = JSON.parse(fs.readFileSync(configFile, 'utf8')).systems;
+const systems = require(path.join(root, 'system-config')).readCatalog(configFile).systems;
 const heading = ['System', 'RAW GB', 'VDI GB', 'Total GB', 'Built (local time)'];
 const rows = [heading];
 for (const [id, system] of Object.entries(systems)) {
+  if (id === 'default') continue;
   const stats = ['raw', 'vdi'].map(format => {
-    try { return fs.statSync(path.resolve(root, system.images[format])); }
+    try { return fs.statSync(path.resolve(root, system[format === 'raw' ? 'qemu' : 'vbox'].image)); }
     catch (error) { if (error.code === 'ENOENT') return null; throw error; }
   });
   const gb = stat => stat ? (stat.blocks * 512 / 1e9).toFixed(2) : '-';
@@ -104,9 +105,9 @@ verify_images() {
 const fs = require('fs');
 const path = require('path');
 const [configFile, id, root] = process.argv.slice(2);
-const system = JSON.parse(fs.readFileSync(configFile, 'utf8')).systems[id];
+const system = require(path.join(root, 'system-config')).readCatalog(configFile).systems[id];
 for (const format of ['raw', 'vdi']) {
-  const file = path.resolve(root, system.images[format]);
+  const file = path.resolve(root, system[format === 'raw' ? 'qemu' : 'vbox'].image);
   const stat = fs.statSync(file);
   if (!stat.isFile() || stat.size === 0) throw new Error(`Missing or empty ${format} image for ${id}: ${file}`);
 }
