@@ -17,14 +17,16 @@ uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
 On Debian or Ubuntu, install the distribution packages:
 
 ```sh
-sudo apt install bash build-essential coreutils findutils grep gzip curl nodejs npm python3 qemu-system-x86 qemu-utils genisoimage vde2
+sudo apt install bash build-essential coreutils findutils grep gzip curl git nodejs npm python3 qemu-system-x86 qemu-utils genisoimage vde2
 ```
 
 Install VirtualBox separately to provide `VBoxManage`. If your distribution's
 QEMU lacks VDE support, see the [QEMU installation notes](misc/install-qemu.md).
-Then, from the repository root:
+Then, clone the repository and start QemuWeb:
 
 ```sh
+git clone https://github.com/orel33/qemuweb.git
+cd qemuweb
 npm ci
 bash scripts/prepare.sh
 ./start.sh
