@@ -66,8 +66,8 @@ d-i pkgsel/upgrade select none
 # QemuNet teaching toolkit: network administration, DNS/DHCP, capture and
 # security, remote/legacy services, Apache, automation, and text-mode tools.
 # Deliberately excluded: PHP, GCC, Emacs, TeX, TShark/Wireshark, IPython,
-# Matplotlib, and graphical utilities. Scapy and Apache are retained.
-d-i pkgsel/include string linux-image-amd64 bash sudo procps nano bash-completion curl wget unzip moreutils rsyslog iproute2 net-tools iputils-ping traceroute netcat-openbsd tcpdump bridge-utils vlan iptables dnsutils dnsmasq dnsmasq-utils isc-dhcp-client isc-dhcp-server nmap dsniff python3-scapy openssl gnutls-bin openvpn openssh-client openssh-server inetutils-telnet inetutils-telnetd tnftp inetutils-ftpd apache2 lynx python3 expect
+# and Matplotlib. xterm is included solely for its /usr/bin/resize command.
+d-i pkgsel/include string linux-image-amd64 bash sudo procps nano xterm bash-completion curl wget unzip moreutils rsyslog iproute2 net-tools iputils-ping traceroute netcat-openbsd tcpdump bridge-utils vlan iptables dnsutils dnsmasq dnsmasq-utils isc-dhcp-client isc-dhcp-server nmap dsniff python3-scapy openssl gnutls-bin openvpn openssh-client openssh-server inetutils-telnet inetutils-telnetd tnftp inetutils-ftpd apache2 lynx python3 expect
 tasksel tasksel/first multiselect standard
 popularity-contest popularity-contest/participate boolean false
 d-i grub-installer/only_debian boolean true
@@ -114,6 +114,7 @@ systemctl enable qemuweb-start.service
 # Refresh boot artifacts after changing GRUB and console/kernel settings.
 update-grub
 update-initramfs -u -k all
+command -v resize >/dev/null
 # The installed image is a template: systemd must choose a new identity in
 # each host's working disk, rather than cloning the installer's machine ID.
 : > /etc/machine-id

@@ -45,11 +45,19 @@ layout for **Load topology**, without startup scripts or IP addresses. You can
 also add hosts and switches in the Web interface, connect them, and save the
 session as a ZIP archive.
 
+To include a file such as `firewall.sh` in a host's startup disk, open **Host
+Settings → Startup → Add extra files** and select it. Enable **Auto-build and
+attach startup disk** in the same tab, then call the file from `start.sh` if
+it should run at boot, for example `sh /mnt/cdrom/firewall.sh`. Save the settings
+and restart the host to use the rebuilt disk. Each extra file can be at most
+1 MiB; all startup files together can be at most 4 MiB.
+
 ## Prepare the available images
 
 `bash scripts/prepare.sh` prepares the four systems listed in
 [`config.json`](config.json): Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy,
-and OpenWrt 25.12. To prepare one system or list existing images:
+and OpenWrt 25.12. Newly built Debian images include the `resize` command. To prepare
+one system or list existing images:
 
 ```sh
 bash scripts/prepare.sh --system alpine

@@ -75,10 +75,11 @@
     #host-settings-form { box-sizing: border-box; display: flex; flex-direction: column; min-height: 100%; }
     #qemu-options-panel .host-create-actions { margin-top: auto; }
     .startup-script-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
-    .startup-template-values { display: grid; gap: 4px; margin: 0 0 16px; font-size: 12px; }
-    .startup-template-values div { display: flex; gap: 8px; min-width: 0; }
+    .startup-template-values { display: flex; flex-wrap: wrap; align-items: center; gap: 0 8px; margin: 0 0 16px; font-size: 12px; line-height: 1.8; }
+    .startup-template-values div { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+    .startup-template-values div:not(:last-child)::after { content: ";"; color: #bdc8d6; }
     .startup-template-values code { color: #a9c4ff; }
-    .startup-template-values span { overflow: hidden; color: #bdc8d6; text-overflow: ellipsis; white-space: nowrap; }
+    .startup-template-values span { color: #bdc8d6; }
     #host-panel-startup { display: flex; flex: 1; flex-direction: column; }
     .startup-template-error { display: flex; align-items: center; gap: 10px; margin-top: auto; padding: 12px 14px; border: 1px solid #806333; border-radius: 6px; background: #2b241b; color: #ffd17c; font-size: 13px; overflow-wrap: anywhere; }
     .startup-template-error svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -112,9 +113,13 @@
     .setting-row input:disabled, .setting-row select:disabled { opacity: 1; color: #aeb9c6; background-color: #303942; border-color: #46515d; box-shadow: none; cursor: default; -webkit-text-fill-color: #aeb9c6; }
     .setting-row input:not(:disabled):hover, .setting-row select:not(:disabled):hover { border-color: #7395bc; }
     .setting-row input:focus-visible, .setting-row select:focus-visible { outline: 2px solid #74a7e6; outline-offset: 1px; }
-    .setting-with-action { display: grid; gap: 8px; min-width: 0; }
-    .setting-with-action input[type="text"] { max-width: 460px; }
-    .setting-with-action input[type="checkbox"] { appearance: auto; flex: none; width: 16px; height: 16px; min-width: 16px; margin: 0; padding: 0; border: 0; background: none; box-shadow: none; accent-color: #70a8ff; }
+    .extra-files-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
+    .extra-files-heading h3 { margin: 0; color: #9fc5ef; font-size: 14px; }
+    .extra-files-list { display: grid; gap: 8px; margin: 12px 0 0; padding: 0; list-style: none; }
+    .extra-files-list li { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; padding: 7px 10px; border: 1px solid #35404c; border-radius: 6px; background: #141c26; }
+    .extra-files-list .extra-file-name { min-width: 0; overflow-wrap: anywhere; }
+    .extra-files-list .extra-file-size { color: #bdc8d6; font-size: 12px; white-space: nowrap; }
+    .extra-files-error { color: #ffb2b4 !important; }
     .settings-commands { margin-top: 16px; }
     .settings-commands summary { cursor: pointer; color: #9fc5ef; }
     .settings-commands pre { white-space: pre-wrap; overflow-wrap: anywhere; color: #d7e1ee; font: 12px/1.4 ui-monospace, monospace; }
@@ -343,6 +348,8 @@
     <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-hardware"></div><div id="settings-editable"></div></section>
     <section class="settings-tab-panel" id="host-panel-storage" role="tabpanel" aria-labelledby="host-tab-storage" data-settings-panel="storage" hidden>
       <div id="settings-storage"></div>
+      <div id="settings-startup-profile"></div>
+      <div id="settings-startup-iso"></div>
     </section>
     <section class="settings-tab-panel" id="host-panel-network" role="tabpanel" aria-labelledby="host-tab-network" data-settings-panel="network" hidden><div id="settings-network">
       <div id="settings-network-profile"></div>
@@ -352,13 +359,17 @@
       </section>
     </div></section>
     <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
-      <div id="settings-startup-profile"></div>
       <div id="startup-template-values" class="startup-template-values" aria-label="Startup template values"></div>
       <div class="startup-script-header"><label for="guest-start-script">start.sh</label><button id="load-start-script" type="button">Load file</button></div>
       <textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
       <input id="guest-script-file" type="file" accept=".sh,text/x-shellscript,text/plain" hidden>
       <label class="create-autostart"><input id="guest-attach-cdrom" type="checkbox" disabled> Auto-build and attach startup disk</label>
-      <div id="settings-startup-iso"></div>
+      <section class="settings-section" aria-labelledby="extra-files-title">
+        <div class="extra-files-heading"><h3 id="extra-files-title">Startup disk files</h3><button id="add-extra-files" type="button">Add extra files</button></div>
+        <input id="extra-files-input" type="file" multiple hidden>
+        <ul id="extra-files-list" class="extra-files-list"></ul>
+        <p id="extra-files-error" class="extra-files-error" role="alert" hidden></p>
+      </section>
       <div id="startup-template-error" class="startup-template-error" role="alert" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span id="startup-template-error-text"></span></div>
     </section>
     <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
@@ -758,6 +769,10 @@
     const settingsFixed = document.getElementById('settings-fixed');
     const settingsHardware = document.getElementById('settings-hardware');
     const settingsStorage = document.getElementById('settings-storage');
+    const addExtraFiles = document.getElementById('add-extra-files');
+    const extraFilesInput = document.getElementById('extra-files-input');
+    const extraFilesList = document.getElementById('extra-files-list');
+    const extraFilesError = document.getElementById('extra-files-error');
     const settingsStartupProfile = document.getElementById('settings-startup-profile');
     const settingsStartupIso = document.getElementById('settings-startup-iso');
     const settingsExtraOptions = document.getElementById('settings-extra-options');
@@ -791,6 +806,7 @@
     let createDraft = null;
     let cloneSourceId = null;
     let hostSettingsDraft = null;
+    let extraFilesLoading = false;
     let startupTemplatePreview = [];
     function saveViewSettings() {
       try {
@@ -805,7 +821,89 @@
       guestAttachCdrom.disabled = !autoCdromSupported;
       startupTemplatePreview = machine.networkInterfaces || [];
       renderStartupTemplateValues(machine);
+      extraFilesError.textContent = '';
+      extraFilesError.hidden = true;
+      renderExtraFiles(machine);
     }
+    function renderExtraFiles(machine) {
+      extraFilesList.replaceChildren();
+      addExtraFiles.disabled = !!machine.busy || extraFilesLoading;
+      const resources = machine.guestMedia?.resources || [];
+      if (!resources.length) {
+        const empty = document.createElement('li');
+        empty.textContent = 'No extra files.';
+        extraFilesList.append(empty);
+        return;
+      }
+      for (const resource of resources) {
+        const row = document.createElement('li');
+        const name = document.createElement('span');
+        name.className = 'extra-file-name';
+        name.textContent = resource.path;
+        const size = document.createElement('span');
+        size.className = 'extra-file-size';
+        size.textContent = `${atob(resource.contentBase64).length.toLocaleString()} bytes`;
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.textContent = 'Remove';
+        remove.setAttribute('aria-label', `Remove ${resource.path}`);
+        remove.disabled = !!machine.busy || extraFilesLoading;
+        remove.addEventListener('click', () => {
+          if (settingsMachine() !== machine) return;
+          machine.guestMedia.resources = machine.guestMedia.resources.filter(entry => entry !== resource);
+          extraFilesError.hidden = true;
+          renderExtraFiles(machine);
+        });
+        row.append(name, size, remove);
+        extraFilesList.append(row);
+      }
+    }
+    addExtraFiles.addEventListener('click', () => extraFilesInput.click());
+    extraFilesInput.addEventListener('change', async () => {
+      const machine = settingsMachine();
+      const files = [...extraFilesInput.files];
+      extraFilesInput.value = '';
+      if (!machine || !files.length) return;
+      extraFilesLoading = true;
+      renderExtraFiles(machine);
+      try {
+        const resources = [...(machine.guestMedia?.resources || [])];
+        for (const file of files) {
+          if (!/^[A-Za-z0-9._-]{1,128}$/.test(file.name) || file.name === '.' || file.name === '..' || file.name === 'start.sh') {
+            throw new Error(`Invalid extra file name: ${file.name}. Use an ASCII name other than start.sh.`);
+          }
+          if (file.size > 1048576) throw new Error(`${file.name} exceeds 1 MiB.`);
+          if (resources.some(resource => resource.path.startsWith(`${file.name}/`))) {
+            throw new Error(`${file.name} conflicts with an existing extra file path.`);
+          }
+          const bytes = new Uint8Array(await file.arrayBuffer());
+          let binary = '';
+          for (let offset = 0; offset < bytes.length; offset += 32768) {
+            binary += String.fromCharCode(...bytes.subarray(offset, offset + 32768));
+          }
+          const entry = {path: file.name, contentBase64: btoa(binary)};
+          const index = resources.findIndex(resource => resource.path === file.name);
+          if (index < 0) resources.push(entry);
+          else resources[index] = entry;
+        }
+        if (resources.length > 32) throw new Error('At most 32 extra files are allowed.');
+        const total = new TextEncoder().encode(machine.guestMedia?.script || '').length +
+          resources.reduce((sum, resource) => sum + atob(resource.contentBase64).length, 0);
+        if (total > 4194304) throw new Error('Startup files exceed 4 MiB in total.');
+        if (settingsMachine() !== machine || !qemuOptionsPanel.open) return;
+        machine.guestMedia.resources = resources;
+        extraFilesError.hidden = true;
+        renderExtraFiles(machine);
+      } catch (error) {
+        if (settingsMachine() === machine) {
+          extraFilesError.textContent = error.message;
+          extraFilesError.hidden = false;
+        }
+      } finally {
+        extraFilesLoading = false;
+        if (settingsMachine() === machine) renderExtraFiles(machine);
+      }
+    });
     function renderStartupTemplateValues(machine, interfaces = startupTemplatePreview) {
       startupTemplateValues.replaceChildren();
       function addValue(token, value) {
@@ -1516,22 +1614,7 @@
       settingsStartupIso.replaceChildren();
       if (diskInterface) addSettingRow(settingsStorage, 'Disk interface', diskInterface);
       for (const disk of storage || []) {
-        const input = addSettingRow(disk.label === 'Startup disk (cd-rom)' ? settingsStartupIso : settingsStorage, disk.label, disk.path);
-        const machine = settingsMachine();
-        if (disk.label !== 'Working disk (QCOW2 overlay)' || !machine || machine.isNew || !machine.hasLaunched || !machine.engine.startsWith('qemu')) continue;
-        const value = document.createElement('div');
-        value.className = 'setting-with-action';
-        input.replaceWith(value);
-        const resetLabel = document.createElement('label');
-        resetLabel.className = 'create-autostart reset-working-disk';
-        const reset = document.createElement('input');
-        reset.type = 'checkbox';
-        reset.checked = !!machine.resetWorkingDiskAtRestart;
-        resetLabel.append(reset, 'Reset working disk at restart');
-        reset.addEventListener('change', () => {
-          machine.resetWorkingDiskAtRestart = reset.checked;
-        });
-        value.append(input, resetLabel);
+        addSettingRow(disk.label === 'Startup disk (cd-rom)' ? settingsStartupIso : settingsStorage, disk.label, disk.path);
       }
     }
     function showIsoPreviewStatus(machine) {
@@ -1798,8 +1881,7 @@
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces,
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
-        guestMedia: {script: defaultStartScript(interfaces), resources: []}, startupDiskEnabled: !!image?.startupDiskEnabled,
-        resetWorkingDiskAtRestart: false
+        guestMedia: {script: defaultStartScript(interfaces), resources: []}, startupDiskEnabled: !!image?.startupDiskEnabled
       };
       hostAutostart.checked = true;
       hostCreateActions.hidden = false;
@@ -1901,11 +1983,9 @@
         confirmDialog.showModal();
       });
     }
-    function chooseRestartTiming(resetDisk) {
+    function chooseRestartTiming() {
       if (restartChoiceDialog.open) return Promise.resolve('cancel');
-      restartChoiceMessage.textContent = resetDisk
-        ? 'These changes need a restart. The working disk will be deleted when the host restarts. Restart now after saving, or later?'
-        : 'These changes need a restart to take effect. Restart now after saving, or later?';
+      restartChoiceMessage.textContent = 'These changes need a restart to take effect. Restart now after saving, or later?';
       restartChoiceDialog.returnValue = '';
       return new Promise(resolve => {
         restartChoiceDialog.addEventListener('close', () => {
@@ -2405,8 +2485,6 @@
           settings: {...data.settings}, settingsLoaded: true,
           guestMedia: structuredClone(data.guestMedia), startupDiskEnabled: data.startupDiskEnabled,
           running: data.running, hasLaunched: data.hasLaunched, pendingRestart: data.pendingRestart, busy: source.busy,
-          resetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
-          initialResetWorkingDiskAtRestart: !!data.resetWorkingDiskAtRestart,
           initialRestartConfig: JSON.stringify({settings: data.settings, interfaces: data.interfaces,
             guestMedia: data.guestMedia, startupDiskEnabled: data.startupDiskEnabled})
         };
@@ -2471,16 +2549,14 @@
         return;
       }
       const autostart = draft.isNew && hostAutostart.checked;
-      const resetDisk = !draft.isNew && draft.resetWorkingDiskAtRestart;
       let restartNow = false;
       const payload = draft.isNew ? null : {name, systemId: draft.imageId, engine: draft.engine, settings: getMachineSettings(draft),
         interfaces: [...draft.interfaces], guestMedia: draft.guestMedia,
-        startupDiskEnabled: draft.startupDiskEnabled, resetWorkingDiskAtRestart: resetDisk};
+        startupDiskEnabled: draft.startupDiskEnabled};
       const restartConfigChanged = payload && JSON.stringify({settings: payload.settings, interfaces: payload.interfaces,
         guestMedia: payload.guestMedia, startupDiskEnabled: payload.startupDiskEnabled}) !== draft.initialRestartConfig;
-      const resetNewlyScheduled = resetDisk && !draft.initialResetWorkingDiskAtRestart;
-      if (draft.running && (restartConfigChanged || resetNewlyScheduled)) {
-        const choice = await chooseRestartTiming(resetDisk);
+      if (draft.running && restartConfigChanged) {
+        const choice = await chooseRestartTiming();
         if (choice === 'cancel' || hostSettingsDraft !== draft || !qemuOptionsPanel.open) return;
         restartNow = choice === 'now';
       }
@@ -2513,11 +2589,9 @@
             machine.networkInterfaces = data.networkInterfaces;
             machine.guestMedia = data.guestMedia;
             machine.startupDiskEnabled = data.startupDiskEnabled;
-            machine.resetWorkingDiskAtRestart = data.resetWorkingDiskAtRestart;
             machine.pendingRestart = data.pendingRestart;
           }
           draft.pendingRestart = data.pendingRestart;
-          draft.resetWorkingDiskAtRestart = data.resetWorkingDiskAtRestart;
           hostSettingsDraft = null;
           qemuOptionsPanel.close();
           dialogClosed = true;
@@ -2531,9 +2605,7 @@
             const restartResult = await restartResponse.json();
             if (!restartResponse.ok) throw new Error(`Settings saved, but restart failed: ${restartResult.error || 'unknown error'}`);
             if (machine) machine.pendingRestart = false;
-            if (machine) machine.resetWorkingDiskAtRestart = false;
             draft.pendingRestart = false;
-            draft.resetWorkingDiskAtRestart = false;
             scheduleSessionSync();
           }
         }
