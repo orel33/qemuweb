@@ -212,7 +212,19 @@
     .pane-expand-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
     .pane-expand-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
     .pane-session-title { display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 240px; box-sizing: border-box; height: 30px; padding: 0 9px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 700 13px/28px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .pane-session-title[hidden], .pane-session-menu[hidden] { display: none; }
     .pane-session-title[data-empty="true"] { padding-left: 0; border-color: transparent; background: transparent; color: #9daec0; }
+    .pane-session-menu { position: relative; flex: 0 1 auto; min-width: 0; width: max-content; max-width: 240px; }
+    .pane-session-menu[open] { z-index: 6; }
+    .pane-session-menu summary { display: flex; align-items: center; gap: 7px; width: 100%; cursor: pointer; list-style: none; }
+    .pane-session-menu summary::-webkit-details-marker { display: none; }
+    .pane-session-menu summary:hover, .pane-session-menu[open] summary { border-color: #70a8ff; background: #304256; }
+    .pane-session-menu summary:focus-visible, .pane-session-list button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+    .pane-session-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+    .pane-session-menu summary svg { flex: none; width: 14px; height: 14px; }
+    .pane-session-list { position: absolute; top: calc(100% + 5px); left: 0; display: grid; gap: 2px; min-width: 100%; width: max-content; max-width: min(300px, 80vw); max-height: 280px; overflow-y: auto; padding: 4px; border: 1px solid #506176; border-radius: 6px; background: #1a2633; box-shadow: 0 10px 28px #0009; }
+    .pane-session-list button { width: 100%; padding: 7px 9px; border: 0; border-radius: 4px; background: transparent; color: #c6d5e5; text-align: left; font: 13px system-ui, sans-serif; white-space: nowrap; }
+    .pane-session-list button:hover, .pane-session-list button[aria-current="true"] { background: #304256; color: #fff; }
     .pane-font-button { display: grid; place-items: center; flex: none; width: 30px; height: 30px; padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #b7d7f4; font: 700 12px system-ui, sans-serif; }
     .pane-font-button:not(:disabled):hover { border-color: #9fc5ef; background: #304256; }
     .pane-font-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
@@ -493,12 +505,36 @@
         if (pane.viewMenu.open) for (const other of panes) {
           if (other !== pane) other.viewMenu.open = false;
           other.actionMenu?.removeAttribute('open');
+          other.sessionMenu?.removeAttribute('open');
+        }
+      });
+      pane.sessionMenu = document.createElement('details');
+      pane.sessionMenu.className = 'pane-session-menu';
+      pane.sessionMenu.hidden = true;
+      pane.sessionToggle = document.createElement('summary');
+      pane.sessionToggle.className = 'pane-session-title';
+      pane.sessionLabel = document.createElement('span');
+      pane.sessionLabel.className = 'pane-session-label';
+      pane.sessionToggle.append(pane.sessionLabel);
+      pane.sessionToggle.insertAdjacentHTML('beforeend', '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>');
+      pane.sessionList = document.createElement('div');
+      pane.sessionList.className = 'pane-session-list';
+      pane.sessionList.setAttribute('role', 'group');
+      pane.sessionMenu.append(pane.sessionToggle, pane.sessionList);
+      pane.title.after(pane.sessionMenu);
+      pane.sessionMenu.addEventListener('toggle', () => {
+        if (!pane.sessionMenu.open) return;
+        renderPaneSessionOptions(pane);
+        for (const other of panes) {
+          if (other !== pane) other.sessionMenu.open = false;
+          other.actionMenu?.removeAttribute('open');
+          other.viewMenu?.removeAttribute('open');
         }
       });
       pane.metrics = document.createElement('span');
       pane.metrics.className = 'pane-metrics';
       pane.metrics.hidden = true;
-      pane.title.after(pane.metrics);
+      pane.sessionMenu.after(pane.metrics);
       pane.actionMenu = document.createElement('details');
       pane.actionMenu.className = 'pane-action-menu';
       pane.actionMenu.hidden = true;
@@ -546,6 +582,7 @@
         if (pane.actionMenu.open) for (const other of panes) {
           if (other !== pane) other.actionMenu.open = false;
           other.viewMenu.open = false;
+          other.sessionMenu.open = false;
         }
       });
       pane.settingsButton = document.createElement('button');
@@ -611,14 +648,15 @@
       for (const pane of panes) {
         if (!pane.actionMenu.contains(event.target)) pane.actionMenu.open = false;
         if (!pane.viewMenu.contains(event.target)) pane.viewMenu.open = false;
+        if (!pane.sessionMenu.contains(event.target)) pane.sessionMenu.open = false;
       }
     });
     document.addEventListener('keydown', event => {
       if (event.key !== 'Escape') return;
-      const openMenu = panes.find(pane => pane.actionMenu.open || pane.viewMenu.open);
+      const openMenu = panes.find(pane => pane.actionMenu.open || pane.viewMenu.open || pane.sessionMenu.open);
       if (!openMenu) return;
       event.preventDefault();
-      const menu = openMenu.viewMenu.open ? openMenu.viewMenu : openMenu.actionMenu;
+      const menu = openMenu.sessionMenu.open ? openMenu.sessionMenu : openMenu.viewMenu.open ? openMenu.viewMenu : openMenu.actionMenu;
       menu.open = false;
       menu.querySelector('summary').focus();
     });
@@ -1230,10 +1268,46 @@
         pane.title.textContent = title;
         pane.title.title = title;
         pane.title.dataset.empty = String(!machine);
+        pane.title.hidden = !!machine;
+        pane.sessionMenu.hidden = !machine;
+        if (machine) {
+          pane.sessionLabel.textContent = title;
+          pane.sessionToggle.title = `Select another ${machine.kind === 'switch' ? 'switch' : 'host'}`;
+          pane.sessionToggle.setAttribute('aria-label', `${title} · select another ${machine.kind === 'switch' ? 'switch' : 'host'}`);
+        } else pane.sessionMenu.open = false;
         pane.element.dataset.active = String(pane.index === activePaneIndex);
       }
       updatePaneViewControls();
       updatePaneStates();
+    }
+    function renderPaneSessionOptions(pane) {
+      const machine = pane.machineId && machines.get(pane.machineId);
+      if (!machine) { pane.sessionList.replaceChildren(); return; }
+      pane.sessionList.setAttribute('aria-label', machine.kind === 'switch' ? 'Switches' : 'Hosts');
+      pane.sessionList.replaceChildren(...[...machines.values()].filter(item => item.kind === machine.kind).map(item => {
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = `${item.hostname} · ${item.kind === 'switch' ? 'VDE switch' : item.osHint}`;
+        button.setAttribute('aria-current', String(item.id === machine.id));
+        button.addEventListener('click', () => {
+          pane.sessionMenu.open = false;
+          swapPaneSession(pane, item.id);
+        });
+        return button;
+      }));
+    }
+    function swapPaneSession(pane, selectedId) {
+      const current = machines.get(pane.machineId);
+      const selected = machines.get(selectedId);
+      if (!current || !selected || current.kind !== selected.kind) return;
+      if (current.id === selected.id) { focusPane(pane.index); return; }
+      const entries = [...machines.entries()];
+      const currentIndex = entries.findIndex(([id]) => id === current.id);
+      const selectedIndex = entries.findIndex(([id]) => id === selected.id);
+      [entries[currentIndex], entries[selectedIndex]] = [entries[selectedIndex], entries[currentIndex]];
+      machines.clear();
+      for (const [id, machine] of entries) machines.set(id, machine);
+      showPage(selected.id, true);
     }
     function consoleSessions() {
       return [...machines.values()].filter(machine => showSwitchConsoles || machine.kind !== 'switch');
@@ -1285,13 +1359,14 @@
       focusPane(pane.index);
       requestAnimationFrame(() => { fitTerminals(); pane.terminal.focus(); });
     }
-    function setPaneSessions(ids, activeIndex = 0) {
+    function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
       const before = panes.map(pane => pane.machineId);
       panes.forEach((pane, index) => { pane.machineId = ids[index] || null; });
-      if (expandedPaneIndex !== null && before[expandedPaneIndex] !== panes[expandedPaneIndex].machineId) expandedPaneIndex = null;
+      if (!preserveExpansion && expandedPaneIndex !== null && before[expandedPaneIndex] !== panes[expandedPaneIndex].machineId) expandedPaneIndex = null;
       panes.forEach(pane => {
         if (before[pane.index] === pane.machineId) return;
         pane.actionMenu.open = false;
+        pane.sessionMenu.open = false;
         pane.view = 'console';
         pane.monitorInput = '';
         pane.monitorAvailable = false;
@@ -1323,14 +1398,14 @@
       });
       requestAnimationFrame(fitTerminals);
     }
-    function showPage(preferredId = null) {
+    function showPage(preferredId = null, preserveExpansion = false) {
       const sessions = consoleSessions();
       const pages = Math.ceil(sessions.length / layoutSize);
       pageIndex = Math.max(0, Math.min(pageIndex, Math.max(0, pages - 1)));
       const ids = sessions.slice(pageIndex * layoutSize, (pageIndex + 1) * layoutSize).map(machine => machine.id);
       const preferredIndex = preferredId ? ids.indexOf(preferredId) : -1;
       const activeIndex = preferredIndex >= 0 ? preferredIndex : Math.min(activePaneIndex, Math.max(0, ids.length - 1));
-      setPaneSessions(ids, activeIndex);
+      setPaneSessions(ids, activeIndex, preserveExpansion);
     }
     function focusPane(index) {
       if (expandedPaneIndex !== null && expandedPaneIndex !== index) expandedPaneIndex = null;
