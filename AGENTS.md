@@ -1,5 +1,13 @@
 # Codex work rules
 
+## Documentation archive
+
+`docs/bak/` contains superseded Markdown files kept only for reference. Ignore
+these files when searching for current instructions or project documentation,
+and do not use them as Codex task context unless the user explicitly asks to
+consult the archive. Use `README.md` and `docs/architecture.md` for current
+documentation.
+
 ## Delegated development tasks
 
 When the user asks to assign a development task to an agent, use a **Codex task visible in the task list** with an isolated worktree. Name a new task `qemuweb - task XXXYY`, replacing `XXXYY` with its stable TODO code (for example, `qemuweb - task GTS16`). Reuse the named existing task if the user specifies one. The user must be able to open that task, follow its progress, and send it instructions directly. Use the Codex task/thread tools for this; an internal sub-agent is not a substitute for a visible task.

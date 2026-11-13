@@ -7,7 +7,7 @@ cd "$project_root"
 html_file=$(mktemp "$project_root/docs/.manual-XXXXXX.html")
 trap 'rm -f "$html_file"' EXIT HUP INT TERM
 
-pandoc docs/manual.md --from=markdown+raw_html --to=html5 --standalone \
+pandoc docs/bak/manual.md --from=markdown+raw_html --to=html5 --standalone \
   --embed-resources --css docs/manual.css --output "$html_file"
 
 wkhtmltopdf --quiet --enable-local-file-access --page-size A4 \
