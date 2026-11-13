@@ -340,6 +340,7 @@
       </section>
     </div></section>
     <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
+      <div id="settings-startup-profile"></div>
       <div id="startup-template-values" class="startup-template-values" aria-label="Startup template values"></div>
       <div class="startup-script-header"><label for="guest-start-script">start.sh</label><button id="load-start-script" type="button">Load file</button></div>
       <textarea id="guest-start-script" rows="9" spellcheck="false" style="display:block;width:100%;box-sizing:border-box;font-family:monospace"></textarea>
@@ -350,6 +351,7 @@
     </section>
     <section class="settings-tab-panel" id="host-panel-expert" role="tabpanel" aria-labelledby="host-tab-expert" data-settings-panel="expert" hidden>
       <div class="settings-section"><h3>Console</h3><div id="settings-console"></div></div>
+      <div class="settings-section settings-commands"><h3>Extra options</h3><pre id="settings-extra-options"></pre></div>
       <div class="settings-section settings-commands"><h3>Full launch commands</h3><pre id="options-commands"></pre></div>
     </section>
     <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
@@ -372,6 +374,11 @@
     <div id="session-archive-load-progress" role="status" aria-live="polite" hidden><div class="archive-progress"><span class="archive-progress-spinner" aria-hidden="true"></span><span id="session-archive-load-progress-text">Uploading and restoring session…</span></div><div class="archive-progress-track" aria-hidden="true"></div></div>
     <p id="session-archive-load-error" role="alert" hidden></p>
     <div class="confirm-actions"><button id="cancel-session-archive-load" type="button">Cancel</button><button id="confirm-session-archive-load" type="button">Load session</button></div>
+  </dialog>
+  <dialog class="confirm-dialog" id="session-archive-load-blocked-dialog" aria-labelledby="session-archive-load-blocked-title" aria-describedby="session-archive-load-blocked-message">
+    <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><h2 id="session-archive-load-blocked-title">Warning</h2></div>
+    <p id="session-archive-load-blocked-message">To load a session ZIP, first remove all hosts and switches from the current session.</p>
+    <form method="dialog" class="confirm-actions"><button autofocus>Close</button></form>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
@@ -713,7 +720,9 @@
     const settingsFixed = document.getElementById('settings-fixed');
     const settingsHardware = document.getElementById('settings-hardware');
     const settingsStorage = document.getElementById('settings-storage');
+    const settingsStartupProfile = document.getElementById('settings-startup-profile');
     const settingsStartupIso = document.getElementById('settings-startup-iso');
+    const settingsExtraOptions = document.getElementById('settings-extra-options');
     const startupTemplateValues = document.getElementById('startup-template-values');
     const startupTemplateError = document.getElementById('startup-template-error');
     const startupTemplateErrorText = document.getElementById('startup-template-error-text');
@@ -1427,10 +1436,10 @@
       const hiddenPixels = select.getBoundingClientRect().bottom - visibleBottom;
       if (hiddenPixels > 0) qemuOptionsPanel.scrollTop += hiddenPixels;
     }
-    function renderStorageSettings(storage, diskBus) {
+    function renderStorageSettings(storage, diskInterface) {
       settingsStorage.replaceChildren();
       settingsStartupIso.replaceChildren();
-      if (diskBus) addSettingRow(settingsStorage, 'Disk bus', diskBus);
+      if (diskInterface) addSettingRow(settingsStorage, 'Disk interface', diskInterface);
       for (const disk of storage || []) {
         const input = addSettingRow(disk.label === 'Startup disk (cd-rom)' ? settingsStartupIso : settingsStorage, disk.label, disk.path);
         const machine = settingsMachine();
@@ -1469,9 +1478,11 @@
       settingsFixed.replaceChildren();
       settingsHardware.replaceChildren();
       settingsStorage.replaceChildren();
+      settingsStartupProfile.replaceChildren();
       settingsStartupIso.replaceChildren();
       settingsNetworkProfile.replaceChildren();
       settingsConsole.replaceChildren();
+      settingsExtraOptions.textContent = '';
       optionsCommands.textContent = '';
       networkControls.hidden = false;
       renderNicControls(machine);
@@ -1548,12 +1559,15 @@
         addSettingTextRow(settingsFixed, 'System ID', machine.imageId);
         addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, true);
         addSettingTextRow(settingsFixed, 'Base image', image?.images?.[machine.engine === 'vbox' ? 'vdi' : 'raw'] || 'Unavailable');
-        const fixedLabels = {machine: 'Machine type', osType: 'Guest profile'};
-        for (const [key, value] of Object.entries(body.fixed || {})) {
-          if (key === 'networkCard') addSettingRow(settingsNetworkProfile, 'Network card', value);
-          else if (key !== 'engine' && key !== 'diskBus') addSettingRow(settingsHardware, fixedLabels[key] || key, value);
-        }
-        renderStorageSettings(body.storage, body.fixed?.diskBus);
+        const hardwareLabels = [
+          ['type', 'Type'], ['arch', 'Architecture'], ['mode', 'Mode'],
+          ['firmware', 'Firmware'], ['acceleration', 'Acceleration'], ['boot', 'Boot']
+        ];
+        for (const [key, label] of hardwareLabels) addSettingRow(settingsHardware, label, body.fixed?.[key]);
+        addSettingRow(settingsNetworkProfile, 'Network model', body.fixed?.networkModel);
+        addSettingRow(settingsStartupProfile, 'CD-ROM interface', body.fixed?.cdromInterface);
+        settingsExtraOptions.textContent = body.fixed?.extraOptions?.length ? body.fixed.extraOptions.join(' ') : 'None';
+        renderStorageSettings(body.storage, body.fixed?.diskInterface);
         addSettingRow(settingsConsole, 'VM serial port', body.console?.guest || 'ttyS0 · 115200 baud');
         addSettingRow(settingsConsole, 'Console socket', body.console?.socket || '');
         if (body.monitor) addSettingRow(settingsConsole, 'Monitor socket', body.monitor);
@@ -1577,7 +1591,7 @@
         updateNicMetadata(body.interfaces);
         startupTemplatePreview = body.interfaces;
         renderStartupTemplateValues(machine);
-        renderStorageSettings(body.storage, body.fixed?.diskBus);
+        renderStorageSettings(body.storage, body.fixed?.diskInterface);
         keepFocusedNicVisible();
         optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
         showIsoPreviewStatus(machine);
@@ -2033,15 +2047,19 @@
         archiveDialog.removeAttribute('aria-busy');
       }
     });
+    const archiveLoadBlockedDialog = document.getElementById('session-archive-load-blocked-dialog');
+    function showArchiveLoadBlockedWarning() {
+      if (!archiveLoadBlockedDialog.open) archiveLoadBlockedDialog.showModal();
+    }
     document.getElementById('load-session-archive').addEventListener('click', () => {
-      if (machines.size) { showStatusError('Load requires an empty session. Remove all hosts and switches first.'); return; }
+      if (machines.size) { showArchiveLoadBlockedWarning(); return; }
       archiveFile.click();
     });
     archiveFile.addEventListener('change', () => {
       const file = archiveFile.files[0];
       archiveFile.value = '';
       if (!file) return;
-      if (machines.size) { showStatusError('Load requires an empty session.'); return; }
+      if (machines.size) { showArchiveLoadBlockedWarning(); return; }
       if (!/\.zip$/i.test(file.name)) { showStatusError('Choose a QemuWeb ZIP archive.'); return; }
       selectedArchiveFile = file;
       archiveLoadImported = false;

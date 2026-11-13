@@ -1325,10 +1325,13 @@ app.get('/api/options/:sessionId', (req, res) => {
       guestIsoAttached: attachGuestCdrom,
       guestIso: attachGuestCdrom ? nextGuestIso : null};
     const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
-    const fixed = isQemu
-      ? {engine: `QEMU · ${session.qemuAcceleration.toUpperCase()}`, machine: options.machine, diskBus: options.diskInterface, networkCard: options.networkModel}
-      : {engine: 'VirtualBox', osType: image.virtualbox.osType, firmware: image.virtualbox.firmware,
-        diskBus: image.virtualbox.diskBus.toUpperCase(), networkCard: image.virtualbox.networkModel};
+    const profile = selectedProfile(readConfig(), image.id, engine);
+    const fixed = {
+      type: profile.type, arch: profile.arch, mode: profile.mode,
+      firmware: profile.firmware, acceleration: profile.acceleration, boot: profile.boot,
+      diskInterface: profile.diskInterface, networkModel: profile.networkModel,
+      cdromInterface: profile.cdromInterface, extraOptions: profile.extraOptions || []
+    };
     const isoCommands = attachGuestCdrom
       ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, '.iso-stage')]]
       : [];

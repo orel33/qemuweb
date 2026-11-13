@@ -231,6 +231,12 @@ Both files use one `NAME=value` assignment per line; blank lines and lines begin
 
 `PORT` is a process variable for the HTTP port; `QEMUWEB_TEST_SERVER` is reserved for integration fixtures. Neither is a system hardware keyword.
 
+## Web interface and session loading
+
+**Add a new host** and **Host Settings** use the same tabs. General shows the host name, system, engine and base image. Hardware shows the resolved, read-only `type`, `arch`, `mode`, `firmware`, `acceleration` and `boot` values above editable memory, CPU and clock settings. Storage shows the read-only **Disk interface** and generated disk paths. Network shows the read-only **Network model** above Ethernet cabling. Startup begins with the read-only **CD-ROM interface**, then shows template values, `start.sh`, the startup disk option and ISO path. Expert shows console paths, the selected engine's **Extra options** (or `None`), and the full launch command preview. These read-only values come from the selected system/engine profile after inheritance; they are not additional host overrides.
+
+**Load session ZIP** requires an empty current session. If any host or switch remains, a Warning dialog explains that all hosts and switches must be removed before choosing an archive. The server also rejects an import into a nonempty session with HTTP 409. This check prevents an archive from replacing current session contents silently.
+
 ## Complete JSON examples and lifecycle
 
 The maintained examples are [`config.json`](samples/config.json), [`session.json`](samples/session.json), [`host.json`](samples/host.json) and [`switch.json`](samples/switch.json). The host sample uses `debian13-legacy` on QEMU and overrides its 1024 MB default to 2048 MB. Its `profileHash` is computed from the resolved QEMU profile. `session.json.baseImages` is populated with image format, size and SHA-256 on ZIP export. A ZIP stores the session directory structure, excluding generated media, sockets, processes and RAM. QEMU working disks are included only when requested.

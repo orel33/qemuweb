@@ -34,11 +34,11 @@ QemuWeb work to plan and implement. See the [roadmap](docs/ROADMAP.md) for the l
 
 ## Hosts and settings
 
-- [ ] **QMS74** — **v0.7.0:** specify and implement the QemuWeb configuration manual and file formats for Linux/x86_64/text systems, hosts, switches and sessions.
+- [x] **QMS74** — **v0.7.0:** specify and implement the QemuWeb configuration manual and file formats for Linux/x86_64/text systems, hosts, switches and sessions.
   - The maintained `docs/manual.md` and generated A4 `docs/manual.pdf` describe `config.json` schema 4, `session.json` schema 4, `host.json` schema 3 and `switch.json` schema 2. The examples in `docs/samples/` match the backend. `.env` and `.env.local` configure executable paths only.
   - `config.json` has an abstract `systems.default` and concrete systems inheriting through `basedOn`. Unsuffixed keywords apply to both engines; `keyword:qemu` and `keyword:vbox` override the matching engine at each inheritance level. Values for `memory`, `cpus`, `clock` and `startupDiskEnabled` can therefore differ by engine. Both concrete images must resolve. Unknown keys and old formats are rejected.
   - `session.json.engine` and `host.json.engine` use `{qemu, vbox}`. A host stores a hash of its selected resolved profile and sparse editable overrides; fixed image and hardware choices remain in `config.json`. The runner translates common `networkModel` values `virtio`/`e1000` to each engine's CLI and supplies necessary implicit constants. ZIP export/import uses the new JSON versions with no old-format reader.
-  - Beta 1 Web acceptance: the user validated two Debian 13 Legacy hosts, startup disk, ping and session ZIP save/load under both QEMU and VirtualBox. Remaining: review the generated PDF and decide whether to run unit/integration tests before the final v0.7.0 release. Do not run tests without the user's explicit approval under `AGENTS.md`.
+  - Web acceptance: the user validated two Debian 13 Legacy hosts, startup disk, ping and session ZIP save/load under both QEMU and VirtualBox. The manual and PDF document the final Host Settings tabs and the empty-session requirement for ZIP loading. Automated unit and integration tests were not run.
 - [x] **JUK24** — Generate unique default host names from women's first names common around 1900.
 - [x] **RNC67** — Keep Settings concise by default and reveal technical fields in an Expert mode.
 - [x] **DPM41** — Allow QEMU or VirtualBox to be selected in general Settings.
