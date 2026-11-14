@@ -15,10 +15,17 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
    ```
 
-2. Install **Node.js 24 LTS** with npm. Ubuntu's `nodejs` package is too old:
-   use nvm (`nvm install` reads `.nvmrc`) or the
-   [official download](https://nodejs.org/en/download). npm rejects other
-   Node versions.
+2. Install **Node.js 24 LTS** with npm. Ubuntu's `nodejs` package is too old,
+   and `npm ci` fails with `EBADENGINE` on other Node versions. Use one of:
+
+   ```sh
+   nvm install                 # with nvm; reads .nvmrc
+   sudo n 24                   # with n
+   ```
+
+   Or use the [official download](https://nodejs.org/en/download). Then check
+   that `node --version` prints `v24.x` (run `hash -r` first if the shell still
+   finds the old version).
 
 3. Check QEMU prerequisites:
    - `qemu-system-x86_64 -netdev help` must list `vde`. If it does not, see
