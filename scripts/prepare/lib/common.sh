@@ -65,6 +65,11 @@ make_vdi() {
   mv "$vdi.tmp" "$vdi"
 }
 
+base64_encode_file() {
+  local file="$1"
+  base64 < "$file" | tr -d '\r\n'
+}
+
 prep_acceleration() {
   # Avoid nested KVM when VirtualBox is already running; otherwise use hardware
   # acceleration when available (KVM on Linux, HVF on macOS) and fall back to TCG.
