@@ -66,6 +66,24 @@ function findCommandCandidates(value, key) {
   return findCommand(value);
 }
 
+function fixPtyHelperPermissions(root) {
+  try {
+    const nodePtyPkg = require.resolve('node-pty/package.json', {paths: [root]});
+    const nodePtyDir = path.dirname(nodePtyPkg);
+    const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
+    if (fs.existsSync(prebuildsDir)) {
+      for (const entry of fs.readdirSync(prebuildsDir, {withFileTypes: true})) {
+        if (entry.isDirectory()) {
+          const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
+          if (fs.existsSync(helper)) {
+            try { fs.chmodSync(helper, 0o755); } catch (_) {}
+          }
+        }
+      }
+    }
+  } catch (_) {}
+}
+
 function resolveCommands(root) {
   const base = readEnvFile(path.join(root, '.env'));
   const local = readEnvFile(path.join(root, '.env.local'));
@@ -100,6 +118,7 @@ function resolveCommands(root) {
     }
   }
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);
+  fixPtyHelperPermissions(root);
   return commands;
 }
 
