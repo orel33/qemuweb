@@ -1,6 +1,6 @@
 {
   "name": "qemuweb",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "private": true,
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
