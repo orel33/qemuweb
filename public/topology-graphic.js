@@ -1,10 +1,11 @@
 // Topology overview. Node positions are browser-local during ordinary use;
 // the explicit session archive can carry them to another browser.
 (function (root, factory) {
-  const api = factory();
+  const icons = typeof module === 'object' && module.exports ? require('./network-node-icons') : root.NetworkNodeIcons;
+  const api = factory(icons);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.TopologyGraphic = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function () {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (NodeIcons) {
   const SVG = 'http://www.w3.org/2000/svg';
   const WIDTH = 1120;
   const CARD_WIDTH = 212;
@@ -125,6 +126,8 @@
     for (const node of graph.nodes) {
       const machine = node.machine;
       const isSwitch = machine.kind === 'switch';
+      const iconType = NodeIcons.typeForMachine(machine.kind);
+      const iconStyle = NodeIcons.styles[iconType];
       const group = element('g', {class: `topology-node ${isSwitch ? 'topology-switch' : 'topology-host'}`, transform: `translate(${node.x}, ${node.y})`, tabindex: '0', role: 'button', 'aria-label': `Open ${machine.hostname} ${isSwitch ? 'switch' : 'host'} terminal; ${node.state}`});
       group.dataset.sessionId = node.id;
       group.dataset.state = node.state;
@@ -136,10 +139,12 @@
       }).join(' · ');
       group.append(element('title', {}, `${machine.hostname} · ${node.state}${machine.message ? ` · ${machine.message}` : ''}${interfaceDetails ? ` · ${interfaceDetails}` : ''}`));
       group.append(element('rect', {x: -106, y: -48, width: 212, height: 96, rx: 12, class: 'node-card'}));
-      group.append(element('rect', {x: -106, y: -48, width: 6, height: 96, rx: 3, class: 'node-accent'}));
-      group.append(element('circle', {cx: -76, cy: -15, r: 17, class: 'node-icon-bg'}));
-      const icon = element('svg', {x: -88, y: -27, width: 24, height: 24, viewBox: '0 0 24 24', class: 'node-icon', 'aria-hidden': 'true'});
-      icon.append(element('use', {href: isSwitch ? '#pane-switch-icon' : '#pane-host-icon'}));
+      group.append(element('rect', {x: -106, y: -48, width: 6, height: 96, rx: 3, fill: iconStyle.color}));
+      group.append(element('circle', {cx: -76, cy: -15, r: 17, fill: iconStyle.badgeFill}));
+      const icon = NodeIcons.create(iconType);
+      icon.setAttribute('x', '-88');
+      icon.setAttribute('y', '-27');
+      icon.setAttribute('aria-hidden', 'true');
       group.append(icon);
       group.append(element('text', {x: -51, y: -11, class: 'node-name'}, short(machine.hostname, 20)));
       group.append(element('text', {x: -86, y: 18, class: 'node-detail'}, short(isSwitch ? `${graph.links.filter(link => link.switchId === node.id).length} connected ports` : `${machine.interfaces?.length || 0} interfaces · ${machine.osHint || 'Host'}`, 27)));
