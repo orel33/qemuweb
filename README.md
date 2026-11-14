@@ -1,4 +1,4 @@
-# QemuWeb
+# <img src="public/favicon.svg" alt="" width="32" height="32"> QemuWeb
 
 QemuWeb lets you create and control Linux machines running in QEMU or VirtualBox
 from a browser. You can connect them through VDE switches, use their serial
