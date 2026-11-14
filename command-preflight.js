@@ -4,7 +4,9 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VBOXMANAGE', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const optionalKeys = ['VBOXMANAGE'];
+const allKeys = [...requiredKeys, ...optionalKeys];
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU',
   QEMU_IMG: 'QEMU disk tools',
@@ -55,21 +57,30 @@ function findCommand(value) {
   throw new Error(`not found in PATH: ${value}`);
 }
 
+function findCommandCandidates(value, key) {
+  if (key === 'GENISOIMAGE' && value === 'genisoimage') {
+    for (const name of ['genisoimage', 'mkisofs', 'xorrisofs']) {
+      try { return findCommand(name); } catch (_) {}
+    }
+  }
+  return findCommand(value);
+}
+
 function resolveCommands(root) {
   const base = readEnvFile(path.join(root, '.env'));
   const local = readEnvFile(path.join(root, '.env.local'));
-  const missing = requiredKeys.filter(key => !Object.hasOwn(base, key));
+  const missing = allKeys.filter(key => !Object.hasOwn(base, key));
   if (missing.length) throw new Error(`Missing command defaults in .env: ${missing.join(', ')}`);
   const commands = {};
   const failures = [];
-  const labelWidth = Math.max(...requiredKeys.map(key => commandLabels[key].length));
+  const labelWidth = Math.max(...allKeys.map(key => commandLabels[key].length));
   console.log('Checking dependencies…');
-  for (const key of requiredKeys) {
+  for (const key of allKeys) {
     const defaultCommand = base[key];
     const label = commandLabels[key].padEnd(labelWidth);
     try {
       const configured = local[key] || process.env[key] || defaultCommand;
-      const resolved = findCommand(configured);
+      const resolved = findCommandCandidates(configured, key);
       // vdeterm treats its first argument as a management socket and has no version flag.
       if (key !== 'VDETERM') {
         const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
@@ -79,8 +90,13 @@ function resolveCommands(root) {
       commands[key] = resolved;
       console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}`);
     } catch (error) {
-      failures.push(key);
-      console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
+      if (optionalKeys.includes(key)) {
+        commands[key] = null;
+        console.log(`  \x1b[33m○\x1b[0m ${label}  not found (engine disabled)`);
+      } else {
+        failures.push(key);
+        console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
+      }
     }
   }
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);

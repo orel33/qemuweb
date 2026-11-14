@@ -7,12 +7,12 @@ consoles, and import or export sessions and network topologies. The
 
 ## Installation
 
-You need a **Linux x86-64** host, **Node.js 18 or newer** with npm, Bash, Python 3,
-QEMU (`qemu-system-x86_64` with VDE support), `qemu-img`, `vde_switch`, `vdeterm`,
-`genisoimage`, and VirtualBox (`VBoxManage`). Startup checks every executable
-listed in `.env`, even if you use only one virtualization engine. QEMU/KVM also
-requires access to `/dev/kvm`. Image preparation downloads official sources and
-uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
+You need a **Linux** or **macOS** host, **Node.js 18 or newer** with npm, Bash, Python 3,
+QEMU (`qemu-system-x86_64` with VDE support), `qemu-img`, `vde_switch`, `vdeterm`, and
+an ISO image tool (`genisoimage` or `mkisofs`). VirtualBox (`VBoxManage`) is optional.
+On Linux, QEMU uses KVM hardware acceleration when `/dev/kvm` is accessible. On macOS,
+QEMU uses HVF acceleration on Intel hosts and TCG emulation on Apple Silicon.
+Image preparation downloads official sources and uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
 
 On Debian or Ubuntu, install the distribution packages:
 
@@ -20,7 +20,13 @@ On Debian or Ubuntu, install the distribution packages:
 sudo apt install bash build-essential coreutils findutils grep gzip curl nodejs npm python3 qemu-system-x86 qemu-utils genisoimage vde2
 ```
 
-Install VirtualBox separately to provide `VBoxManage`. If your distribution's
+On macOS, install the dependencies with Homebrew:
+
+```sh
+brew install node python3 qemu vde cdrtools
+```
+
+Install VirtualBox separately if you plan to use the VirtualBox engine. If your Linux distribution's
 QEMU lacks VDE support, see the [QEMU installation notes](misc/install-qemu.md).
 Then, from the repository root:
 

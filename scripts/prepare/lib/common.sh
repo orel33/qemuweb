@@ -28,6 +28,11 @@ prepare_images() { [[ "$PREPARE_MODE" != sources ]]; }
 require_commands() {
   # Check tools only when a script actually needs to build an image.
   for command in "$@"; do
+    if [[ "$command" == genisoimage ]]; then
+      if command -v genisoimage >/dev/null || command -v mkisofs >/dev/null; then
+        continue
+      fi
+    fi
     command -v "$command" >/dev/null || { echo "Required preparation tool not found: $command" >&2; exit 1; }
   done
 }
@@ -61,12 +66,14 @@ make_vdi() {
 }
 
 prep_acceleration() {
-  # Avoid nested KVM when VirtualBox is already running; otherwise use KVM when
-  # available and fall back to QEMU's software emulation.
+  # Avoid nested KVM when VirtualBox is already running; otherwise use hardware
+  # acceleration when available (KVM on Linux, HVF on macOS) and fall back to TCG.
   if command -v VBoxManage >/dev/null 2>&1 && [[ -n "$(VBoxManage list runningvms 2>/dev/null || true)" ]]; then
     printf 'tcg'
   elif [[ -r /dev/kvm && -w /dev/kvm ]]; then
     printf 'kvm'
+  elif [[ "$(uname -s)" == 'Darwin' ]] && qemu-system-x86_64 -accel help 2>/dev/null | grep -qw 'hvf'; then
+    printf 'hvf'
   else
     printf 'tcg'
   fi

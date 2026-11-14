@@ -6,13 +6,13 @@ const net = require('net');
 const {StringDecoder} = require('string_decoder');
 const path = require('path');
 const crypto = require('crypto');
-const {spawn, execFileSync, execFile} = require('child_process');
+const {spawn, spawnSync, execFileSync, execFile} = require('child_process');
 const {promisify} = require('util');
 const express = require('express');
 const socketIo = require('socket.io');
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
-const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
+const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics, getHostCpuTicks, parsePsOutput} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
 const {writeArchive, readArchive} = require('./session-archive');
 const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./system-config');
@@ -54,8 +54,35 @@ let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
 readCatalog(configPath);
 let sessionEngine = 'qemu';
-try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible; VirtualBox remains selectable.'); }
+
+function detectSupportedQemuAccelerators() {
+  try {
+    const result = spawnSync(commands.QEMU_SYSTEM_X86_64, ['-accel', 'help'], {encoding: 'utf8', timeout: 5000});
+    if (result.status === 0) {
+      return result.stdout.split('\n')
+        .map(line => line.trim().toLowerCase())
+        .filter(line => line && !line.includes('accelerators supported'));
+    }
+  } catch (_) {}
+  return ['tcg'];
+}
+
+function detectBestQemuAcceleration() {
+  if (process.env.QEMU_ACCEL) return process.env.QEMU_ACCEL;
+  const supported = detectSupportedQemuAccelerators();
+  if (process.platform === 'linux') {
+    try {
+      fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
+      if (supported.includes('kvm')) return 'kvm';
+    } catch (_) {}
+  } else if (process.platform === 'darwin') {
+    if (supported.includes('hvf')) return 'hvf';
+  }
+  return 'tcg';
+}
+
+const activeQemuAccel = detectBestQemuAcceleration();
+console.log(`QEMU acceleration: \x1b[32m${activeQemuAccel.toUpperCase()}\x1b[0m${activeQemuAccel === 'tcg' ? ' (software emulation)' : ''}.`);
 
 function pointCurrentSession(id) {
   const temporary = path.join(runtime, `.current-${sessionId}`);
@@ -195,7 +222,8 @@ async function sampleResources() {
   try {
     const running = [...sessions.values()].filter(session => session.kind === 'vm' && session.machine);
     const qemuRunning = running.some(session => session.engine?.startsWith('qemu'));
-    const hostCpu = qemuRunning ? parseHostCpu(await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '')) : null;
+    const hostStat = await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '');
+    const hostCpu = qemuRunning ? (parseHostCpu(hostStat) || getHostCpuTicks()) : null;
     await Promise.all(running.map(async session => {
       const machine = session.machine;
       let result;
@@ -210,7 +238,15 @@ async function sampleResources() {
         const cpuPercent = previous?.machine === machine ? processCpuPercent(previous, processCpu, hostCpu) : null;
         const ramBytes = parseProcessRss(status);
         if (processCpu && hostCpu) previousProcessSamples.set(session.id, {...processCpu, hostTicks: hostCpu.totalTicks, machine});
-        result = resourceResult(cpuPercent, ramBytes);
+        if (cpuPercent !== null || ramBytes !== null) {
+          result = resourceResult(cpuPercent, ramBytes);
+        } else if (Number.isInteger(pid)) {
+          try {
+            const {stdout} = await execFileAsync('ps', ['-p', String(pid), '-o', '%cpu=,rss='], {encoding: 'utf8', timeout: 2000});
+            const psMetrics = parsePsOutput(stdout);
+            if (psMetrics) result = resourceResult(psMetrics.cpuPercent, psMetrics.ramBytes);
+          } catch (_) {}
+        }
       } else if (session.engine === 'vbox') {
         try {
           if (vboxMetricSetup.get(session.id) !== machine) {
@@ -508,13 +544,19 @@ function launchSettingsFor(imageId, overrides = {}) {
 
 app.get('/api/general-settings', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({sessionId, engine: sessionEngine});
+  res.json({
+    sessionId,
+    engine: sessionEngine,
+    vboxAvailable: !!commands.VBOXMANAGE,
+    qemuAcceleration: detectBestQemuAcceleration()
+  });
 });
 
 app.put('/api/general-settings', (req, res) => {
   try {
     const engine = req.body?.engine;
     if (!['qemu', 'vbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
+    if (engine === 'vbox' && !commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
     if (engine !== sessionEngine) {
       if ([...sessions.values()].some(session => session.kind === 'vm')) {
         return res.status(409).json({error: 'Delete existing hosts before changing the session engine.'});
@@ -1014,8 +1056,15 @@ function imagePath(file) { return path.resolve(root, file); }
 
 function qemuArgs(session, image, overlay) {
   const settings = session.qemuOptions;
+  const extraOptions = [...settings.extraOptions];
+  if (session.qemuAcceleration === 'tcg') {
+    const cpuIndex = extraOptions.indexOf('-cpu');
+    if (cpuIndex !== -1 && extraOptions[cpuIndex + 1] === 'host') {
+      extraOptions[cpuIndex + 1] = 'max';
+    }
+  }
   const common = [
-    ...settings.extraOptions, '-accel', session.qemuAcceleration,
+    ...extraOptions, '-accel', session.qemuAcceleration,
     '-display', settings.display, '-m', String(settings.memory), '-smp', String(settings.smp),
     '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
     '-serial', `unix:${session.socketPath},server=on,wait=off`
@@ -1187,12 +1236,13 @@ async function stopSwitch(session, force = false) {
 
 function qemuAcceleration(engine, checkAvailability = true) {
   if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
-  if (!checkAvailability) return 'kvm';
+  const accel = detectBestQemuAcceleration();
+  if (!checkAvailability) return accel;
   const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'vbox');
-  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
-  try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or use VirtualBox.'); }
-  return 'kvm';
+  if (virtualBoxRunning && accel === 'kvm') {
+    throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
+  }
+  return accel;
 }
 
 function qemuOverlayArgs(image, overlay) {
@@ -1393,6 +1443,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   requireSessionEngine(selectedEngine);
   const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
   if (selectedEngine === 'vbox') {
+    if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
@@ -1531,8 +1582,11 @@ async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
 function validateRestartPrerequisites(session) {
   requireSessionEngine(session.engine);
   if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine);
-  else if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
-    throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
+  else {
+    if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
+    if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
+      throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
+    }
   }
   const image = session.selectedImage;
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
