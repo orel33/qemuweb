@@ -502,6 +502,7 @@
         replayGeneration: 0,
         replaying: false,
         replayPending: '',
+        cursorReportDeadline: 0,
         fontSizeOverride: null
       };
       pane.viewMenu = document.createElement('details');
@@ -648,8 +649,14 @@
         if (pane.view === 'monitor') handleMonitorInput(pane, data);
         else if (pane.view === 'console') {
           const machine = machines.get(pane.machineId);
-          // Boot-time cursor position replies are echoed literally by serial getty.
-          const input = machine?.kind === 'vm' ? data.replace(/\x1b\[\d+;\d+R/g, '') : data;
+          // resize queries device attributes before requesting cursor position.
+          // Other cursor replies can be echoed literally by serial getty at boot.
+          if (machine?.kind === 'vm' && /\x1b\[\?[\d;]+c/.test(data)) pane.cursorReportDeadline = Date.now() + 10000;
+          const input = machine?.kind === 'vm' ? data.replace(/\x1b\[\d+;\d+R/g, reply => {
+            if (Date.now() > pane.cursorReportDeadline) return '';
+            pane.cursorReportDeadline = 0;
+            return reply;
+          }) : data;
           if (input) pane.socket.emit('input', input);
         }
       });
@@ -1471,6 +1478,7 @@
         pane.replayGeneration++;
         pane.replayPending = '';
         pane.replaying = !!pane.machineId;
+        pane.cursorReportDeadline = 0;
         pane.terminal.reset();
       });
       activePaneIndex = activeIndex;

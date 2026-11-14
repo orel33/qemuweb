@@ -368,6 +368,10 @@ function plainSerialLine(line) {
   return line.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '');
 }
 
+function standaloneTerminalControl(text) {
+  return /^(?:\x1b\[[0-?]*[ -/]*[@-~]|\x1b[78])+$/.test(text);
+}
+
 function possibleGuestHookLine(line) {
   const plain = plainSerialLine(line);
   if (plain.length > 160) return false;
@@ -394,6 +398,10 @@ function filterGuestHookSerial(session, text) {
       if (!/(?:qemuweb-guest-start\[\d+\]:\s*)?QEMUWEB_START_(?:BEGIN|EXIT)\b/.test(plainSerialLine(session.serialFilterPending))) {
         visible += session.serialFilterPending;
       }
+      session.serialFilterPending = '';
+    } else if (standaloneTerminalControl(session.serialFilterPending)) {
+      // Terminal queries have no newline; send them before the guest times out.
+      visible += session.serialFilterPending;
       session.serialFilterPending = '';
     } else if (!possibleGuestHookLine(session.serialFilterPending)) {
       visible += session.serialFilterPending;
