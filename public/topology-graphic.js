@@ -104,7 +104,7 @@
     if (!graph.nodes.length) {
       const empty = document.createElement('div');
       empty.className = 'graphic-empty';
-      empty.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 11 17 6M7 13l10 5"/></svg><h2>No network yet</h2><p>Add a host or switch, or load a .topo file to see it here.</p>';
+      empty.innerHTML = '<img src="/favicon.svg" alt=""><h2>No network yet</h2><p>Add a host or switch, or load a .topo file to see it here.</p>';
       container.append(empty);
       return graph;
     }

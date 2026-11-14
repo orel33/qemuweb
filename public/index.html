@@ -179,7 +179,7 @@
     .topology-node[data-state="stopped"] .node-status, .topology-node[data-state="starting"] .node-status, .topology-node[data-state="stopping"] .node-status { fill: #ffd17c; }
     .topology-node[data-state="error"] .node-status { fill: #ff9b9e; }
     .graphic-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100%; padding: 30px; color: #bdcddd; text-align: center; }
-    .graphic-empty svg { width: 60px; height: 60px; fill: none; stroke: #5adbd1; stroke-width: 1.5; }
+    .graphic-empty img { width: 112px; height: 112px; }
     .graphic-empty h2 { margin: 18px 0 4px; color: #eef6ff; font-size: 19px; }
     .graphic-empty p { margin: 0; font-size: 13px; }
     .console-pane { display: flex; flex-direction: column; min-width: 0; min-height: 0; border: 1px solid #35404c; border-radius: 7px; background: #10151c; overflow: hidden; container-type: inline-size; }
@@ -254,7 +254,9 @@
     .pane-metrics { flex: none; color: #b7c9db; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
     .pane-metrics[data-status="unavailable"] { color: #8899aa; }
     @container (max-width: 550px) { .console-pane-header { gap: 6px; } }
-    .terminal-frame { display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 8px; background: #0b0f14; }
+    .terminal-frame { position: relative; display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 8px; background: #0b0f14; }
+    .console-pane[data-empty="true"] .terminal-frame::after { position: absolute; inset: 8px; background: url("/favicon.svg") center / 112px 112px no-repeat; content: ""; pointer-events: none; }
+    .console-pane[data-empty="true"] .terminal-scroll { display: none; }
     .terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; font-family: var(--console-font-family); font-size: var(--console-font-size); }
     .terminal .xterm { font-family: var(--console-font-family); font-size: var(--console-font-size); }
     .terminal .xterm-viewport { overflow-x: hidden; overflow-y: scroll; scrollbar-width: none; }
@@ -1367,6 +1369,7 @@
         pane.title.textContent = title;
         pane.title.title = title;
         pane.title.dataset.empty = String(!machine);
+        pane.element.dataset.empty = String(!machine);
         pane.title.hidden = !!machine;
         pane.sessionMenu.hidden = !machine;
         if (machine) {
