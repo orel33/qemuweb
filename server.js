@@ -369,7 +369,7 @@ function plainSerialLine(line) {
 }
 
 function standaloneTerminalControl(text) {
-  return /^(?:\x1b\[[0-?]*[ -/]*[@-~]|\x1b[78])+$/.test(text);
+  return /^(?:\r|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[78])+$/.test(text);
 }
 
 function possibleGuestHookLine(line) {
@@ -400,7 +400,7 @@ function filterGuestHookSerial(session, text) {
       }
       session.serialFilterPending = '';
     } else if (standaloneTerminalControl(session.serialFilterPending)) {
-      // Terminal queries have no newline; send them before the guest times out.
+      // Pass CR and complete terminal controls without waiting for a newline.
       visible += session.serialFilterPending;
       session.serialFilterPending = '';
     } else if (!possibleGuestHookLine(session.serialFilterPending)) {
