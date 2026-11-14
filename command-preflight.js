@@ -105,15 +105,22 @@ function resolveCommands(root) {
         if (result.error) throw result.error;
         if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);
       }
+      if (key === 'QEMU_SYSTEM_X86_64') {
+        const result = spawnSync(resolved, ['-netdev', 'help'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
+        if (result.error) throw result.error;
+        if (!/(^|\s)vde(\s|$)/m.test(`${result.stdout}\n${result.stderr}`)) {
+          throw new Error('QEMU lacks VDE support. See README.md > Troubleshooting > Install QEMU.');
+        }
+      }
       commands[key] = resolved;
       console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}`);
     } catch (error) {
-      if (optionalKeys.includes(key)) {
-        commands[key] = null;
-        console.log(`  \x1b[33m○\x1b[0m ${label}  not found (engine disabled)`);
-      } else {
+      if (requiredKeys.includes(key)) {
         failures.push(key);
         console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
+      } else {
+        commands[key] = null;
+        console.log(`  - ${label}  unavailable (${error.message}); VirtualBox hosts disabled`);
       }
     }
   }

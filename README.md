@@ -1,4 +1,4 @@
-# QemuWeb
+# <img src="public/favicon.svg" alt="" width="32" height="32"> QemuWeb
 
 QemuWeb lets you create and control Linux machines running in QEMU or VirtualBox
 from a browser. You can connect them through VDE switches, use their serial
@@ -14,10 +14,20 @@ On Linux, QEMU uses KVM hardware acceleration when `/dev/kvm` is accessible. On 
 QEMU uses HVF acceleration on Intel hosts and TCG emulation on Apple Silicon.
 Image preparation downloads official sources and uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
 
-On Debian or Ubuntu, install the distribution packages:
+For **Ubuntu 24.04 on x86-64**, install **Node.js 24 LTS** with npm from the
+[official Node.js download page](https://nodejs.org/en/download). Ubuntu 24.04's
+`nodejs` package is older. The repository includes `.nvmrc` for users of nvm.
+Check `node --version` and `npm --version` before installing dependencies;
+npm rejects unsupported Node versions.
+
+QEMU installations need `qemu-system-x86_64` with VDE support, `qemu-img`,
+`vde_switch`, `vdeterm`, and access to `/dev/kvm`. VirtualBox is optional:
+install it separately to provide `VBoxManage` if you want VirtualBox hosts.
+
+On Ubuntu 24.04, install the distribution packages:
 
 ```sh
-sudo apt install bash build-essential coreutils findutils grep gzip curl nodejs npm python3 qemu-system-x86 qemu-utils genisoimage vde2
+sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
 ```
 
 On macOS, install the dependencies with Homebrew:
@@ -26,18 +36,31 @@ On macOS, install the dependencies with Homebrew:
 brew install node python3 qemu vde cdrtools
 ```
 
-Install VirtualBox separately if you plan to use the VirtualBox engine. If your Linux distribution's
-QEMU lacks VDE support, see the [QEMU installation notes](misc/install-qemu.md).
-Then, from the repository root:
+Install VirtualBox separately if you plan to use the VirtualBox engine.
+
+Clone the repository:
+
+```sh
+git clone https://github.com/orel33/qemuweb.git
+cd qemuweb
+```
+
+If QEMU lacks VDE support, see [Install QEMU](#install-qemu). On Linux, confirm that your
+user can read and write `/dev/kvm` before starting QEMU hosts. Then install
+the Node.js dependencies, prepare one image, and start QemuWeb:
 
 ```sh
 npm ci
-bash scripts/prepare.sh
+bash scripts/prepare.sh --system alpine
 ./start.sh
 ```
 
 Open <http://127.0.0.1:3002>. Press `Ctrl+C` to stop the server. Use
-`PORT=3003 ./start.sh` to choose another port.
+`PORT=3003 ./start.sh` to choose another port. The project's `allowScripts`
+entry lets npm 11 run the pinned `node-pty` install script. VirtualBox is
+disabled in the Web interface when `VBoxManage` is unavailable. Image
+preparation creates both RAW and VDI files with QEMU tools; it does not need
+VirtualBox. Running a QEMU host requires usable `/dev/kvm` access.
 
 ## Try the included LAN demo
 
@@ -51,11 +74,19 @@ layout for **Load topology**, without startup scripts or IP addresses. You can
 also add hosts and switches in the Web interface, connect them, and save the
 session as a ZIP archive.
 
+To include a file such as `firewall.sh` in a host's startup disk, open **Host
+Settings → Startup → Add extra files** and select it. Enable **Auto-build and
+attach startup disk** in the same tab, then call the file from `start.sh` if
+it should run at boot, for example `sh /mnt/cdrom/firewall.sh`. Save the settings
+and restart the host to use the rebuilt disk. Each extra file can be at most
+1 MiB; all startup files together can be at most 4 MiB.
+
 ## Prepare the available images
 
 `bash scripts/prepare.sh` prepares the four systems listed in
 [`config.json`](config.json): Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy,
-and OpenWrt 25.12. To prepare one system or list existing images:
+and OpenWrt 25.12. Newly built Debian images include the `resize` command. To prepare
+one system or list existing images:
 
 ```sh
 bash scripts/prepare.sh --system alpine
@@ -85,3 +116,23 @@ may depend on the previous base image.
 The [JSON examples](docs/samples/) show the session file formats. `runtime/`
 contains temporary files that are removed with their session; use **Save session**
 to keep a portable copy.
+
+## Troubleshooting
+
+### Install QEMU
+
+Ubuntu 24.04's packaged QEMU may not include the VDE network backend. Check
+whether `qemu-system-x86_64 -netdev help` lists `vde`. If it does not, follow
+the [QEMU installation notes](misc/install-qemu.md) to build a compatible
+binary. For example, if the installer puts QEMU 11.1.3 in `/opt`, create
+`.env.local` in the repository root with:
+
+```text
+QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64
+```
+
+Use the actual version installed on your machine. This local setting overrides
+only `QEMU_SYSTEM_X86_64` from `.env`; `qemu-img` still uses the distribution
+package. `.env.local` is ignored by Git. Confirm that the selected binary lists
+`vde` with `/opt/qemu-11.1.3/bin/qemu-system-x86_64 -netdev help`, then run
+`./start.sh` again.

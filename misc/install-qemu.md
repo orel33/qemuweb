@@ -37,6 +37,15 @@ After installation, check the binary and its VDE backend:
 /opt/qemu-11.1.3/bin/qemu-system-x86_64 -netdev help
 ```
 
-Use the versioned `bin` directory in `PATH` when launching QEMU by command
-name. The installer stops if the destination version directory already exists,
-so an existing build is never overwritten.
+Tell QemuWeb to use the path printed by the installer. For example, if it
+installed QEMU 11.1.3, create `.env.local` in the repository root with:
+
+```text
+QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64
+```
+
+The version and path are examples; use the actual path printed by the
+installer. `qemu-img` can continue to come from the distribution's `qemu-utils`
+package. You can instead put the versioned `bin` directory first in `PATH`.
+The installer stops if the destination version directory already exists, so
+an existing build is never overwritten.
