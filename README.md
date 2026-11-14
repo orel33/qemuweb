@@ -31,12 +31,9 @@ git clone https://github.com/orel33/qemuweb.git
 cd qemuweb
 ```
 
-The Ubuntu 24.04 QEMU package installed here does not provide the VDE network
-backend. If `qemu-system-x86_64 -netdev help` does not list `vde`, follow the
-[QEMU installation notes](misc/install-qemu.md) to build a compatible binary
-and select it with `.env.local`. Confirm that your user can read and write
-`/dev/kvm` before starting QEMU hosts. Then install the Node.js dependencies,
-prepare one image, and start QemuWeb:
+If QEMU lacks VDE support, see [Install QEMU](#install-qemu). Confirm that your
+user can read and write `/dev/kvm` before starting QEMU hosts. Then install
+the Node.js dependencies, prepare one image, and start QemuWeb:
 
 ```sh
 npm ci
@@ -105,3 +102,12 @@ may depend on the previous base image.
 The [JSON examples](docs/samples/) show the session file formats. `runtime/`
 contains temporary files that are removed with their session; use **Save session**
 to keep a portable copy.
+
+## Troubleshooting
+
+### Install QEMU
+
+Ubuntu 24.04's packaged QEMU may not include the VDE network backend. Check
+whether `qemu-system-x86_64 -netdev help` lists `vde`. If it does not, follow
+the [QEMU installation notes](misc/install-qemu.md) to build a compatible
+binary, then select its path in `.env.local`.

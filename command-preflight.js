@@ -71,19 +71,17 @@ function resolveCommands(root) {
     try {
       const configured = local[key] || process.env[key] || defaultCommand;
       const resolved = findCommand(configured);
-      let version = '';
       // vdeterm treats its first argument as a management socket and has no version flag.
       if (key !== 'VDETERM') {
         const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
         if (result.error) throw result.error;
         if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);
-        version = (result.stdout || result.stderr).trim().split('\n')[0];
       }
       if (key === 'QEMU_SYSTEM_X86_64') {
         const result = spawnSync(resolved, ['-netdev', 'help'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
         if (result.error) throw result.error;
         if (!/(^|\s)vde(\s|$)/m.test(`${result.stdout}\n${result.stderr}`)) {
-          throw new Error(`${resolved} (${version}) is installed but was built without the VDE network backend. On Ubuntu, see misc/install-qemu.md to install a VDE-enabled QEMU and select it in .env.local.`);
+          throw new Error('QEMU lacks VDE support. See README.md > Troubleshooting > Install QEMU.');
         }
       }
       commands[key] = resolved;
