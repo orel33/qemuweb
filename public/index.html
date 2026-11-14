@@ -275,7 +275,7 @@
       <div class="create-fields">
         <label class="create-field">Name<input id="create-name" required maxlength="64" autocomplete="off" spellcheck="false"></label>
         <label class="create-field" id="create-system-row">System<select id="os-image" required></select></label>
-        <label class="create-field" id="create-engine-row">Engine<select id="engine" disabled><option value="qemu">QEMU · KVM</option><option value="vbox">VirtualBox</option></select></label>
+        <label class="create-field" id="create-engine-row">Engine<select id="engine" disabled><option value="qemu">QEMU</option><option value="vbox">VirtualBox</option></select></label>
         <section class="network-controls create-network" id="create-network" aria-label="Ethernet interfaces for new host">
           <div class="network-controls-head"><strong>Ethernet interfaces</strong><button id="create-add-nic" type="button">+ Interface</button></div>
           <div id="create-nic-list"></div>
@@ -317,7 +317,7 @@
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
     <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
     <div class="create-fields">
-      <label class="create-field">Session engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="vbox">VirtualBox</option></select></label>
+      <label class="create-field">Session engine<select id="default-engine"><option value="qemu">QEMU</option><option value="vbox">VirtualBox</option></select></label>
       <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
       <label class="create-field">Console font<select id="console-font-family"><option value="system">Ubuntu Sans Mono (GNOME Terminal)</option><option value="consolas">Consolas</option><option value="menlo">Menlo</option><option value="liberation">Liberation Mono</option><option value="default">Browser default monospace</option></select></label>
       <label class="create-field">Console font size<select id="console-font-size"><option value="11">11 px</option><option value="12">12 px</option><option value="13">13 px</option><option value="14">14 px</option><option value="15">15 px</option><option value="16">16 px</option><option value="17">17 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="22">22 px</option><option value="24">24 px</option></select></label>
@@ -1633,7 +1633,12 @@
         });
         addSettingTextRow(settingsFixed, 'System ID', machine.imageId);
         addSettingSelectRow(settingsFixed, 'Engine', [...engineSelect.options].map(option => [option.value, option.textContent]), machine.engine, true);
-        addSettingTextRow(settingsFixed, 'Base image', image?.images?.[machine.engine === 'vbox' ? 'vdi' : 'raw'] || 'Unavailable');
+        const rawExists = image?.imageExists?.raw;
+        const vdiExists = image?.imageExists?.vdi;
+        const baseExists = machine.engine === 'vbox' ? vdiExists : rawExists;
+        let baseImageText = image?.images?.[machine.engine === 'vbox' ? 'vdi' : 'raw'] || 'Unavailable';
+        if (baseExists === false) baseImageText += ' (missing; run scripts/prepare.sh)';
+        addSettingTextRow(settingsFixed, 'Base image', baseImageText);
         const hardwareLabels = [
           ['type', 'Type'], ['arch', 'Architecture'], ['mode', 'Mode'],
           ['firmware', 'Firmware'], ['acceleration', 'Acceleration'], ['boot', 'Boot']
@@ -2012,6 +2017,19 @@
       }).catch(error => ({error: error.message}))
     ]).then(([items, sessionSettings, existing, schemes]) => {
       generalSettings.engine = sessionSettings.engine;
+      const qemuAccel = (sessionSettings.qemuAcceleration || 'tcg').toUpperCase();
+      const qemuLabel = `QEMU · ${qemuAccel}`;
+      for (const sel of [engineSelect, defaultEngineSelect]) {
+        const opt = sel?.querySelector('option[value="qemu"]');
+        if (opt) opt.textContent = qemuLabel;
+      }
+      if (sessionSettings.vboxAvailable === false) {
+        const vboxOpt = defaultEngineSelect?.querySelector('option[value="vbox"]');
+        if (vboxOpt) {
+          vboxOpt.textContent = 'VirtualBox (not installed)';
+          vboxOpt.disabled = true;
+        }
+      }
       loadGraphicPositions(sessionSettings.sessionId);
       images = items;
       namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};

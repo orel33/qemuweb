@@ -574,8 +574,14 @@ app.get('/api/systems', (_req, res) => {
     const config = readConfig();
     res.json(Object.keys(config.systems).filter(id => id !== 'default').map(id => {
       const p = selectedProfile(config, id, sessionEngine);
+      const rawFile = config.systems[id].qemu.image;
+      const vdiFile = config.systems[id].vbox.image;
       return {id, label: p.label,
-        images: {raw: config.systems[id].qemu.image, vdi: config.systems[id].vbox.image},
+        images: {raw: rawFile, vdi: vdiFile},
+        imageExists: {
+          raw: !!(rawFile && fs.existsSync(imagePath(rawFile))),
+          vdi: !!(vdiFile && fs.existsSync(imagePath(vdiFile)))
+        },
         memory: p.memory, cpus: p.cpus, clock: p.clock,
         startupDiskEnabled: p.startupDiskEnabled,
         vboxNetworkModel: p.networkModel === 'virtio' ? 'virtio' : '82540EM',
@@ -1378,7 +1384,9 @@ app.get('/api/options/:sessionId', (req, res) => {
     const profile = selectedProfile(readConfig(), image.id, engine);
     const fixed = {
       type: profile.type, arch: profile.arch, mode: profile.mode,
-      firmware: profile.firmware, acceleration: profile.acceleration, boot: profile.boot,
+      firmware: profile.firmware,
+      acceleration: isQemu ? (previewSession.qemuAcceleration || 'tcg') : profile.acceleration,
+      boot: profile.boot,
       diskInterface: profile.diskInterface, networkModel: profile.networkModel,
       cdromInterface: profile.cdromInterface, extraOptions: profile.extraOptions || []
     };
@@ -1788,7 +1796,7 @@ app.post('/api/start', async (req, res) => {
     console.error(message);
     try {
       const session = getSession(req.body.sessionId);
-      if (session) publishState(session, message);
+      if (session) publishState(session, message.startsWith('Start failed:') ? message : `Start failed: ${message}`);
     } catch (_) {}
     res.status(500).json({error: message});
   }
