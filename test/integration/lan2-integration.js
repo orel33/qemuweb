@@ -297,8 +297,10 @@ async function startHost(id) {
 }
 
 async function run() {
-  assert.equal(engine, 'qemu', 'LAN2 requires QEMU/KVM.');
-  fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
+  assert.ok(engine.startsWith('qemu'), 'LAN2 requires QEMU.');
+  if (process.platform === 'linux' && engine === 'qemu' && !process.env.QEMU_ACCEL) {
+    try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); } catch (_) {}
+  }
   assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh first.`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;

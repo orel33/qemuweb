@@ -31,8 +31,8 @@ prepare_debian_image() {
     # Cloud-init creates the lab account, enables both consoles, and configures
     # the guest NIC for DHCP. The VDE switch itself does not provide DHCP.
     local hook_b64 unit_b64
-    hook_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/guest-start.sh")"
-    unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/qemuweb-start.service")"
+    hook_b64="$(base64_encode_file "$ROOT/scripts/prepare/resources/guest-start.sh")"
+    unit_b64="$(base64_encode_file "$ROOT/scripts/prepare/resources/qemuweb-start.service")"
     cat > "$user_data" <<CLOUD_CONFIG
 #cloud-config
 hostname: qemuweb
@@ -141,7 +141,9 @@ ethernets:
 NETWORK_CONFIG
     qemu-img create -f qcow2 -F qcow2 -b "$cloud_source" "$overlay"
     # Boot a temporary overlay so the downloaded base cloud image remains pristine.
-    genisoimage -quiet -output "$seed" -volid cidata -joliet -rock "$user_data" "$meta_data" "$network_config"
+    local iso_cmd
+    iso_cmd="$(command -v genisoimage 2>/dev/null || command -v mkisofs 2>/dev/null || echo genisoimage)"
+    "$iso_cmd" -quiet -output "$seed" -volid cidata -joliet -rock "$user_data" "$meta_data" "$network_config"
     qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 1024 -smp 1 \
       -display none -monitor none -qmp "unix:$qmp_socket,server=on,wait=off" -serial "file:$serial_log" \
       -no-reboot -drive "file=$overlay,if=virtio,format=qcow2" \

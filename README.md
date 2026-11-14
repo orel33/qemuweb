@@ -7,6 +7,13 @@ consoles, and import or export sessions and network topologies. The
 
 ## Installation
 
+You need a **Linux** or **macOS** host, **Node.js 18 or newer** with npm, Bash, Python 3,
+QEMU (`qemu-system-x86_64` with VDE support), `qemu-img`, `vde_switch`, `vdeterm`, and
+an ISO image tool (`genisoimage` or `mkisofs`). VirtualBox (`VBoxManage`) is optional.
+On Linux, QEMU uses KVM hardware acceleration when `/dev/kvm` is accessible. On macOS,
+QEMU uses HVF acceleration on Intel hosts and TCG emulation on Apple Silicon.
+Image preparation downloads official sources and uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
+
 For **Ubuntu 24.04 on x86-64**, install **Node.js 24 LTS** with npm from the
 [official Node.js download page](https://nodejs.org/en/download). Ubuntu 24.04's
 `nodejs` package is older. The repository includes `.nvmrc` for users of nvm.
@@ -16,13 +23,20 @@ npm rejects unsupported Node versions.
 QEMU installations need `qemu-system-x86_64` with VDE support, `qemu-img`,
 `vde_switch`, `vdeterm`, and access to `/dev/kvm`. VirtualBox is optional:
 install it separately to provide `VBoxManage` if you want VirtualBox hosts.
-Image preparation uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
 
 On Ubuntu 24.04, install the distribution packages:
 
 ```sh
 sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
 ```
+
+On macOS, install the dependencies with Homebrew:
+
+```sh
+brew install node python3 qemu vde cdrtools
+```
+
+Install VirtualBox separately if you plan to use the VirtualBox engine.
 
 Clone the repository:
 
@@ -31,7 +45,7 @@ git clone https://github.com/orel33/qemuweb.git
 cd qemuweb
 ```
 
-If QEMU lacks VDE support, see [Install QEMU](#install-qemu). Confirm that your
+If QEMU lacks VDE support, see [Install QEMU](#install-qemu). On Linux, confirm that your
 user can read and write `/dev/kvm` before starting QEMU hosts. Then install
 the Node.js dependencies, prepare one image, and start QemuWeb:
 

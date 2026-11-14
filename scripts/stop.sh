@@ -24,8 +24,25 @@ if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
   exit 0
 fi
 
-if [[ "$(readlink -f -- "/proc/$pid/cwd" 2>/dev/null || true)" != "$root" ]] ||
-   [[ "$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null || true)" != *server.js* ]]; then
+is_matching_server() {
+  local target_pid="$1"
+  if [[ -d "/proc/$target_pid" ]]; then
+    if [[ "$(readlink -f -- "/proc/$target_pid/cwd" 2>/dev/null || true)" == "$root" ]] &&
+       [[ "$(tr '\0' ' ' < "/proc/$target_pid/cmdline" 2>/dev/null || true)" == *server.js* ]]; then
+      return 0
+    fi
+    return 1
+  fi
+  # Fallback for systems without /proc (e.g. macOS)
+  local cmd
+  cmd="$(ps -p "$target_pid" -o args= 2>/dev/null || true)"
+  if [[ "$cmd" == *server.js* ]]; then
+    return 0
+  fi
+  return 1
+}
+
+if ! is_matching_server "$pid"; then
   echo "PID $pid does not belong to this QemuWeb server; no process was stopped." >&2
   exit 1
 fi

@@ -111,7 +111,7 @@ umount "$target"
 sync
 echo QEMUNET_ALPINE_PREPARED
 ALPINE_HOOK
-  payload="$(base64 -w 0 "$guest_script")"
+  payload="$(base64_encode_file "$guest_script")"
   # Boot the installer with a temporary user-mode NIC for package/repository
   # access; this is only for image preparation, not the resulting LAN topology.
   qemu-img create -f raw "$disk" 2G

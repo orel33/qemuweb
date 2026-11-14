@@ -6,6 +6,7 @@ const {spawnSync} = require('child_process');
 
 const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
 const optionalKeys = ['VBOXMANAGE'];
+const allKeys = [...requiredKeys, ...optionalKeys];
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU',
   QEMU_IMG: 'QEMU disk tools',
@@ -56,21 +57,48 @@ function findCommand(value) {
   throw new Error(`not found in PATH: ${value}`);
 }
 
+function findCommandCandidates(value, key) {
+  if (key === 'GENISOIMAGE' && value === 'genisoimage') {
+    for (const name of ['genisoimage', 'mkisofs', 'xorrisofs']) {
+      try { return findCommand(name); } catch (_) {}
+    }
+  }
+  return findCommand(value);
+}
+
+function fixPtyHelperPermissions(root) {
+  try {
+    const nodePtyPkg = require.resolve('node-pty/package.json', {paths: [root]});
+    const nodePtyDir = path.dirname(nodePtyPkg);
+    const prebuildsDir = path.join(nodePtyDir, 'prebuilds');
+    if (fs.existsSync(prebuildsDir)) {
+      for (const entry of fs.readdirSync(prebuildsDir, {withFileTypes: true})) {
+        if (entry.isDirectory()) {
+          const helper = path.join(prebuildsDir, entry.name, 'spawn-helper');
+          if (fs.existsSync(helper)) {
+            try { fs.chmodSync(helper, 0o755); } catch (_) {}
+          }
+        }
+      }
+    }
+  } catch (_) {}
+}
+
 function resolveCommands(root) {
   const base = readEnvFile(path.join(root, '.env'));
   const local = readEnvFile(path.join(root, '.env.local'));
-  const missing = requiredKeys.filter(key => !Object.hasOwn(base, key));
+  const missing = allKeys.filter(key => !Object.hasOwn(base, key));
   if (missing.length) throw new Error(`Missing command defaults in .env: ${missing.join(', ')}`);
   const commands = {};
   const failures = [];
-  const labelWidth = Math.max(...[...requiredKeys, ...optionalKeys].map(key => commandLabels[key].length));
+  const labelWidth = Math.max(...allKeys.map(key => commandLabels[key].length));
   console.log('Checking dependencies…');
-  for (const key of [...requiredKeys, ...optionalKeys]) {
+  for (const key of allKeys) {
     const defaultCommand = base[key];
     const label = commandLabels[key].padEnd(labelWidth);
     try {
       const configured = local[key] || process.env[key] || defaultCommand;
-      const resolved = findCommand(configured);
+      const resolved = findCommandCandidates(configured, key);
       // vdeterm treats its first argument as a management socket and has no version flag.
       if (key !== 'VDETERM') {
         const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
@@ -97,6 +125,7 @@ function resolveCommands(root) {
     }
   }
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);
+  fixPtyHelperPermissions(root);
   return commands;
 }
 

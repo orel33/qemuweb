@@ -27,7 +27,7 @@ function validateProfile(profile, id, engine) {
   validateOverrides(Object.fromEntries(editableKeys.map(key => [key, profile[key]])));
   if (profile.firmware !== 'bios' || profile.boot !== 'disk' || profile.cdromInterface !== 'ide' ||
       !['virtio', 'e1000'].includes(profile.networkModel) ||
-      (engine === 'qemu' && (profile.acceleration !== 'kvm' || !['ide', 'virtio'].includes(profile.diskInterface))) ||
+      (engine === 'qemu' && (!['kvm', 'hvf', 'tcg', 'auto'].includes(profile.acceleration) || !['ide', 'virtio'].includes(profile.diskInterface))) ||
       (engine === 'vbox' && (profile.acceleration !== 'default' || profile.diskInterface !== 'sata'))) {
     throw new Error(`Invalid hardware profile: ${id}/${engine}.`);
   }
@@ -38,7 +38,7 @@ function validateProfile(profile, id, engine) {
       : {};
     if (!Array.isArray(args) || args.length !== 6 || args.some(value => typeof value !== 'string') ||
         new Set(args.filter((_, index) => index % 2 === 0)).size !== 3 ||
-        pairs['-machine'] !== 'q35' || pairs['-cpu'] !== 'host' || pairs['-nic'] !== 'none') {
+        pairs['-machine'] !== 'q35' || !['host', 'max', 'qemu64'].includes(pairs['-cpu']) || pairs['-nic'] !== 'none') {
       throw new Error(`Invalid extraOptions:qemu for ${id}.`);
     }
   } else if (profile.extraOptions !== undefined) {
