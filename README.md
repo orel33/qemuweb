@@ -110,4 +110,15 @@ to keep a portable copy.
 Ubuntu 24.04's packaged QEMU may not include the VDE network backend. Check
 whether `qemu-system-x86_64 -netdev help` lists `vde`. If it does not, follow
 the [QEMU installation notes](misc/install-qemu.md) to build a compatible
-binary, then select its path in `.env.local`.
+binary. For example, if the installer puts QEMU 11.1.3 in `/opt`, create
+`.env.local` in the repository root with:
+
+```text
+QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64
+```
+
+Use the actual version installed on your machine. This local setting overrides
+only `QEMU_SYSTEM_X86_64` from `.env`; `qemu-img` still uses the distribution
+package. `.env.local` is ignored by Git. Confirm that the selected binary lists
+`vde` with `/opt/qemu-11.1.3/bin/qemu-system-x86_64 -netdev help`, then run
+`./start.sh` again.
