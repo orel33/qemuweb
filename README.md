@@ -72,6 +72,9 @@ start from fresh images. [`demo/`](demo/) also contains DMZ and gateway sessions
 
 - **Save session** exports hosts, switches, settings, and startup scripts as a
   ZIP archive; **Load session ZIP** restores it.
+- Before loading, the dialog summarizes the archive and warns when a base image
+  changed since the session was saved. Hosts on a changed image start from the
+  current image; their working disks (qcow2) are discarded, never reused.
 - **Load topology** reads a `.topo` text file that describes only hosts,
   switches, and their links, without disks or startup scripts. Examples:
   [`topo/lan.topo`](topo/lan.topo), [`topo/dmz.topo`](topo/dmz.topo),
