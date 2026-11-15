@@ -177,8 +177,17 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 
 **Critères de fin**
 
-- [ ] Deux utilisateurs connectés en même temps ne voient ni ne pilotent les nodes de l'autre (test d'intégration dédié).
-- [ ] Fermer le navigateur puis se reconnecter retrouve les VM en cours et leurs consoles.
+- [x] Deux utilisateurs connectés en même temps ne voient ni ne pilotent les nodes de l'autre (test d'intégration dédié).
+- [x] Fermer le navigateur puis se reconnecter retrouve les VM en cours et leurs consoles.
+
+**Écarts par rapport au plan**
+
+- Le contexte du runner est une instance par session (`createContext()`), et `lib/session.js` ne porte plus que l'espace de travail : l'état du serveur (fichiers `server-<port>.pid` et `.session`, nettoyage) est dans `lib/server-instance.js`, et `lib/session-manager.js` fait le lien login → session + runner.
+- `runtime/current` est supprimé, remplacé par `runtime/users/<login>`. Le fichier `server-<port>.session` liste désormais plusieurs identifiants de session (l'ancien format reste lu).
+- Les VM VirtualBox portent l'identifiant de session dans leur nom, et l'exclusion KVM / VirtualBox vaut pour toute la machine.
+- Un identifiant de node inconnu donne 404 (au lieu de 400 ou 500), sauf l'aperçu `GET /api/nodes/:id/options`.
+- Ajouts : `DELETE /api/session` (suppression de sa propre session, avec le bouton de l'en-tête), `QEMUWEB_AUTH=off` (usage local explicite), `docs/deployment.md`.
+- Reporté au jalon 6 : contrôle `Origin`, déconnexion révocable, politique de mot de passe, ralentissement des échecs, liste blanche HMP, quotas, jail. Un compte retiré garde sa session jusqu'à sa suppression ou au redémarrage (jalon 4 pour l'administration).
 
 ## Jalon 4 — Rôle admin
 
