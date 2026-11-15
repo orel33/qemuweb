@@ -22,7 +22,7 @@ flowchart TB
   end
 
   subgraph Server["Node.js server · server.js"]
-    Auth["Authentication · lib/auth/ (cookie, Origin)"]
+    Auth["Authentication · lib/auth/ (signed cookie)"]
     Manager["Session manager · lib/session-manager.js (login → session + runner)"]
     Routes["HTTP API · one router per session · routes/"]
     Sockets["Socket.IO · rooms session:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
@@ -74,7 +74,7 @@ flowchart TB
   processes. The runner reports state, logs and serial output as events, which
   `sockets.js` forwards over Socket.IO to the relevant browser tabs.
 - **Users and sessions:** `lib/auth/` checks the signed cookie of every request
-  and of the Socket.IO handshake, and the `Origin` of state-changing requests.
+  and of the Socket.IO handshake (Origin checks are planned for milestone 6).
   `lib/session-manager.js` maps the login to its workspace `{session, runner}`,
   creating it at first use; it survives logouts and closed tabs until the user
   deletes it or the server stops. Each HTTP request goes to the router of the
@@ -116,7 +116,7 @@ The server is split into layers with one-way dependencies:
 | `routes/metrics.js` | Per-host CPU and memory metrics. |
 | `lib/session-manager.js` | Login → `{session, runner}`; creation at first use, deletion, shutdown, `runtime/users/<login>` links. |
 | `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
-| `lib/auth/` | `index.js` facade (login routes, middleware, Socket.IO handshake), `users-store.js` (`users.json`), `passwords.js` (scrypt), `cookie.js` (signed cookie), `origin.js` (CSRF Origin check). |
+| `lib/auth/` | `index.js` facade (login routes, middleware, Socket.IO handshake), `users-store.js` (`users.json`), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
 | `lib/session.js` | One session: engine, nodes, runtime directory and `session.json` (with `owner`). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
 | `lib/topology.js` | `.topo` parsing and formatting. |

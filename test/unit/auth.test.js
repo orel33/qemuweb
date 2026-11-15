@@ -1,4 +1,4 @@
-// Authentication unit tests: password hashes, users file, signed cookie, Origin checks,
+// Authentication unit tests: password hashes, users file, signed cookie,
 // the auth middleware and the user administration script. No server is started.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -9,7 +9,6 @@ const {spawnSync} = require('node:child_process');
 const {hashPassword, verifyPassword, isPasswordHash} = require('../../lib/auth/passwords');
 const {validateLogin, readUsers, writeUsers, parseUsers, usersFilePath, createUsersStore} = require('../../lib/auth/users-store');
 const {COOKIE_NAME, loadSecret, signSession, verifySession, parseCookies, sessionCookie} = require('../../lib/auth/cookie');
-const {parseAllowedOrigins, originAllowed} = require('../../lib/auth/origin');
 const {createAuth} = require('../../lib/auth');
 
 const root = path.join(__dirname, '..', '..');
@@ -93,20 +92,6 @@ test('session cookies are signed, expire and reject tampering', t => {
   assert.match(sessionCookie(value, {maxAgeMs: 1000, secure: true}), /; Secure$/);
 });
 
-test('the Origin must name this server or an allowed origin', () => {
-  assert.equal(originAllowed('http://127.0.0.1:3002', '127.0.0.1:3002'), true);
-  assert.equal(originAllowed('http://127.0.0.1:3003', '127.0.0.1:3002'), false);
-  assert.equal(originAllowed('https://evil.example', '127.0.0.1:3002'), false);
-  assert.equal(originAllowed(undefined, '127.0.0.1:3002'), false);
-  assert.equal(originAllowed('null', '127.0.0.1:3002'), false);
-  assert.equal(originAllowed('file://x', 'x'), false);
-  const allowed = parseAllowedOrigins('https://qemuweb.example.org, https://lab.example.org/');
-  assert.equal(originAllowed('https://qemuweb.example.org', '127.0.0.1:3002', allowed), true);
-  assert.equal(originAllowed('https://lab.example.org', '127.0.0.1:3002', allowed), true);
-  assert.equal(originAllowed('http://qemuweb.example.org', '127.0.0.1:3002', allowed), false);
-  assert.throws(() => parseAllowedOrigins('ftp://x'), /Invalid origin/);
-});
-
 // Minimal Express-like request and response doubles.
 function exchange({method = 'GET', path: url = '/', headers = {}} = {}) {
   const res = {statusCode: 200, headers: {}, body: null, redirected: null,
@@ -158,22 +143,18 @@ test('the auth facade authenticates, identifies the cookie and guards pages and 
     assert.equal(run(auth.requireUser, req, res), true, url);
   }
 
-  ({req, res} = exchange({method: 'POST', path: '/api/hosts', headers: {host: '127.0.0.1:3002'}}));
-  assert.equal(run(auth.checkOrigin, req, res), false, 'missing Origin refused');
-  assert.equal(res.statusCode, 403);
-  ({req, res} = exchange({method: 'POST', path: '/api/hosts', headers: {host: '127.0.0.1:3002', origin: 'http://127.0.0.1:3002'}}));
-  assert.equal(run(auth.checkOrigin, req, res), true);
-  ({req, res} = exchange({method: 'GET', path: '/api/nodes', headers: {host: '127.0.0.1:3002'}}));
-  assert.equal(run(auth.checkOrigin, req, res), true, 'GET needs no Origin');
+  ({req, res} = exchange({method: 'POST', path: '/api/hosts'}));
+  run(auth.identify, req, res);
+  assert.equal(run(auth.requireUser, req, res), false, 'an anonymous POST is refused');
+  assert.equal(res.statusCode, 401);
 
   const socket = (headers) => ({request: {headers}, data: {}});
   const accept = s => new Promise(resolve => auth.socketMiddleware(s, error => resolve(error || null)));
-  const ok = socket({host: '127.0.0.1:3002', origin: 'http://127.0.0.1:3002', cookie});
+  const ok = socket({host: '127.0.0.1:3002', cookie});
   assert.equal(await accept(ok), null);
   assert.equal(ok.data.user.login, 'toto');
-  assert.match((await accept(socket({host: '127.0.0.1:3002', origin: 'http://evil.example', cookie}))).message, /Cross-site/);
-  assert.match((await accept(socket({host: '127.0.0.1:3002', 'sec-fetch-site': 'cross-site', cookie}))).message, /Cross-site/);
-  assert.match((await accept(socket({host: '127.0.0.1:3002', origin: 'http://127.0.0.1:3002'}))).message, /Authentication required/);
+  assert.match((await accept(socket({host: '127.0.0.1:3002'}))).message, /Authentication required/);
+  assert.match((await accept(socket({host: '127.0.0.1:3002', cookie: `${COOKIE_NAME}=forged.value`}))).message, /Authentication required/);
 
   writeUsers(usersFile, []);
   ({req, res} = exchange({headers: {cookie}}));

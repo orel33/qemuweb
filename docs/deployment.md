@@ -4,8 +4,16 @@ QemuWeb always listens on `127.0.0.1`. To open it to students, put a reverse
 proxy in front of it that terminates TLS and forwards HTTP and WebSocket
 traffic. This page uses nginx; any proxy with the same features works.
 
-Until per-user quotas, QEMU monitor restrictions and the runner jail exist
-(milestone 6 of the roadmap), give accounts only to trusted users.
+Until per-user quotas, QEMU monitor restrictions, cross-site request checks and
+the runner jail exist (milestone 6 of the roadmap), give accounts only to
+trusted users.
+
+**Give QemuWeb its own domain name** (for example `qemuweb.example.org`), never
+a sub-domain or a site shared with pages that students can publish (for
+example `~login` pages or `students.example.org/...`). QemuWeb does not check
+the `Origin` of requests yet: the `SameSite=Lax` login cookie is then the only
+protection against requests forged by another site, and it does not separate
+pages of the same site.
 
 ## 1. Accounts
 
@@ -26,7 +34,6 @@ writes it with mode 0600). Do not set `QEMUWEB_AUTH=off` on an exposed server.
 | --- | --- | --- |
 | `PORT` | `3002` (or another local port) | Port nginx forwards to. |
 | `QEMUWEB_TRUST_PROXY` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
-| `QEMUWEB_ALLOWED_ORIGINS` | `https://qemuweb.example.org` | Only needed if nginx does not pass the public `Host` header (see `proxy_set_header Host` below): the `Origin` of browser requests must then be listed here. |
 | `QEMUWEB_SESSION_HOURS` | `12` (default) | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_USERS_FILE` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
 
@@ -87,8 +94,7 @@ server {
         proxy_set_header Upgrade $http_upgrade;
         proxy_set_header Connection $connection_upgrade;
 
-        # QemuWeb compares the Origin header with Host, and uses
-        # X-Forwarded-Proto to mark the cookie Secure.
+        # QemuWeb uses X-Forwarded-Proto to mark the cookie Secure.
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto $scheme;
@@ -114,7 +120,15 @@ Check the result:
 - consoles connect over `wss://` (the Network tab shows a `101 Switching
   Protocols` response for `/socket.io/`).
 
-If every state-changing action fails with *Cross-site request refused*, the
-`Host` header that reaches QemuWeb differs from the public host name: pass
-`proxy_set_header Host $host;` or list the public origin in
-`QEMUWEB_ALLOWED_ORIGINS`.
+## Known limits
+
+- Cross-site request checks (`Origin`/CSRF) and a revocable logout come with
+  milestone 6; until then, keep QemuWeb on its own domain name (see above).
+- Log out only clears the cookie in the browser: a copied cookie stays valid
+  until it expires (`QEMUWEB_SESSION_HOURS`). Removing the account or deleting
+  `runtime/auth-secret` (which logs everybody out) revokes it.
+- A user removed with `scripts/user.sh remove` can no longer log in, but their
+  running session stays on the server until it is deleted or the server
+  restarts.
+- Deleting another user's session from an administration page comes with
+  milestone 4; until then only the user can delete their own session.

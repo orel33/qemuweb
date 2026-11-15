@@ -83,16 +83,16 @@ line of standard input. Logins use letters, digits, `.`, `_`, `-` and `@` (up to
 64 characters). Changes apply without restarting the server. The `admin` role
 is stored but grants nothing yet.
 
-Until per-user quotas and command restrictions exist, give accounts only to
-trusted users: any user can run any single-line QEMU monitor command on their
-own hosts.
+Until per-user quotas, command restrictions and cross-site request checks
+exist (milestone 6), give accounts only to trusted users: any user can run any
+single-line QEMU monitor command on their own hosts. Log out only clears the
+browser's cookie; see [docs/deployment.md](docs/deployment.md#known-limits).
 
 | Variable | Default | Effect |
 | --- | --- | --- |
 | `QEMUWEB_USERS_FILE` | `users.json` | Users file. |
 | `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
-| `QEMUWEB_ALLOWED_ORIGINS` | unset | Extra allowed `Origin` values, comma-separated, when the public URL differs from the `Host` header. |
 | `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
 
 With `QEMUWEB_AUTH=off`, the server prints a warning at startup and the
@@ -198,7 +198,7 @@ record the owner, so any user can load them.
 | `sockets.js` | Socket.IO consoles; forwards each runner's events to the browsers of its session only. |
 | `runner/` | Node processes behind the facade `runner/index.js`, one runner instance per session: QEMU, VirtualBox, VDE switches, consoles, startup media, metrics. |
 | `lib/` | Session manager (one session per user), session, server instance records, session ZIP archives and snapshots, `.topo` parsing. |
-| `lib/auth/` | Authentication: users file, password hashes, signed cookie, Origin checks. |
+| `lib/auth/` | Authentication: users file, password hashes, signed cookie. |
 | `scripts/user.sh`, `scripts/user.js` | User account administration. |
 | `common/` | Code shared by the runner and the server: IDs, launch settings, `config.json` validation. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |

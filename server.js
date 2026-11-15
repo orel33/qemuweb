@@ -64,7 +64,6 @@ io.use(auth.socketMiddleware);
 attachSockets(io, manager);
 
 app.use(auth.identify);
-app.use(['/api', '/auth'], auth.checkOrigin);
 auth.register(app);
 app.use(auth.requireUser);
 app.use(express.json({limit: '6mb'}));

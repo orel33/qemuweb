@@ -8,7 +8,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 
 | File | Purpose |
 |---|---|
-| `auth.test.js` | Check authentication: scrypt hash round trip, login character set, `users.json` validation and mode 0600, signed cookie expiry and tampering, Origin checks, the page/API gate, the Socket.IO handshake, `QEMUWEB_AUTH=off`, and `scripts/user.js` (add, passwd, role, remove, list, import-csv). |
+| `auth.test.js` | Check authentication: scrypt hash round trip, login character set, `users.json` validation and mode 0600, signed cookie expiry and tampering, the page/API gate, the Socket.IO handshake, `QEMUWEB_AUTH=off`, and `scripts/user.js` (add, passwd, role, remove, list, import-csv). |
 | `guest-hook-filter.test.js` | Hide startup hook markers from the serial console, including split and prefixed lines. |
 | `guest-media.test.js` | Validate startup files and resource paths; check that separate read-only ISOs contain the right script and resources when `genisoimage` and `isoinfo` are available. |
 | `host-settings-naming.test.js` | Check automatic host names (from `public/nodes.js`) and the shared Add host/Host Settings dialog. |
@@ -31,13 +31,13 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 
 ## Integration tests (`test/integration/`)
 
-Every scenario logs in for real: `qemuweb-client.js` writes a temporary users file with random passwords, starts the server with `QEMUWEB_USERS_FILE`, and drives it with an HTTP and Socket.IO client that keeps the session cookie and sends an `Origin` header. The server has no test backdoor.
+Every scenario logs in for real: `qemuweb-client.js` writes a temporary users file with random passwords, starts the server with `QEMUWEB_USERS_FILE`, and drives it with an HTTP and Socket.IO client that keeps the session cookie like a browser. The server has no test backdoor.
 
 These scenarios require QEMU and prepared RAW images. The two-hosts and four-hosts scenarios require a QEMU build with VDE support and the VDE tools. The two-hosts scenario uses KVM when available and falls back to QEMU/TCG otherwise; `two-hosts-tcg` forces TCG. The four-hosts scenario uses KVM by default and can use TCG with `FOUR_HOSTS_ENGINE=qemu-tcg`.
 
 | Command | Script | Purpose |
 |---|---|---|
-| `./scripts/run-tests.sh two-users-isolation` | `two-users-isolation.js` | Two users logged in at once: each lists only its own nodes; every cross-session node route answers 404 and changes nothing; Socket.IO cannot select, type into, clear or resize the other user's consoles; no event of one session reaches the other; anonymous and cross-origin requests are refused; deleting one session leaves the other intact; logging out stops nothing. Needs only the VDE tools (no image, no KVM). |
+| `./scripts/run-tests.sh two-users-isolation` | `two-users-isolation.js` | Two users logged in at once: each lists only its own nodes; every cross-session node route answers 404 and changes nothing; Socket.IO cannot select, type into, clear or resize the other user's consoles; no event of one session reaches the other; anonymous requests and sockets are refused; deleting one session leaves the other intact; logging out stops nothing. Needs only the VDE tools (no image, no KVM). |
 | `./scripts/run-tests.sh session-reconnect` | `session-reconnect.js` | Start a VDE switch (and a Debian 13 Legacy host when its image and KVM are available), type into the consoles, close every socket and log out, then log in again: same session, nodes still running, console and log history replayed by `node-snapshot`, input works. `RECONNECT_HOST=0` skips the host. |
 | `./scripts/run-tests.sh two-hosts` | `two-hosts-ping.js` | Boot two Debian 13 Legacy guests on one VDE switch; verify distinct ports and MACs, serial login, static IPs, bidirectional ping, and Stop/Resume. Requires `images/debian13-legacy.raw`. |
 | `./scripts/run-tests.sh two-hosts-tcg` | `two-hosts-ping.js` | Run the same two-hosts scenario with QEMU software emulation. |

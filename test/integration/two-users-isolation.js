@@ -2,7 +2,7 @@
 
 // Two users logged in on one server at the same time: neither sees nor drives the other's
 // nodes, through HTTP or Socket.IO, and no event of one session reaches the other.
-// Also checks the authentication gate, the Origin check and self-service deletion.
+// Also checks the authentication gate and self-service deletion.
 // Uses VDE switches and host drafts only: no system image or KVM is needed.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -84,28 +84,19 @@ async function run() {
   await expectStatus(anonymous, '/login.html', 'GET', 200);
   await expectStatus(anonymous, '/auth/login', 'POST', 401, {login: 'alice', password: 'wrong'});
   await expectStatus(anonymous, '/auth/login', 'POST', 401, {login: 'nobody', password: 'x'});
-  const noOrigin = await fetch(`${baseUrl}/auth/login`, {method: 'POST', headers: {'content-type': 'application/json'},
-    body: JSON.stringify({login: aliceUser.login, password: aliceUser.password})});
-  assert.equal(noOrigin.status, 403, 'a login without Origin must be refused');
-  const unauthenticatedSocket = io(baseUrl, {reconnection: false, timeout: 5000, extraHeaders: {origin: baseUrl}});
+  await expectStatus(anonymous, '/api/switches', 'POST', 401, {id: newId('switch'), name: 'anon'});
+  await expectStatus(anonymous, '/api/session', 'DELETE', 401);
+  const unauthenticatedSocket = io(baseUrl, {reconnection: false, timeout: 5000});
   sockets.push(unauthenticatedSocket);
   const refused = await new Promise(resolve => {
     unauthenticatedSocket.once('connect', () => resolve('connected'));
     unauthenticatedSocket.once('connect_error', error => resolve(error.message));
   });
   assert.equal(refused, 'Authentication required.');
-  console.log('Isolation: anonymous API, pages, sockets and Origin-less login refused');
+  console.log('Isolation: anonymous API, pages and sockets refused');
 
   const alice = await new QemuWebClient(baseUrl).signIn(aliceUser.login, aliceUser.password);
   const bob = await new QemuWebClient(baseUrl).signIn(bobUser.login, bobUser.password);
-  const foreignOrigin = await alice.fetch('/api/switches', {method: 'POST', body: {id: newId('switch'), name: 'evil'}, headers: {origin: 'http://evil.example'}});
-  assert.equal(foreignOrigin.status, 403, 'a foreign Origin must be refused');
-  const foreignSocket = alice.socket({extraHeaders: {origin: 'http://evil.example'}});
-  sockets.push(foreignSocket);
-  assert.match(await new Promise(resolve => {
-    foreignSocket.once('connect', () => resolve('connected'));
-    foreignSocket.once('connect_error', error => resolve(error.message));
-  }), /Cross-site/);
   const aliceSettings = await alice.request('/api/general-settings');
   const bobSettings = await bob.request('/api/general-settings');
   assert.notEqual(aliceSettings.sessionId, bobSettings.sessionId, 'both users share one session');
