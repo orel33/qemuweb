@@ -519,6 +519,8 @@ function imageById(id) {
   const vbox = selectedProfile(catalog, id, 'vbox');
   const active = selectedProfile(catalog, id, sessionEngine);
   return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled,
+    boot: active.boot || 'disk',
+    containerImage: active.containerImage || null,
     arch: active.arch || 'x86_64',
     images: {raw: qemu.image, vdi: vbox.image},
     virtualbox: {osType: 'Linux_64', networkModel: vbox.networkModel === 'virtio' ? 'virtio' : '82540EM',
@@ -1894,19 +1896,32 @@ async function stop(session, options = {}) {
         }
       }
     } else {
-      try {
-        appendLog(session, '$ QEMU monitor: system_powerdown');
-        await sendMonitorCommand(session, 'system_powerdown');
-        await waitForQemuExit(current, 10000);
-      } catch (error) {
-        if (options.forceOnTimeout === false) throw new Error(`Host did not power off gracefully: ${error.message}`);
-        appendLog(session, `# Graceful QEMU shutdown failed: ${error.message}; sending SIGTERM`);
+      const isKernelBoot = session.selectedImage?.boot === 'kernel' || session.qemuOptions?.boot === 'kernel' || session.selectedImage?.id === 'container';
+      if (isKernelBoot) {
+        appendLog(session, '# Direct kernel boot host without ACPI: terminating QEMU cleanly with SIGTERM');
         current.kill('SIGTERM');
-        try { await waitForQemuExit(current, 2000); }
-        catch (_) {
-          appendLog(session, '$ signal sent to qemu-system-x86_64: SIGKILL');
+        try { await waitForQemuExit(current, 5000); }
+        catch (error) {
+          if (options.forceOnTimeout === false) throw new Error(`Host did not power off gracefully: ${error.message}`);
+          appendLog(session, '# Signal sent to QEMU: SIGKILL');
           current.kill('SIGKILL');
           await waitForQemuExit(current, 5000);
+        }
+      } else {
+        try {
+          appendLog(session, '$ QEMU monitor: system_powerdown');
+          await sendMonitorCommand(session, 'system_powerdown');
+          await waitForQemuExit(current, 10000);
+        } catch (error) {
+          if (options.forceOnTimeout === false) throw new Error(`Host did not power off gracefully: ${error.message}`);
+          appendLog(session, `# Graceful QEMU shutdown failed: ${error.message}; sending SIGTERM`);
+          current.kill('SIGTERM');
+          try { await waitForQemuExit(current, 2000); }
+          catch (_) {
+            appendLog(session, '# Signal sent to QEMU: SIGKILL');
+            current.kill('SIGKILL');
+            await waitForQemuExit(current, 5000);
+          }
         }
       }
     }
@@ -1949,7 +1964,7 @@ async function destroySession(session) {
     }
     fs.rmSync(tempFile(session, 'vbox-vm'), {recursive: true, force: true});
   } else if (current) {
-    appendLog(session, '$ force kill qemu-system-x86_64: SIGKILL');
+    appendLog(session, '# Force kill QEMU: SIGKILL');
     current.kill('SIGKILL');
     try { await waitForQemuExit(current, 5000); } catch (_) {}
   }
