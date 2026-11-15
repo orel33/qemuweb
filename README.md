@@ -40,19 +40,63 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    cd qemuweb
    npm ci
    bash scripts/prepare.sh --system alpine
+   ./scripts/user.sh add alice      # create your account; prompts for a password
    ./start.sh
    ```
 
-Open <http://127.0.0.1:3002>. Press `Ctrl+C` to stop the server, or use
-`PORT=3003 ./start.sh` to choose another port.
+Open <http://127.0.0.1:3002> and log in. Press `Ctrl+C` to stop the server, or
+use `PORT=3003 ./start.sh` to choose another port.
 
-The server listens only on `127.0.0.1` and has no authentication. To use it
-from another machine, forward the port over SSH:
-`ssh -L 3002:127.0.0.1:3002 <server>`.
+The server listens only on `127.0.0.1`. To use it from another machine, forward
+the port over SSH (`ssh -L 3002:127.0.0.1:3002 <server>`) or put it behind
+nginx with TLS: see [docs/deployment.md](docs/deployment.md).
 
 VirtualBox is optional: install it separately to provide `VBoxManage`. The
 VirtualBox engine is disabled in the Web interface when `VBoxManage` is
 unavailable.
+
+## Users and sessions
+
+Each user logs in with a login and a password and always finds the same
+session: its hosts, switches, consoles and logs. The session lives on the
+server, independently of the browser: closing the tab or logging out stops
+nothing, and several tabs of one user share the session. It disappears only
+when the user deletes it (**Delete session** in the header) or when the server
+stops, which stops every machine.
+
+Accounts live in `users.json` at the repository root (mode 0600, ignored by
+Git; `QEMUWEB_USERS_FILE` selects another file, and
+[`users.example.json`](users.example.json) shows the layout). Passwords are
+stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
+
+```sh
+./scripts/user.sh add alice                 # prompts for the password twice
+./scripts/user.sh add bob --role admin      # roles: student (default) or admin
+./scripts/user.sh passwd alice
+./scripts/user.sh remove alice
+./scripts/user.sh list
+./scripts/user.sh import-csv class.csv      # lines: login,password[,role]
+```
+
+For scripts, the password can come from `QEMUWEB_PASSWORD` or from the first
+line of standard input. Logins use letters, digits, `.`, `_`, `-` and `@` (up to
+64 characters). Changes apply without restarting the server. The `admin` role
+is stored but grants nothing yet.
+
+Until per-user quotas and command restrictions exist, give accounts only to
+trusted users: any user can run any single-line QEMU monitor command on their
+own hosts.
+
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `QEMUWEB_USERS_FILE` | `users.json` | Users file. |
+| `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime, renewed while the user is active. |
+| `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
+| `QEMUWEB_ALLOWED_ORIGINS` | unset | Extra allowed `Origin` values, comma-separated, when the public URL differs from the `Host` header. |
+| `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
+
+With `QEMUWEB_AUTH=off`, the server prints a warning at startup and the
+interface shows **Authentication disabled**. It is never the default.
 
 ## Using QemuWeb
 
@@ -127,15 +171,20 @@ Guests log in as `root` without a password on the serial console.
 | [`config.json`](config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. |
 | [`.env`](.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
-| `runtime/sessions/<id>/` | Current session: `session.json`, `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. |
+| `users.json` | User accounts (see [Users and sessions](#users-and-sessions)); ignored by Git. |
+| `runtime/sessions/<id>/` | One user's session: `session.json` (with its `owner`), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. The ID is random. |
+| `runtime/users/<login>` | Link to the user's session directory, for administrators. |
+| `runtime/auth-secret` | Key that signs login cookies; deleting it logs everybody out. |
 
 `runtime/` is temporary: a node's files are removed with the node or when
-the server stops. Use **Save session** to keep a portable copy.
+the server stops. Use **Save session** to keep a portable copy; archives do not
+record the owner, so any user can load them.
 
 ## Maintenance scripts
 
 | Command | Effect |
 | --- | --- |
+| `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
 | `scripts/stop.sh` | Stop the server started on `PORT` (default 3002). |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, QEMU processes, and VirtualBox VMs, including orphans. |
 | `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads. |
@@ -144,11 +193,13 @@ the server stops. Use **Save session** to keep a portable copy.
 
 | Path | Role |
 | --- | --- |
-| `server.js` | Startup: preflight, session, runner, HTTP routes and Socket.IO wiring. |
-| `routes/` | HTTP API by area: settings, nodes, hosts, topology, archives, metrics. |
-| `sockets.js` | Socket.IO consoles; forwards runner events to browsers. |
-| `runner/` | Node processes behind the facade `runner/index.js`: QEMU, VirtualBox, VDE switches, consoles, startup media, metrics. |
-| `lib/` | Session, session ZIP archives and snapshots, `.topo` parsing. |
+| `server.js` | Startup: preflight, authentication, session manager, HTTP routes and Socket.IO wiring. |
+| `routes/` | HTTP API of one session (`routes/index.js` builds one router per session), by area: settings, nodes, hosts, topology, archives, metrics. |
+| `sockets.js` | Socket.IO consoles; forwards each runner's events to the browsers of its session only. |
+| `runner/` | Node processes behind the facade `runner/index.js`, one runner instance per session: QEMU, VirtualBox, VDE switches, consoles, startup media, metrics. |
+| `lib/` | Session manager (one session per user), session, server instance records, session ZIP archives and snapshots, `.topo` parsing. |
+| `lib/auth/` | Authentication: users file, password hashes, signed cookie, Origin checks. |
+| `scripts/user.sh`, `scripts/user.js` | User account administration. |
 | `common/` | Code shared by the runner and the server: IDs, launch settings, `config.json` validation. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |
@@ -163,7 +214,8 @@ npm test                          # unit tests only
 ./scripts/run-tests.sh --list     # unit and integration scenarios
 ```
 
-Integration tests need prepared images, QEMU with VDE, and usually KVM. See
+Integration tests log in with a temporary users file; most need prepared
+images, QEMU with VDE, and usually KVM. See
 [test/TESTS.md](test/TESTS.md) for each scenario and its prerequisites.
 
 ## Troubleshooting
