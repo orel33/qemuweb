@@ -116,5 +116,7 @@ export function initSockets() {
     showPage();
   });
   socket.on('node-error', showStatusError);
+  // The session was deleted (here or in another tab): reload into the new, empty one.
+  socket.on('session-deleted', () => location.reload());
   socket.on('connect_error', socketConnectError);
 }

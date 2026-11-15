@@ -75,6 +75,12 @@ app.use((req, res, next) => {
   next();
 });
 app.use(express.static(path.join(root, 'public')));
+// Self-service deletion: stops and removes every node, then the session; the next request
+// opens a new, empty session.
+app.delete('/api/session', async (req, res) => {
+  try { res.json({deleted: await manager.remove(req.user.login)}); }
+  catch (error) { res.status(409).json({error: error.message}); }
+});
 // API requests go to the router of the user's own session (created at first use).
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();

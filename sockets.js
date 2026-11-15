@@ -23,6 +23,11 @@ function bindWorkspace(io, {session, runner}) {
 function attachSockets(io, manager) {
   for (const workspace of manager.list()) bindWorkspace(io, workspace);
   manager.on('created', workspace => bindWorkspace(io, workspace));
+  // Browsers of a deleted session reload, which opens the user's new session.
+  manager.on('removed', ({session}) => {
+    io.to(sessionRoom(session)).emit('session-deleted', {sessionId: session.id});
+    io.in(sessionRoom(session)).disconnectSockets(true);
+  });
 
   io.on('connection', socket => {
     let workspace;
