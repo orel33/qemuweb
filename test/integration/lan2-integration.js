@@ -99,26 +99,26 @@ class SerialShell {
     this.socket = io(baseUrl, {reconnection: false, timeout: 10000});
     this.socket.on('connect', () => {
       this.connected = true;
-      this.socket.emit('select-session', id, `lan2-${nonce}`, response => {
+      this.socket.emit('select-node', id, `lan2-${nonce}`, response => {
         if (response && response.error) this.selectionError = response.error;
         else this.selected = true;
       });
     });
-    this.socket.on('session-snapshot', snapshot => {
-      if (snapshot.sessionId === id) {
+    this.socket.on('node-snapshot', snapshot => {
+      if (snapshot.nodeId === id) {
         this.logs = snapshot.logs || [];
         this.append(snapshot.serial || '');
       }
     });
-    this.socket.on('log', packet => { if (packet.sessionId === id) this.logs.push(packet.line); });
+    this.socket.on('log', packet => { if (packet.nodeId === id) this.logs.push(packet.line); });
     this.socket.on('serial', packet => {
-      if (packet.sessionId === id) this.append(packet.data || '');
+      if (packet.nodeId === id) this.append(packet.data || '');
     });
     this.socket.on('serial-reset', packet => {
-      if (!packet || packet.sessionId === id) { this.output = ''; this.resetCount++; }
+      if (!packet || packet.nodeId === id) { this.output = ''; this.resetCount++; }
     });
     this.socket.on('connect_error', error => { this.connectionError = error.message; });
-    this.socket.on('session-error', error => { this.selectionError = String(error); });
+    this.socket.on('node-error', error => { this.selectionError = String(error); });
   }
 
   append(value) {

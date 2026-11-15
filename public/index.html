@@ -593,11 +593,11 @@
         caption.textContent = label;
         button.append(icon, caption);
         button.addEventListener('click', () => {
-          const sessionId = pane.machineId;
+          const nodeId = pane.machineId;
           pane.actionMenu.open = false;
-          if (!sessionId || !machines.has(sessionId)) return;
+          if (!nodeId || !machines.has(nodeId)) return;
           focusPane(pane.index);
-          if (activeId !== sessionId) return;
+          if (activeId !== nodeId) return;
           ({play: startActiveMachine, stop: stopActiveMachine, reboot: rebootActiveMachine, reset: resetActiveMachine, remove: removeActiveMachine})[action]();
         });
         pane.actionButtons[action] = button;
@@ -620,10 +620,10 @@
       pane.settingsButton.hidden = true;
       pane.settingsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-settings-icon"></use></svg>';
       pane.settingsButton.addEventListener('click', () => {
-        const sessionId = pane.machineId;
-        if (!sessionId || machines.get(sessionId)?.kind !== 'host') return;
+        const nodeId = pane.machineId;
+        if (!nodeId || machines.get(nodeId)?.kind !== 'host') return;
         focusPane(pane.index);
-        if (activeId === sessionId) openHostSettings();
+        if (activeId === nodeId) openHostSettings();
       });
       pane.actionMenu.after(pane.settingsButton);
       pane.clearButton = document.createElement('button');
@@ -1127,7 +1127,7 @@
     graphicCanvas.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       const nodeElement = event.target.closest('.topology-node');
-      const node = graphicGraph?.nodes.find(item => item.id === nodeElement?.dataset.sessionId);
+      const node = graphicGraph?.nodes.find(item => item.id === nodeElement?.dataset.nodeId);
       const pointer = graphicPointerPosition(event);
       if (!node || !pointer) return;
       graphicDrag = {pointerId: event.pointerId, id: node.id, x: node.x, y: node.y, startX: pointer.x, startY: pointer.y, moved: false};
@@ -1289,11 +1289,11 @@
     async function sendPaneMonitorCommand(pane, machine, command) {
       machine.monitorBusy = true;
       machine.monitorOutput = `${machine.monitorOutput || ''}> ${command}\n`;
-      const sessionId = machine.id;
+      const nodeId = machine.id;
       const request = ++pane.monitorRequest;
       let output;
       try {
-        const response = await fetch(`/api/nodes/${encodeURIComponent(sessionId)}/monitor`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}/monitor`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Command failed');
         output = body.output || '(no output)';
@@ -1301,7 +1301,7 @@
       finally {
         machine.monitorOutput += `${output}\n`;
         machine.monitorBusy = false;
-        if (pane.monitorRequest === request && pane.machineId === sessionId && pane.view === 'monitor' && machines.get(sessionId) === machine) renderMonitorView(pane);
+        if (pane.monitorRequest === request && pane.machineId === nodeId && pane.view === 'monitor' && machines.get(nodeId) === machine) renderMonitorView(pane);
       }
     }
     function handleMonitorInput(pane, data) {
@@ -1505,13 +1505,13 @@
       panes.forEach(pane => {
         if (!pane.machineId || before[pane.index] === pane.machineId) return;
         pane.token = ++selectionToken;
-        const sessionId = pane.machineId;
-        pane.socket.emit('select-session', sessionId, pane.token, result => {
-          if (result?.error && pane.machineId === sessionId) showStatusError(result.error);
+        const nodeId = pane.machineId;
+        pane.socket.emit('select-node', nodeId, pane.token, result => {
+          if (result?.error && pane.machineId === nodeId) showStatusError(result.error);
         });
       });
       panes.forEach(pane => {
-        if (before[pane.index] && !pane.machineId) pane.socket.emit('leave-session', before[pane.index]);
+        if (before[pane.index] && !pane.machineId) pane.socket.emit('leave-node', before[pane.index]);
       });
       requestAnimationFrame(fitTerminals);
     }
@@ -1531,7 +1531,7 @@
       activeId = pane.machineId;
       panes.forEach(item => item.element.dataset.active = String(item.index === index));
       updateWorkspaceLayout();
-      tabs.querySelectorAll('.machine-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.sessionId === activeId)));
+      tabs.querySelectorAll('.machine-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.nodeId === activeId)));
       updateControls();
       const machine = activeMachine();
       if (machine) {
@@ -1783,7 +1783,7 @@
       for (const machine of machines.values()) {
         const tab = document.createElement('div');
         tab.className = 'machine-tab';
-        tab.dataset.sessionId = machine.id;
+        tab.dataset.nodeId = machine.id;
         tab.setAttribute('aria-selected', String(machine.id === activeId));
         const select = document.createElement('button');
         select.type = 'button';
@@ -2738,14 +2738,14 @@
       pane.socket.on('connect', () => {
         if (!pane.machineId) return;
         pane.token = ++selectionToken;
-        const sessionId = pane.machineId;
-        pane.socket.emit('select-session', sessionId, pane.token, result => {
-          if (result?.error && pane.machineId === sessionId) showStatusError(result.error);
+        const nodeId = pane.machineId;
+        pane.socket.emit('select-node', nodeId, pane.token, result => {
+          if (result?.error && pane.machineId === nodeId) showStatusError(result.error);
         });
       });
-      pane.socket.on('session-snapshot', snapshot => {
-        const machine = machines.get(snapshot.sessionId);
-        if (!machine || pane.machineId !== snapshot.sessionId || pane.token !== snapshot.token) return;
+      pane.socket.on('node-snapshot', snapshot => {
+        const machine = machines.get(snapshot.nodeId);
+        if (!machine || pane.machineId !== snapshot.nodeId || pane.token !== snapshot.token) return;
         machine.running = snapshot.state.running;
         machine.hasLaunched = snapshot.state.hasLaunched;
         machine.message = snapshot.state.message;
@@ -2759,8 +2759,8 @@
         requestAnimationFrame(() => fitTerminal(pane));
       });
       pane.socket.on('serial-reset', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         machine.serial = event.serial || '';
         if (pane.view !== 'console') return;
         const generation = ++pane.replayGeneration;
@@ -2774,28 +2774,28 @@
         });
       });
       pane.socket.on('serial', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         machine.serial = (machine.serial + event.data).slice(-262144);
         if (pane.view !== 'console') return;
         if (pane.replaying) pane.replayPending += event.data;
         else pane.terminal.write(event.data, () => syncConsoleScroll(pane));
       });
       pane.socket.on('log', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
-        const earlierConnectedPane = panes.some(other => other.index < pane.index && other.machineId === event.sessionId && other.socket.connected);
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
+        const earlierConnectedPane = panes.some(other => other.index < pane.index && other.machineId === event.nodeId && other.socket.connected);
         if (!earlierConnectedPane) appendLog(machine, event.line);
       });
       pane.socket.on('logs-reset', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         SessionLog.reset(machine);
         refreshLogViews(machine);
       });
       pane.socket.on('state', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         machine.running = event.running;
         if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
         if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
@@ -2804,12 +2804,12 @@
         renderTabs();
         if (machine.id === activeId) updateControls();
       });
-      pane.socket.on('session-error', showStatusError);
+      pane.socket.on('node-error', showStatusError);
       pane.socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
     }
     panes.forEach(attachPaneSocket);
-    socket.on('sessions-changed', event => {
-      const machine = event && machines.get(event.sessionId);
+    socket.on('nodes-changed', event => {
+      const machine = event && machines.get(event.nodeId);
       if (!machine) { scheduleSessionSync(); return; }
       machine.running = event.running;
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
@@ -2827,12 +2827,12 @@
         defaultEngineSelect.value = event.engine;
       }
     });
-    socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
-    socket.on('sessions-removed', event => {
+    socket.on('node-renamed', event => { const machine = machines.get(event.nodeId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
+    socket.on('nodes-removed', event => {
       for (const id of event.ids || []) machines.delete(id);
       showPage();
     });
-    socket.on('session-error', showStatusError);
+    socket.on('node-error', showStatusError);
     socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
     function clearPaneConsole(pane) {
       if (!pane.machineId || pane.view !== 'console' || !machines.has(pane.machineId)) return;
@@ -2878,7 +2878,7 @@
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
           pane.token = ++selectionToken;
-          pane.socket.emit('select-session', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
+          pane.socket.emit('select-node', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
         });
         const configResponse = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/config`, {cache: 'no-store'});
         const config = await configResponse.json();

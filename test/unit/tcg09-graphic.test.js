@@ -4,7 +4,7 @@ const fs = require('node:fs');
 const {parseTopology} = require('../../topology');
 const {buildGraph, stateOf} = require('../../public/topology-graphic');
 
-function sessionsFromFixture(file) {
+function nodesFromFixture(file) {
   const topology = parseTopology(fs.readFileSync(file, 'utf8'), ['debian13-legacy']);
   const switches = topology.switches.map(sw => ({id: sw.name, kind: 'switch', hostname: sw.name, running: true}));
   const portBySwitch = new Map();
@@ -20,12 +20,12 @@ function sessionsFromFixture(file) {
   return [...switches, ...hosts];
 }
 
-test('the LAN and gateway examples produce a node for every session and a distinct curved path for every NIC', () => {
+test('the LAN and gateway examples produce a node for every host and switch and a distinct curved path for every NIC', () => {
   for (const [file, expectedSwitches, expectedHosts, expectedLinks] of [
     ['topo/lan.topo', 1, 4, 4],
     ['topo/gw.topo', 2, 4, 5]
   ]) {
-    const graph = buildGraph(sessionsFromFixture(file));
+    const graph = buildGraph(nodesFromFixture(file));
     assert.equal(graph.switches, expectedSwitches);
     assert.equal(graph.hosts, expectedHosts);
     assert.equal(graph.nodes.length, expectedSwitches + expectedHosts);
@@ -50,12 +50,12 @@ test('parallel interfaces remain separate and disconnected interfaces have no li
 });
 
 test('moving nodes updates their Bézier endpoints without changing network links', () => {
-  const sessions = [
+  const nodes = [
     {id: 's1', kind: 'switch', hostname: 's1'},
     {id: 'h1', kind: 'host', hostname: 'h1', interfaces: ['s1']}
   ];
-  const original = buildGraph(sessions);
-  const moved = buildGraph(sessions, new Map([['h1', {x: 400, y: 300}], ['s1', {x: 700, y: 220}]]));
+  const original = buildGraph(nodes);
+  const moved = buildGraph(nodes, new Map([['h1', {x: 400, y: 300}], ['s1', {x: 700, y: 220}]]));
   assert.equal(moved.links.length, original.links.length);
   assert.deepEqual(moved.nodes.map(node => node.id), original.nodes.map(node => node.id));
   assert.equal(moved.nodes.find(node => node.id === 'h1').x, 400);
@@ -63,7 +63,7 @@ test('moving nodes updates their Bézier endpoints without changing network link
   assert.notEqual(moved.links[0].path, original.links[0].path);
 });
 
-test('empty and changing session states are represented', () => {
+test('empty and changing node states are represented', () => {
   assert.deepEqual(buildGraph([]).nodes, []);
   assert.equal(stateOf({running: false, hasLaunched: false}), 'ready');
   assert.equal(stateOf({running: false, hasLaunched: true}), 'stopped');

@@ -68,18 +68,18 @@ function watchSession(id) {
   const state = {serial: '', logs: [], resetCount: 0};
   const socket = io(baseUrl, {reconnection: false, timeout: 10000});
   state.socket = socket;
-  socket.on('connect', () => socket.emit('select-session', id, id));
-  socket.on('session-snapshot', value => {
-    if (value.sessionId === id) {
+  socket.on('connect', () => socket.emit('select-node', id, id));
+  socket.on('node-snapshot', value => {
+    if (value.nodeId === id) {
       state.serial += value.serial || '';
       state.logs = value.logs || [];
     }
   });
-  socket.on('serial', value => { if (value.sessionId === id) state.serial += value.data || ''; });
+  socket.on('serial', value => { if (value.nodeId === id) state.serial += value.data || ''; });
   socket.on('serial-reset', value => {
-    if (value.sessionId === id) { state.serial = value.serial || ''; state.resetCount++; }
+    if (value.nodeId === id) { state.serial = value.serial || ''; state.resetCount++; }
   });
-  socket.on('log', value => { if (value.sessionId === id) state.logs.push(value.line); });
+  socket.on('log', value => { if (value.nodeId === id) state.logs.push(value.line); });
   return state;
 }
 
@@ -220,10 +220,10 @@ async function run() {
       const socket = io(baseUrl, {reconnection: false, timeout: 10000});
       let serial = '';
       let logs = [];
-      socket.on('connect', () => socket.emit('select-session', id, id));
-      socket.on('session-snapshot', value => { if (value.sessionId === id) { serial += value.serial || ''; logs = value.logs || []; } });
-      socket.on('serial', value => { if (value.sessionId === id) serial += value.data || ''; });
-      socket.on('log', value => { if (value.sessionId === id) logs.push(value.line); });
+      socket.on('connect', () => socket.emit('select-node', id, id));
+      socket.on('node-snapshot', value => { if (value.nodeId === id) { serial += value.serial || ''; logs = value.logs || []; } });
+      socket.on('serial', value => { if (value.nodeId === id) serial += value.data || ''; });
+      socket.on('log', value => { if (value.nodeId === id) logs.push(value.line); });
       try {
         await waitFor(`${scenario.suffix} socket`, () => socket.connected);
         await request(`/api/nodes/${id}/start`, 'POST', {engine: 'qemu', imageId: 'openwrt', interfaces: [], settings: {memory: 256, cpus: 1, clock: 'utc'}});

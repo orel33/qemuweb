@@ -351,9 +351,9 @@ function stateMessage(node) {
 
 function publishState(node, message = stateMessage(node)) {
   node.lastMessage = message;
-  const state = {sessionId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message};
+  const state = {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message};
   io.to(node.id).emit('state', state);
-  io.emit('sessions-changed', state);
+  io.emit('nodes-changed', state);
 }
 
 function appendLog(node, message) {
@@ -361,7 +361,7 @@ function appendLog(node, message) {
   if (!line) return;
   node.runLog.push(line);
   if (node.runLog.length > 1000) node.runLog.shift();
-  io.to(node.id).emit('log', {sessionId: node.id, line});
+  io.to(node.id).emit('log', {nodeId: node.id, line});
 }
 
 function plainSerialLine(line) {
@@ -780,7 +780,7 @@ function installArchive(snapshot, stage) {
     throw error;
   }
   io.emit('general-settings-changed', {sessionId: serverSessionId, engine: sessionEngine});
-  io.emit('sessions-changed', {sessionId: null});
+  io.emit('nodes-changed', {nodeId: null});
 }
 app.get('/api/session-archive/estimate', (req, res) => {
   try {
@@ -912,7 +912,7 @@ function connectSerial(node, attempt = 0, generation = node.generation) {
     const emitSerial = text => {
       if (!text) return;
       node.serialBuffer = (node.serialBuffer + text).slice(-262144);
-      io.to(node.id).emit('serial', {sessionId: node.id, data: text});
+      io.to(node.id).emit('serial', {nodeId: node.id, data: text});
     };
     const publishSerial = text => emitSerial(filterGuestHookSerial(node, text));
     node.serial = connection;
@@ -1152,7 +1152,7 @@ function stopSwitchTerminal(node) {
 function startSwitchTerminal(node) {
   stopSwitchTerminal(node);
   node.serialBuffer = '';
-  io.to(node.id).emit('serial-reset', {sessionId: node.id, serial: ''});
+  io.to(node.id).emit('serial-reset', {nodeId: node.id, serial: ''});
   const socketName = path.basename(node.mgmtPath);
   appendLog(node, `$ ${[commands.VDETERM, socketName].map(shellQuote).join(' ')}  # cwd=${shellQuote(node.runtimeDir)}`);
   const terminal = pty.spawn(commands.VDETERM, [socketName], {
@@ -1165,7 +1165,7 @@ function startSwitchTerminal(node) {
   node.switchTerminal = terminal;
   terminal.onData(data => {
     node.serialBuffer = (node.serialBuffer + data).slice(-262144);
-    io.to(node.id).emit('serial', {sessionId: node.id, data});
+    io.to(node.id).emit('serial', {nodeId: node.id, data});
   });
   terminal.onExit(({exitCode}) => {
     if (node.switchTerminal !== terminal) return;
@@ -1482,8 +1482,8 @@ function start(nodeId, selectedEngine, imageId, options = {}) {
   node.serialFilterPending = '';
   node.serialFilterPassThrough = false;
   node.lastMessage = 'Starting…';
-  if (!options.reset && !resume) io.to(node.id).emit('logs-reset', {sessionId: node.id});
-  io.to(node.id).emit('serial-reset', {sessionId: node.id});
+  if (!options.reset && !resume) io.to(node.id).emit('logs-reset', {nodeId: node.id});
+  io.to(node.id).emit('serial-reset', {nodeId: node.id});
   appendLog(node, `${options.reset ? '# Reset from base image' : resume ? '# Resuming from current disk' : '# Starting'} · ${selectedEngine} · ${image.label}`);
   node.engine = selectedEngine;
   node.qemuAcceleration = acceleration;
@@ -1760,7 +1760,7 @@ async function exitAllNodes() {
     }
     return removed;
   } finally {
-    if (removed.length) io.emit('sessions-removed', {ids: removed});
+    if (removed.length) io.emit('nodes-removed', {ids: removed});
   }
 }
 
@@ -1848,7 +1848,7 @@ app.post('/api/topology', async (req, res) => {
         }
       }
     }
-    if (created.length) io.emit('sessions-changed', {sessionId: null});
+    if (created.length) io.emit('nodes-changed', {nodeId: null});
     res.json({created: created.length, errors});
   } catch (error) {
     for (const id of created.reverse()) {
@@ -1924,7 +1924,7 @@ app.post('/api/hosts', (req, res) => {
       throw error;
     }
     node.lastMessage = 'Host ready to start';
-    io.emit('sessions-changed', {sessionId: id, running: false, hasLaunched: false, message: node.lastMessage});
+    io.emit('nodes-changed', {nodeId: id, running: false, hasLaunched: false, message: node.lastMessage});
     res.json({...hostConfigurationResponse(node), imageId: image.id});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
@@ -1983,8 +1983,8 @@ app.put('/api/nodes/:nodeId/config', (req, res) => {
     node.guestMedia = readStartupFiles(startupDirectory(node));
     node.guestIsoAttached = body.startupDiskEnabled;
     if (mediaChanged || name !== previousName) node.guestIsoOutdated = !!node.guestIso;
-    if (name !== previousName) io.emit('session-renamed', {sessionId: node.id, name});
-    io.emit('sessions-changed', {sessionId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message: stateMessage(node)});
+    if (name !== previousName) io.emit('node-renamed', {nodeId: node.id, name});
+    io.emit('nodes-changed', {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message: stateMessage(node)});
     res.json(hostConfigurationResponse(node));
   } catch (error) { res.status(400).json({error: error.message}); }
 });
@@ -2051,7 +2051,7 @@ app.post('/api/switches', async (req, res) => {
     persistSwitchConfiguration(node);
     saveSessionMetadata();
     if (autostart) await startSwitch(node);
-    io.emit('sessions-changed', {sessionId: id, running: !!node.machine, hasLaunched: node.everStarted, message: stateMessage(node)});
+    io.emit('nodes-changed', {nodeId: id, running: !!node.machine, hasLaunched: node.everStarted, message: stateMessage(node)});
     res.json({id, name, running: !!node.machine, message: stateMessage(node)});
   } catch (error) {
     if (node) {
@@ -2115,7 +2115,7 @@ app.patch('/api/nodes/:nodeId', (req, res) => {
     setNodeHostname(node, name.trim());
     try { persistHostConfiguration(node); }
     catch (error) { setNodeHostname(node, previous); throw error; }
-    io.emit('session-renamed', {sessionId: node.id, name: node.hostname});
+    io.emit('node-renamed', {nodeId: node.id, name: node.hostname});
     res.json({name: node.hostname});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
@@ -2129,14 +2129,14 @@ app.delete('/api/nodes/:nodeId', async (req, res) => {
   try {
     const node = getNode(req.params.nodeId);
     await destroyNode(node);
-    io.emit('sessions-removed', {ids: [req.params.nodeId]});
+    io.emit('nodes-removed', {ids: [req.params.nodeId]});
     res.json({ok: true});
   } catch (error) { res.status(500).json({error: error.message}); }
 });
 
 io.on('connection', socket => {
   let selectionQueue = Promise.resolve();
-  socket.on('select-session', (id, token, acknowledge) => {
+  socket.on('select-node', (id, token, acknowledge) => {
     selectionQueue = selectionQueue.then(async () => {
       const node = getNode(id);
       if (!node) throw new Error('Unknown node.');
@@ -2145,8 +2145,8 @@ io.on('connection', socket => {
       }
       await socket.join(id);
       socket.nodeId = node.id;
-      socket.emit('session-snapshot', {
-        sessionId: node.id,
+      socket.emit('node-snapshot', {
+        nodeId: node.id,
         token,
         state: {running: !!node.machine, message: stateMessage(node), hasLaunched: node.everStarted},
         logs: node.runLog,
@@ -2154,11 +2154,11 @@ io.on('connection', socket => {
       });
       if (typeof acknowledge === 'function') acknowledge({ok: true});
     }).catch(error => {
-      socket.emit('session-error', error.message);
+      socket.emit('node-error', error.message);
       if (typeof acknowledge === 'function') acknowledge({error: error.message});
     });
   });
-  socket.on('leave-session', id => {
+  socket.on('leave-node', id => {
     if (id !== socket.nodeId) return;
     socket.leave(id);
     socket.nodeId = null;
@@ -2185,7 +2185,7 @@ io.on('connection', socket => {
     const line = typeof request.line === 'string' ? request.line.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 1024) : '';
     const column = Number.isInteger(request.column) ? Math.max(0, Math.min(request.column, 1024)) : line.length;
     node.serialBuffer = line ? `${line}\x1b[${column + 1}G` : '';
-    io.to(request.id).emit('serial-reset', {sessionId: request.id, preserveLine: true, serial: node.serialBuffer});
+    io.to(request.id).emit('serial-reset', {nodeId: request.id, preserveLine: true, serial: node.serialBuffer});
   });
 });
 

@@ -68,18 +68,18 @@ class GuestConsole {
     this.output = '';
     this.selected = false;
     this.socket = io(baseUrl, {reconnection: false, timeout: 10000});
-    this.socket.on('connect', () => this.socket.emit('select-session', host.id, host.id, reply => {
+    this.socket.on('connect', () => this.socket.emit('select-node', host.id, host.id, reply => {
       if (reply?.error) this.error = reply.error;
       else this.selected = true;
     }));
-    this.socket.on('session-snapshot', value => {
-      if (value.sessionId === host.id) this.append(value.serial || '');
+    this.socket.on('node-snapshot', value => {
+      if (value.nodeId === host.id) this.append(value.serial || '');
     });
     this.socket.on('serial', value => {
-      if (value.sessionId === host.id) this.append(value.data || '');
+      if (value.nodeId === host.id) this.append(value.data || '');
     });
     this.socket.on('serial-reset', value => {
-      if (value.sessionId === host.id) this.output = value.serial || '';
+      if (value.nodeId === host.id) this.output = value.serial || '';
     });
     this.socket.on('connect_error', error => { this.error = error.message; });
   }
