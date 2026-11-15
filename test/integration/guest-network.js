@@ -109,7 +109,7 @@ class GuestConsole {
         throw new Error(`${this.label}: root login asked for a password.`);
       }
       if (/(?:^|\n)[^\n]*#\s*$/.test(tail)) {
-        const identity = await this.exec('id -u');
+        const identity = await this.execWithRetry('id -u');
         assert.equal(identity.status, 0, `${this.label}: id -u failed: ${identity.output}`);
         assert.match(identity.output, /(?:^|\n)0\s*$/m, `${this.label}: shell is not root.`);
         return;
@@ -127,7 +127,19 @@ class GuestConsole {
     throw new Error(`${this.label}: no passwordless root shell. Recent serial:\n${stripAnsi(this.output).slice(-2000)}`);
   }
 
-  async exec(command) {
+  // OpenWrt's console shell is active before the system has finished booting, and a command typed
+  // while it is being activated, or interleaved with late boot output, can be lost: send it again.
+  async execWithRetry(command, attempts = 6, limit = 8000) {
+    for (let attempt = 1; ; attempt++) {
+      try { return await this.exec(command, limit); }
+      catch (error) {
+        if (!/^Timed out/.test(error.message) || attempt >= attempts) throw error;
+        this.send('\r');
+      }
+    }
+  }
+
+  async exec(command, limit = timeout) {
     assert.ok(!/[\r\n]/.test(command), 'Guest command must fit on one serial line.');
     const token = crypto.randomBytes(5).toString('hex');
     const begin = `__GN_BEGIN_${token}__`;
@@ -144,7 +156,7 @@ class GuestConsole {
       const rest = output.slice(from + begin.length + 2);
       const match = rest.match(new RegExp(`(?:^|\\n)${end}(\\d+)__(?:\\n|$)`));
       return match ? {status: Number(match[1]), output: rest.slice(0, match.index).trim()} : null;
-    });
+    }, limit);
     if (value.output) for (const line of value.output.split('\n')) console.log(`[${this.label}]   ${line}`);
     console.log(`[${this.label}]   exit ${value.status}`);
     return value;
@@ -215,11 +227,17 @@ async function runProfile(profile) {
         assert.notEqual(bridge.status, 0, 'br-lan still exists.');
       });
       await check(profile, `${host.label} startup hostname`, async () => {
-        // The console shell can be ready before the START=99 init service has
-        // run the startup script (OpenWrt), so wait for its exit marker.
-        await waitFor(`${host.label} startup script exit`, () => /QEMUWEB_START_EXIT \d+/.test(shell.output));
-        const output = await success(shell, 'hostname');
-        assert.equal(output.trim(), host.name);
+        // OpenWrt's console shell is ready before its START=99 service has run the startup script,
+        // and the server hides the hook's QEMUWEB_START_* marker lines from the console: poll the hostname.
+        let current = '';
+        try {
+          await waitFor(`${host.label} startup hostname`, async () => {
+            const result = await shell.execWithRetry('hostname');
+            current = result.output.trim();
+            return result.status === 0 && current === host.name;
+          }, 90000);
+        } catch (error) { if (!/^Timed out/.test(error.message)) throw error; }
+        assert.equal(current, host.name);
       });
       await check(profile, `${host.label} hostname command`, async () => {
         const output = await success(shell, `hostname ${host.name} && hostname`);
