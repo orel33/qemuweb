@@ -468,6 +468,20 @@ const xtermFitDir = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit
   ? path.join(root, 'node_modules/@xterm/addon-fit')
   : path.join(root, 'node_modules/xterm-addon-fit');
 app.use('/vendor', express.static(xtermDir));
+app.get('/vendor-addon-fit/lib/addon-fit.js', (_req, res, next) => {
+  const file = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js'))
+    ? path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js')
+    : path.join(root, 'node_modules/xterm-addon-fit/lib/xterm-addon-fit.js');
+  if (fs.existsSync(file)) return res.sendFile(path.resolve(file));
+  next();
+});
+app.get('/vendor-addon-fit/lib/addon-fit.js.map', (_req, res, next) => {
+  const file = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js.map'))
+    ? path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js.map')
+    : path.join(root, 'node_modules/xterm-addon-fit/lib/xterm-addon-fit.js.map');
+  if (fs.existsSync(file)) return res.sendFile(path.resolve(file));
+  next();
+});
 app.use('/vendor-addon-fit', express.static(xtermFitDir));
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');

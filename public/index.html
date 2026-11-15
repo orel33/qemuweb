@@ -1025,7 +1025,8 @@
       const size = pane.fontSizeOverride ?? generalSettings.consoleFontSize;
       if (pane.fontSizeOverride === null) pane.element.style.removeProperty('--console-font-size');
       else pane.element.style.setProperty('--console-font-size', `${size}px`);
-      pane.terminal.options.fontSize = size;
+      if (pane.terminal.options) pane.terminal.options.fontSize = size;
+      else if (pane.terminal.setOption) pane.terminal.setOption('fontSize', size);
       for (const [index, button] of pane.fontButtons.entries()) {
         button.disabled = index === 0 ? size <= 11 : size >= 24;
         button.title = `${index === 0 ? 'Decrease' : 'Increase'} terminal font size (${size} px)`;
@@ -1046,7 +1047,8 @@
       const fontFamily = style.getPropertyValue('--console-font-family').trim();
       for (const pane of panes) {
         if (resetPaneSizes) pane.fontSizeOverride = null;
-        pane.terminal.options.fontFamily = fontFamily;
+        if (pane.terminal.options) pane.terminal.options.fontFamily = fontFamily;
+        else if (pane.terminal.setOption) pane.terminal.setOption('fontFamily', fontFamily);
         applyPaneFontSize(pane);
       }
       requestAnimationFrame(fitTerminals);
