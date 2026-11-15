@@ -16,6 +16,8 @@ const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseV
 const {filterGuestHookSerial} = require('./runner/console/guest-hook-filter');
 const {launchSettingFields, validateQemuOptions, validateLaunchSettings} = require('./common/launch-settings');
 const {entityKind, newEntityId} = require('./common/node-id');
+const {fileSha256} = require('./runner/media/image-hash');
+const {shellQuote} = require('./common/shell-quote');
 const {parseTopology, formatTopology} = require('./lib/topology');
 const {writeArchive, readArchive} = require('./lib/session-archive');
 const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./common/system-config');
@@ -233,11 +235,6 @@ async function sampleResources() {
 
 const resourceTimer = setInterval(() => sampleResources().catch(error => console.error('Resource sampling:', error)), 2000);
 resourceTimer.unref();
-
-function shellQuote(value) {
-  const text = String(value);
-  return /^[a-zA-Z0-9_./:=,+-]+$/.test(text) ? text : `'${text.replace(/'/g, `'\\''`)}'`;
-}
 
 function defaultStartupScript(interfaces) {
   return '#!/bin/sh\nhostname @HOSTNAME@\n' +
@@ -477,29 +474,6 @@ app.get('/api/nodes', (_req, res) => {
 });
 
 const MAX_SESSION_ARCHIVE = 0xffffffff;
-// Base images are large and rarely change: cache their digest by file identity.
-const sha256Cache = new Map();
-function fileSha256(file) {
-  const stat = fs.statSync(file);
-  if (!stat.isFile()) throw new Error(`Base image is not a regular file: ${file}`);
-  const key = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
-  const cached = sha256Cache.get(file);
-  if (cached?.key === key) return {size: stat.size, sha256: cached.sha256};
-  const hash = crypto.createHash('sha256');
-  const fd = fs.openSync(file, 'r');
-  const chunk = Buffer.alloc(1024 * 1024);
-  try {
-    let offset = 0;
-    while (offset < stat.size) {
-      const count = fs.readSync(fd, chunk, 0, Math.min(chunk.length, stat.size - offset), offset);
-      if (!count) throw new Error(`Base image changed while reading: ${file}`);
-      hash.update(chunk.subarray(0, count)); offset += count;
-    }
-  } finally { fs.closeSync(fd); }
-  const sha256 = hash.digest('hex');
-  sha256Cache.set(file, {key, sha256});
-  return {size: stat.size, sha256};
-}
 function archiveSources(includeDisks, allowRunning = false) {
   if (typeof includeDisks !== 'boolean') throw new Error('Invalid working disk option.');
   if (includeDisks && session.engine === 'vbox') throw new Error('VirtualBox working disk archives are not supported.');
