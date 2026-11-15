@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 const path = require('path');
 const {execFileSync} = require('child_process');
-const {validateBootFiles, validateStartupTemplate, readStartupFiles, writeStartupFiles, writeStartupScript, createGuestIso, LABEL} = require('../../guest-media');
+const {validateBootFiles, validateStartupTemplate, readStartupFiles, writeStartupFiles, writeStartupScript, createGuestIso, LABEL} = require('../../runner/media/guest-media');
 
 test('startup template validation catches missing interfaces and malformed tokens before ISO creation', () => {
   const connected = [{switchId: 's1', port: 2}];

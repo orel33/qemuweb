@@ -16,7 +16,7 @@ const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseV
 const {parseTopology, formatTopology} = require('./lib/topology');
 const {writeArchive, readArchive} = require('./lib/session-archive');
 const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./common/system-config');
-const {LABEL: GUEST_ISO_LABEL, validateBootFiles, validateStartupTemplate, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./guest-media');
+const {LABEL: GUEST_ISO_LABEL, validateBootFiles, validateStartupTemplate, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso} = require('./runner/media/guest-media');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
