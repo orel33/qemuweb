@@ -82,3 +82,18 @@ QemuWeb dynamically inspects host virtualization capabilities to select the opti
 - System profiles define their architecture requirement via `arch:qemu` (`x86_64`, `aarch64`, or `auto`).
 - When `arch:qemu` is `auto`, the engine automatically selects the native host architecture (`aarch64` on Apple Silicon, `x86_64` on Intel/AMD PCs) and the matching binary (`qemu-system-aarch64` or `qemu-system-x86_64`).
 - VirtualBox (`VBoxManage`) remains supported as an optional alternative for x86_64 profiles when installed.
+
+## Direct Kernel Boot and OCI Containers (Boot2container)
+
+Boot2container (`container` system profile) allows booting virtual machines directly from OCI / Docker images without full OS disk images:
+
+- **Direct Kernel Boot:** Rather than booting a disk image via SeaBIOS or UEFI, QEMU is launched with `-kernel` and `-initrd` pointing to a minimal Linux kernel and a Podman-enabled initramfs (`linux-arm64-qemu` / `linux-x86_64-qemu` and `initramfs.*.cpio.xz`).
+- **Command-line arguments (`-append`):** The container runtime parameters are passed to the kernel:
+  ```text
+  console=ttyAMA0 console=ttyS0 b2c.cache_device=/dev/vda,use=existing|free-space b2c.run="-it <containerImage>"
+  ```
+- **Console relay:** Serial output is bound to the QEMU serial socket (`/dev/ttyAMA0` on ARM64 `virt`, `/dev/ttyS0` on x86_64 `q35`), enabling seamless interactive stdin/stdout relay to `xterm.js` over Socket.IO.
+- **Persistent layer caching:** The session attaches `images/container.raw` as `/dev/vda`. Podman caches downloaded image layers on this disk, avoiding repeated downloads across VM restarts.
+- **Dual networking:**
+  - Interfaces set to `switchId: 'nat'` use QEMU SLIRP (`-netdev user`) to provide transparent DHCP, DNS, and Internet access for pulling container images without root/sudo privileges.
+  - Interfaces assigned to a switch (`switchId: 's1'`, etc.) connect to VDE virtual switches (`-netdev vde`) for local virtual network topologies.
