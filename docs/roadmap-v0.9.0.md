@@ -4,7 +4,7 @@
 
 ## Contexte et architecture cible
 
-QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les six jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, runners, puis durcissement applicatif.
+QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les six jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, runners, puis durcissement applicatif et jail minimaliste.
 
 Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est livré sous forme d'une bêta, et 0.9.0 sort une fois les critères du jalon 6 remplis.
 
@@ -14,8 +14,8 @@ Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est liv
 | 2 — Refactoring modulaire | 0.9.0-beta.2 |
 | 3 — Multi-utilisateurs, auth simple | 0.9.0-beta.3 |
 | 4 — Rôle admin | 0.9.0-beta.4 |
-| 5 — Runners et jail minimaliste | 0.9.0-beta.5 |
-| 6 — Durcissement applicatif | 0.9.0-beta.6 |
+| 5 — Runners local et distant | 0.9.0-beta.5 |
+| 6 — Durcissement applicatif et jail minimaliste | 0.9.0-beta.6 |
 | Stabilisation | 0.9.0 |
 
 ```
@@ -33,6 +33,8 @@ Runner local                          Runner distant (enregistré par l'admin, j
   ├─ Session alice : QEMU + VDE, scope systemd
   └─ Session david : QEMU + VDE, scope systemd
 ```
+
+Ce schéma montre l'architecture finale : le compte `qemuweb-runner`, les scopes systemd et les quotas n'arrivent qu'au jalon 6.
 
 Le plan de contrôle ne lance aucune VM. Il route chaque utilisateur vers sa session, où qu'elle tourne. L'isolation entre sessions repose sur le contrôle d'accès côté serveur, la liste blanche HMP et les quotas, renforcés par le compte dédié et les scopes systemd du runner.
 
@@ -210,7 +212,7 @@ L'admin voit toutes les sessions en cours, peut entrer dans n'importe laquelle p
 - [ ] L'admin observe la console d'un étudiant en direct sans pouvoir y taper (entrées refusées côté serveur).
 - [ ] La suppression groupée libère les processus QEMU/VDE et le répertoire `runtime/sessions/<id>/`.
 
-## Jalon 5 — Runners local / distant et jail minimaliste
+## Jalon 5 — Runners local / distant
 
 L'exécution des sessions sort du serveur web vers des runners, sur le modèle de gitlab-runner : c'est le runner qui se connecte au plan de contrôle, avec un jeton délivré par l'admin. Une session entière (QEMU + VDE) tourne sur un seul runner pendant toute sa vie.
 
@@ -234,32 +236,23 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 **Administration des runners** : liste avec état (en ligne, vu pour la dernière fois), capacité et charge ; mettre en pause (drain : plus de nouvelles sessions) ; révoquer le jeton.
 
-**Jail minimaliste**
-
-- Le runner tourne sous un compte système dédié `qemuweb-runner` (groupe `kvm`), distinct du plan de contrôle.
-- Chaque session est lancée dans un scope systemd (`systemd-run --scope -p MemoryMax=… -p CPUQuota=…`), comme garde-fou au-delà des limites QEMU.
-- `runtime/` en `0700`, images de base en lecture seule.
-- La liste blanche HMP et les quotas, appliqués par le runner lui-même, arrivent au jalon 6.
-- VirtualBox reste supporté mais hors jail : ses VM sont lancées par le démon VBoxSVC, donc hors du scope systemd. Un runner annonce `qemu`, `vbox` ou les deux ; QEMU reste la priorité.
-- Plus tard si besoin : un uid par session, bubblewrap ou nsjail, namespace réseau.
+**Sécurité** : la jail minimaliste (compte dédié, scopes systemd), la liste blanche HMP et les quotas arrivent au jalon 6. Jusque-là, le runner tourne sous le compte qui le lance : choisir un compte sans privilège, jamais root, et réserver les runners distants à des machines de confiance.
 
 **Découpage conseillé**
 
 1. 5a : interface runner formalisée au-dessus des modules `runner/` séparés au jalon 2, toujours dans le même processus.
-2. 5b : runner local en processus séparé sur socket Unix, sous son compte dédié.
+2. 5b : runner local en processus séparé sur socket Unix.
 3. 5c : runners distants, enregistrement et placement.
-4. 5d : scopes systemd et durcissement.
 
 **Critères de fin**
 
 - [ ] Un runner distant s'enregistre avec un jeton admin et apparaît en ligne.
 - [ ] Une session placée sur un runner distant se pilote comme une session locale.
 - [ ] Couper puis rétablir le réseau du runner ne tue aucune VM et l'interface se resynchronise.
-- [ ] Une VM qui dépasse sa RAM est tuée par son scope sans affecter les autres sessions.
 
-## Jalon 6 — Durcissement applicatif
+## Jalon 6 — Durcissement applicatif et jail minimaliste
 
-Les protections applicatives sont regroupées ici, après les runners, pour être appliquées par le runner lui-même : il ne fait pas confiance aveuglément au plan de contrôle, y compris quand il est distant. Jusqu'au jalon 5, QemuWeb ne doit être ouvert qu'à des utilisateurs de confiance.
+Les protections applicatives et la jail du runner sont regroupées ici, après les runners, pour être appliquées par le runner lui-même : il ne fait pas confiance aveuglément au plan de contrôle, y compris quand il est distant. Avant ce jalon, QemuWeb ne doit être ouvert qu'à des utilisateurs de confiance.
 
 **Comptes**
 
@@ -277,12 +270,22 @@ Les protections applicatives sont regroupées ici, après les runners, pour êtr
 - Pour le serveur ou le runner : refus de démarrer une VM au-delà de la RAM disponible.
 - Appliqués par le runner, avec un message d'erreur clair. Les limites propres à un runner distant restent dans son `config.toml` (jalon 5).
 
+**Jail minimaliste**
+
+- Le runner tourne sous un compte système dédié `qemuweb-runner` (groupe `kvm`), distinct du plan de contrôle.
+- Chaque session est lancée dans un scope systemd (`systemd-run --scope -p MemoryMax=… -p CPUQuota=…`), comme garde-fou au-delà des limites QEMU.
+- `runtime/` en `0700`, images de base en lecture seule.
+- VirtualBox reste supporté mais hors jail : ses VM sont lancées par le démon VBoxSVC, donc hors du scope systemd. Un runner annonce `qemu`, `vbox` ou les deux ; QEMU reste la priorité.
+- Plus tard si besoin : un uid par session, bubblewrap ou nsjail, namespace réseau.
+
 **Critères de fin**
 
 - [ ] Une commande HMP hors liste blanche est refusée, y compris sur un runner distant.
 - [ ] Un dépassement de quota (VM, session ou serveur) est refusé avec un message clair.
 - [ ] Un mot de passe trop court est refusé par `scripts/user.sh`, sauf avec `--allow-weak`.
 - [ ] Les échecs de connexion répétés sont ralentis.
+- [ ] Le runner local tourne sous le compte `qemuweb-runner`, `runtime/` est en `0700` et les images de base sont en lecture seule.
+- [ ] Une VM qui dépasse sa RAM est tuée par son scope sans affecter les autres sessions.
 
 ## Après le jalon 6, et décisions prises
 
@@ -298,8 +301,8 @@ Les protections applicatives sont regroupées ici, après les runners, pour êtr
 | --- | --- |
 | Redémarrage du serveur | Tout est effacé : VM arrêtées, `runtime/sessions/` vidé |
 | Sessions inactives | Pas d'expiration : ménage manuel par l'admin depuis `/admin` |
-| VirtualBox | Conservé aux jalons 3 à 5, sans jail ni quota cgroup ; QEMU prioritaire |
+| VirtualBox | Conservé aux jalons 3 à 6, sans jail ni quota cgroup ; QEMU prioritaire |
 | Console admin | Lecture seule, jamais d'écriture |
 | Sessions par utilisateur | Une seule, définitivement |
 | Identifiant de session | Aléatoire, login dans `owner`, lien `runtime/users/<login>` |
-| Sécurité applicative (mot de passe minimal, quotas, liste blanche HMP) | Jalon 6, après les runners ; jusque-là, utilisateurs de confiance uniquement |
+| Sécurité (mot de passe minimal, quotas, liste blanche HMP, jail du runner) | Jalon 6, après les runners ; jusque-là, utilisateurs de confiance uniquement |
