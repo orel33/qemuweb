@@ -18,7 +18,7 @@ flowchart TB
   end
 
   subgraph Local["Local processes"]
-    QEMU["QEMU · VM, UART, and HMP monitor"]
+    QEMU["QEMU (x86_64 / aarch64) · VM, UART, and HMP monitor"]
     VBox["VirtualBox · VM and UART"]
     VDE["vde_switch · virtual Ethernet network"]
     VDeterm["vdeterm · switch console"]
@@ -66,3 +66,19 @@ Stopping a host keeps its working disk for a later start. Resetting recreates
 the disk from the base image. Removing a session or stopping the server cleans
 up its temporary files. A ZIP export can preserve a session explicitly; a
 `.topo` file describes only hosts, switches, and their connections.
+
+## Virtualization backends and acceleration
+
+QemuWeb dynamically inspects host virtualization capabilities to select the optimal acceleration mode:
+
+| Host OS / Arch | Guest Arch | Engine Binary | Accelerator | CPU Model |
+| --- | --- | --- | --- | --- |
+| Linux x86_64 | x86_64 | `qemu-system-x86_64` | KVM (`-accel kvm`) | `host` |
+| macOS x86_64 (Intel) | x86_64 | `qemu-system-x86_64` | HVF (`-accel hvf`) | `host` |
+| macOS arm64 (Apple Silicon) | aarch64 | `qemu-system-aarch64` | HVF (`-accel hvf`) | `host` |
+| macOS arm64 (Apple Silicon) | x86_64 | `qemu-system-x86_64` | TCG emulation (`-accel tcg`) | `max` |
+| Any | Any | `qemu-system-*` (fallback) | TCG emulation (`-accel tcg`) | `max` / `qemu64` |
+
+- System profiles define their architecture requirement via `arch:qemu` (`x86_64`, `aarch64`, or `auto`).
+- When `arch:qemu` is `auto`, the engine automatically selects the native host architecture (`aarch64` on Apple Silicon, `x86_64` on Intel/AMD PCs) and the matching binary (`qemu-system-aarch64` or `qemu-system-x86_64`).
+- VirtualBox (`VBoxManage`) remains supported as an optional alternative for x86_64 profiles when installed.
