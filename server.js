@@ -13,6 +13,7 @@ const {Server: SocketIoServer} = require('socket.io');
 const pty = require('node-pty');
 const {resolveCommands} = require('./runner/preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./runner/metrics');
+const {filterGuestHookSerial} = require('./runner/console/guest-hook-filter');
 const {parseTopology, formatTopology} = require('./lib/topology');
 const {writeArchive, readArchive} = require('./lib/session-archive');
 const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./common/system-config');
@@ -373,54 +374,6 @@ function appendLog(node, message) {
   node.runLog.push(line);
   if (node.runLog.length > 1000) node.runLog.shift();
   io.to(node.id).emit('log', {nodeId: node.id, line});
-}
-
-function plainSerialLine(line) {
-  return line.replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '').replace(/\r/g, '');
-}
-
-function standaloneTerminalControl(text) {
-  return /^(?:\r|\x1b\[[0-?]*[ -/]*[@-~]|\x1b[78])+$/.test(text);
-}
-
-function possibleGuestHookLine(line) {
-  const plain = plainSerialLine(line);
-  if (plain.length > 160) return false;
-  if (plain.startsWith('\x1b')) return true; // Wait for a split ANSI sequence.
-  // OpenRC writes its service label immediately before the hook's first line.
-  const openRcPrefix = ' * QemuWeb guest startup ...';
-  if (openRcPrefix.startsWith(plain) || plain.startsWith(openRcPrefix)) return true;
-  const timestamp = /^\[\s*[\d.]*\]\s*(.*)$/.exec(plain);
-  if (timestamp) return 'qemuweb-guest-start'.startsWith(timestamp[1]) || timestamp[1].startsWith('qemuweb-guest-start');
-  if (/^\[\s*[\d.]*$/.test(plain)) return true;
-  return ['qemuweb-guest-start', 'QEMUWEB_START_'].some(prefix => prefix.startsWith(plain) || plain.startsWith(prefix));
-}
-
-function filterGuestHookSerial(node, text) {
-  let visible = '';
-  for (const char of text) {
-    if (node.serialFilterPassThrough) {
-      visible += char;
-      if (char === '\n') node.serialFilterPassThrough = false;
-      continue;
-    }
-    node.serialFilterPending += char;
-    if (char === '\n') {
-      if (!/(?:qemuweb-guest-start\[\d+\]:\s*)?QEMUWEB_START_(?:BEGIN|EXIT)\b/.test(plainSerialLine(node.serialFilterPending))) {
-        visible += node.serialFilterPending;
-      }
-      node.serialFilterPending = '';
-    } else if (standaloneTerminalControl(node.serialFilterPending)) {
-      // Pass CR and complete terminal controls without waiting for a newline.
-      visible += node.serialFilterPending;
-      node.serialFilterPending = '';
-    } else if (!possibleGuestHookLine(node.serialFilterPending)) {
-      visible += node.serialFilterPending;
-      node.serialFilterPending = '';
-      node.serialFilterPassThrough = true;
-    }
-  }
-  return visible;
 }
 
 function execLogged(node, command, args, options = {stdio: 'pipe'}) {
