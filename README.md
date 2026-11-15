@@ -72,14 +72,24 @@ stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 ```sh
 ./scripts/user.sh add alice                 # prompts for the password twice
 ./scripts/user.sh add bob --role admin      # roles: student (default) or admin
-./scripts/user.sh passwd alice
-./scripts/user.sh remove alice
-./scripts/user.sh list
+./scripts/user.sh passwd alice              # change a password
+./scripts/user.sh role alice admin          # change a role
+./scripts/user.sh remove alice              # delete the account
+./scripts/user.sh list                      # logins and roles (never the passwords)
 ./scripts/user.sh import-csv class.csv      # lines: login,password[,role]
 ```
 
+| Command | What it does |
+| --- | --- |
+| `add <login> [--role student\|admin]` | Creates an account. It fails if the login already exists: use `passwd` to change the password. To add an account again after `remove`, simply run `add` again. |
+| `passwd <login>` | Sets a new password for an existing account. |
+| `role <login> student\|admin` | Changes the role of an existing account. |
+| `remove <login>` | Deletes the account: the user can no longer log in and their cookie stops working at once. Their session is **not** deleted: its machines keep running until the user deletes it or the server restarts. If you `add` the same login again while the server is still running, that account finds the old session again. |
+| `list` | Prints one `login<TAB>role` line per account. |
+| `import-csv <file>` | Reads `login,password[,role]` lines (an optional header line is accepted). New logins are added, existing ones get the new password and role. |
+
 For scripts, the password can come from `QEMUWEB_PASSWORD` or from the first
-line of standard input. Logins use letters, digits, `.`, `_`, `-` and `@` (up to
+line of standard input; otherwise the script prompts for it. Logins use letters, digits, `.`, `_`, `-` and `@` (up to
 64 characters). Changes apply without restarting the server. The `admin` role
 is stored but grants nothing yet.
 

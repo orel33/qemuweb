@@ -129,6 +129,7 @@ Check the result:
   `runtime/auth-secret` (which logs everybody out) revokes it.
 - A user removed with `scripts/user.sh remove` can no longer log in, but their
   running session stays on the server until it is deleted or the server
-  restarts.
+  restarts. Adding the same login again while the server is running gives that
+  account the old session back.
 - Deleting another user's session from an administration page comes with
   milestone 4; until then only the user can delete their own session.
