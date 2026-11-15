@@ -88,26 +88,28 @@ uci set 'network.lan.device=eth0'
 # two hosts on one switch would conflict. Remove the stock address so the lab
 # LAN stays unconfigured until the startup script assigns one. proto becomes
 # "none" so netifd brings the device up without any address.
-uci -q delete network.lan.ipaddr
-uci -q delete network.lan.netmask
-uci -q delete network.lan.ip6assign
+# "uci delete" exits with 1 when the option does not exist (recent releases write
+# a CIDR "list ipaddr" and no separate netmask), which set -e would turn into a
+# failed build: tolerate it here and verify the result below.
+for option in ipaddr netmask ip6assign; do uci -q delete "network.lan.$option" || true; done
 uci set network.lan.proto=none
 uci commit network
 [ "$(uci -q get network.lan.proto)" = none ] || { echo 'OpenWrt LAN proto not none' >&2; exit 1; }
 if uci -q get network.lan.ipaddr >/dev/null; then echo 'OpenWrt LAN still has a static address' >&2; exit 1; fi
 # A plain lab image must not hand out addresses on a static-IP-only LAN.
-# Disable DHCPv4, DHCPv6 and RA unconditionally (no existence guards that
-# could silently skip a section on another OpenWrt release) and verify.
-# uci set creates the section options even when the section is missing.
+# Disable DHCPv4, DHCPv6 and RA for the lan section (uci set creates it when it is
+# missing) and dnsmasq's DNS/DHCP service when its section exists, then verify.
 uci set 'dhcp.lan=dhcp'
 uci set 'dhcp.lan.interface=lan'
 uci set 'dhcp.lan.ignore=1'
 uci set 'dhcp.lan.dhcpv6=disabled'
 uci set 'dhcp.lan.ra=disabled'
-uci set 'dhcp.@dnsmasq[0].port=0'
+if uci -q get 'dhcp.@dnsmasq[0]' >/dev/null; then uci set 'dhcp.@dnsmasq[0].port=0'; fi
 uci commit dhcp
-[ "$(uci -q get dhcp.lan.ignore)" = 1 ] && [ "$(uci -q get 'dhcp.@dnsmasq[0].port')" = 0 ] \
-  || { echo 'OpenWrt DHCP was not disabled' >&2; exit 1; }
+[ "$(uci -q get dhcp.lan.ignore)" = 1 ] || { echo 'OpenWrt LAN DHCP was not disabled' >&2; exit 1; }
+if uci -q get 'dhcp.@dnsmasq[0]' >/dev/null && [ "$(uci -q get 'dhcp.@dnsmasq[0].port')" != 0 ]; then
+  echo 'OpenWrt dnsmasq was not disabled' >&2; exit 1
+fi
 /etc/init.d/odhcpd disable
 OPENWRT_PREPARE
   cat >> "$guest_script" <<'OPENWRT_HOOK'
@@ -187,6 +189,7 @@ command = 'sh /tmp/qemuweb-prepare.sh; status=$?; echo QEMUWEB_OPENWRT_STATUS_$s
 buffer = b''
 sock.sendall(command.encode() + b'\r')
 if wait_for([rb'QEMUWEB_OPENWRT_STATUS_0', rb'QEMUWEB_OPENWRT_STATUS_[1-9][0-9]*']) != 0:
+    print(buffer.decode(errors='replace')[-3000:], file=sys.stderr)
     raise RuntimeError('OpenWrt customization failed')
 sock.sendall(b'poweroff\r')
 sock.close()
