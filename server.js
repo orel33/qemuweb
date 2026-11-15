@@ -100,7 +100,16 @@ const activeQemuAccel = detectBestQemuAcceleration();
 if (process.platform === 'linux' && activeQemuAccel !== 'kvm') {
   console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
 }
-console.log(`QEMU acceleration: \x1b[32m${activeQemuAccel.toUpperCase()}\x1b[0m${activeQemuAccel === 'tcg' ? ' (software emulation)' : ''}.`);
+if (process.platform === 'darwin') {
+  const armAccel = commands.QEMU_SYSTEM_AARCH64 ? detectBestQemuAcceleration('aarch64') : null;
+  if (armAccel === 'hvf') {
+    console.log(`QEMU acceleration: \x1b[32mHVF\x1b[0m (Apple Silicon native for ARM64), TCG for x86_64.`);
+  } else {
+    console.log(`QEMU acceleration: \x1b[32m${activeQemuAccel.toUpperCase()}\x1b[0m${activeQemuAccel === 'tcg' ? ' (software emulation)' : ''}.`);
+  }
+} else {
+  console.log(`QEMU acceleration: \x1b[32m${activeQemuAccel.toUpperCase()}\x1b[0m${activeQemuAccel === 'tcg' ? ' (software emulation)' : ''}.`);
+}
 
 function pointCurrentSession(id) {
   const temporary = path.join(runtime, `.current-${sessionId}`);
@@ -1186,7 +1195,8 @@ function qemuArgs(session, image, overlay) {
     const kernelPath = path.resolve(root, settings.kernel);
     const initrdPath = settings.initrd ? path.resolve(root, settings.initrd) : null;
     const containerImg = session.launchSettings?.containerImage || settings.containerImage || 'docker.io/library/alpine:3.20';
-    const appendCmd = `console=ttyS0 b2c.cache_device=/dev/vda,use=existing|free-space b2c.run="-it ${containerImg}"`;
+    const serialConsole = (image.arch === 'aarch64' || image.arch === 'arm64') ? 'console=ttyAMA0 console=ttyS0' : 'console=ttyS0';
+    const appendCmd = `${serialConsole} b2c.cache_device=/dev/vda,use=existing|free-space b2c.run="-it ${containerImg}"`;
     args = [
       ...common,
       '-kernel', kernelPath,
