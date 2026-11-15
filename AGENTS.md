@@ -35,8 +35,20 @@ able to open that task, follow its progress, and send it instructions directly.
 
 - **Codex**: use a Codex task visible in the task list, created with the Codex
   task/thread tools.
-- **Claude Code**: use a background agent or session with worktree isolation
-  that the user can list, open, and message.
+- **Claude Code**: start a real, interactive **background session**, never the
+  internal `Agent` tool (a sub-agent does not appear in `claude agents` or
+  `/tasks`, so the user cannot open it). Roadmap milestones are always delegated
+  this way. Procedure:
+  1. Create a dedicated worktree and task branch from the **local** `main`
+     HEAD, not from `origin/main`, for example
+     `git worktree add .claude/worktrees/<name> -b task/<slug> main`.
+     Do not name the branch like a release tag (for example `v0.9.0-beta.2`).
+  2. From that worktree, launch the session with the prompt:
+     `claude --bg -n "qemuweb - task XXXYY" --permission-mode auto "<prompt>"`.
+  3. Check it with `claude agents`, then report its title and status together
+     with `claude attach <id>`, `claude logs <id>` and `claude stop <id>`.
+  4. Tell the session the orchestrator's session name so that it can reach it
+     with `SendMessage` (see `claude agents`).
 
 Name a new task `qemuweb - task XXXYY`, replacing `XXXYY` with its stable TODO
 code (for example, `qemuweb - task GTS16`). Reuse the named existing task if
@@ -49,7 +61,8 @@ created, say so instead of silently starting a hidden sub-agent.
 
 Internal sub-agents (not user-controllable) may be used only when the user
 explicitly requests internal delegation or parallel agent work. They do not
-replace a requested user-visible task.
+replace a requested user-visible task, and are never used for a roadmap
+milestone or any other task the user wants to follow.
 
 ## Orchestrator and implementation agent
 
