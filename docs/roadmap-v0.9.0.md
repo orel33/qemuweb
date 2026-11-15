@@ -74,7 +74,7 @@ Regrouper l'état global dans un objet `Session` (engine, nodes, runtimeDir, arc
 
 - [x] Tests unitaires et d'intégration verts (`scripts/run-tests.sh`), renommés eux aussi.
 - [x] Plus aucune variable globale d'état hors de l'objet `Session`.
-- [ ] Les archives ZIP existantes (`demo/*.zip`) se chargent toujours.
+- [x] Les archives ZIP existantes (`demo/*.zip`) se chargent toujours.
 
 ## Jalon 2 — Refactoring modulaire
 
