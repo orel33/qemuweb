@@ -68,18 +68,18 @@ class GuestConsole {
     this.output = '';
     this.selected = false;
     this.socket = io(baseUrl, {reconnection: false, timeout: 10000});
-    this.socket.on('connect', () => this.socket.emit('select-session', id, id, reply => {
+    this.socket.on('connect', () => this.socket.emit('select-node', id, id, reply => {
       if (reply?.error) this.error = reply.error;
       else this.selected = true;
     }));
-    this.socket.on('session-snapshot', value => {
-      if (value.sessionId === id) this.output += value.serial || '';
+    this.socket.on('node-snapshot', value => {
+      if (value.nodeId === id) this.output += value.serial || '';
     });
     this.socket.on('serial', value => {
-      if (value.sessionId === id) this.output += value.data || '';
+      if (value.nodeId === id) this.output += value.data || '';
     });
     this.socket.on('serial-reset', value => {
-      if (value.sessionId === id) this.output = value.serial || '';
+      if (value.nodeId === id) this.output = value.serial || '';
     });
     this.socket.on('connect_error', error => { this.error = error.message; });
   }
@@ -183,11 +183,11 @@ async function runProfile(profile) {
       consoles.push(host.console);
     }
     await Promise.all(hosts.map(host => waitFor(`${host.label} socket`, () => host.console.selected || host.console.error)));
-    await Promise.all(hosts.map(host => request('/api/start', 'POST', {
-      sessionId: host.id, engine, imageId: profile, interfaces: [switchId]
+    await Promise.all(hosts.map(host => request(`/api/nodes/${host.id}/start`, 'POST', {
+      engine, imageId: profile, interfaces: [switchId]
     })));
     await check(profile, 'distinct VDE ports and MACs', async () => {
-      const sessions = await request('/api/sessions');
+      const sessions = await request('/api/nodes');
       const nics = hosts.map(host => sessions.find(session => session.id === host.id)?.networkInterfaces?.[0]);
       assert.ok(nics.every(nic => nic?.switchId === switchId && nic.port && nic.mac), 'A host lacks its VDE connection.');
       assert.notEqual(nics[0].port, nics[1].port, 'The hosts share a VDE port.');
@@ -245,7 +245,7 @@ async function runProfile(profile) {
     for (const shell of consoles) shell.close();
     for (const host of hosts) {
       if (!created.includes(host.id)) continue;
-      try { await request(`/api/sessions/${host.id}`, 'DELETE'); } catch (error) { console.error(`Cleanup ${host.id}: ${error.message}`); }
+      try { await request(`/api/nodes/${host.id}`, 'DELETE'); } catch (error) { console.error(`Cleanup ${host.id}: ${error.message}`); }
       created.splice(created.indexOf(host.id), 1);
     }
   }
@@ -287,7 +287,7 @@ async function run() {
 async function cleanup() {
   if (!child || child.exitCode !== null) return;
   for (const id of created.reverse()) {
-    try { await request(`/api/sessions/${id}`, 'DELETE'); } catch (error) { console.error(`Cleanup ${id}: ${error.message}`); }
+    try { await request(`/api/nodes/${id}`, 'DELETE'); } catch (error) { console.error(`Cleanup ${id}: ${error.message}`); }
   }
   child.kill('SIGTERM');
   await Promise.race([

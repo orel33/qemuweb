@@ -11,6 +11,14 @@ and do not use them as task context unless the user explicitly asks to consult
 the archive. Use `README.md` and `docs/architecture.md` for current
 documentation.
 
+## Vocabulary
+
+- **Session**: the workspace (nodes, engine, `runtime/sessions/<id>/`). The
+  server holds one session today.
+- **Node**: an element of a session, either a **host** (virtual machine) or a
+  **switch** (VDE). Code, API routes and Socket.IO events use `node` and
+  `nodeId`, never `session`, for a single host or switch.
+
 ## Language
 
 - **Project content is in English**: code, code comments, documentation, GUI

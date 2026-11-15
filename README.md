@@ -125,9 +125,9 @@ Guests log in as `root` without a password on the serial console.
 | [`config.json`](config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. |
 | [`.env`](.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
-| `runtime/<session>/` | Current session: `session.json`, `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. |
+| `runtime/sessions/<id>/` | Current session: `session.json`, `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. |
 
-`runtime/` is temporary: a session's files are removed with the session or when
+`runtime/` is temporary: a node's files are removed with the node or when
 the server stops. Use **Save session** to keep a portable copy.
 
 ## Maintenance scripts

@@ -21,8 +21,8 @@
     return count < 2 ? 0 : (index / (count - 1) - 0.5) * range * 2;
   }
 
-  function buildGraph(sessions, positions = new Map()) {
-    const machines = [...sessions];
+  function buildGraph(inputNodes, positions = new Map()) {
+    const machines = [...inputNodes];
     const switches = machines.filter(machine => machine.kind === 'switch');
     const switchOrder = new Map(switches.map((sw, index) => [sw.id, index]));
     const hosts = machines.filter(machine => machine.kind !== 'switch').sort((a, b) => {
@@ -99,8 +99,8 @@
     return text.length > limit ? `${text.slice(0, limit - 1)}…` : text;
   }
 
-  function draw(container, sessions, onSelect, positions) {
-    const graph = buildGraph(sessions, positions);
+  function draw(container, nodes, onSelect, positions) {
+    const graph = buildGraph(nodes, positions);
     container.replaceChildren();
     if (!graph.nodes.length) {
       const empty = document.createElement('div');
@@ -129,7 +129,7 @@
       const iconType = NodeIcons.typeForMachine(machine.kind);
       const iconStyle = NodeIcons.styles[iconType];
       const group = element('g', {class: `topology-node ${isSwitch ? 'topology-switch' : 'topology-host'}`, transform: `translate(${node.x}, ${node.y})`, tabindex: '0', role: 'button', 'aria-label': `Open ${machine.hostname} ${isSwitch ? 'switch' : 'host'} terminal; ${node.state}`});
-      group.dataset.sessionId = node.id;
+      group.dataset.nodeId = node.id;
       group.dataset.state = node.state;
       const interfaceDetails = isSwitch ? '' : (machine.interfaces || []).map((switchId, index) => {
         const sw = graph.nodes.find(item => item.id === switchId)?.machine;

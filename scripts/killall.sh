@@ -54,7 +54,7 @@ signal_pids() {
   done < <(matching_pids "$kind")
 }
 
-# SIGTERM déclenche la fermeture des sessions et des VM gérées par server.js.
+# SIGTERM triggers the shutdown of the nodes (VMs and switches) managed by server.js.
 signal_pids TERM server
 if (( ! DRY_RUN )); then
   for _ in {1..12}; do

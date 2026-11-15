@@ -593,11 +593,11 @@
         caption.textContent = label;
         button.append(icon, caption);
         button.addEventListener('click', () => {
-          const sessionId = pane.machineId;
+          const nodeId = pane.machineId;
           pane.actionMenu.open = false;
-          if (!sessionId || !machines.has(sessionId)) return;
+          if (!nodeId || !machines.has(nodeId)) return;
           focusPane(pane.index);
-          if (activeId !== sessionId) return;
+          if (activeId !== nodeId) return;
           ({play: startActiveMachine, stop: stopActiveMachine, reboot: rebootActiveMachine, reset: resetActiveMachine, remove: removeActiveMachine})[action]();
         });
         pane.actionButtons[action] = button;
@@ -620,10 +620,10 @@
       pane.settingsButton.hidden = true;
       pane.settingsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-settings-icon"></use></svg>';
       pane.settingsButton.addEventListener('click', () => {
-        const sessionId = pane.machineId;
-        if (!sessionId || machines.get(sessionId)?.kind !== 'vm') return;
+        const nodeId = pane.machineId;
+        if (!nodeId || machines.get(nodeId)?.kind !== 'host') return;
         focusPane(pane.index);
-        if (activeId === sessionId) openHostSettings();
+        if (activeId === nodeId) openHostSettings();
       });
       pane.actionMenu.after(pane.settingsButton);
       pane.clearButton = document.createElement('button');
@@ -662,8 +662,8 @@
           const machine = machines.get(pane.machineId);
           // resize queries device attributes before requesting cursor position.
           // Other cursor replies can be echoed literally by serial getty at boot.
-          if (machine?.kind === 'vm' && /\x1b\[\?[\d;]+c/.test(data)) pane.cursorReportDeadline = Date.now() + 10000;
-          const input = machine?.kind === 'vm' ? data.replace(/\x1b\[\d+;\d+R/g, reply => {
+          if (machine?.kind === 'host' && /\x1b\[\?[\d;]+c/.test(data)) pane.cursorReportDeadline = Date.now() + 10000;
+          const input = machine?.kind === 'host' ? data.replace(/\x1b\[\d+;\d+R/g, reply => {
             if (Date.now() > pane.cursorReportDeadline) return '';
             pane.cursorReportDeadline = 0;
             return reply;
@@ -1127,7 +1127,7 @@
     graphicCanvas.addEventListener('pointerdown', event => {
       if (event.button !== 0) return;
       const nodeElement = event.target.closest('.topology-node');
-      const node = graphicGraph?.nodes.find(item => item.id === nodeElement?.dataset.sessionId);
+      const node = graphicGraph?.nodes.find(item => item.id === nodeElement?.dataset.nodeId);
       const pointer = graphicPointerPosition(event);
       if (!node || !pointer) return;
       graphicDrag = {pointerId: event.pointerId, id: node.id, x: node.x, y: node.y, startX: pointer.x, startY: pointer.y, moved: false};
@@ -1289,11 +1289,11 @@
     async function sendPaneMonitorCommand(pane, machine, command) {
       machine.monitorBusy = true;
       machine.monitorOutput = `${machine.monitorOutput || ''}> ${command}\n`;
-      const sessionId = machine.id;
+      const nodeId = machine.id;
       const request = ++pane.monitorRequest;
       let output;
       try {
-        const response = await fetch(`/api/monitor/${encodeURIComponent(sessionId)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(nodeId)}/monitor`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Command failed');
         output = body.output || '(no output)';
@@ -1301,7 +1301,7 @@
       finally {
         machine.monitorOutput += `${output}\n`;
         machine.monitorBusy = false;
-        if (pane.monitorRequest === request && pane.machineId === sessionId && pane.view === 'monitor' && machines.get(sessionId) === machine) renderMonitorView(pane);
+        if (pane.monitorRequest === request && pane.machineId === nodeId && pane.view === 'monitor' && machines.get(nodeId) === machine) renderMonitorView(pane);
       }
     }
     function handleMonitorInput(pane, data) {
@@ -1339,7 +1339,7 @@
       for (const pane of panes) {
         const machine = pane.machineId && machines.get(pane.machineId);
         updatePaneActionMenu(pane, machine);
-        pane.settingsButton.hidden = !machine || machine.kind !== 'vm';
+        pane.settingsButton.hidden = !machine || machine.kind !== 'host';
         pane.clearButton.hidden = !machine;
         pane.clearButton.disabled = !machine || pane.view !== 'console';
         pane.expandButton.hidden = !machine || (layoutSize === 1 && expandedPaneIndex === null);
@@ -1351,7 +1351,7 @@
         pane.state.hidden = state === 'empty';
         pane.state.textContent = state.toUpperCase();
         pane.state.title = machine ? (machine.error || machine.message || '') : (state === 'error' ? workspaceError : '');
-        pane.metrics.hidden = !machine || machine.kind !== 'vm';
+        pane.metrics.hidden = !machine || machine.kind !== 'host';
         if (!pane.metrics.hidden) {
           const sample = machine.running ? resourceMetrics.get(machine.id) : null;
           const cpu = Number.isFinite(sample?.cpuPercent) ? `${sample.cpuPercent.toFixed(1)}%` : '—';
@@ -1505,13 +1505,13 @@
       panes.forEach(pane => {
         if (!pane.machineId || before[pane.index] === pane.machineId) return;
         pane.token = ++selectionToken;
-        const sessionId = pane.machineId;
-        pane.socket.emit('select-session', sessionId, pane.token, result => {
-          if (result?.error && pane.machineId === sessionId) showStatusError(result.error);
+        const nodeId = pane.machineId;
+        pane.socket.emit('select-node', nodeId, pane.token, result => {
+          if (result?.error && pane.machineId === nodeId) showStatusError(result.error);
         });
       });
       panes.forEach(pane => {
-        if (before[pane.index] && !pane.machineId) pane.socket.emit('leave-session', before[pane.index]);
+        if (before[pane.index] && !pane.machineId) pane.socket.emit('leave-node', before[pane.index]);
       });
       requestAnimationFrame(fitTerminals);
     }
@@ -1531,7 +1531,7 @@
       activeId = pane.machineId;
       panes.forEach(item => item.element.dataset.active = String(item.index === index));
       updateWorkspaceLayout();
-      tabs.querySelectorAll('.machine-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.sessionId === activeId)));
+      tabs.querySelectorAll('.machine-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.nodeId === activeId)));
       updateControls();
       const machine = activeMachine();
       if (machine) {
@@ -1665,7 +1665,7 @@
       renderNicControls(machine);
       try {
         const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), startupDiskEnabled: String(!!machine.startupDiskEnabled)});
-        const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/options?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine !== settingsMachine()) return;
@@ -1761,7 +1761,7 @@
       const request = ++optionsRequest;
       try {
         const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), startupDiskEnabled: String(!!machine.startupDiskEnabled)});
-        const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/options?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine !== settingsMachine() || !qemuOptionsPanel.open) return;
@@ -1783,7 +1783,7 @@
       for (const machine of machines.values()) {
         const tab = document.createElement('div');
         tab.className = 'machine-tab';
-        tab.dataset.sessionId = machine.id;
+        tab.dataset.nodeId = machine.id;
         tab.setAttribute('aria-selected', String(machine.id === activeId));
         const select = document.createElement('button');
         select.type = 'button';
@@ -1796,7 +1796,7 @@
           const name = window.prompt('Display name for this host:', machine.hostname);
           if (name === null || !name.trim()) return;
           try {
-            const response = await fetch(`/api/sessions/${encodeURIComponent(machine.id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
+            const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
             const body = await response.json();
             if (!response.ok) throw new Error(body.error);
           } catch (error) { showStatusError(error.message); }
@@ -1809,7 +1809,7 @@
         close.title = machine.kind === 'switch' ? 'Remove switch' : 'Remove host and delete its working disk';
         close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Remove host'} ${machine.hostname}`);
         close.onclick = () => closeMachine(machine.id);
-        if (machine.kind === 'vm' && machine.pendingRestart) {
+        if (machine.kind === 'host' && machine.pendingRestart) {
           const badge = document.createElement('span');
           badge.className = 'pending-badge';
           badge.textContent = 'Restart pending';
@@ -1882,7 +1882,7 @@
           if (available.length) return available[Math.floor(Math.random() * available.length)];
         }
       }
-      const prefix = scheme?.prefixes?.[kind] || (kind === 'vm' ? 'h' : 's');
+      const prefix = scheme?.prefixes?.[kind] || (kind === 'host' ? 'h' : 's');
       const numberWidth = scheme?.numberWidth || 1;
       let number = 1;
       while (used.has(`${prefix}${String(number).padStart(numberWidth, '0')}`)) number++;
@@ -1890,13 +1890,13 @@
     }
     async function openHostSettingsCreate() {
       const current = activeMachine();
-      const imageId = current?.kind === 'vm' ? current.imageId : images[0]?.id;
+      const imageId = current?.kind === 'host' ? current.imageId : images[0]?.id;
       const image = images.find(item => item.id === imageId);
-      const hostname = nextMachineName('vm');
+      const hostname = nextMachineName('host');
       const interfaces = [null];
       hostSettingsDraft = {
         id: `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
-        isNew: true, kind: 'vm', hostname, imageId,
+        isNew: true, kind: 'host', hostname, imageId,
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces,
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
@@ -1915,7 +1915,7 @@
     }
     function openCreateDialog(kind) {
       createKind = kind;
-      const host = kind === 'vm';
+      const host = kind === 'host';
       createTitle.textContent = host ? 'Add a new host' : 'Add a new switch';
       createName.value = nextMachineName(kind);
       createName.maxLength = host ? 64 : 32;
@@ -1925,7 +1925,7 @@
       document.getElementById('create-engine-row').hidden = !host;
       imageSelect.required = host;
       const current = activeMachine();
-      imageSelect.value = host && current?.kind === 'vm' ? current.imageId : (images[0]?.id || '');
+      imageSelect.value = host && current?.kind === 'host' ? current.imageId : (images[0]?.id || '');
       engineSelect.value = generalSettings.engine;
       createDraft = host ? {engine: generalSettings.engine, interfaces: [null], hasLaunched: false, busy: false} : null;
       createNetwork.hidden = !host;
@@ -1960,7 +1960,7 @@
       const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'host', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       if (select) selectMachine(id);
       else renderGraphic();
@@ -2025,7 +2025,7 @@
       if (!await confirmAction(title, message, title)) return;
       if (machines.get(id) !== machine || machine.busy) return;
       try {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {method: 'DELETE'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(id)}`, {method: 'DELETE'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to remove host or switch');
         machines.delete(id);
@@ -2049,7 +2049,7 @@
     function machineFromSession(session) {
       const image = images.find(item => item.id === session.imageId);
       return {
-        id: session.id, kind: session.kind || 'vm', hostname: session.hostname,
+        id: session.id, kind: session.kind || 'host', hostname: session.hostname,
         osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
         imageId: image ? image.id : (images[0]?.id || ''),
         settings: session.settings || null, settingsLoaded: !!session.settings,
@@ -2074,7 +2074,7 @@
       current.message = session.message;
       current.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
       current.networkInterfaces = session.networkInterfaces || [];
-      if (session.kind === 'vm' && session.settings) { current.settings = session.settings; current.settingsLoaded = true; }
+      if (session.kind === 'host' && session.settings) { current.settings = session.settings; current.settingsLoaded = true; }
       if (!(qemuOptionsPanel.open && settingsMachine()?.id === session.id)) {
         const image = images.find(item => item.id === session.imageId);
         current.imageId = image ? image.id : (session.imageId || images[0]?.id || '');
@@ -2090,7 +2090,7 @@
     }
     async function syncSessionsFromServer() {
       try {
-        const response = await fetch('/api/sessions', {cache: 'no-store'});
+        const response = await fetch('/api/nodes', {cache: 'no-store'});
         const current = await response.json();
         if (!response.ok) throw new Error(current.error || 'Cannot refresh sessions');
         const currentIds = new Set(current.map(session => session.id));
@@ -2104,7 +2104,7 @@
     Promise.all([
       fetch('/api/systems').then(response => response.json()),
       fetch('/api/general-settings').then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Session settings unavailable'); return body; }),
-      fetch('/api/sessions').then(response => response.json()),
+      fetch('/api/nodes').then(response => response.json()),
       fetch('/resources/naming-schemes.json').then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
@@ -2116,7 +2116,7 @@
       }
       loadGraphicPositions(sessionSettings.sessionId);
       images = items;
-      namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};
+      namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {host: 'h', switch: 's'}}};
       if (schemes?.error || !schemes?.classic?.prefixes) {
         generalSettingsError.textContent = `Naming schemes unavailable: ${schemes?.error || 'invalid resource file'}. Classic naming is available.`;
         generalSettingsError.hidden = false;
@@ -2497,7 +2497,7 @@
         } else {
           const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked
             ? [null] : [...source.interfaces];
-          const configResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
+          const configResponse = await fetch(`/api/nodes/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
           const config = await configResponse.json();
           if (!configResponse.ok) throw new Error(config.error || 'Cannot copy host configuration.');
           await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine,
@@ -2527,10 +2527,10 @@
       createError.hidden = true;
       let startHost = false;
       try {
-        if (kind === 'vm') await addHost({name: createName.value.trim(), imageId: imageSelect.value, engine: generalSettings.engine, interfaces: [...createDraft.interfaces]});
+        if (kind === 'host') await addHost({name: createName.value.trim(), imageId: imageSelect.value, engine: generalSettings.engine, interfaces: [...createDraft.interfaces]});
         else await addSwitch({name: createName.value.trim(), autostart});
         createDialog.close();
-        startHost = kind === 'vm' && autostart;
+        startHost = kind === 'host' && autostart;
       } catch (error) {
         createError.textContent = error.message;
         createError.hidden = false;
@@ -2561,7 +2561,7 @@
     });
     addNic.addEventListener('click', () => {
       const machine = settingsMachine();
-      if (!machine || machine.kind !== 'vm' || machine.busy || machine.interfaces.length >= 4) return;
+      if (!machine || machine.kind !== 'host' || machine.busy || machine.interfaces.length >= 4) return;
       const scrollTop = qemuOptionsPanel.scrollTop;
       machine.interfaces.push(null);
       clearStartupTemplateError();
@@ -2580,14 +2580,14 @@
     });
     async function openHostSettings() {
       const source = activeMachine();
-      if (source?.kind !== 'vm') return;
+      if (source?.kind !== 'host') return;
       try {
-        const response = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Cannot load host configuration.');
         if (!machines.has(source.id) || activeId !== source.id) return;
         hostSettingsDraft = {
-          id: source.id, isNew: false, kind: 'vm', hostname: data.name,
+          id: source.id, isNew: false, kind: 'host', hostname: data.name,
           imageId: data.systemId, osHint: source.osHint, hasDifferentialDisk: source.hasDifferentialDisk,
           engine: data.engine, interfaces: [...data.interfaces], networkInterfaces: data.networkInterfaces,
           settings: {...data.settings}, settingsLoaded: true,
@@ -2683,7 +2683,7 @@
           selectMachine(machine.id);
           if (autostart) await startActiveMachine();
         } else {
-          const response = await fetch(`/api/hosts/${encodeURIComponent(draft.id)}/config`, {
+          const response = await fetch(`/api/nodes/${encodeURIComponent(draft.id)}/config`, {
             method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
           });
           const data = await response.json();
@@ -2706,8 +2706,8 @@
           renderTabs();
           renderGraphic();
           if (restartNow) {
-            const endpoint = data.running ? `/api/reboot/${encodeURIComponent(draft.id)}` : '/api/start';
-            const body = data.running ? undefined : JSON.stringify({sessionId: draft.id, engine: draft.engine, imageId: draft.imageId});
+            const endpoint = `/api/nodes/${encodeURIComponent(draft.id)}/${data.running ? 'reboot' : 'start'}`;
+            const body = data.running ? undefined : JSON.stringify({engine: draft.engine, imageId: draft.imageId});
             const restartResponse = await fetch(endpoint, {method: 'POST',
               ...(body ? {headers: {'Content-Type': 'application/json'}, body} : {})});
             const restartResult = await restartResponse.json();
@@ -2738,14 +2738,14 @@
       pane.socket.on('connect', () => {
         if (!pane.machineId) return;
         pane.token = ++selectionToken;
-        const sessionId = pane.machineId;
-        pane.socket.emit('select-session', sessionId, pane.token, result => {
-          if (result?.error && pane.machineId === sessionId) showStatusError(result.error);
+        const nodeId = pane.machineId;
+        pane.socket.emit('select-node', nodeId, pane.token, result => {
+          if (result?.error && pane.machineId === nodeId) showStatusError(result.error);
         });
       });
-      pane.socket.on('session-snapshot', snapshot => {
-        const machine = machines.get(snapshot.sessionId);
-        if (!machine || pane.machineId !== snapshot.sessionId || pane.token !== snapshot.token) return;
+      pane.socket.on('node-snapshot', snapshot => {
+        const machine = machines.get(snapshot.nodeId);
+        if (!machine || pane.machineId !== snapshot.nodeId || pane.token !== snapshot.token) return;
         machine.running = snapshot.state.running;
         machine.hasLaunched = snapshot.state.hasLaunched;
         machine.message = snapshot.state.message;
@@ -2759,8 +2759,8 @@
         requestAnimationFrame(() => fitTerminal(pane));
       });
       pane.socket.on('serial-reset', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         machine.serial = event.serial || '';
         if (pane.view !== 'console') return;
         const generation = ++pane.replayGeneration;
@@ -2774,28 +2774,28 @@
         });
       });
       pane.socket.on('serial', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         machine.serial = (machine.serial + event.data).slice(-262144);
         if (pane.view !== 'console') return;
         if (pane.replaying) pane.replayPending += event.data;
         else pane.terminal.write(event.data, () => syncConsoleScroll(pane));
       });
       pane.socket.on('log', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
-        const earlierConnectedPane = panes.some(other => other.index < pane.index && other.machineId === event.sessionId && other.socket.connected);
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
+        const earlierConnectedPane = panes.some(other => other.index < pane.index && other.machineId === event.nodeId && other.socket.connected);
         if (!earlierConnectedPane) appendLog(machine, event.line);
       });
       pane.socket.on('logs-reset', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         SessionLog.reset(machine);
         refreshLogViews(machine);
       });
       pane.socket.on('state', event => {
-        const machine = machines.get(event.sessionId);
-        if (!machine || pane.machineId !== event.sessionId) return;
+        const machine = machines.get(event.nodeId);
+        if (!machine || pane.machineId !== event.nodeId) return;
         machine.running = event.running;
         if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
         if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
@@ -2804,12 +2804,12 @@
         renderTabs();
         if (machine.id === activeId) updateControls();
       });
-      pane.socket.on('session-error', showStatusError);
+      pane.socket.on('node-error', showStatusError);
       pane.socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
     }
     panes.forEach(attachPaneSocket);
-    socket.on('sessions-changed', event => {
-      const machine = event && machines.get(event.sessionId);
+    socket.on('nodes-changed', event => {
+      const machine = event && machines.get(event.nodeId);
       if (!machine) { scheduleSessionSync(); return; }
       machine.running = event.running;
       if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
@@ -2827,12 +2827,12 @@
         defaultEngineSelect.value = event.engine;
       }
     });
-    socket.on('session-renamed', event => { const machine = machines.get(event.sessionId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
-    socket.on('sessions-removed', event => {
+    socket.on('node-renamed', event => { const machine = machines.get(event.nodeId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === activeId) updateControls(); } });
+    socket.on('nodes-removed', event => {
       for (const id of event.ids || []) machines.delete(id);
       showPage();
     });
-    socket.on('session-error', showStatusError);
+    socket.on('node-error', showStatusError);
     socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
     function clearPaneConsole(pane) {
       if (!pane.machineId || pane.view !== 'console' || !machines.has(pane.machineId)) return;
@@ -2847,7 +2847,7 @@
       if (machine.kind === 'switch') {
         machine.busy = true; machine.operation = 'starting'; machine.error = null; updateControls();
         try {
-          const response = await fetch(`/api/switches/${encodeURIComponent(machine.id)}/start`, {method: 'POST'});
+          const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/start`, {method: 'POST'});
           const body = await response.json();
           if (!response.ok) throw new Error(body.error || 'Cannot start switch');
           machine.running = true; machine.hasLaunched = true;
@@ -2878,9 +2878,9 @@
         await new Promise((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
           pane.token = ++selectionToken;
-          pane.socket.emit('select-session', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
+          pane.socket.emit('select-node', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
         });
-        const configResponse = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/config`, {cache: 'no-store'});
+        const configResponse = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/config`, {cache: 'no-store'});
         const config = await configResponse.json();
         if (!configResponse.ok) throw new Error(config.error || 'Cannot load host configuration.');
         machine.settings = config.settings;
@@ -2889,8 +2889,8 @@
         machine.networkInterfaces = config.networkInterfaces;
         machine.guestMedia = config.guestMedia;
         machine.startupDiskEnabled = config.startupDiskEnabled;
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/start`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({engine: machine.engine, imageId: machine.imageId})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to start');
         machine.hostname = body.name;
@@ -2918,7 +2918,7 @@
       machine.message = 'Stopping…';
       updateControls();
       try {
-        const route = machine.kind === 'switch' ? `/api/switches/${encodeURIComponent(machine.id)}/stop` : `/api/stop/${encodeURIComponent(machine.id)}`;
+        const route = `/api/nodes/${encodeURIComponent(machine.id)}/stop`;
         const response = await fetch(route, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to stop');
@@ -2933,7 +2933,7 @@
       if (!await confirmAction('Remove all hosts and switches', 'Remove all hosts and switches from this session?\n\nAll working disks will be deleted and their changes lost.', 'Remove all')) return;
       exitAllBusy = true; updateControls();
       try {
-        const response = await fetch('/api/sessions', {method: 'DELETE'});
+        const response = await fetch('/api/nodes', {method: 'DELETE'});
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to remove all hosts and switches');
         for (const id of result.removed) machines.delete(id);
@@ -2950,7 +2950,7 @@
       machine.message = 'Rebooting…';
       updateControls();
       try {
-        const response = await fetch(`/api/reboot/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/reboot`, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reboot');
       } catch (error) { machine.message = error.message; machine.error = error.message; }
@@ -2967,7 +2967,7 @@
       machine.message = 'Resetting from base image…';
       updateControls();
       try {
-        const response = await fetch(`/api/reset/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/reset`, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reset');
         machine.hasLaunched = true;

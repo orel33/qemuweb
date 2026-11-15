@@ -11,10 +11,10 @@ const io = require('socket.io-client');
 
 const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
-const engine = process.env.LAN2_ENGINE || 'qemu';
-const timeoutMs = Number(process.env.LAN2_TIMEOUT_MS || 120000);
+const engine = process.env.TWO_HOSTS_ENGINE || 'qemu';
+const timeoutMs = Number(process.env.TWO_HOSTS_TIMEOUT_MS || 120000);
 const addresses = ['192.0.2.101', '192.0.2.102'];
-const verifyGuestMedia = process.env.LAN2_GTS16 === '1';
+const verifyGuestMedia = process.env.TWO_HOSTS_STARTUP_MEDIA === '1';
 const nonce = `${process.pid}-${Math.random().toString(16).slice(2, 8)}`;
 const switchId = `s-${crypto.randomBytes(8).toString('hex')}`;
 const hostIds = Array.from({length: 2}, () => `h-${crypto.randomBytes(8).toString('hex')}`);
@@ -68,7 +68,7 @@ async function request(route, {method = 'GET', body} = {}) {
 
 async function waitForSession(id, predicate, description) {
   return waitFor(description, async () => {
-    const sessions = await request('/api/sessions');
+    const sessions = await request('/api/nodes');
     const session = sessions.find(candidate => candidate.id === id);
     return session && predicate(session) ? session : null;
   });
@@ -99,26 +99,26 @@ class SerialShell {
     this.socket = io(baseUrl, {reconnection: false, timeout: 10000});
     this.socket.on('connect', () => {
       this.connected = true;
-      this.socket.emit('select-session', id, `lan2-${nonce}`, response => {
+      this.socket.emit('select-node', id, `lan2-${nonce}`, response => {
         if (response && response.error) this.selectionError = response.error;
         else this.selected = true;
       });
     });
-    this.socket.on('session-snapshot', snapshot => {
-      if (snapshot.sessionId === id) {
+    this.socket.on('node-snapshot', snapshot => {
+      if (snapshot.nodeId === id) {
         this.logs = snapshot.logs || [];
         this.append(snapshot.serial || '');
       }
     });
-    this.socket.on('log', packet => { if (packet.sessionId === id) this.logs.push(packet.line); });
+    this.socket.on('log', packet => { if (packet.nodeId === id) this.logs.push(packet.line); });
     this.socket.on('serial', packet => {
-      if (packet.sessionId === id) this.append(packet.data || '');
+      if (packet.nodeId === id) this.append(packet.data || '');
     });
     this.socket.on('serial-reset', packet => {
-      if (!packet || packet.sessionId === id) { this.output = ''; this.resetCount++; }
+      if (!packet || packet.nodeId === id) { this.output = ''; this.resetCount++; }
     });
     this.socket.on('connect_error', error => { this.connectionError = error.message; });
-    this.socket.on('session-error', error => { this.selectionError = String(error); });
+    this.socket.on('node-error', error => { this.selectionError = String(error); });
   }
 
   append(value) {
@@ -287,8 +287,7 @@ journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_STA
 }
 
 async function startHost(id) {
-  await request('/api/start', {method: 'POST', body: {
-    sessionId: id,
+  await request(`/api/nodes/${id}/start`, {method: 'POST', body: {
     engine,
     imageId: 'debian13-legacy',
     interfaces: [switchId],
@@ -297,7 +296,7 @@ async function startHost(id) {
 }
 
 async function run() {
-  assert.equal(engine, 'qemu', 'LAN2 requires QEMU/KVM.');
+  assert.equal(engine, 'qemu', 'The two-hosts test requires QEMU/KVM.');
   fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
   assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh first.`);
   const port = await freePort();
@@ -314,21 +313,21 @@ async function run() {
     try { return (await request('/api/systems')).some(system => system.id === 'debian13-legacy'); }
     catch (_) { return false; }
   }, 30000);
-  console.log('LAN2: QemuWeb démarré');
-  console.log(`LAN2: moteur ${engine === 'qemu' ? 'QEMU/KVM' : 'QEMU/TCG'}`);
+  console.log('Two hosts: QemuWeb started');
+  console.log(`Two hosts: engine ${engine === 'qemu' ? 'QEMU/KVM' : 'QEMU/TCG'}`);
   await request('/api/general-settings', {method: 'PUT', body: {engine}});
 
   const switchName = `lan2sw${nonce.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;
   const sw = await request('/api/switches', {method: 'POST', body: {id: switchId, name: switchName, autostart: true}});
   switchCreated = true;
   assert.equal(sw.running, true, 'VDE switch did not start.');
-  console.log('LAN2: switch VDE démarré');
+  console.log('Two hosts: VDE switch started');
 
   for (let index = 0; index < hostIds.length; index++) {
     const id = hostIds[index];
     await request('/api/hosts', {method: 'POST', body: {
       id,
-      name: `LAN2 Debian ${index + 1} ${nonce}`,
+      name: `Two hosts Debian ${index + 1} ${nonce}`,
       imageId: 'debian13-legacy',
       engine,
       interfaces: [switchId],
@@ -346,30 +345,30 @@ async function run() {
   assert.equal(secondNic.switchId, switchId);
   assert.notEqual(firstNic.port, secondNic.port, 'Hosts were assigned the same VDE port.');
   assert.notEqual(firstNic.mac, secondNic.mac, 'Hosts were assigned the same MAC address.');
-  console.log(`LAN2: ports distincts (${firstNic.port}, ${secondNic.port}), MAC distinctes`);
+  console.log(`Two hosts: distinct ports (${firstNic.port}, ${secondNic.port}) and MAC addresses`);
 
   await Promise.all(consoles.map(shell => shell.waitForShell()));
   await Promise.all(consoles.map((shell, index) => setStaticAddress(shell, addresses[index])));
   await ping(consoles[0], addresses[1]);
   await ping(consoles[1], addresses[0]);
-  console.log('LAN2: ping bidirectionnel validé');
+  console.log('Two hosts: bidirectional ping verified');
 
   if (verifyGuestMedia) {
     for (let index = 0; index < hostIds.length; index++) {
       await installGuestHook(consoles[index]);
-      await request(`/api/hosts/${hostIds[index]}/guest-media`, {method: 'PUT', body: mediaFor(index)});
-      await request(`/api/hosts/${hostIds[index]}/guest-cdrom`, {method: 'POST', body: mediaFor(index)});
-      await request(`/api/hosts/${hostIds[index]}/guest-cdrom`, {method: 'PATCH', body: {attached: true}});
+      await request(`/api/nodes/${hostIds[index]}/guest-media`, {method: 'PUT', body: mediaFor(index)});
+      await request(`/api/nodes/${hostIds[index]}/guest-cdrom`, {method: 'POST', body: mediaFor(index)});
+      await request(`/api/nodes/${hostIds[index]}/guest-cdrom`, {method: 'PATCH', body: {attached: true}});
     }
-    console.log('GTS16: hooks installés dans les overlays, médias propres aux hôtes enregistrés');
+    console.log('Startup media: hooks installed in the overlays, per-host media registered');
   }
 
-  for (const id of hostIds) await request(`/api/stop/${id}`, {method: 'POST'});
+  for (const id of hostIds) await request(`/api/nodes/${id}/stop`, {method: 'POST'});
   for (const id of hostIds) {
     const stopped = await waitForSession(id, session => !session.running && session.hasDifferentialDisk, `${id} stop`);
     assert.ok(stopped.hasDifferentialDisk, `${id} differential disk was lost after Stop.`);
   }
-  console.log('LAN2: les deux hôtes sont arrêtés, disques conservés');
+  console.log('Two hosts: both hosts stopped, disks kept');
 
   await Promise.all(hostIds.map(startHost));
   await Promise.all(hostIds.map(id => waitForSession(id, session => session.running, `${id} resume`)));
@@ -382,23 +381,23 @@ async function run() {
     await consoles[index].exec(`test "$(cat /root/.lan2-address-marker)" = "${addresses[index]}"`);
     if (verifyGuestMedia) await verifyGuestBoot(consoles[index], index, 1);
   }
-  console.log('LAN2: reprise confirmée, port/MAC et disque conservés');
+  console.log('Two hosts: resume confirmed, port, MAC and disk kept');
 
   if (!verifyGuestMedia) await Promise.all(consoles.map((shell, index) => setStaticAddress(shell, addresses[index])));
   await ping(consoles[0], addresses[1]);
   await ping(consoles[1], addresses[0]);
-  console.log('LAN2: IP statiques reconfigurées, ping bidirectionnel validé après reprise');
+  console.log('Two hosts: static IPs reconfigured, bidirectional ping verified after resume');
   if (verifyGuestMedia) {
-    await request(`/api/hosts/${hostIds[0]}/guest-media`, {method: 'PUT', body: mediaFor(0, 2)});
-    await request(`/api/hosts/${hostIds[0]}/guest-cdrom`, {method: 'POST', body: mediaFor(0, 2)});
+    await request(`/api/nodes/${hostIds[0]}/guest-media`, {method: 'PUT', body: mediaFor(0, 2)});
+    await request(`/api/nodes/${hostIds[0]}/guest-cdrom`, {method: 'POST', body: mediaFor(0, 2)});
     const resetBeforeReboot = consoles[0].resetCount;
-    await request(`/api/reboot/${hostIds[0]}`, {method: 'POST'});
+    await request(`/api/nodes/${hostIds[0]}/reboot`, {method: 'POST'});
     await waitFor('h1 reboot serial reset', () => consoles[0].resetCount > resetBeforeReboot);
     await waitFor('h1 fresh login prompt', () => /login:\s*$/m.test(stripAnsi(consoles[0].output)));
     await consoles[0].waitForShell();
     await verifyGuestBoot(consoles[0], 0, 2);
     await ping(consoles[0], addresses[1]);
-    console.log('GTS16: script édité après Reboot, ressource lue, IP/hostname et disque vérifiés');
+    console.log('Startup media: script edited after Reboot, resource read, IP, hostname and disk verified');
   }
 }
 
@@ -406,10 +405,10 @@ async function cleanup() {
   await Promise.all(consoles.map(shell => shell.close().catch(() => {})));
   if (baseUrl && child && child.exitCode === null) {
     for (const id of hostIds) {
-      try { await request(`/api/sessions/${id}`, {method: 'DELETE'}); } catch (_) {}
+      try { await request(`/api/nodes/${id}`, {method: 'DELETE'}); } catch (_) {}
     }
     if (switchCreated) {
-      try { await request(`/api/sessions/${switchId}`, {method: 'DELETE'}); } catch (_) {}
+      try { await request(`/api/nodes/${switchId}`, {method: 'DELETE'}); } catch (_) {}
     }
     child.kill('SIGTERM');
     await Promise.race([
@@ -420,7 +419,7 @@ async function cleanup() {
 }
 
 run().catch(error => {
-  console.error(`\nLAN2 FAILED: ${error.stack || error.message}`);
+  console.error(`\nTwo-hosts test FAILED: ${error.stack || error.message}`);
   if (serverOutput.length) console.error(`\n--- QemuWeb output ---\n${serverTail()}`);
   process.exitCode = 1;
 }).finally(cleanup);

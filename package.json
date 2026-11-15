@@ -1,15 +1,15 @@
 {
   "name": "qemuweb",
-  "version": "0.8.1",
+  "version": "0.9.0-beta.1",
   "private": true,
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/unit/*.test.js",
-    "test:lan2": "node test/integration/lan2-integration.js",
-    "test:lan4-startup": "node test/integration/lan4-startup-templates.js",
-    "test:gts16-lan2": "LAN2_GTS16=1 node test/integration/lan2-integration.js",
-    "test:gts16-profiles": "node test/integration/gts16-profiles.js",
+    "test:two-hosts": "node test/integration/two-hosts-ping.js",
+    "test:four-hosts-startup": "node test/integration/four-hosts-startup.js",
+    "test:two-hosts-startup-media": "TWO_HOSTS_STARTUP_MEDIA=1 node test/integration/two-hosts-ping.js",
+    "test:startup-media-profiles": "node test/integration/startup-media-profiles.js",
     "test:guest-network": "node test/integration/guest-network.js"
   },
   "engines": {
