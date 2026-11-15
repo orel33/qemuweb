@@ -135,7 +135,8 @@
         const sw = graph.nodes.find(item => item.id === switchId)?.machine;
         const portInfo = machine.networkInterfaces?.[index];
         const port = portInfo?.switchId === switchId ? portInfo.port : null;
-        return `eth${index}: ${sw?.hostname || 'disconnected'}${port == null ? '' : ` port ${port}`}`;
+        const target = switchId === 'nat' ? 'NAT' : (sw?.hostname || 'disconnected');
+        return `eth${index}: ${target}${port == null ? '' : ` port ${port}`}`;
       }).join(' · ');
       group.append(element('title', {}, `${machine.hostname} · ${node.state}${machine.message ? ` · ${machine.message}` : ''}${interfaceDetails ? ` · ${interfaceDetails}` : ''}`));
       group.append(element('rect', {x: -106, y: -48, width: 212, height: 96, rx: 12, class: 'node-card'}));

@@ -1856,6 +1856,7 @@
         const label = document.createElement('span'); label.textContent = `Ethernet ${index}`;
         const select = document.createElement('select'); select.setAttribute('aria-label', `Ethernet interface ${index} switch`); select.disabled = locked;
         const disconnected = document.createElement('option'); disconnected.value = ''; disconnected.textContent = 'Disconnected'; select.append(disconnected);
+        const nat = document.createElement('option'); nat.value = 'nat'; nat.textContent = 'Internet (NAT)'; select.append(nat);
         for (const sw of machines.values()) if (sw.kind === 'switch') {
           const option = document.createElement('option'); option.value = sw.id; option.textContent = `${sw.hostname}${sw.running ? '' : ' (stopped)'}`; select.append(option);
         }

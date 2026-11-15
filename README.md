@@ -118,11 +118,11 @@ the settings and restart the host to use the rebuilt disk.
 ## Images
 
 `scripts/prepare.sh` prepares the systems listed in [`config.json`](config.json):
-Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, and OpenWrt 25.12.
+Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, OpenWrt 25.12, and OCI Container (Boot2container).
 
 ```sh
 bash scripts/prepare.sh                      # all systems
-bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt
+bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt, container
 bash scripts/prepare.sh --list               # show prepared images
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 ```
