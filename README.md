@@ -143,11 +143,11 @@ the server stops. Use **Save session** to keep a portable copy.
 | Path | Role |
 | --- | --- |
 | `server.js` | HTTP API, Socket.IO consoles, and process management. |
-| `topology.js` | `.topo` parsing and formatting. |
-| `session-archive.js` | Session ZIP import and export. |
-| `guest-media.js` | Startup disk (ISO) generation. |
-| `resource-metrics.js` | CPU and memory metrics for VMs. |
-| `command-preflight.js`, `system-config.js` | Executable checks, and `config.json` and host settings validation. |
+| `lib/topology.js` | `.topo` parsing and formatting. |
+| `lib/session-archive.js` | Session ZIP import and export. |
+| `runner/media/guest-media.js` | Startup disk (ISO) generation. |
+| `runner/metrics.js` | CPU and memory metrics for VMs. |
+| `runner/preflight.js`, `common/system-config.js` | Executable checks, and `config.json` and host settings validation. |
 | `public/` | Web interface (HTML, xterm.js terminals, network graph). |
 | `scripts/prepare/` | One image preparation script per system. |
 
