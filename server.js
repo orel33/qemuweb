@@ -15,6 +15,7 @@ const {resolveCommands} = require('./runner/preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./runner/metrics');
 const {filterGuestHookSerial} = require('./runner/console/guest-hook-filter');
 const {launchSettingFields, validateQemuOptions, validateLaunchSettings} = require('./common/launch-settings');
+const {entityKind, newEntityId} = require('./common/node-id');
 const {parseTopology, formatTopology} = require('./lib/topology');
 const {writeArchive, readArchive} = require('./lib/session-archive');
 const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./common/system-config');
@@ -169,17 +170,6 @@ function sessionMetadata(engine = session.engine) {
     .filter(node => node.kind === kind && node.hostname && (kind === 'switch' || node.selectedImage))
     .map(node => node.id).sort();
   return {schemaVersion: 4, engine, hosts: ids('host'), switches: ids('switch'), baseImages: {}};
-}
-
-function entityKind(id, expectedKind) {
-  if (typeof id !== 'string' || !/^[hs]-[0-9a-f]{16}$/.test(id)) throw new Error('Invalid host or switch ID; expected h- or s- followed by 16 lowercase hex characters.');
-  const kind = id[0] === 'h' ? 'host' : 'switch';
-  if (expectedKind && kind !== expectedKind) throw new Error(`Expected a ${expectedKind === 'host' ? 'host' : 'switch'} ID.`);
-  return kind;
-}
-
-function newEntityId(kind) {
-  return `${kind === 'switch' ? 's' : 'h'}-${crypto.randomBytes(8).toString('hex')}`;
 }
 
 function requireSessionEngine(engine) {
