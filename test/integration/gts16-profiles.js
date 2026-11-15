@@ -127,17 +127,17 @@ async function verifyConcurrentIsolation() {
   for (const host of hosts) {
     ids.push(host.id);
     await request('/api/hosts', 'POST', {id: host.id, name: `GTS16 isolated ${host.id}`, imageId: 'openwrt', engine, interfaces: [], guestMedia: host.media.files});
-    await request(`/api/hosts/${host.id}/guest-cdrom`, 'POST', host.media.files);
-    await request(`/api/hosts/${host.id}/guest-cdrom`, 'PATCH', {attached: true});
+    await request(`/api/nodes/${host.id}/guest-cdrom`, 'POST', host.media.files);
+    await request(`/api/nodes/${host.id}/guest-cdrom`, 'PATCH', {attached: true});
     host.state = watchSession(host.id);
   }
   try {
     await Promise.all(hosts.map(host => waitFor(`${host.id} socket`, () => host.state.socket.connected)));
-    await Promise.all(hosts.map(host => request('/api/start', 'POST', {
-      sessionId: host.id, engine, imageId: 'openwrt', interfaces: [], settings: {memory: 256, cpus: 1, clock: 'utc'}
+    await Promise.all(hosts.map(host => request(`/api/nodes/${host.id}/start`, 'POST', {
+      engine, imageId: 'openwrt', interfaces: [], settings: {memory: 256, cpus: 1, clock: 'utc'}
     })));
     await Promise.all(hosts.map(host => verifyBoot('openwrt', host.state, host.media)));
-    const sessions = await request('/api/sessions');
+    const sessions = await request('/api/nodes');
     assert.ok(hosts.every(host => sessions.some(session => session.id === host.id && session.running)),
       'Both isolated hosts must be running at the same time.');
     for (let index = 0; index < hosts.length; index++) {
@@ -155,7 +155,7 @@ async function verifyConcurrentIsolation() {
     console.log('openwrt: two concurrent hosts used distinct ISOs, scripts, resources and disks');
   } finally {
     for (const host of hosts) host.state.socket.disconnect();
-    for (const host of hosts) await request(`/api/sessions/${host.id}`, 'DELETE');
+    for (const host of hosts) await request(`/api/nodes/${host.id}`, 'DELETE');
   }
 }
 
@@ -172,36 +172,36 @@ async function run() {
     const id = ids[index];
     const first = mediaFor(profile, 1);
     const second = mediaFor(profile, 2);
-    const startOptions = {sessionId: id, engine, imageId: profile, interfaces: [], settings: {memory: profile === 'openwrt' ? 256 : 1024, cpus: 1, clock: 'utc'}};
+    const startOptions = {engine, imageId: profile, interfaces: [], settings: {memory: profile === 'openwrt' ? 256 : 1024, cpus: 1, clock: 'utc'}};
     await request('/api/hosts', 'POST', {id, name: `GTS16 ${profile}`, imageId: profile, engine, interfaces: [], guestMedia: first.files});
-    await request(`/api/hosts/${id}/guest-cdrom`, 'POST', first.files);
-    await request(`/api/hosts/${id}/guest-cdrom`, 'PATCH', {attached: true});
+    await request(`/api/nodes/${id}/guest-cdrom`, 'POST', first.files);
+    await request(`/api/nodes/${id}/guest-cdrom`, 'PATCH', {attached: true});
     const state = watchSession(id);
     try {
       await waitFor(`${profile} socket`, () => state.socket.connected);
-      await request('/api/start', 'POST', startOptions);
+      await request(`/api/nodes/${id}/start`, 'POST', startOptions);
       await verifyBoot(profile, state, first);
       console.log(`${profile}: initial ISO script, resource and disk marker verified`);
       if (engine.startsWith('qemu')) {
-        await request(`/api/hosts/${id}/guest-media`, 'PUT', second.files);
+        await request(`/api/nodes/${id}/guest-media`, 'PUT', second.files);
         const beforeReboot = state.resetCount;
-        await request(`/api/reboot/${id}`, 'POST');
+        await request(`/api/nodes/${id}/reboot`, 'POST');
         await waitFor(`${profile} reboot serial reset`, () => state.resetCount > beforeReboot);
         await verifyBoot(profile, state, second);
         assert.ok(!state.serial.includes(first.resourceMarker), `${profile} reboot retained the old resource.`);
         console.log(`${profile}: edited script and companion resource verified after Reboot`);
 
-        await request(`/api/stop/${id}`, 'POST');
-        const stopped = (await request('/api/sessions')).find(session => session.id === id);
+        await request(`/api/nodes/${id}/stop`, 'POST');
+        const stopped = (await request('/api/nodes')).find(session => session.id === id);
         assert.ok(stopped && !stopped.running && stopped.hasDifferentialDisk, `${profile} Stop lost its differential disk.`);
         const beforeResume = state.resetCount;
-        await request('/api/start', 'POST', startOptions);
+        await request(`/api/nodes/${id}/start`, 'POST', startOptions);
         await waitFor(`${profile} resume serial reset`, () => state.resetCount > beforeResume);
         await verifyBoot(profile, state, second);
         console.log(`${profile}: Stop/Resume retained the disk marker and edited startup media`);
       }
     } finally { state.socket.disconnect(); }
-    await request(`/api/sessions/${id}`, 'DELETE');
+    await request(`/api/nodes/${id}`, 'DELETE');
   }
   if (profiles.includes('openwrt') && engine.startsWith('qemu')) await verifyConcurrentIsolation();
   if (profiles.includes('openwrt') && engine === 'qemu') {
@@ -214,8 +214,8 @@ async function run() {
       ids.push(id);
       await request('/api/hosts', 'POST', {id, name: `GTS16 missing ${scenario.suffix}`, imageId: 'openwrt', engine: 'qemu', interfaces: [], guestMedia: {script: scenario.script, resources: []}});
       if (scenario.attach) {
-        await request(`/api/hosts/${id}/guest-cdrom`, 'POST', {script: scenario.script, resources: []});
-        await request(`/api/hosts/${id}/guest-cdrom`, 'PATCH', {attached: true});
+        await request(`/api/nodes/${id}/guest-cdrom`, 'POST', {script: scenario.script, resources: []});
+        await request(`/api/nodes/${id}/guest-cdrom`, 'PATCH', {attached: true});
       }
       const socket = io(baseUrl, {reconnection: false, timeout: 10000});
       let serial = '';
@@ -226,20 +226,20 @@ async function run() {
       socket.on('log', value => { if (value.sessionId === id) logs.push(value.line); });
       try {
         await waitFor(`${scenario.suffix} socket`, () => socket.connected);
-        await request('/api/start', 'POST', {sessionId: id, engine: 'qemu', imageId: 'openwrt', interfaces: [], settings: {memory: 256, cpus: 1, clock: 'utc'}});
+        await request(`/api/nodes/${id}/start`, 'POST', {engine: 'qemu', imageId: 'openwrt', interfaces: [], settings: {memory: 256, cpus: 1, clock: 'utc'}});
         await waitFor(`${scenario.suffix} report`, () => serial.includes(scenario.error), 90000);
         assert.ok(serial.includes('Please press Enter to activate this console.'), 'OpenWrt boot did not reach its console.');
         assert.ok(!logs.some(line => line.startsWith('[guest]')), 'Host Log contains guest serial output.');
         console.log(`openwrt: missing ${scenario.suffix} reported promptly in console; boot reached console`);
       } finally { socket.disconnect(); }
-      await request(`/api/sessions/${id}`, 'DELETE');
+      await request(`/api/nodes/${id}`, 'DELETE');
     }
   }
 }
 
 async function cleanup() {
   if (baseUrl && child?.exitCode === null) {
-    for (const id of ids) { try { await request(`/api/sessions/${id}`, 'DELETE'); } catch (_) {} }
+    for (const id of ids) { try { await request(`/api/nodes/${id}`, 'DELETE'); } catch (_) {} }
     child.kill('SIGTERM');
     await new Promise(resolve => child.once('exit', resolve));
   }

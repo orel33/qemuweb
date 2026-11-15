@@ -68,7 +68,7 @@ async function request(route, {method = 'GET', body} = {}) {
 
 async function waitForSession(id, predicate, description) {
   return waitFor(description, async () => {
-    const sessions = await request('/api/sessions');
+    const sessions = await request('/api/nodes');
     const session = sessions.find(candidate => candidate.id === id);
     return session && predicate(session) ? session : null;
   });
@@ -287,8 +287,7 @@ journalctl -b -u qemuweb-start.service --no-pager -o cat | grep -Fq 'QEMUWEB_STA
 }
 
 async function startHost(id) {
-  await request('/api/start', {method: 'POST', body: {
-    sessionId: id,
+  await request(`/api/nodes/${id}/start`, {method: 'POST', body: {
     engine,
     imageId: 'debian13-legacy',
     interfaces: [switchId],
@@ -357,14 +356,14 @@ async function run() {
   if (verifyGuestMedia) {
     for (let index = 0; index < hostIds.length; index++) {
       await installGuestHook(consoles[index]);
-      await request(`/api/hosts/${hostIds[index]}/guest-media`, {method: 'PUT', body: mediaFor(index)});
-      await request(`/api/hosts/${hostIds[index]}/guest-cdrom`, {method: 'POST', body: mediaFor(index)});
-      await request(`/api/hosts/${hostIds[index]}/guest-cdrom`, {method: 'PATCH', body: {attached: true}});
+      await request(`/api/nodes/${hostIds[index]}/guest-media`, {method: 'PUT', body: mediaFor(index)});
+      await request(`/api/nodes/${hostIds[index]}/guest-cdrom`, {method: 'POST', body: mediaFor(index)});
+      await request(`/api/nodes/${hostIds[index]}/guest-cdrom`, {method: 'PATCH', body: {attached: true}});
     }
     console.log('GTS16: hooks installés dans les overlays, médias propres aux hôtes enregistrés');
   }
 
-  for (const id of hostIds) await request(`/api/stop/${id}`, {method: 'POST'});
+  for (const id of hostIds) await request(`/api/nodes/${id}/stop`, {method: 'POST'});
   for (const id of hostIds) {
     const stopped = await waitForSession(id, session => !session.running && session.hasDifferentialDisk, `${id} stop`);
     assert.ok(stopped.hasDifferentialDisk, `${id} differential disk was lost after Stop.`);
@@ -389,10 +388,10 @@ async function run() {
   await ping(consoles[1], addresses[0]);
   console.log('LAN2: IP statiques reconfigurées, ping bidirectionnel validé après reprise');
   if (verifyGuestMedia) {
-    await request(`/api/hosts/${hostIds[0]}/guest-media`, {method: 'PUT', body: mediaFor(0, 2)});
-    await request(`/api/hosts/${hostIds[0]}/guest-cdrom`, {method: 'POST', body: mediaFor(0, 2)});
+    await request(`/api/nodes/${hostIds[0]}/guest-media`, {method: 'PUT', body: mediaFor(0, 2)});
+    await request(`/api/nodes/${hostIds[0]}/guest-cdrom`, {method: 'POST', body: mediaFor(0, 2)});
     const resetBeforeReboot = consoles[0].resetCount;
-    await request(`/api/reboot/${hostIds[0]}`, {method: 'POST'});
+    await request(`/api/nodes/${hostIds[0]}/reboot`, {method: 'POST'});
     await waitFor('h1 reboot serial reset', () => consoles[0].resetCount > resetBeforeReboot);
     await waitFor('h1 fresh login prompt', () => /login:\s*$/m.test(stripAnsi(consoles[0].output)));
     await consoles[0].waitForShell();
@@ -406,10 +405,10 @@ async function cleanup() {
   await Promise.all(consoles.map(shell => shell.close().catch(() => {})));
   if (baseUrl && child && child.exitCode === null) {
     for (const id of hostIds) {
-      try { await request(`/api/sessions/${id}`, {method: 'DELETE'}); } catch (_) {}
+      try { await request(`/api/nodes/${id}`, {method: 'DELETE'}); } catch (_) {}
     }
     if (switchCreated) {
-      try { await request(`/api/sessions/${switchId}`, {method: 'DELETE'}); } catch (_) {}
+      try { await request(`/api/nodes/${switchId}`, {method: 'DELETE'}); } catch (_) {}
     }
     child.kill('SIGTERM');
     await Promise.race([

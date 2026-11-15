@@ -1293,7 +1293,7 @@
       const request = ++pane.monitorRequest;
       let output;
       try {
-        const response = await fetch(`/api/monitor/${encodeURIComponent(sessionId)}`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(sessionId)}/monitor`, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({command})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Command failed');
         output = body.output || '(no output)';
@@ -1665,7 +1665,7 @@
       renderNicControls(machine);
       try {
         const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), startupDiskEnabled: String(!!machine.startupDiskEnabled)});
-        const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/options?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine !== settingsMachine()) return;
@@ -1761,7 +1761,7 @@
       const request = ++optionsRequest;
       try {
         const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(getMachineSettings(machine)), startupDiskEnabled: String(!!machine.startupDiskEnabled)});
-        const response = await fetch(`/api/options/${encodeURIComponent(machine.id)}?${params}`);
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/options?${params}`);
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Settings unavailable');
         if (request !== optionsRequest || machine !== settingsMachine() || !qemuOptionsPanel.open) return;
@@ -1796,7 +1796,7 @@
           const name = window.prompt('Display name for this host:', machine.hostname);
           if (name === null || !name.trim()) return;
           try {
-            const response = await fetch(`/api/sessions/${encodeURIComponent(machine.id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
+            const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}`, {method: 'PATCH', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({name})});
             const body = await response.json();
             if (!response.ok) throw new Error(body.error);
           } catch (error) { showStatusError(error.message); }
@@ -2025,7 +2025,7 @@
       if (!await confirmAction(title, message, title)) return;
       if (machines.get(id) !== machine || machine.busy) return;
       try {
-        const response = await fetch(`/api/sessions/${encodeURIComponent(id)}`, {method: 'DELETE'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(id)}`, {method: 'DELETE'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to remove host or switch');
         machines.delete(id);
@@ -2090,7 +2090,7 @@
     }
     async function syncSessionsFromServer() {
       try {
-        const response = await fetch('/api/sessions', {cache: 'no-store'});
+        const response = await fetch('/api/nodes', {cache: 'no-store'});
         const current = await response.json();
         if (!response.ok) throw new Error(current.error || 'Cannot refresh sessions');
         const currentIds = new Set(current.map(session => session.id));
@@ -2104,7 +2104,7 @@
     Promise.all([
       fetch('/api/systems').then(response => response.json()),
       fetch('/api/general-settings').then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Session settings unavailable'); return body; }),
-      fetch('/api/sessions').then(response => response.json()),
+      fetch('/api/nodes').then(response => response.json()),
       fetch('/resources/naming-schemes.json').then(response => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         return response.json();
@@ -2497,7 +2497,7 @@
         } else {
           const interfaces = cloneNetworkRow.hidden || !cloneNetwork.checked
             ? [null] : [...source.interfaces];
-          const configResponse = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
+          const configResponse = await fetch(`/api/nodes/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
           const config = await configResponse.json();
           if (!configResponse.ok) throw new Error(config.error || 'Cannot copy host configuration.');
           await addHost({name: cloneName.value.trim(), imageId: source.imageId, engine: generalSettings.engine,
@@ -2582,7 +2582,7 @@
       const source = activeMachine();
       if (source?.kind !== 'host') return;
       try {
-        const response = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Cannot load host configuration.');
         if (!machines.has(source.id) || activeId !== source.id) return;
@@ -2683,7 +2683,7 @@
           selectMachine(machine.id);
           if (autostart) await startActiveMachine();
         } else {
-          const response = await fetch(`/api/hosts/${encodeURIComponent(draft.id)}/config`, {
+          const response = await fetch(`/api/nodes/${encodeURIComponent(draft.id)}/config`, {
             method: 'PUT', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload)
           });
           const data = await response.json();
@@ -2706,8 +2706,8 @@
           renderTabs();
           renderGraphic();
           if (restartNow) {
-            const endpoint = data.running ? `/api/reboot/${encodeURIComponent(draft.id)}` : '/api/start';
-            const body = data.running ? undefined : JSON.stringify({sessionId: draft.id, engine: draft.engine, imageId: draft.imageId});
+            const endpoint = `/api/nodes/${encodeURIComponent(draft.id)}/${data.running ? 'reboot' : 'start'}`;
+            const body = data.running ? undefined : JSON.stringify({engine: draft.engine, imageId: draft.imageId});
             const restartResponse = await fetch(endpoint, {method: 'POST',
               ...(body ? {headers: {'Content-Type': 'application/json'}, body} : {})});
             const restartResult = await restartResponse.json();
@@ -2847,7 +2847,7 @@
       if (machine.kind === 'switch') {
         machine.busy = true; machine.operation = 'starting'; machine.error = null; updateControls();
         try {
-          const response = await fetch(`/api/switches/${encodeURIComponent(machine.id)}/start`, {method: 'POST'});
+          const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/start`, {method: 'POST'});
           const body = await response.json();
           if (!response.ok) throw new Error(body.error || 'Cannot start switch');
           machine.running = true; machine.hasLaunched = true;
@@ -2880,7 +2880,7 @@
           pane.token = ++selectionToken;
           pane.socket.emit('select-session', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
         });
-        const configResponse = await fetch(`/api/hosts/${encodeURIComponent(machine.id)}/config`, {cache: 'no-store'});
+        const configResponse = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/config`, {cache: 'no-store'});
         const config = await configResponse.json();
         if (!configResponse.ok) throw new Error(config.error || 'Cannot load host configuration.');
         machine.settings = config.settings;
@@ -2889,8 +2889,8 @@
         machine.networkInterfaces = config.networkInterfaces;
         machine.guestMedia = config.guestMedia;
         machine.startupDiskEnabled = config.startupDiskEnabled;
-        const response = await fetch('/api/start', {method: 'POST', headers: {'Content-Type': 'application/json'},
-          body: JSON.stringify({sessionId: machine.id, engine: machine.engine, imageId: machine.imageId})});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/start`, {method: 'POST', headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({engine: machine.engine, imageId: machine.imageId})});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to start');
         machine.hostname = body.name;
@@ -2918,7 +2918,7 @@
       machine.message = 'Stopping…';
       updateControls();
       try {
-        const route = machine.kind === 'switch' ? `/api/switches/${encodeURIComponent(machine.id)}/stop` : `/api/stop/${encodeURIComponent(machine.id)}`;
+        const route = `/api/nodes/${encodeURIComponent(machine.id)}/stop`;
         const response = await fetch(route, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to stop');
@@ -2933,7 +2933,7 @@
       if (!await confirmAction('Remove all hosts and switches', 'Remove all hosts and switches from this session?\n\nAll working disks will be deleted and their changes lost.', 'Remove all')) return;
       exitAllBusy = true; updateControls();
       try {
-        const response = await fetch('/api/sessions', {method: 'DELETE'});
+        const response = await fetch('/api/nodes', {method: 'DELETE'});
         const result = await response.json();
         if (!response.ok) throw new Error(result.error || 'Failed to remove all hosts and switches');
         for (const id of result.removed) machines.delete(id);
@@ -2950,7 +2950,7 @@
       machine.message = 'Rebooting…';
       updateControls();
       try {
-        const response = await fetch(`/api/reboot/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/reboot`, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reboot');
       } catch (error) { machine.message = error.message; machine.error = error.message; }
@@ -2967,7 +2967,7 @@
       machine.message = 'Resetting from base image…';
       updateControls();
       try {
-        const response = await fetch(`/api/reset/${encodeURIComponent(machine.id)}`, {method: 'POST'});
+        const response = await fetch(`/api/nodes/${encodeURIComponent(machine.id)}/reset`, {method: 'POST'});
         const body = await response.json();
         if (!response.ok) throw new Error(body.error || 'Failed to reset');
         machine.hasLaunched = true;

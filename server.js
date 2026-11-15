@@ -554,7 +554,7 @@ app.get('/api/systems', (_req, res) => {
 
 app.get('/api/guest-cdrom-capability', (_req, res) => res.json({autoBuild: true, previewIso: true}));
 
-app.get('/api/sessions', (_req, res) => {
+app.get('/api/nodes', (_req, res) => {
   res.json([...sessions.values()].map(node => ({
     id: node.id,
     kind: node.kind,
@@ -1329,7 +1329,7 @@ function virtualBoxCommands(node, image) {
   ];
 }
 
-app.get('/api/options/:sessionId', (req, res) => {
+app.get('/api/nodes/:nodeId/options', (req, res) => {
   try {
     if (Object.keys(req.query).some(key => !['system', 'engine', 'interfaces', 'settings', 'startupDiskEnabled'].includes(key))) {
       throw new Error('Unknown host preview option.');
@@ -1337,7 +1337,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     if (req.query.startupDiskEnabled !== undefined && !['true', 'false'].includes(req.query.startupDiskEnabled)) {
       throw new Error('startupDiskEnabled must be true or false.');
     }
-    const id = req.params.sessionId;
+    const id = req.params.nodeId;
     entityKind(id, 'host');
     const existing = getNode(id);
     const launched = !!(existing && existing.everStarted && existing.selectedImage);
@@ -1764,24 +1764,28 @@ async function exitAllNodes() {
   }
 }
 
-app.post('/api/start', async (req, res) => {
+app.post('/api/nodes/:nodeId/start', async (req, res) => {
   try {
-    const configured = getNode(req.body?.sessionId);
+    const configured = getNode(req.params.nodeId);
+    if (configured?.kind === 'switch') {
+      await startSwitch(configured);
+      return res.json({ok: true});
+    }
     if (!configured || configured.kind !== 'host' || !configured.selectedImage) throw new Error('Unknown host configuration.');
-    if (req.body.engine !== configured.engine || req.body.imageId !== configured.selectedImage.id) throw new Error('Host system and engine differ from the saved configuration.');
+    if (req.body?.engine !== configured.engine || req.body.imageId !== configured.selectedImage.id) throw new Error('Host system and engine differ from the saved configuration.');
     start(configured.id, configured.engine, configured.selectedImage.id, {
       interfaces: configured.networkInterfaces.map(nic => nic.switchId), settings: configured.launchSettings,
       startupDiskEnabled: configured.guestIsoAttached
     });
-    res.json({ok: true, sessionId: configured.id, name: configured.hostname});
+    res.json({ok: true, nodeId: configured.id, name: configured.hostname});
   } catch (error) {
     const message = error.stderr ? error.stderr.toString().trim() : error.message;
     console.error(message);
     try {
-      const node = getNode(req.body.sessionId);
-      if (node) publishState(node, message);
+      const node = getNode(req.params.nodeId);
+      if (node && node.kind === 'host') publishState(node, message);
     } catch (_) {}
-    res.status(500).json({error: message});
+    res.status(getNode(req.params.nodeId)?.kind === 'switch' ? 400 : 500).json({error: message});
   }
 });
 
@@ -1925,18 +1929,18 @@ app.post('/api/hosts', (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.get('/api/hosts/:sessionId/config', (req, res) => {
+app.get('/api/nodes/:nodeId/config', (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     if (!node || node.kind !== 'host' || !node.selectedImage) throw new Error('Unknown host.');
     res.set('Cache-Control', 'no-store');
     res.json(hostConfigurationResponse(node));
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.put('/api/hosts/:sessionId/config', (req, res) => {
+app.put('/api/nodes/:nodeId/config', (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     if (!node || node.kind !== 'host' || !node.selectedImage) throw new Error('Unknown host.');
     if (node.action) throw new Error('Wait for the current host action to finish.');
     const body = req.body;
@@ -1985,17 +1989,17 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.get('/api/hosts/:sessionId/guest-media', (req, res) => {
+app.get('/api/nodes/:nodeId/guest-media', (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     res.json({...readStartupFiles(startupDirectory(node)), guestCdrom: guestIsoStatus(node)});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
+app.put('/api/nodes/:nodeId/guest-media', (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
     if (node.guestIsoAttached) validateStartupTemplate(media.script, node.networkInterfaces, true);
@@ -2007,9 +2011,9 @@ app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
+app.post('/api/nodes/:nodeId/guest-cdrom', (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
     validateStartupTemplate(media.script, node.networkInterfaces, true);
@@ -2020,9 +2024,9 @@ app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.patch('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
+app.patch('/api/nodes/:nodeId/guest-cdrom', (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     if (typeof req.body?.attached !== 'boolean') throw new Error('Invalid CD-ROM attachment option.');
     if (req.body.attached && !guestIsoStatus(node).created) throw new Error('Create the CD-ROM before attaching it.');
@@ -2058,52 +2062,38 @@ app.post('/api/switches', async (req, res) => {
   }
 });
 
-app.post('/api/switches/:id/start', async (req, res) => {
+app.post('/api/nodes/:nodeId/stop', async (req, res) => {
+  const target = getNode(req.params.nodeId);
+  if (target?.kind === 'switch') {
+    try { await stopSwitch(target); res.json({ok: true}); }
+    catch (error) { res.status(400).json({error: error.message}); }
+    return;
+  }
   try {
-    const node = getNode(req.params.id);
-    if (!node || node.kind !== 'switch') throw new Error('Unknown switch.');
-    await startSwitch(node);
-    res.json({ok: true});
-  } catch (error) { res.status(400).json({error: error.message}); }
-});
-
-app.post('/api/switches/:id/stop', async (req, res) => {
-  try {
-    const node = getNode(req.params.id);
-    if (!node || node.kind !== 'switch') throw new Error('Unknown switch.');
-    await stopSwitch(node);
-    res.json({ok: true});
-  } catch (error) { res.status(400).json({error: error.message}); }
-});
-
-app.post('/api/stop/:sessionId', async (req, res) => {
-  try {
-    const node = getNode(req.params.sessionId);
-    if (node && node.kind !== 'host') throw new Error('Use the switch stop action.');
-    if (node && node.action) throw new Error('An action is already in progress for this host.');
-    await stop(node);
+    if (target && target.action) throw new Error('An action is already in progress for this host.');
+    await stop(target);
     res.json({ok: true});
   }
   catch (error) {
     console.error(error);
-    try { const node = getNode(req.params.sessionId); if (node) publishState(node, error.message); } catch (_) {}
+    try { const node = getNode(req.params.nodeId); if (node) publishState(node, error.message); } catch (_) {}
     res.status(500).json({error: error.message});
   }
 });
 
-app.post('/api/reboot/:sessionId', async (req, res) => {
-  try { await reboot(getNode(req.params.sessionId)); res.json({ok: true}); }
+app.post('/api/nodes/:nodeId/reboot', async (req, res) => {
+  try { await reboot(getNode(req.params.nodeId)); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
-app.post('/api/reset/:sessionId', async (req, res) => {
-  try { await reset(getNode(req.params.sessionId)); res.json({ok: true}); }
+app.post('/api/nodes/:nodeId/reset', async (req, res) => {
+  try { await reset(getNode(req.params.nodeId)); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
-app.post('/api/monitor/:sessionId', async (req, res) => {
+app.post('/api/nodes/:nodeId/monitor', async (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     if (!node || node.kind !== 'host' || !node.machine || !node.engine.startsWith('qemu') || node.action) throw new Error('Monitor is available only for a running QEMU host.');
     const command = req.body && req.body.command;
     if (typeof command !== 'string' || !command.trim() || command.length > 256 || /[\r\n\x00-\x1f\x7f]/.test(command)) throw new Error('Enter a single-line QEMU command (maximum 256 characters).');
@@ -2114,9 +2104,9 @@ app.post('/api/monitor/:sessionId', async (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.patch('/api/sessions/:sessionId', (req, res) => {
+app.patch('/api/nodes/:nodeId', (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     const name = req.body && req.body.name;
     if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
@@ -2130,16 +2120,16 @@ app.patch('/api/sessions/:sessionId', (req, res) => {
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-app.delete('/api/sessions', async (_req, res) => {
+app.delete('/api/nodes', async (_req, res) => {
   try { res.json({removed: await exitAllNodes()}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
-app.delete('/api/sessions/:sessionId', async (req, res) => {
+app.delete('/api/nodes/:nodeId', async (req, res) => {
   try {
-    const node = getNode(req.params.sessionId);
+    const node = getNode(req.params.nodeId);
     await destroyNode(node);
-    io.emit('sessions-removed', {ids: [req.params.sessionId]});
+    io.emit('sessions-removed', {ids: [req.params.nodeId]});
     res.json({ok: true});
   } catch (error) { res.status(500).json({error: error.message}); }
 });

@@ -179,7 +179,7 @@ async function run() {
       startupDiskEnabled: true
     });
     host.created = true;
-    const config = await request(`/api/hosts/${host.id}/config`);
+    const config = await request(`/api/nodes/${host.id}/config`);
     assert.equal(config.guestMedia.script, expectedScript, `${host.label}: unexpected default start.sh`);
     assert.equal(config.startupDiskEnabled, true, `${host.label}: automatic startup disk is disabled`);
     host.console = new GuestConsole(host);
@@ -187,10 +187,10 @@ async function run() {
   await Promise.all(hosts.map(host => waitFor(`${host.label} console selection`, () => host.console.selected || host.console.error)));
   for (const host of hosts) if (host.console.error) throw new Error(`${host.label}: ${host.console.error}`);
 
-  await Promise.all(hosts.map(host => request('/api/start', 'POST', {
-    sessionId: host.id, engine, imageId: 'debian13-legacy', interfaces: [switchId]
+  await Promise.all(hosts.map(host => request(`/api/nodes/${host.id}/start`, 'POST', {
+    engine, imageId: 'debian13-legacy', interfaces: [switchId]
   })));
-  const sessions = await request('/api/sessions');
+  const sessions = await request('/api/nodes');
   const ports = new Set();
   const macs = new Set();
   for (const host of hosts) {
@@ -234,10 +234,10 @@ async function cleanup() {
   if (!baseUrl || !child || child.exitCode !== null) return;
   for (const host of hosts) {
     if (!host.created) continue;
-    try { await request(`/api/sessions/${host.id}`, 'DELETE'); } catch (_) {}
+    try { await request(`/api/nodes/${host.id}`, 'DELETE'); } catch (_) {}
   }
   if (switchCreated) {
-    try { await request(`/api/sessions/${switchId}`, 'DELETE'); } catch (_) {}
+    try { await request(`/api/nodes/${switchId}`, 'DELETE'); } catch (_) {}
   }
   child.kill('SIGTERM');
   await Promise.race([
