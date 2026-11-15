@@ -24,8 +24,23 @@ function setArchiveLoadDiscardRelevant(relevant) {
   archiveLoadDiscardStaleDisks.checked = relevant;
   archiveLoadDiscardStaleDisks.disabled = !relevant;
 }
-const archiveLoadWarning = document.getElementById('session-archive-load-warning');
-const archiveLoadSummary = document.getElementById('session-archive-load-summary');
+const archiveLoadSteps = document.getElementById('session-archive-load-steps');
+const archiveRestoreLabel = document.getElementById('session-archive-restore-label');
+const stepStateText = {pending: 'Pending', running: 'In progress', done: 'Done', warning: 'Warning', error: 'Failed'};
+const loadStepNames = ['read', 'check', 'upload', 'restore'];
+// One line per stage of loading a session: a state icon (spinner, green tick, warning, error) and an optional detail.
+function setLoadStep(name, state, detail = '') {
+  const item = archiveLoadSteps.querySelector(`[data-step="${name}"]`);
+  item.dataset.state = state;
+  item.querySelector('.archive-step-state').textContent = stepStateText[state];
+  const text = item.querySelector('.archive-step-detail');
+  text.textContent = detail;
+  text.hidden = !detail;
+}
+function resetLoadSteps(names = loadStepNames) { for (const name of names) setLoadStep(name, 'pending'); }
+function updateRestoreLabel() {
+  archiveRestoreLabel.textContent = archiveLoadAutoStart.checked ? 'Restore session and start hosts and switches' : 'Restore session';
+}
 const countLabel = (count, noun, plural = `${noun}s`) => `${count} ${count === 1 ? noun : plural}`;
 // Reads the ZIP central directory. QemuWeb archives always end with a 32-bit
 // end-of-central-directory record, so only the file tail is read.
@@ -54,16 +69,19 @@ async function archiveJson(file, entry) {
   const start = entry.offset + 30 + header.getUint16(26, true) + header.getUint16(28, true);
   return JSON.parse(await file.slice(start, start + entry.size).text());
 }
-// Warns before upload when a base image changed since the archive was saved.
-async function checkArchiveBaseImages(file) {
+// Reads session.json and the list of working disks from the ZIP, without uploading it.
+async function readArchiveSummary(file) {
   const entries = await archiveEntries(file);
   const diskHosts = [...entries.keys()].map(name => /^(h-[0-9a-f]{16})\/disk\.qcow2$/.exec(name)?.[1]).filter(Boolean);
   const session = await archiveJson(file, entries.get('session.json'));
-  if (selectedArchiveFile === file) {
-    const disks = diskHosts.length ? countLabel(diskHosts.length, 'working disk') : 'no working disk';
-    archiveLoadSummary.textContent = `${countLabel(session.hosts.length, 'host')} and ${countLabel(session.switches.length, 'switch', 'switches')}, ${disks} (qcow2)`;
-    archiveLoadSummary.hidden = false;
-  }
+  return {entries, diskHosts, session};
+}
+function archiveSummaryText({session, diskHosts}) {
+  const disks = diskHosts.length ? countLabel(diskHosts.length, 'working disk') : 'no working disk';
+  return `${countLabel(session.hosts.length, 'host')} and ${countLabel(session.switches.length, 'switch', 'switches')}, ${disks} (qcow2)`;
+}
+// Warns before upload when a base image changed since the archive was saved.
+async function checkArchiveBaseImages(file, {entries, diskHosts, session}) {
   const result = await requestJson('/api/session-archive/check', jsonRequest('POST', {engine: session.engine, baseImages: session.baseImages}), 'Cannot check base images.');
   const hosts = await Promise.all(diskHosts.map(id => archiveJson(file, entries.get(`${id}/host.json`))));
   const messages = [];
@@ -73,12 +91,29 @@ async function checkArchiveBaseImages(file) {
     staleDisks ||= stale.length > 0;
     messages.push(stale.length
       ? `Base image ${id} changed since this session was saved. The working disks of ${stale.join(', ')} cannot be reused.`
-      : `Base image ${id} changed since this session was saved.`);
+      : `Base image ${id} changed since this session was saved. Its hosts will start from the current image.`);
   }
   return {messages, staleDisks};
 }
-const archiveLoadProgress = document.getElementById('session-archive-load-progress');
-const archiveLoadProgressText = document.getElementById('session-archive-load-progress-text');
+// Uploads the ZIP with progress reporting, which fetch() cannot do.
+function importArchive(file, {autoStart, discardStaleDisks}, onProgress, onUploaded) {
+  return new Promise((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open('POST', `/api/session-archive/import?autoStart=${autoStart}&discardStaleDisks=${discardStaleDisks}`);
+    request.setRequestHeader('Content-Type', 'application/zip');
+    request.upload.addEventListener('progress', event => { if (event.lengthComputable && event.total) onProgress(Math.floor(event.loaded * 100 / event.total)); });
+    request.upload.addEventListener('load', onUploaded);
+    request.addEventListener('load', () => {
+      let data = {};
+      try { data = JSON.parse(request.responseText); } catch (_) { /* Not JSON: use the generic message. */ }
+      if (request.status >= 200 && request.status < 300) resolve(data);
+      else reject(new Error(data.error || 'Cannot load session.'));
+    });
+    request.addEventListener('error', () => reject(new Error('Network error while uploading the archive.')));
+    request.addEventListener('abort', () => reject(new Error('Upload cancelled.')));
+    request.send(file);
+  });
+}
 const archiveLoadError = document.getElementById('session-archive-load-error');
 const archiveLoadCancel = document.getElementById('cancel-session-archive-load');
 const archiveLoadConfirm = document.getElementById('confirm-session-archive-load');
@@ -177,31 +212,46 @@ export function initArchive() {
     archiveLoadImported = false;
     archiveLoadFileLabel.textContent = file.name;
     archiveLoadAutoStart.checked = true;
+    updateRestoreLabel();
     setArchiveLoadDiscardRelevant(false);
-    archiveLoadSummary.hidden = true;
-    archiveLoadWarning.hidden = true;
+    resetLoadSteps();
     archiveLoadError.hidden = true;
     archiveLoadCancel.textContent = 'Cancel';
     archiveLoadConfirm.hidden = false;
     archiveLoadConfirm.disabled = true;
-    archiveLoadProgressText.textContent = 'Checking base images…';
-    archiveLoadProgress.hidden = false;
     archiveLoadDialog.showModal();
+    // The first two steps only read the local file and ask the server about base images: nothing is uploaded yet.
+    let summary = null;
+    setLoadStep('read', 'running');
     try {
-      const check = await checkArchiveBaseImages(file);
+      summary = await readArchiveSummary(file);
       if (selectedArchiveFile !== file) return;
-      if (check.messages.length) {
-        archiveLoadWarning.querySelector('span').textContent = check.messages.join('\n');
-        archiveLoadWarning.hidden = false;
-      }
-      setArchiveLoadDiscardRelevant(check.staleDisks);
+      setLoadStep('read', 'done', archiveSummaryText(summary));
     } catch (_) {
+      if (selectedArchiveFile !== file) return;
       // The server validates the archive on load; offer the option if disks may be present.
-      if (selectedArchiveFile === file) setArchiveLoadDiscardRelevant(true);
+      setLoadStep('read', 'warning', 'Cannot read the archive here; the server will validate it on load.');
+    }
+    try {
+      if (!summary) {
+        setLoadStep('check', 'warning', 'Skipped: the base images are checked on load.');
+        setArchiveLoadDiscardRelevant(true);
+      } else {
+        setLoadStep('check', 'running');
+        const check = await checkArchiveBaseImages(file, summary);
+        if (selectedArchiveFile !== file) return;
+        setLoadStep('check', check.messages.length ? 'warning' : 'done', check.messages.join('\n') || 'Base images are up to date');
+        setArchiveLoadDiscardRelevant(check.staleDisks);
+      }
+    } catch (_) {
+      if (selectedArchiveFile !== file) return;
+      setLoadStep('check', 'warning', 'Cannot check base images; the server will validate them on load.');
+      setArchiveLoadDiscardRelevant(true);
     } finally {
-      if (selectedArchiveFile === file) { archiveLoadProgress.hidden = true; archiveLoadConfirm.disabled = false; }
+      if (selectedArchiveFile === file) archiveLoadConfirm.disabled = false;
     }
   });
+  archiveLoadAutoStart.addEventListener('change', updateRestoreLabel);
   archiveLoadCancel.addEventListener('click', () => archiveLoadDialog.close());
   archiveLoadConfirm.addEventListener('click', async () => {
     if (!selectedArchiveFile || archiveLoadBusy) return;
@@ -211,37 +261,39 @@ export function initArchive() {
     archiveLoadAutoStart.disabled = true;
     archiveLoadDiscardStaleDisks.disabled = true;
     archiveLoadError.hidden = true;
-    archiveLoadProgressText.textContent = archiveLoadAutoStart.checked ? 'Uploading, restoring and starting session…' : 'Uploading and restoring session…';
-    archiveLoadProgress.hidden = false;
+    updateRestoreLabel();
+    resetLoadSteps(['upload', 'restore']);
     archiveLoadDialog.setAttribute('aria-busy', 'true');
+    let activeStep = 'upload';
     try {
       const autoStart = archiveLoadAutoStart.checked;
       const discardStaleDisks = archiveLoadDiscardRelevant && archiveLoadDiscardStaleDisks.checked;
-      const response = await fetch(`/api/session-archive/import?autoStart=${autoStart}&discardStaleDisks=${discardStaleDisks}`, {
-        method: 'POST', headers: {'Content-Type': 'application/zip'}, body: selectedArchiveFile
-      });
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || 'Cannot load session.');
+      setLoadStep('upload', 'running', '0%');
+      const result = await importArchive(selectedArchiveFile, {autoStart, discardStaleDisks},
+        percent => setLoadStep('upload', 'running', `${percent}%`),
+        () => { setLoadStep('upload', 'done'); activeStep = 'restore'; setLoadStep('restore', 'running'); });
       archiveLoadImported = true;
       store.graphicZoom = 1;
       saveViewSettings();
       localStorage.removeItem(graphicLayoutKey);
       if (result.startErrors?.length) {
-        archiveLoadError.textContent = `Session loaded, but some instances could not start:\n${result.startErrors.join('\n')}`;
-        archiveLoadError.hidden = false;
+        setLoadStep('restore', 'warning', `Session loaded, but some instances could not start:\n${result.startErrors.join('\n')}`);
         archiveLoadCancel.textContent = 'Close';
         archiveLoadConfirm.hidden = true;
-      } else archiveLoadDialog.close();
+      } else {
+        setLoadStep('restore', 'done');
+        // Leave the final tick visible for a moment before the page reloads.
+        await new Promise(resolve => setTimeout(resolve, 700));
+        archiveLoadDialog.close();
+      }
     } catch (error) {
-      archiveLoadError.textContent = error.message;
-      archiveLoadError.hidden = false;
+      setLoadStep(activeStep, 'error', error.message);
     } finally {
       archiveLoadBusy = false;
       archiveLoadCancel.disabled = false;
       archiveLoadConfirm.disabled = false;
       archiveLoadAutoStart.disabled = false;
       archiveLoadDiscardStaleDisks.disabled = !archiveLoadDiscardRelevant;
-      archiveLoadProgress.hidden = true;
       archiveLoadDialog.removeAttribute('aria-busy');
     }
   });

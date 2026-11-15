@@ -133,11 +133,14 @@
   <dialog class="confirm-dialog" id="session-archive-load-dialog" aria-labelledby="session-archive-load-title">
     <h2 id="session-archive-load-title">Load session</h2>
     <p id="session-archive-load-file"></p>
-    <p id="session-archive-load-summary" hidden></p>
-    <div id="session-archive-load-warning" class="archive-warning" role="status" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span></span></div>
+    <ol id="session-archive-load-steps" class="archive-steps">
+      <li data-step="read" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label">Read archive</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
+      <li data-step="check" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label">Check base images</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
+      <li data-step="upload" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label">Upload archive</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
+      <li data-step="restore" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label" id="session-archive-restore-label">Restore session</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
+    </ol>
     <label class="archive-load-option"><input id="session-archive-autostart" type="checkbox" checked> Start/resume hosts and switches automatically</label>
     <label id="session-archive-discard-stale-disks-option" class="archive-load-option" title="A working disk only stores differences from its base image and cannot be reused once that image has been rebuilt."><input id="session-archive-discard-stale-disks" type="checkbox" checked> Discard working disks whose base image changed</label>
-    <div id="session-archive-load-progress" role="status" aria-live="polite" hidden><div class="archive-progress"><span class="archive-progress-spinner" aria-hidden="true"></span><span id="session-archive-load-progress-text">Uploading and restoring session…</span></div><div class="archive-progress-track" aria-hidden="true"></div></div>
     <p id="session-archive-load-error" role="alert" hidden></p>
     <div class="confirm-actions"><button id="cancel-session-archive-load" type="button">Cancel</button><button id="confirm-session-archive-load" type="button">Load session</button></div>
   </dialog>
