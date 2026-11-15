@@ -20,7 +20,7 @@ function nextName({scheme, machines = [], random = 0}) {
     generalSettings: {namingScheme: 'selected'},
     Math: {...Math, floor: Math.floor, random: () => random}
   };
-  return vm.runInNewContext(`${nextNameSource()}\nnextMachineName('vm');`, context);
+  return vm.runInNewContext(`${nextNameSource()}\nnextMachineName('host');`, context);
 }
 
 test('list-based naming randomly selects an unused name', () => {
@@ -30,7 +30,7 @@ test('list-based naming randomly selects an unused name', () => {
 });
 
 test('classic naming remains sequential', () => {
-  assert.equal(nextName({scheme: {prefixes: {vm: 'h'}}, machines: ['h1']}), 'h2');
+  assert.equal(nextName({scheme: {prefixes: {host: 'h'}}, machines: ['h1']}), 'h2');
 });
 
 test('Add a new host and Host Settings share a dialog with Cancel and OK', () => {

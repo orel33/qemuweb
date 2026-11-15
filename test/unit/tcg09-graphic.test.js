@@ -9,7 +9,7 @@ function sessionsFromFixture(file) {
   const switches = topology.switches.map(sw => ({id: sw.name, kind: 'switch', hostname: sw.name, running: true}));
   const portBySwitch = new Map();
   const hosts = topology.hosts.map(host => ({
-    id: host.name, kind: 'vm', hostname: host.name, osHint: host.system, running: false,
+    id: host.name, kind: 'host', hostname: host.name, osHint: host.system, running: false,
     interfaces: host.switches,
     networkInterfaces: host.switches.map(switchId => {
       const port = (portBySwitch.get(switchId) || 0) + 1;
@@ -38,7 +38,7 @@ test('the LAN and gateway examples produce a node for every session and a distin
 test('parallel interfaces remain separate and disconnected interfaces have no link', () => {
   const graph = buildGraph([
     {id: 's1', kind: 'switch', hostname: 's1'},
-    {id: 'h1', kind: 'vm', hostname: 'h1', interfaces: ['s1', 's1', null], networkInterfaces: [
+    {id: 'h1', kind: 'host', hostname: 'h1', interfaces: ['s1', 's1', null], networkInterfaces: [
       {switchId: 's1', port: 1}, {switchId: 's1', port: 2}, {switchId: null, port: null}
     ]}
   ]);
@@ -52,7 +52,7 @@ test('parallel interfaces remain separate and disconnected interfaces have no li
 test('moving nodes updates their Bézier endpoints without changing network links', () => {
   const sessions = [
     {id: 's1', kind: 'switch', hostname: 's1'},
-    {id: 'h1', kind: 'vm', hostname: 'h1', interfaces: ['s1']}
+    {id: 'h1', kind: 'host', hostname: 'h1', interfaces: ['s1']}
   ];
   const original = buildGraph(sessions);
   const moved = buildGraph(sessions, new Map([['h1', {x: 400, y: 300}], ['s1', {x: 700, y: 220}]]));

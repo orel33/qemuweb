@@ -621,7 +621,7 @@
       pane.settingsButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-settings-icon"></use></svg>';
       pane.settingsButton.addEventListener('click', () => {
         const sessionId = pane.machineId;
-        if (!sessionId || machines.get(sessionId)?.kind !== 'vm') return;
+        if (!sessionId || machines.get(sessionId)?.kind !== 'host') return;
         focusPane(pane.index);
         if (activeId === sessionId) openHostSettings();
       });
@@ -662,8 +662,8 @@
           const machine = machines.get(pane.machineId);
           // resize queries device attributes before requesting cursor position.
           // Other cursor replies can be echoed literally by serial getty at boot.
-          if (machine?.kind === 'vm' && /\x1b\[\?[\d;]+c/.test(data)) pane.cursorReportDeadline = Date.now() + 10000;
-          const input = machine?.kind === 'vm' ? data.replace(/\x1b\[\d+;\d+R/g, reply => {
+          if (machine?.kind === 'host' && /\x1b\[\?[\d;]+c/.test(data)) pane.cursorReportDeadline = Date.now() + 10000;
+          const input = machine?.kind === 'host' ? data.replace(/\x1b\[\d+;\d+R/g, reply => {
             if (Date.now() > pane.cursorReportDeadline) return '';
             pane.cursorReportDeadline = 0;
             return reply;
@@ -1339,7 +1339,7 @@
       for (const pane of panes) {
         const machine = pane.machineId && machines.get(pane.machineId);
         updatePaneActionMenu(pane, machine);
-        pane.settingsButton.hidden = !machine || machine.kind !== 'vm';
+        pane.settingsButton.hidden = !machine || machine.kind !== 'host';
         pane.clearButton.hidden = !machine;
         pane.clearButton.disabled = !machine || pane.view !== 'console';
         pane.expandButton.hidden = !machine || (layoutSize === 1 && expandedPaneIndex === null);
@@ -1351,7 +1351,7 @@
         pane.state.hidden = state === 'empty';
         pane.state.textContent = state.toUpperCase();
         pane.state.title = machine ? (machine.error || machine.message || '') : (state === 'error' ? workspaceError : '');
-        pane.metrics.hidden = !machine || machine.kind !== 'vm';
+        pane.metrics.hidden = !machine || machine.kind !== 'host';
         if (!pane.metrics.hidden) {
           const sample = machine.running ? resourceMetrics.get(machine.id) : null;
           const cpu = Number.isFinite(sample?.cpuPercent) ? `${sample.cpuPercent.toFixed(1)}%` : '—';
@@ -1809,7 +1809,7 @@
         close.title = machine.kind === 'switch' ? 'Remove switch' : 'Remove host and delete its working disk';
         close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Remove host'} ${machine.hostname}`);
         close.onclick = () => closeMachine(machine.id);
-        if (machine.kind === 'vm' && machine.pendingRestart) {
+        if (machine.kind === 'host' && machine.pendingRestart) {
           const badge = document.createElement('span');
           badge.className = 'pending-badge';
           badge.textContent = 'Restart pending';
@@ -1882,7 +1882,7 @@
           if (available.length) return available[Math.floor(Math.random() * available.length)];
         }
       }
-      const prefix = scheme?.prefixes?.[kind] || (kind === 'vm' ? 'h' : 's');
+      const prefix = scheme?.prefixes?.[kind] || (kind === 'host' ? 'h' : 's');
       const numberWidth = scheme?.numberWidth || 1;
       let number = 1;
       while (used.has(`${prefix}${String(number).padStart(numberWidth, '0')}`)) number++;
@@ -1890,13 +1890,13 @@
     }
     async function openHostSettingsCreate() {
       const current = activeMachine();
-      const imageId = current?.kind === 'vm' ? current.imageId : images[0]?.id;
+      const imageId = current?.kind === 'host' ? current.imageId : images[0]?.id;
       const image = images.find(item => item.id === imageId);
-      const hostname = nextMachineName('vm');
+      const hostname = nextMachineName('host');
       const interfaces = [null];
       hostSettingsDraft = {
         id: `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
-        isNew: true, kind: 'vm', hostname, imageId,
+        isNew: true, kind: 'host', hostname, imageId,
         osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
         engine: generalSettings.engine, interfaces,
         settings: null, settingsLoaded: false, running: false, hasLaunched: false, busy: false,
@@ -1915,7 +1915,7 @@
     }
     function openCreateDialog(kind) {
       createKind = kind;
-      const host = kind === 'vm';
+      const host = kind === 'host';
       createTitle.textContent = host ? 'Add a new host' : 'Add a new switch';
       createName.value = nextMachineName(kind);
       createName.maxLength = host ? 64 : 32;
@@ -1925,7 +1925,7 @@
       document.getElementById('create-engine-row').hidden = !host;
       imageSelect.required = host;
       const current = activeMachine();
-      imageSelect.value = host && current?.kind === 'vm' ? current.imageId : (images[0]?.id || '');
+      imageSelect.value = host && current?.kind === 'host' ? current.imageId : (images[0]?.id || '');
       engineSelect.value = generalSettings.engine;
       createDraft = host ? {engine: generalSettings.engine, interfaces: [null], hasLaunched: false, busy: false} : null;
       createNetwork.hidden = !host;
@@ -1960,7 +1960,7 @@
       const response = await fetch('/api/hosts', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({id, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled})});
       const body = await response.json();
       if (!response.ok) throw new Error(body.error || 'Cannot create host');
-      const machine = {id, kind: 'vm', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+      const machine = {id, kind: 'host', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
       machines.set(id, machine);
       if (select) selectMachine(id);
       else renderGraphic();
@@ -2049,7 +2049,7 @@
     function machineFromSession(session) {
       const image = images.find(item => item.id === session.imageId);
       return {
-        id: session.id, kind: session.kind || 'vm', hostname: session.hostname,
+        id: session.id, kind: session.kind || 'host', hostname: session.hostname,
         osHint: session.kind === 'switch' ? 'VDE switch' : (image?.label || 'Unknown system'),
         imageId: image ? image.id : (images[0]?.id || ''),
         settings: session.settings || null, settingsLoaded: !!session.settings,
@@ -2074,7 +2074,7 @@
       current.message = session.message;
       current.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
       current.networkInterfaces = session.networkInterfaces || [];
-      if (session.kind === 'vm' && session.settings) { current.settings = session.settings; current.settingsLoaded = true; }
+      if (session.kind === 'host' && session.settings) { current.settings = session.settings; current.settingsLoaded = true; }
       if (!(qemuOptionsPanel.open && settingsMachine()?.id === session.id)) {
         const image = images.find(item => item.id === session.imageId);
         current.imageId = image ? image.id : (session.imageId || images[0]?.id || '');
@@ -2116,7 +2116,7 @@
       }
       loadGraphicPositions(sessionSettings.sessionId);
       images = items;
-      namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {vm: 'h', switch: 's'}}};
+      namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {host: 'h', switch: 's'}}};
       if (schemes?.error || !schemes?.classic?.prefixes) {
         generalSettingsError.textContent = `Naming schemes unavailable: ${schemes?.error || 'invalid resource file'}. Classic naming is available.`;
         generalSettingsError.hidden = false;
@@ -2527,10 +2527,10 @@
       createError.hidden = true;
       let startHost = false;
       try {
-        if (kind === 'vm') await addHost({name: createName.value.trim(), imageId: imageSelect.value, engine: generalSettings.engine, interfaces: [...createDraft.interfaces]});
+        if (kind === 'host') await addHost({name: createName.value.trim(), imageId: imageSelect.value, engine: generalSettings.engine, interfaces: [...createDraft.interfaces]});
         else await addSwitch({name: createName.value.trim(), autostart});
         createDialog.close();
-        startHost = kind === 'vm' && autostart;
+        startHost = kind === 'host' && autostart;
       } catch (error) {
         createError.textContent = error.message;
         createError.hidden = false;
@@ -2561,7 +2561,7 @@
     });
     addNic.addEventListener('click', () => {
       const machine = settingsMachine();
-      if (!machine || machine.kind !== 'vm' || machine.busy || machine.interfaces.length >= 4) return;
+      if (!machine || machine.kind !== 'host' || machine.busy || machine.interfaces.length >= 4) return;
       const scrollTop = qemuOptionsPanel.scrollTop;
       machine.interfaces.push(null);
       clearStartupTemplateError();
@@ -2580,14 +2580,14 @@
     });
     async function openHostSettings() {
       const source = activeMachine();
-      if (source?.kind !== 'vm') return;
+      if (source?.kind !== 'host') return;
       try {
         const response = await fetch(`/api/hosts/${encodeURIComponent(source.id)}/config`, {cache: 'no-store'});
         const data = await response.json();
         if (!response.ok) throw new Error(data.error || 'Cannot load host configuration.');
         if (!machines.has(source.id) || activeId !== source.id) return;
         hostSettingsDraft = {
-          id: source.id, isNew: false, kind: 'vm', hostname: data.name,
+          id: source.id, isNew: false, kind: 'host', hostname: data.name,
           imageId: data.systemId, osHint: source.osHint, hasDifferentialDisk: source.hasDifferentialDisk,
           engine: data.engine, interfaces: [...data.interfaces], networkInterfaces: data.networkInterfaces,
           settings: {...data.settings}, settingsLoaded: true,

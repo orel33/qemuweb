@@ -1,12 +1,12 @@
 {
   "classicLong": {
     "label": "Classic long (host01, switch01, ...)",
-    "prefixes": {"vm": "host", "switch": "switch"},
+    "prefixes": {"host": "host", "switch": "switch"},
     "numberWidth": 2
   },
   "classic": {
     "label": "Classic (h1, s1, ...)",
-    "prefixes": {"vm": "h", "switch": "s"}
+    "prefixes": {"host": "h", "switch": "s"}
   },
   "women1900": {
     "label": "French women's names (1900)",

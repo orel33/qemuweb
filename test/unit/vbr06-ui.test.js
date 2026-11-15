@@ -9,9 +9,9 @@ const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
 const monitorTerminal = require('../../public/monitor-terminal');
 
 test('QEMU monitor capability excludes engines without an HMP monitor', () => {
-  assert.equal(monitorTerminal.isSupported({kind: 'vm', engine: 'qemu'}), true);
-  assert.equal(monitorTerminal.isSupported({kind: 'vm', engine: 'qemu-tcg'}), false);
-  assert.equal(monitorTerminal.isSupported({kind: 'vm', engine: 'vbox'}), false);
+  assert.equal(monitorTerminal.isSupported({kind: 'host', engine: 'qemu'}), true);
+  assert.equal(monitorTerminal.isSupported({kind: 'host', engine: 'qemu-tcg'}), false);
+  assert.equal(monitorTerminal.isSupported({kind: 'host', engine: 'vbox'}), false);
   assert.equal(monitorTerminal.isSupported({kind: 'switch', engine: 'qemu'}), false);
 });
 

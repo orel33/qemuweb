@@ -162,13 +162,13 @@ function sessionMetadata(engine = sessionEngine) {
   const ids = kind => [...sessions.values()]
     .filter(session => session.kind === kind && session.hostname && (kind === 'switch' || session.selectedImage))
     .map(session => session.id).sort();
-  return {schemaVersion: 4, engine, hosts: ids('vm'), switches: ids('switch'), baseImages: {}};
+  return {schemaVersion: 4, engine, hosts: ids('host'), switches: ids('switch'), baseImages: {}};
 }
 
 function entityKind(id, expectedKind) {
   if (typeof id !== 'string' || !/^[hs]-[0-9a-f]{16}$/.test(id)) throw new Error('Invalid host or switch ID; expected h- or s- followed by 16 lowercase hex characters.');
-  const kind = id[0] === 'h' ? 'vm' : 'switch';
-  if (expectedKind && kind !== expectedKind) throw new Error(`Expected a ${expectedKind === 'vm' ? 'host' : 'switch'} ID.`);
+  const kind = id[0] === 'h' ? 'host' : 'switch';
+  if (expectedKind && kind !== expectedKind) throw new Error(`Expected a ${expectedKind === 'host' ? 'host' : 'switch'} ID.`);
   return kind;
 }
 
@@ -195,7 +195,7 @@ async function sampleResources() {
   if (samplingResources) return;
   samplingResources = true;
   try {
-    const running = [...sessions.values()].filter(session => session.kind === 'vm' && session.machine);
+    const running = [...sessions.values()].filter(session => session.kind === 'host' && session.machine);
     const qemuRunning = running.some(session => session.engine?.startsWith('qemu'));
     const hostCpu = qemuRunning ? parseHostCpu(await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '')) : null;
     await Promise.all(running.map(async session => {
@@ -248,7 +248,7 @@ function defaultStartupScript(interfaces) {
     (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n' : '');
 }
 
-function sessionPaths(id, kind = 'vm') {
+function sessionPaths(id, kind = 'host') {
   entityKind(id, kind);
   const runtimeDir = path.join(runtimeInstance, id);
   const paths = {
@@ -303,7 +303,7 @@ function getSession(id, create = false, expectedKind = null, existingDir = false
     if (fs.existsSync(paths.runtimeDir) !== existingDir) throw new Error('Runtime directory state does not match this ID.');
     if (!existingDir) {
       fs.mkdirSync(paths.runtimeDir);
-      if (kind === 'vm') fs.mkdirSync(path.join(paths.runtimeDir, 'startup'));
+      if (kind === 'host') fs.mkdirSync(path.join(paths.runtimeDir, 'startup'));
     }
     sessions.set(id, {
       id,
@@ -526,7 +526,7 @@ app.put('/api/general-settings', (req, res) => {
     if (!['qemu', 'vbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
     if (!availableEngines.includes(engine)) throw new Error('VirtualBox is unavailable on this server.');
     if (engine !== sessionEngine) {
-      if ([...sessions.values()].some(session => session.kind === 'vm')) {
+      if ([...sessions.values()].some(session => session.kind === 'host')) {
         return res.status(409).json({error: 'Delete existing hosts before changing the session engine.'});
       }
       saveSessionMetadata(engine);
@@ -598,8 +598,8 @@ function fileSha256(file) {
 function archiveSources(includeDisks, allowRunning = false) {
   if (typeof includeDisks !== 'boolean') throw new Error('Invalid working disk option.');
   if (includeDisks && sessionEngine === 'vbox') throw new Error('VirtualBox working disk archives are not supported.');
-  const runningHosts = [...sessions.values()].filter(item => item.kind === 'vm' && item.machine);
-  if (includeDisks && [...sessions.values()].some(item => item.kind === 'vm' && item.action)) {
+  const runningHosts = [...sessions.values()].filter(item => item.kind === 'host' && item.machine);
+  if (includeDisks && [...sessions.values()].some(item => item.kind === 'host' && item.action)) {
     throw new Error('Wait for the current host action to finish before saving working disks.');
   }
   if (includeDisks && !allowRunning && runningHosts.length) {
@@ -611,7 +611,7 @@ function archiveSources(includeDisks, allowRunning = false) {
     sources.push({name: `${item.id}/switch.json`, file: tempFile(item, 'switch.json')});
     return {id: item.id, name: item.hostname};
   });
-  const hosts = all.filter(item => item.kind === 'vm').map(item => {
+  const hosts = all.filter(item => item.kind === 'host').map(item => {
     sources.push({name: `${item.id}/host.json`, file: tempFile(item, 'host.json')});
     const media = readStartupFiles(startupDirectory(item));
     const startup = path.join(item.runtimeDir, 'startup');
@@ -662,7 +662,7 @@ function validateArchiveSession(snapshot, stage, {discardStaleDisks = false} = {
     if (!host || typeof host !== 'object') throw new Error('Invalid host entry.');
     if (Object.keys(host).some(key => !['schemaVersion', 'id', 'name', 'system', 'engine', 'profileHash', 'config', 'network', 'disk'].includes(key)) ||
         !host.network || Object.keys(host.network).some(key => key !== 'interfaces')) throw new Error('Unknown host configuration keyword.');
-    entityKind(host.id, 'vm');
+    entityKind(host.id, 'host');
     if (ids.has(host.id) || typeof host.name !== 'string' || !host.name.trim() || host.name.length > 64 || /[\x00-\x1f\x7f]/.test(host.name) || names.has(host.name.toLowerCase())) throw new Error('Invalid or duplicate host identity.');
     ids.add(host.id); names.add(host.name.toLowerCase());
     expectedFiles.add(`${host.id}/host.json`);
@@ -756,7 +756,7 @@ function installArchive(snapshot, stage) {
       persistSwitchConfiguration(item);
     }
     for (const entry of snapshot.hosts) {
-      const item = getSession(entry.id, true, 'vm', true); created.push(item);
+      const item = getSession(entry.id, true, 'host', true); created.push(item);
       item.selectedImage = imageById(entry.system); item.engine = snapshot.engine;
       item.profileHash = entry.profileHash;
       const profile = selectedProfile(readConfig(), entry.system, entry.engine);
@@ -803,7 +803,7 @@ app.post('/api/session-archive/export', async (req, res) => {
       baseImages[id] = {format, ...fileSha256(imagePath(imageById(id).images[format]))};
     }
     if (includeDisks) {
-      for (const host of sessions.values()) if (host.kind === 'vm' && host.machine) {
+      for (const host of sessions.values()) if (host.kind === 'host' && host.machine) {
         try { await stop(host, {forceOnTimeout: false}); }
         catch (error) { throw new Error(`Cannot power off ${host.hostname}: ${error.message}. Hosts already stopped remain stopped.`); }
       }
@@ -895,7 +895,7 @@ app.post('/api/session-archive/import', async (req, res) => {
 
 app.get('/api/metrics', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json(Object.fromEntries([...sessions.values()].filter(session => session.kind === 'vm').map(session => {
+  res.json(Object.fromEntries([...sessions.values()].filter(session => session.kind === 'host').map(session => {
     if (!session.machine) return [session.id, {status: 'stopped', cpuPercent: null, ramBytes: null}];
     const sample = resourceSamples.get(session.id);
     return [session.id, sample?.machine === session.machine
@@ -992,7 +992,7 @@ function activeConfiguration(session) {
 }
 
 function pendingRestart(session) {
-  if (session?.kind !== 'vm' || !session.machine || !session.activeConfig) return false;
+  if (session?.kind !== 'host' || !session.machine || !session.activeConfig) return false;
   const active = session.activeConfig;
   return ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
     JSON.stringify(session.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
@@ -1032,9 +1032,9 @@ function archivedSessionFiles(stage, paths) {
   if (new Set(ids).size !== ids.length) throw new Error('Duplicate session entity ID.');
   const readEntity = (id, kind) => {
     entityKind(id, kind);
-    const file = path.join(stage, id, kind === 'vm' ? 'host.json' : 'switch.json');
+    const file = path.join(stage, id, kind === 'host' ? 'host.json' : 'switch.json');
     const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-    if (data.id !== id || data.schemaVersion !== (kind === 'vm' ? 3 : 2)) throw new Error(`Invalid configuration for ${id}.`);
+    if (data.id !== id || data.schemaVersion !== (kind === 'host' ? 3 : 2)) throw new Error(`Invalid configuration for ${id}.`);
     if (kind === 'switch' && (data.kind !== 'vde' ||
         Object.keys(data).some(key => !['schemaVersion', 'id', 'name', 'kind'].includes(key)))) {
       throw new Error(`Invalid switch configuration for ${id}.`);
@@ -1042,7 +1042,7 @@ function archivedSessionFiles(stage, paths) {
     return data;
   };
   const hosts = metadata.hosts.map(id => {
-    const data = readEntity(id, 'vm');
+    const data = readEntity(id, 'host');
     return {...data, disk: paths.includes(`${id}/disk.qcow2`)};
   });
   const switches = metadata.switches.map(id => readEntity(id, 'switch'));
@@ -1136,7 +1136,7 @@ function assignNetworkInterfaces(session, switches) {
 }
 
 function linkedHosts(switchId) {
-  return [...sessions.values()].filter(session => session.kind === 'vm' &&
+  return [...sessions.values()].filter(session => session.kind === 'host' &&
     [...session.networkInterfaces, ...(session.machine ? session.activeConfig?.networkInterfaces || [] : [])]
       .some(nic => nic.switchId === switchId));
 }
@@ -1338,7 +1338,7 @@ app.get('/api/options/:sessionId', (req, res) => {
       throw new Error('startupDiskEnabled must be true or false.');
     }
     const id = req.params.sessionId;
-    entityKind(id, 'vm');
+    entityKind(id, 'host');
     const existing = getSession(id);
     const launched = !!(existing && existing.everStarted && existing.selectedImage);
     const image = launched ? existing.selectedImage : imageById(req.query.system);
@@ -1434,7 +1434,7 @@ function spawnVirtualBox(session, image) {
 function start(sessionId, selectedEngine, imageId, options = {}) {
   const session = getSession(sessionId);
   if (!session) throw new Error('Unknown host configuration.');
-  if (session.kind !== 'vm') throw new Error('This tab is a VDE switch.');
+  if (session.kind !== 'host') throw new Error('This tab is a VDE switch.');
   if (session.action && !options.reset && !(options.resume && session.action === 'reboot')) throw new Error('An action is already in progress for this host.');
   if (session.machine) throw new Error('This host is already running.');
   const resume = session.everStarted && !options.reset;
@@ -1444,7 +1444,7 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   requireSessionEngine(selectedEngine);
   const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
   if (selectedEngine === 'vbox') {
-    const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
+    const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'host' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
   const image = resume ? session.selectedImage : imageById(imageId);
@@ -1752,7 +1752,7 @@ async function destroySession(session) {
 async function exitAllSessions() {
   const removed = [];
   try {
-    for (const kind of ['vm', 'switch']) {
+    for (const kind of ['host', 'switch']) {
       for (const session of [...sessions.values()].filter(item => item.kind === kind)) {
         await destroySession(session);
         removed.push(session.id);
@@ -1767,7 +1767,7 @@ async function exitAllSessions() {
 app.post('/api/start', async (req, res) => {
   try {
     const configured = getSession(req.body?.sessionId);
-    if (!configured || configured.kind !== 'vm' || !configured.selectedImage) throw new Error('Unknown host configuration.');
+    if (!configured || configured.kind !== 'host' || !configured.selectedImage) throw new Error('Unknown host configuration.');
     if (req.body.engine !== configured.engine || req.body.imageId !== configured.selectedImage.id) throw new Error('Host system and engine differ from the saved configuration.');
     start(configured.id, configured.engine, configured.selectedImage.id, {
       interfaces: configured.networkInterfaces.map(nic => nic.switchId), settings: configured.launchSettings,
@@ -1818,9 +1818,9 @@ app.post('/api/topology', async (req, res) => {
       switchIds.set(sw.name, id);
     }
     for (const host of topology.hosts) {
-      const id = newEntityId('vm');
+      const id = newEntityId('host');
       const interfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(host.switches.map(name => switchIds.get(name)), engine, false));
-      const session = getSession(id, true, 'vm'); created.push(id);
+      const session = getSession(id, true, 'host'); created.push(id);
       setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
       session.networkInterfaces = interfaces; session.launchSettings = launchSettingsFor(host.system);
       session.guestIsoAttached = session.selectedImage.startupDiskEnabled;
@@ -1862,7 +1862,7 @@ app.get('/api/topology', (_req, res) => {
   try {
     const all = [...sessions.values()];
     const switches = all.filter(session => session.kind === 'switch').map(session => ({name: session.hostname}));
-    const hosts = all.filter(session => session.kind === 'vm').map(session => ({
+    const hosts = all.filter(session => session.kind === 'host').map(session => ({
       name: session.hostname, system: session.selectedImage?.id,
       switches: session.networkInterfaces.map(nic => {
         const sw = nic.switchId && sessions.get(nic.switchId);
@@ -1883,7 +1883,7 @@ app.post('/api/hosts', (req, res) => {
       throw new Error('Unknown host creation option.');
     }
     const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, startupDiskEnabled} = req.body || {};
-    entityKind(id, 'vm');
+    entityKind(id, 'host');
     if (sessions.has(id)) throw new Error('Host ID already exists.');
     const image = imageById(imageId || Object.keys(readConfig().systems).find(id => id !== 'default'));
     if (!image) throw new Error('Unknown system in config.json.');
@@ -1900,7 +1900,7 @@ app.post('/api/hosts', (req, res) => {
     if (buildStartupDisk) {
       validateStartupTemplate(validatedMedia.script, networkInterfaces, true);
     }
-    const session = getSession(id, true, 'vm');
+    const session = getSession(id, true, 'host');
     session.selectedImage = image;
     session.engine = engine;
     session.networkInterfaces = networkInterfaces;
@@ -1928,7 +1928,7 @@ app.post('/api/hosts', (req, res) => {
 app.get('/api/hosts/:sessionId/config', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm' || !session.selectedImage) throw new Error('Unknown host.');
+    if (!session || session.kind !== 'host' || !session.selectedImage) throw new Error('Unknown host.');
     res.set('Cache-Control', 'no-store');
     res.json(hostConfigurationResponse(session));
   } catch (error) { res.status(400).json({error: error.message}); }
@@ -1937,7 +1937,7 @@ app.get('/api/hosts/:sessionId/config', (req, res) => {
 app.put('/api/hosts/:sessionId/config', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm' || !session.selectedImage) throw new Error('Unknown host.');
+    if (!session || session.kind !== 'host' || !session.selectedImage) throw new Error('Unknown host.');
     if (session.action) throw new Error('Wait for the current host action to finish.');
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid host configuration.');
@@ -1988,7 +1988,7 @@ app.put('/api/hosts/:sessionId/config', (req, res) => {
 app.get('/api/hosts/:sessionId/guest-media', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
+    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
     res.json({...readStartupFiles(startupDirectory(session)), guestCdrom: guestIsoStatus(session)});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
@@ -1996,7 +1996,7 @@ app.get('/api/hosts/:sessionId/guest-media', (req, res) => {
 app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
+    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
     if (session.guestIsoAttached) validateStartupTemplate(media.script, session.networkInterfaces, true);
     writeStartupFiles(startupDirectory(session), media);
@@ -2010,7 +2010,7 @@ app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
 app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
+    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
     validateStartupTemplate(media.script, session.networkInterfaces, true);
     writeStartupFiles(startupDirectory(session), media);
@@ -2023,7 +2023,7 @@ app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
 app.patch('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
+    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
     if (typeof req.body?.attached !== 'boolean') throw new Error('Invalid CD-ROM attachment option.');
     if (req.body.attached && !guestIsoStatus(session).created) throw new Error('Create the CD-ROM before attaching it.');
     const previous = session.guestIsoAttached;
@@ -2079,7 +2079,7 @@ app.post('/api/switches/:id/stop', async (req, res) => {
 app.post('/api/stop/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (session && session.kind !== 'vm') throw new Error('Use the switch stop action.');
+    if (session && session.kind !== 'host') throw new Error('Use the switch stop action.');
     if (session && session.action) throw new Error('An action is already in progress for this host.');
     await stop(session);
     res.json({ok: true});
@@ -2104,7 +2104,7 @@ app.post('/api/reset/:sessionId', async (req, res) => {
 app.post('/api/monitor/:sessionId', async (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'vm' || !session.machine || !session.engine.startsWith('qemu') || session.action) throw new Error('Monitor is available only for a running QEMU host.');
+    if (!session || session.kind !== 'host' || !session.machine || !session.engine.startsWith('qemu') || session.action) throw new Error('Monitor is available only for a running QEMU host.');
     const command = req.body && req.body.command;
     if (typeof command !== 'string' || !command.trim() || command.length > 256 || /[\r\n\x00-\x1f\x7f]/.test(command)) throw new Error('Enter a single-line QEMU command (maximum 256 characters).');
     appendLog(session, `$ monitor: ${command}`);
@@ -2118,7 +2118,7 @@ app.patch('/api/sessions/:sessionId', (req, res) => {
   try {
     const session = getSession(req.params.sessionId);
     const name = req.body && req.body.name;
-    if (!session || session.kind !== 'vm') throw new Error('Unknown host.');
+    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
     if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
     const previous = session.hostname;
@@ -2239,7 +2239,7 @@ async function shutdown() {
   shuttingDown = true;
   clearInterval(resourceTimer);
   const forceExit = setTimeout(() => process.exit(1), 10000);
-  for (const kind of ['vm', 'switch']) {
+  for (const kind of ['host', 'switch']) {
     await Promise.all([...sessions.values()].filter(session => session.kind === kind)
       .map(session => destroySession(session).catch(error => console.error('Session shutdown:', error))));
   }
