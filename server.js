@@ -800,6 +800,7 @@ function validateArchiveSession(snapshot, stage, {discardStaleDisks = false} = {
           !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/.test(nic.mac) || macs.has(nic.mac)) throw new Error('Invalid or duplicate MAC address.');
       macs.add(nic.mac);
       if (nic.switchId === null) { if (nic.port !== null) throw new Error('Disconnected Ethernet must have no port.'); }
+      else if (nic.switchId === 'nat') { if (nic.port !== null) throw new Error('Internet (NAT) Ethernet must have no port.'); }
       else {
         if (!switches.has(nic.switchId) || !Number.isInteger(nic.port) || nic.port < 1 || nic.port > 32) throw new Error('Invalid Ethernet switch or port.');
         const key = `${nic.switchId}:${nic.port}`;
