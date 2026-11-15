@@ -139,7 +139,7 @@ server.js                démarrage et câblage
 **Écarts par rapport au découpage prévu**
 
 - `common/` contient aussi `launch-settings.js`, `node-id.js`, `shell-quote.js` et `json-file.js` : ces helpers servent au plan de contrôle comme au runner.
-- `runner/` contient des modules en plus de ceux listés (`context.js`, `catalog.js`, `host-config.js`, `launch-preview.js`, `resources.js`, `node-lifecycle.js`, `engines/child-exit.js`, `media/guest-iso.js`, `media/image-hash.js`). Le contexte du runner (`runner/context.js`) est un singleton de module configuré par `createRunner` : il suffit tant qu'il n'y a qu'une `Session`, et sera à reprendre pour le jalon 5.
+- `runner/` contient des modules en plus de ceux listés (`context.js`, `catalog.js`, `host-config.js`, `launch-preview.js`, `resources.js`, `node-lifecycle.js`, `engines/child-exit.js`, `media/guest-iso.js`, `media/image-hash.js`). Le contexte du runner était à l'origine un singleton de module : il est remplacé au jalon 3 par une instance par session (`createContext()`).
 - `runner/network/vde-switch.js` requiert `node-pty` (paquet, pas module natif de Node), inhérent à `vdeterm`.
 - `lib/session-snapshot.js` porte la logique d'archive côté plan de contrôle, à côté de `lib/session-archive.js`.
 - Interface web : modules ajoutés à ceux prévus (`app.js`, `state.js`, `workspace.js`, `node-dialogs.js`, `startup-media.js`, `general-settings.js`). Les modules ont des imports circulaires, sans effet à l'exécution tant qu'ils ne font que déclarer au chargement.
@@ -155,7 +155,6 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 - Script d'administration, par exemple `scripts/user.sh add alice` ou un import CSV pour une promo entière.
 - Page de connexion et cookie `HttpOnly`, `Secure`, `SameSite=Lax`, signé.
 - Socket.IO authentifié au handshake (`io.use`) avec le même cookie.
-- Contrôle de l'en-tête `Origin` sur l'API et Socket.IO (protection CSRF).
 - Authentification isolée dans un module, pour la remplacer par OpenID Connect plus tard sans toucher au reste.
 
 **Une session par utilisateur, persistante**
@@ -172,7 +171,7 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 - Chaque route résout `req.user → session`, puis cherche le `nodeId` uniquement dans cette session (404 sinon).
 - Les 12 `io.emit` deviennent `io.to('session:<id>')`.
 
-**Hors périmètre de ce jalon** : mot de passe minimal, ralentissement des échecs de connexion, liste blanche HMP et quotas sont au jalon 6. Jusqu'à ce jalon, le Monitor accepte toute commande HMP d'une ligne et les limites de mémoire et de vCPU restent celles du code (32 768 Mo, 64 vCPU) : n'ouvrir QemuWeb qu'à des utilisateurs de confiance.
+**Hors périmètre de ce jalon** : contrôle de l'en-tête `Origin` (protection CSRF), déconnexion révocable, mot de passe minimal, ralentissement des échecs de connexion, liste blanche HMP et quotas sont au jalon 6. Le cookie `SameSite=Lax` assure seul la protection contre les requêtes venues d'un autre site ; QemuWeb doit donc tourner sur son propre nom de domaine, pas sur un sous-domaine partagé avec des pages hébergées par les étudiants. Jusqu'à ce jalon, le Monitor accepte toute commande HMP d'une ligne et les limites de mémoire et de vCPU restent celles du code (32 768 Mo, 64 vCPU) : n'ouvrir QemuWeb qu'à des utilisateurs de confiance.
 
 **Exposition** : le serveur reste sur `127.0.0.1`, nginx assure le TLS et le passage en WebSocket (`client_max_body_size` adapté aux imports ZIP).
 
@@ -259,6 +258,11 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 - Mot de passe : longueur minimale de 8 caractères imposée par `scripts/user.sh` et par la réinitialisation depuis `/admin`, avec une option explicite `--allow-weak` pour les comptes de test.
 - Ralentissement des échecs de connexion (par login et par adresse IP), sans verrouillage définitif.
 
+**Sessions web**
+
+- Contrôle de l'en-tête `Origin` sur l'API (requêtes qui modifient l'état) et sur le branchement Socket.IO, avec une liste d'origines autorisées pour nginx. Il protège contre les sous-domaines voisins et les anciens navigateurs, que `SameSite=Lax` ne couvre pas. À traiter : un `Origin` absent sur le branchement Socket.IO (les requêtes GET de repli du navigateur n'en envoient pas).
+- Déconnexion révocable : le cookie signé est aujourd'hui sans état côté serveur, donc une copie reste valable jusqu'à son expiration. Prévoir une liste de sessions web côté serveur, ou la rotation du secret.
+
 **Liste blanche HMP**
 
 - `/api/nodes/:nodeId/monitor` n'accepte que `info …`, `system_reset`, `system_powerdown`, `stop`, `cont`, `sendkey`, `nmi`. Le runner la vérifie lui-même.
@@ -284,6 +288,8 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 - [ ] Un dépassement de quota (VM, session ou serveur) est refusé avec un message clair.
 - [ ] Un mot de passe trop court est refusé par `scripts/user.sh`, sauf avec `--allow-weak`.
 - [ ] Les échecs de connexion répétés sont ralentis.
+- [ ] Une requête d'écriture ou un branchement Socket.IO venant d'une origine non autorisée est refusé.
+- [ ] Après une déconnexion, l'ancien cookie n'ouvre plus de session.
 - [ ] Le runner local tourne sous le compte `qemuweb-runner`, `runtime/` est en `0700` et les images de base sont en lecture seule.
 - [ ] Une VM qui dépasse sa RAM est tuée par son scope sans affecter les autres sessions.
 
