@@ -1732,6 +1732,11 @@
             const selectedImage = images.find(item => item.id === value);
             machine.osHint = selectedImage?.label || 'System';
             machine.hasDifferentialDisk = !!selectedImage?.hasDifferentialDisk;
+            if (selectedImage?.boot === 'kernel' || selectedImage?.containerImage) {
+              if (!machine.interfaces || !machine.interfaces.length || (machine.interfaces.length === 1 && machine.interfaces[0] === null)) {
+                machine.interfaces = ['nat'];
+              }
+            }
             renderQemuOptions();
           }
         });
@@ -1901,7 +1906,7 @@
       const imageId = current?.kind === 'vm' ? current.imageId : images[0]?.id;
       const image = images.find(item => item.id === imageId);
       const hostname = nextMachineName('vm');
-      const interfaces = [null];
+      const interfaces = (image?.boot === 'kernel' || image?.containerImage) ? ['nat'] : [null];
       hostSettingsDraft = {
         id: `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
         isNew: true, kind: 'vm', hostname, imageId,
@@ -1933,9 +1938,12 @@
       document.getElementById('create-engine-row').hidden = !host;
       imageSelect.required = host;
       const current = activeMachine();
-      imageSelect.value = host && current?.kind === 'vm' ? current.imageId : (images[0]?.id || '');
+      const defaultImageId = host && current?.kind === 'vm' ? current.imageId : (images[0]?.id || '');
+      imageSelect.value = defaultImageId;
+      const defaultImage = images.find(item => item.id === defaultImageId);
+      const isContainer = host && (defaultImage?.boot === 'kernel' || defaultImage?.containerImage);
       engineSelect.value = generalSettings.engine;
-      createDraft = host ? {engine: generalSettings.engine, interfaces: [null], hasLaunched: false, busy: false} : null;
+      createDraft = host ? {engine: generalSettings.engine, interfaces: [isContainer ? 'nat' : null], hasLaunched: false, busy: false} : null;
       createNetwork.hidden = !host;
       if (host) renderCreateNicControls();
       createAutostart.checked = true;
@@ -2496,6 +2504,15 @@
     namingSchemeSelect.addEventListener('change', () => { generalSettings.namingScheme = namingSchemeSelect.value; saveGeneralSettings(); });
     consoleFontFamilySelect.addEventListener('change', () => { generalSettings.consoleFontFamily = consoleFontFamilySelect.value; consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(); });
     consoleFontSizeSelect.addEventListener('change', () => { generalSettings.consoleFontSize = Number(consoleFontSizeSelect.value); consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(true); });
+    imageSelect.addEventListener('change', () => {
+      const img = images.find(item => item.id === imageSelect.value);
+      if (createDraft && (img?.boot === 'kernel' || img?.containerImage)) {
+        if (!createDraft.interfaces.length || (createDraft.interfaces.length === 1 && createDraft.interfaces[0] === null)) {
+          createDraft.interfaces = ['nat'];
+          renderCreateNicControls();
+        }
+      }
+    });
     document.getElementById('new-host').addEventListener('click', openHostSettingsCreate);
     document.getElementById('new-switch').addEventListener('click', () => openCreateDialog('switch'));
     cloneButton.addEventListener('click', () => { const machine = activeMachine(); if (machine && !machine.busy) openCloneDialog(machine); });
