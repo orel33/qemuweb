@@ -12,6 +12,7 @@ const {SessionManager} = require('./lib/session-manager');
 const {attachSockets, sessionRoom} = require('./sockets');
 const {createSessionRouter} = require('./routes');
 const {readCatalog} = require('./common/system-config');
+const {createAuth} = require('./lib/auth');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -45,25 +46,38 @@ readCatalog(configPath);
 try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
 catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
 
-// Until authentication is wired in, every request belongs to one implicit local user.
-const implicitUser = {login: 'local', role: 'admin'};
-io.use((socket, next) => { socket.data.user = implicitUser; next(); });
+let auth;
+try { auth = createAuth({root, runtimeRoot: runtime}); }
+catch (error) { console.error(error.message); process.exit(1); }
+if (auth.mode === 'off') {
+  console.warn('WARNING: authentication is disabled (QEMUWEB_AUTH=off). Every visitor uses one shared local session.');
+  console.warn('         Use it only for single-user local work, never on a shared or exposed server.');
+} else if (!auth.userCount()) {
+  console.warn(`No user account in ${auth.usersFile}: nobody can log in. Add one with ./scripts/user.sh add <login>.`);
+}
+// Express trust proxy (e.g. "loopback" behind nginx), so that req.secure follows X-Forwarded-Proto.
+if (process.env.QEMUWEB_TRUST_PROXY) {
+  const value = process.env.QEMUWEB_TRUST_PROXY;
+  app.set('trust proxy', value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value);
+}
+io.use(auth.socketMiddleware);
 attachSockets(io, manager);
 
+app.use(auth.identify);
+app.use(['/api', '/auth'], auth.checkOrigin);
+auth.register(app);
+app.use(auth.requireUser);
 app.use(express.json({limit: '6mb'}));
 app.use('/vendor', express.static(path.join(root, 'node_modules/@xterm/xterm')));
 app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/@xterm/addon-fit')));
 app.use((req, res, next) => {
-  if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');
+  if (['/', '/index.html', '/login.html'].includes(req.path)) res.set('Cache-Control', 'no-store');
   next();
 });
 app.use(express.static(path.join(root, 'public')));
-app.use('/api', (req, _res, next) => {
-  req.user = implicitUser;
-  next();
-});
+// API requests go to the router of the user's own session (created at first use).
 app.use((req, res, next) => {
-  if (!req.user) return next();
+  if (!req.path.startsWith('/api/')) return next();
   try { req.workspace = manager.open(req.user.login); }
   catch (error) { return res.status(503).json({error: error.message}); }
   req.workspace.router(req, res, next);

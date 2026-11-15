@@ -11,3 +11,4 @@ runtime/*
 !runtime/.gitkeep
 dist/
 preview/
+users.json

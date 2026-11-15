@@ -23,3 +23,22 @@ export function launchOptionsUrl(machine, settings) {
   const params = new URLSearchParams({system: machine.imageId, engine: machine.engine, interfaces: JSON.stringify(machine.interfaces || []), settings: JSON.stringify(settings), startupDiskEnabled: String(!!machine.startupDiskEnabled)});
   return `${nodeUrl(machine.id, 'options')}?${params}`;
 }
+
+// Sends the browser to the login page once, e.g. after a 401 response.
+let redirectingToLogin = false;
+export function redirectToLogin() {
+  if (redirectingToLogin) return;
+  redirectingToLogin = true;
+  location.assign('/login.html');
+}
+
+// Every fetch() of the UI goes through this wrapper: a 401 response means the login
+// session expired or was revoked, so the page returns to the login form.
+export function installAuthRedirect() {
+  const nativeFetch = window.fetch.bind(window);
+  window.fetch = async (...args) => {
+    const response = await nativeFetch(...args);
+    if (response.status === 401) redirectToLogin();
+    return response;
+  };
+}
