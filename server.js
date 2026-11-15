@@ -26,8 +26,8 @@ try { commands = resolveCommands(root); }
 catch (error) { console.error(error.message); process.exit(1); }
 const availableEngines = commands.VBOXMANAGE ? ['qemu', 'vbox'] : ['qemu'];
 const runtime = path.join(root, 'runtime');
-const sessionId = crypto.randomBytes(8).toString('hex');
-const runtimeInstance = path.join(runtime, sessionId);
+const serverSessionId = crypto.randomBytes(8).toString('hex');
+const runtimeInstance = path.join(runtime, serverSessionId);
 const sessionFile = path.join(runtimeInstance, 'session.json');
 const currentSessionLink = path.join(runtime, 'current');
 const ephemeralServer = process.env.QEMUWEB_TEST_SERVER === '1';
@@ -45,7 +45,7 @@ const serverSessionFile = path.join(runtime, `server-${port}.session`);
 const app = express();
 const server = http.createServer(app);
 const io = new SocketIoServer(server);
-const sessions = new Map();
+const nodes = new Map();
 let archiveBusy = false;
 const execFileAsync = promisify(execFile);
 const resourceSamples = new Map();
@@ -59,7 +59,7 @@ try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
 catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
 
 function pointCurrentSession(id) {
-  const temporary = path.join(runtime, `.current-${sessionId}`);
+  const temporary = path.join(runtime, `.current-${serverSessionId}`);
   try {
     fs.symlinkSync(id, temporary, 'dir');
     fs.renameSync(temporary, currentSessionLink);
@@ -70,7 +70,7 @@ function pointCurrentSession(id) {
 }
 
 function linkCurrentSession() {
-  if (!ephemeralServer) pointCurrentSession(sessionId);
+  if (!ephemeralServer) pointCurrentSession(serverSessionId);
 }
 
 function liveServerSessions() {
@@ -93,9 +93,9 @@ function liveServerSessions() {
 function removeCurrentSessionLink() {
   if (ephemeralServer) return;
   try {
-    if (fs.readlinkSync(currentSessionLink) !== sessionId) return;
+    if (fs.readlinkSync(currentSessionLink) !== serverSessionId) return;
     const live = liveServerSessions();
-    const fallback = fs.readdirSync(runtime).filter(name => /^[0-9a-f]{16}$/.test(name) && name !== sessionId && live.has(name) && !live.get(name).ephemeral)
+    const fallback = fs.readdirSync(runtime).filter(name => /^[0-9a-f]{16}$/.test(name) && name !== serverSessionId && live.has(name) && !live.get(name).ephemeral)
       .map(name => {
         try {
           return {name, started: fs.statSync(path.join(runtime, name)).birthtimeMs};
@@ -107,7 +107,7 @@ function removeCurrentSessionLink() {
 }
 
 function removeEmptyRuntimeSession() {
-  if (sessions.size) return;
+  if (nodes.size) return;
   try {
     for (const name of ['hosts', 'switches']) {
       try { fs.rmdirSync(path.join(runtimeInstance, name)); }
@@ -160,8 +160,8 @@ function saveSessionMetadata(engine = sessionEngine) {
 
 function sessionMetadata(engine = sessionEngine) {
   const ids = kind => [...sessions.values()]
-    .filter(session => session.kind === kind && session.hostname && (kind === 'switch' || session.selectedImage))
-    .map(session => session.id).sort();
+    .filter(node => node.kind === kind && node.hostname && (kind === 'switch' || node.selectedImage))
+    .map(node => node.id).sort();
   return {schemaVersion: 4, engine, hosts: ids('host'), switches: ids('switch'), baseImages: {}};
 }
 
@@ -195,40 +195,40 @@ async function sampleResources() {
   if (samplingResources) return;
   samplingResources = true;
   try {
-    const running = [...sessions.values()].filter(session => session.kind === 'host' && session.machine);
-    const qemuRunning = running.some(session => session.engine?.startsWith('qemu'));
+    const running = [...sessions.values()].filter(node => node.kind === 'host' && node.machine);
+    const qemuRunning = running.some(node => node.engine?.startsWith('qemu'));
     const hostCpu = qemuRunning ? parseHostCpu(await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '')) : null;
-    await Promise.all(running.map(async session => {
-      const machine = session.machine;
+    await Promise.all(running.map(async node => {
+      const machine = node.machine;
       let result;
-      if (session.engine?.startsWith('qemu')) {
+      if (node.engine?.startsWith('qemu')) {
         const pid = machine.pid;
         const [stat, status] = Number.isInteger(pid) ? await Promise.all([
           fs.promises.readFile(`/proc/${pid}/stat`, 'utf8').catch(() => ''),
           fs.promises.readFile(`/proc/${pid}/status`, 'utf8').catch(() => '')
         ]) : ['', ''];
         const processCpu = parseProcessCpu(stat);
-        const previous = previousProcessSamples.get(session.id);
+        const previous = previousProcessSamples.get(node.id);
         const cpuPercent = previous?.machine === machine ? processCpuPercent(previous, processCpu, hostCpu) : null;
         const ramBytes = parseProcessRss(status);
-        if (processCpu && hostCpu) previousProcessSamples.set(session.id, {...processCpu, hostTicks: hostCpu.totalTicks, machine});
+        if (processCpu && hostCpu) previousProcessSamples.set(node.id, {...processCpu, hostTicks: hostCpu.totalTicks, machine});
         result = resourceResult(cpuPercent, ramBytes);
-      } else if (session.engine === 'vbox') {
+      } else if (node.engine === 'vbox') {
         try {
-          if (vboxMetricSetup.get(session.id) !== machine) {
-            await vboxMetricCommand(['setup', '--period', '2', '--samples', '1', session.vmName, 'CPU/Load,RAM/Usage']);
-            if (session.machine !== machine) return;
-            vboxMetricSetup.set(session.id, machine);
+          if (vboxMetricSetup.get(node.id) !== machine) {
+            await vboxMetricCommand(['setup', '--period', '2', '--samples', '1', node.vmName, 'CPU/Load,RAM/Usage']);
+            if (node.machine !== machine) return;
+            vboxMetricSetup.set(node.id, machine);
           }
           const values = parseVBoxMetrics(await vboxMetricCommand([
-            'query', session.vmName, 'CPU/Load/User,CPU/Load/Kernel,RAM/Usage/Used'
+            'query', node.vmName, 'CPU/Load/User,CPU/Load/Kernel,RAM/Usage/Used'
           ]));
           result = resourceResult(values.cpuPercent, values.ramBytes);
         } catch (_) { result = resourceResult(null, null); }
       }
-      if (result && session.machine === machine) resourceSamples.set(session.id, {machine, result});
+      if (result && node.machine === machine) resourceSamples.set(node.id, {machine, result});
     }));
-    const runningIds = new Set(running.map(session => session.id));
+    const runningIds = new Set(running.map(node => node.id));
     for (const id of resourceSamples.keys()) if (!runningIds.has(id)) resourceSamples.delete(id);
     for (const id of previousProcessSamples.keys()) if (!runningIds.has(id)) previousProcessSamples.delete(id);
     for (const id of vboxMetricSetup.keys()) if (!runningIds.has(id)) vboxMetricSetup.delete(id);
@@ -265,47 +265,47 @@ function sessionPaths(id, kind = 'host') {
   return paths;
 }
 
-function hostnameAliasPath(session, name) {
+function hostnameAliasPath(node, name) {
   const encoded = encodeURIComponent(name);
   const safeName = encoded === '.' || encoded === '..' ? encoded.replaceAll('.', '%2E') : encoded;
   const component = Buffer.byteLength(safeName) <= 120
-    ? safeName : `${safeName.slice(0, 96)}-${path.basename(session.runtimeDir)}`;
-  return path.join(runtimeInstance, session.kind === 'switch' ? 'switches' : 'hosts', component);
+    ? safeName : `${safeName.slice(0, 96)}-${path.basename(node.runtimeDir)}`;
+  return path.join(runtimeInstance, node.kind === 'switch' ? 'switches' : 'hosts', component);
 }
 
-function setSessionHostname(session, name) {
-  const alias = hostnameAliasPath(session, name);
-  if (alias !== session.hostnameAliasPath) {
+function setNodeHostname(node, name) {
+  const alias = hostnameAliasPath(node, name);
+  if (alias !== node.hostnameAliasPath) {
     fs.mkdirSync(path.dirname(alias), {recursive: true});
-    const target = path.relative(path.dirname(alias), session.runtimeDir);
+    const target = path.relative(path.dirname(alias), node.runtimeDir);
     try { fs.symlinkSync(target, alias, 'dir'); }
     catch (error) {
       if (error.code !== 'EEXIST' || fs.readlinkSync(alias) !== target) throw error;
     }
-    removeHostnameAlias(session);
-    session.hostnameAliasPath = alias;
+    removeHostnameAlias(node);
+    node.hostnameAliasPath = alias;
   }
-  session.hostname = name;
+  node.hostname = name;
 }
 
-function removeHostnameAlias(session) {
-  const alias = session.hostnameAliasPath;
+function removeHostnameAlias(node) {
+  const alias = node.hostnameAliasPath;
   if (!alias) return;
   try { fs.unlinkSync(alias); } catch (error) { if (error.code !== 'ENOENT') throw error; }
-  session.hostnameAliasPath = null;
+  node.hostnameAliasPath = null;
   try { fs.rmdirSync(path.dirname(alias)); } catch (_) {}
 }
 
-function getSession(id, create = false, expectedKind = null, existingDir = false) {
+function getNode(id, create = false, expectedKind = null, existingDir = false) {
   const kind = entityKind(id, expectedKind);
-  if (!sessions.has(id) && create) {
+  if (!nodes.has(id) && create) {
     const paths = sessionPaths(id, kind);
     if (fs.existsSync(paths.runtimeDir) !== existingDir) throw new Error('Runtime directory state does not match this ID.');
     if (!existingDir) {
       fs.mkdirSync(paths.runtimeDir);
       if (kind === 'host') fs.mkdirSync(path.join(paths.runtimeDir, 'startup'));
     }
-    sessions.set(id, {
+    nodes.set(id, {
       id,
       kind,
       ...paths,
@@ -339,29 +339,29 @@ function getSession(id, create = false, expectedKind = null, existingDir = false
       switchTerminal: null
     });
   }
-  return sessions.get(id);
+  return nodes.get(id);
 }
 
-function stateMessage(session) {
-  if (!session.machine) return session.lastMessage || 'Stopped';
-  if (session.kind === 'switch') return `VDE switch · ${session.hostname}`;
-  if (session.engine.startsWith('qemu')) return `QEMU/${session.qemuAcceleration.toUpperCase()} · ${session.selectedImage.label}`;
-  return `VirtualBox · ${session.selectedImage.label}`;
+function stateMessage(node) {
+  if (!node.machine) return node.lastMessage || 'Stopped';
+  if (node.kind === 'switch') return `VDE switch · ${node.hostname}`;
+  if (node.engine.startsWith('qemu')) return `QEMU/${node.qemuAcceleration.toUpperCase()} · ${node.selectedImage.label}`;
+  return `VirtualBox · ${node.selectedImage.label}`;
 }
 
-function publishState(session, message = stateMessage(session)) {
-  session.lastMessage = message;
-  const state = {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message};
-  io.to(session.id).emit('state', state);
+function publishState(node, message = stateMessage(node)) {
+  node.lastMessage = message;
+  const state = {sessionId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message};
+  io.to(node.id).emit('state', state);
   io.emit('sessions-changed', state);
 }
 
-function appendLog(session, message) {
+function appendLog(node, message) {
   const line = String(message).replace(/\s+$/, '');
   if (!line) return;
-  session.runLog.push(line);
-  if (session.runLog.length > 1000) session.runLog.shift();
-  io.to(session.id).emit('log', {sessionId: session.id, line});
+  node.runLog.push(line);
+  if (node.runLog.length > 1000) node.runLog.shift();
+  io.to(node.id).emit('log', {sessionId: node.id, line});
 }
 
 function plainSerialLine(line) {
@@ -385,35 +385,35 @@ function possibleGuestHookLine(line) {
   return ['qemuweb-guest-start', 'QEMUWEB_START_'].some(prefix => prefix.startsWith(plain) || plain.startsWith(prefix));
 }
 
-function filterGuestHookSerial(session, text) {
+function filterGuestHookSerial(node, text) {
   let visible = '';
   for (const char of text) {
-    if (session.serialFilterPassThrough) {
+    if (node.serialFilterPassThrough) {
       visible += char;
-      if (char === '\n') session.serialFilterPassThrough = false;
+      if (char === '\n') node.serialFilterPassThrough = false;
       continue;
     }
-    session.serialFilterPending += char;
+    node.serialFilterPending += char;
     if (char === '\n') {
-      if (!/(?:qemuweb-guest-start\[\d+\]:\s*)?QEMUWEB_START_(?:BEGIN|EXIT)\b/.test(plainSerialLine(session.serialFilterPending))) {
-        visible += session.serialFilterPending;
+      if (!/(?:qemuweb-guest-start\[\d+\]:\s*)?QEMUWEB_START_(?:BEGIN|EXIT)\b/.test(plainSerialLine(node.serialFilterPending))) {
+        visible += node.serialFilterPending;
       }
-      session.serialFilterPending = '';
-    } else if (standaloneTerminalControl(session.serialFilterPending)) {
+      node.serialFilterPending = '';
+    } else if (standaloneTerminalControl(node.serialFilterPending)) {
       // Pass CR and complete terminal controls without waiting for a newline.
-      visible += session.serialFilterPending;
-      session.serialFilterPending = '';
-    } else if (!possibleGuestHookLine(session.serialFilterPending)) {
-      visible += session.serialFilterPending;
-      session.serialFilterPending = '';
-      session.serialFilterPassThrough = true;
+      visible += node.serialFilterPending;
+      node.serialFilterPending = '';
+    } else if (!possibleGuestHookLine(node.serialFilterPending)) {
+      visible += node.serialFilterPending;
+      node.serialFilterPending = '';
+      node.serialFilterPassThrough = true;
     }
   }
   return visible;
 }
 
-function execLogged(session, command, args, options = {stdio: 'pipe'}) {
-  appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`);
+function execLogged(node, command, args, options = {stdio: 'pipe'}) {
+  appendLog(node, `$ ${[command, ...args].map(shellQuote).join(' ')}`);
   return execFileSync(command, args, options);
 }
 
@@ -445,7 +445,7 @@ function imageById(id) {
 }
 
 function allocateName(prefix) {
-  const used = new Set([...sessions.values()].map(session => session.hostname).filter(Boolean));
+  const used = new Set([...sessions.values()].map(node => node.hostname).filter(Boolean));
   for (let n = 1; n <= 99; n++) {
     const name = `${prefix}${n}`;
     if (!used.has(name)) return name;
@@ -517,7 +517,7 @@ function launchSettingsFor(imageId, overrides = {}) {
 
 app.get('/api/general-settings', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({sessionId, engine: sessionEngine, availableEngines});
+  res.json({sessionId: serverSessionId, engine: sessionEngine, availableEngines});
 });
 
 app.put('/api/general-settings', (req, res) => {
@@ -526,14 +526,14 @@ app.put('/api/general-settings', (req, res) => {
     if (!['qemu', 'vbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
     if (!availableEngines.includes(engine)) throw new Error('VirtualBox is unavailable on this server.');
     if (engine !== sessionEngine) {
-      if ([...sessions.values()].some(session => session.kind === 'host')) {
+      if ([...sessions.values()].some(node => node.kind === 'host')) {
         return res.status(409).json({error: 'Delete existing hosts before changing the session engine.'});
       }
       saveSessionMetadata(engine);
       sessionEngine = engine;
-      io.emit('general-settings-changed', {sessionId, engine});
+      io.emit('general-settings-changed', {sessionId: serverSessionId, engine});
     }
-    res.json({sessionId, engine: sessionEngine});
+    res.json({sessionId: serverSessionId, engine: sessionEngine});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -555,19 +555,19 @@ app.get('/api/systems', (_req, res) => {
 app.get('/api/guest-cdrom-capability', (_req, res) => res.json({autoBuild: true, previewIso: true}));
 
 app.get('/api/sessions', (_req, res) => {
-  res.json([...sessions.values()].map(session => ({
-    id: session.id,
-    kind: session.kind,
-    running: !!session.machine,
-    hasLaunched: session.everStarted,
-    engine: session.engine,
-    imageId: session.selectedImage && session.selectedImage.id,
-    settings: session.launchSettings,
-    hostname: session.hostname,
-    networkInterfaces: session.networkInterfaces,
-    pendingRestart: pendingRestart(session),
-    hasDifferentialDisk: !!session.runDisk && fs.existsSync(session.runDisk),
-    message: stateMessage(session)
+  res.json([...sessions.values()].map(node => ({
+    id: node.id,
+    kind: node.kind,
+    running: !!node.machine,
+    hasLaunched: node.everStarted,
+    engine: node.engine,
+    imageId: node.selectedImage && node.selectedImage.id,
+    settings: node.launchSettings,
+    hostname: node.hostname,
+    networkInterfaces: node.networkInterfaces,
+    pendingRestart: pendingRestart(node),
+    hasDifferentialDisk: !!node.runDisk && fs.existsSync(node.runDisk),
+    message: stateMessage(node)
   })));
 });
 
@@ -738,7 +738,7 @@ function validateArchiveSession(snapshot, stage, {discardStaleDisks = false} = {
   return warnings;
 }
 function installArchive(snapshot, stage) {
-  if (sessions.size) throw new Error('Load requires an empty session.');
+  if (nodes.size) throw new Error('Load requires an empty session.');
   const oldEngine = sessionEngine, moved = [], created = [];
   const entries = [...snapshot.switches, ...snapshot.hosts];
   for (const entry of entries) if (fs.existsSync(path.join(runtimeInstance, entry.id))) throw new Error(`Runtime directory already exists: ${entry.id}.`);
@@ -751,12 +751,12 @@ function installArchive(snapshot, stage) {
     }
     sessionEngine = snapshot.engine;
     for (const entry of snapshot.switches) {
-      const item = getSession(entry.id, true, 'switch', true); created.push(item);
-      setSessionHostname(item, entry.name); item.lastMessage = 'VDE switch stopped';
+      const item = getNode(entry.id, true, 'switch', true); created.push(item);
+      setNodeHostname(item, entry.name); item.lastMessage = 'VDE switch stopped';
       persistSwitchConfiguration(item);
     }
     for (const entry of snapshot.hosts) {
-      const item = getSession(entry.id, true, 'host', true); created.push(item);
+      const item = getNode(entry.id, true, 'host', true); created.push(item);
       item.selectedImage = imageById(entry.system); item.engine = snapshot.engine;
       item.profileHash = entry.profileHash;
       const profile = selectedProfile(readConfig(), entry.system, entry.engine);
@@ -768,18 +768,18 @@ function installArchive(snapshot, stage) {
       item.runDisk = entry.disk ? tempFile(item, 'disk.qcow2') : null;
       item.everStarted = entry.disk;
       item.qemuOptions = entry.disk ? qemuOptionsFor(entry.system, item.launchSettings) : null;
-      setSessionHostname(item, entry.name); item.lastMessage = entry.disk ? 'Host stopped; current disk kept' : 'Host stopped; ready to start';
+      setNodeHostname(item, entry.name); item.lastMessage = entry.disk ? 'Host stopped; current disk kept' : 'Host stopped; ready to start';
       persistHostConfiguration(item);
     }
     fs.copyFileSync(path.join(stage, 'session.json'), sessionFile);
   } catch (error) {
-    for (const item of created.reverse()) { try { removeHostnameAlias(item); } catch (_) {} sessions.delete(item.id); }
+    for (const item of created.reverse()) { try { removeHostnameAlias(item); } catch (_) {} nodes.delete(item.id); }
     for (const {source, target} of moved.reverse()) { try { fs.renameSync(target, source); } catch (_) {} }
     sessionEngine = oldEngine;
     try { saveSessionMetadata(oldEngine); } catch (_) {}
     throw error;
   }
-  io.emit('general-settings-changed', {sessionId, engine: sessionEngine});
+  io.emit('general-settings-changed', {sessionId: serverSessionId, engine: sessionEngine});
   io.emit('sessions-changed', {sessionId: null});
 }
 app.get('/api/session-archive/estimate', (req, res) => {
@@ -803,11 +803,11 @@ app.post('/api/session-archive/export', async (req, res) => {
       baseImages[id] = {format, ...fileSha256(imagePath(imageById(id).images[format]))};
     }
     if (includeDisks) {
-      for (const host of sessions.values()) if (host.kind === 'host' && host.machine) {
+      for (const host of nodes.values()) if (host.kind === 'host' && host.machine) {
         try { await stop(host, {forceOnTimeout: false}); }
         catch (error) { throw new Error(`Cannot power off ${host.hostname}: ${error.message}. Hosts already stopped remain stopped.`); }
       }
-      for (const sw of sessions.values()) if (sw.kind === 'switch' && sw.machine) {
+      for (const sw of nodes.values()) if (sw.kind === 'switch' && sw.machine) {
         try { await stopSwitch(sw); }
         catch (error) { throw new Error(`Cannot stop ${sw.hostname}: ${error.message}. Instances already stopped remain stopped.`); }
       }
@@ -851,7 +851,7 @@ app.post('/api/session-archive/import', async (req, res) => {
     const discardStaleDisks = req.query.discardStaleDisks === 'true';
     if (req.query.discardStaleDisks !== undefined && !['true', 'false'].includes(req.query.discardStaleDisks)) throw new Error('Invalid working disk option.');
     stage = fs.mkdtempSync(path.join(runtimeInstance, '.session-import-'));
-    if (sessions.size) throw new Error('Load requires an empty session.');
+    if (nodes.size) throw new Error('Load requires an empty session.');
     if (req.headers['content-type'] !== 'application/zip') throw new Error('Choose a QemuWeb ZIP archive.');
     const available = fs.statfsSync(runtimeInstance);
     const declared = Number(req.headers['content-length']);
@@ -862,7 +862,7 @@ app.post('/api/session-archive/import', async (req, res) => {
       req.on('data', chunk => { size += chunk.length; if (size > MAX_SESSION_ARCHIVE) req.destroy(new Error('Session archive exceeds ZIP total size limit (4 GiB).')); });
       req.on('error', reject); out.on('error', reject); out.on('finish', resolve); req.pipe(out);
     });
-    if (sessions.size) throw new Error('Load requires an empty session.');
+    if (nodes.size) throw new Error('Load requires an empty session.');
     const files = await readArchive(upload, stage);
     const snapshot = archivedSessionFiles(stage, files);
     const warnings = validateArchiveSession(snapshot, stage, {discardStaleDisks});
@@ -870,22 +870,22 @@ app.post('/api/session-archive/import', async (req, res) => {
     const startErrors = [];
     if (autoStart) {
       for (const entry of [...snapshot.switches, ...snapshot.hosts]) {
-        const session = sessions.get(entry.id);
+        const node = nodes.get(entry.id);
         try {
-          if (session.kind === 'switch') await startSwitch(session);
-          else start(session.id, session.engine, session.selectedImage.id, {
-            interfaces: session.networkInterfaces.map(nic => nic.switchId)
+          if (node.kind === 'switch') await startSwitch(node);
+          else start(node.id, node.engine, node.selectedImage.id, {
+            interfaces: node.networkInterfaces.map(nic => nic.switchId)
           });
         } catch (error) {
           const message = `Start failed: ${error.message}`;
-          startErrors.push(`${session.hostname}: ${error.message}`);
-          publishState(session, message);
+          startErrors.push(`${node.hostname}: ${error.message}`);
+          publishState(node, message);
         }
       }
     }
     // Log after automatic starts, which reset the run log of fresh hosts.
     for (const warning of warnings) {
-      for (const id of warning.hosts) { const session = sessions.get(id); if (session) appendLog(session, `# Warning: ${warning.message}`); }
+      for (const id of warning.hosts) { const node = nodes.get(id); if (node) appendLog(node, `# Warning: ${warning.message}`); }
     }
     res.json({ok: true, hosts: snapshot.hosts.length, switches: snapshot.switches.length, startErrors,
       warnings: warnings.map(warning => warning.message)});
@@ -895,125 +895,125 @@ app.post('/api/session-archive/import', async (req, res) => {
 
 app.get('/api/metrics', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json(Object.fromEntries([...sessions.values()].filter(session => session.kind === 'host').map(session => {
-    if (!session.machine) return [session.id, {status: 'stopped', cpuPercent: null, ramBytes: null}];
-    const sample = resourceSamples.get(session.id);
-    return [session.id, sample?.machine === session.machine
+  res.json(Object.fromEntries([...sessions.values()].filter(node => node.kind === 'host').map(node => {
+    if (!node.machine) return [node.id, {status: 'stopped', cpuPercent: null, ramBytes: null}];
+    const sample = resourceSamples.get(node.id);
+    return [node.id, sample?.machine === node.machine
       ? sample.result : {status: 'warming', cpuPercent: null, ramBytes: null}];
   })));
 });
 
-function connectSerial(session, attempt = 0, generation = session.generation) {
-  if (!session.machine || session.stopping || generation !== session.generation || attempt > 100) return;
-  const connection = net.createConnection(session.socketPath);
+function connectSerial(node, attempt = 0, generation = node.generation) {
+  if (!node.machine || node.stopping || generation !== node.generation || attempt > 100) return;
+  const connection = net.createConnection(node.socketPath);
   connection.once('connect', () => {
     // Serial socket chunks can split a UTF-8 character across reads.
     const decoder = new StringDecoder('utf8');
     const emitSerial = text => {
       if (!text) return;
-      session.serialBuffer = (session.serialBuffer + text).slice(-262144);
-      io.to(session.id).emit('serial', {sessionId: session.id, data: text});
+      node.serialBuffer = (node.serialBuffer + text).slice(-262144);
+      io.to(node.id).emit('serial', {sessionId: node.id, data: text});
     };
-    const publishSerial = text => emitSerial(filterGuestHookSerial(session, text));
-    session.serial = connection;
-    publishState(session);
+    const publishSerial = text => emitSerial(filterGuestHookSerial(node, text));
+    node.serial = connection;
+    publishState(node);
     connection.on('data', data => publishSerial(decoder.write(data)));
     connection.on('close', () => {
       publishSerial(decoder.end());
-      emitSerial(session.serialFilterPending);
-      session.serialFilterPending = '';
-      session.serialFilterPassThrough = false;
-      if (session.serial === connection) session.serial = null;
-      if (!session.stopping && session.action !== 'reboot' && session.machine) publishState(session, 'Serial console disconnected');
+      emitSerial(node.serialFilterPending);
+      node.serialFilterPending = '';
+      node.serialFilterPassThrough = false;
+      if (node.serial === connection) node.serial = null;
+      if (!node.stopping && node.action !== 'reboot' && node.machine) publishState(node, 'Serial console disconnected');
     });
     connection.on('error', error => console.error('serial:', error.message));
   });
-  connection.once('error', () => setTimeout(() => connectSerial(session, attempt + 1, generation), 250));
+  connection.once('error', () => setTimeout(() => connectSerial(node, attempt + 1, generation), 250));
 }
 
-function tempFile(session, name) {
-  return path.join(session.runtimeDir, name);
+function tempFile(node, name) {
+  return path.join(node.runtimeDir, name);
 }
 
-function guestIsoStatus(session) {
-  const attachedNow = !!session.machine && !!session.activeGuestIso;
+function guestIsoStatus(node) {
+  const attachedNow = !!node.machine && !!node.activeGuestIso;
   return {
-    created: !!session.guestIso && fs.existsSync(session.guestIso),
-    attached: session.guestIsoAttached,
+    created: !!node.guestIso && fs.existsSync(node.guestIso),
+    attached: node.guestIsoAttached,
     attachedNow,
-    currentIso: attachedNow && session.activeGuestIso === session.guestIso,
-    outdated: session.guestIsoOutdated || (!!session.guestIsoSource &&
-      JSON.stringify(readStartupFiles(startupDirectory(session))) !== JSON.stringify(session.guestIsoSource))
+    currentIso: attachedNow && node.activeGuestIso === node.guestIso,
+    outdated: node.guestIsoOutdated || (!!node.guestIsoSource &&
+      JSON.stringify(readStartupFiles(startupDirectory(node))) !== JSON.stringify(node.guestIsoSource))
   };
 }
 
-function startupDirectory(session) {
-  return tempFile(session, 'startup');
+function startupDirectory(node) {
+  return tempFile(node, 'startup');
 }
 
-function buildGuestIso(session, destination = tempFile(session, `startup-${crypto.randomUUID()}.iso`)) {
+function buildGuestIso(node, destination = tempFile(node, `startup-${crypto.randomUUID()}.iso`)) {
   const next = destination;
-  createGuestIso({directory: startupDirectory(session), destination: next, genisoimage: commands.GENISOIMAGE,
-    hostname: session.hostname, interfaces: session.networkInterfaces,
-    onCommand: (command, args) => appendLog(session, `$ ${[command, ...args].map(shellQuote).join(' ')}`)});
-  const previous = session.guestIso;
-  session.guestMedia = readStartupFiles(startupDirectory(session));
-  session.guestIsoSource = session.guestMedia;
-  session.guestIso = next;
-  session.guestIsoOutdated = false;
-  session.guestIsoFiles.add(next);
-  if (previous && previous !== session.activeGuestIso) {
+  createGuestIso({directory: startupDirectory(node), destination: next, genisoimage: commands.GENISOIMAGE,
+    hostname: node.hostname, interfaces: node.networkInterfaces,
+    onCommand: (command, args) => appendLog(node, `$ ${[command, ...args].map(shellQuote).join(' ')}`)});
+  const previous = node.guestIso;
+  node.guestMedia = readStartupFiles(startupDirectory(node));
+  node.guestIsoSource = node.guestMedia;
+  node.guestIso = next;
+  node.guestIsoOutdated = false;
+  node.guestIsoFiles.add(next);
+  if (previous && previous !== node.activeGuestIso) {
     fs.rmSync(previous, {force: true});
-    session.guestIsoFiles.delete(previous);
+    node.guestIsoFiles.delete(previous);
   }
-  appendLog(session, `# Guest setup ISO created: ${next} (label QWEBSTART; read-only)`);
-  return guestIsoStatus(session);
+  appendLog(node, `# Guest setup ISO created: ${next} (label QWEBSTART; read-only)`);
+  return guestIsoStatus(node);
 }
 
-function cleanupGuestIsoFiles(session) {
-  for (const file of session.guestIsoFiles) fs.rmSync(file, {force: true});
-  session.guestIsoFiles.clear();
-  session.guestIso = null;
-  session.guestIsoSource = null;
-  session.activeGuestIso = null;
+function cleanupGuestIsoFiles(node) {
+  for (const file of node.guestIsoFiles) fs.rmSync(file, {force: true});
+  node.guestIsoFiles.clear();
+  node.guestIso = null;
+  node.guestIsoSource = null;
+  node.activeGuestIso = null;
 }
 
-function persistSwitchConfiguration(session) {
-  writeJsonAtomic(tempFile(session, 'switch.json'), {schemaVersion: 2, id: session.id, name: session.hostname, kind: 'vde'});
+function persistSwitchConfiguration(node) {
+  writeJsonAtomic(tempFile(node, 'switch.json'), {schemaVersion: 2, id: node.id, name: node.hostname, kind: 'vde'});
 }
 
-function activeConfiguration(session) {
+function activeConfiguration(node) {
   return {
     settings: {...session.launchSettings},
-    networkInterfaces: session.networkInterfaces.map(nic => ({...nic})),
-    guestMedia: readStartupFiles(startupDirectory(session)),
-    startupDiskEnabled: session.guestIsoAttached
+    networkInterfaces: node.networkInterfaces.map(nic => ({...nic})),
+    guestMedia: readStartupFiles(startupDirectory(node)),
+    startupDiskEnabled: node.guestIsoAttached
   };
 }
 
-function pendingRestart(session) {
-  if (session?.kind !== 'host' || !session.machine || !session.activeConfig) return false;
-  const active = session.activeConfig;
-  return ['memory', 'cpus', 'clock'].some(key => session.launchSettings[key] !== active.settings[key]) ||
-    JSON.stringify(session.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
-    JSON.stringify(readStartupFiles(startupDirectory(session))) !== JSON.stringify(active.guestMedia) ||
-    session.guestIsoAttached !== active.startupDiskEnabled;
+function pendingRestart(node) {
+  if (node?.kind !== 'host' || !node.machine || !node.activeConfig) return false;
+  const active = node.activeConfig;
+  return ['memory', 'cpus', 'clock'].some(key => node.launchSettings[key] !== active.settings[key]) ||
+    JSON.stringify(node.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
+    JSON.stringify(readStartupFiles(startupDirectory(node))) !== JSON.stringify(active.guestMedia) ||
+    node.guestIsoAttached !== active.startupDiskEnabled;
 }
 
-function hostConfiguration(session, settings = session.launchSettings, interfaces = session.networkInterfaces,
-  startupDiskEnabled = session.guestIsoAttached, name = session.hostname) {
-  const profile = selectedProfile(readConfig(), session.selectedImage.id, session.engine);
+function hostConfiguration(node, settings = node.launchSettings, interfaces = node.networkInterfaces,
+  startupDiskEnabled = node.guestIsoAttached, name = node.hostname) {
+  const profile = selectedProfile(readConfig(), node.selectedImage.id, node.engine);
   const hash = profileHash(profile);
-  if (session.profileHash && session.profileHash !== hash) {
+  if (node.profileHash && node.profileHash !== hash) {
     throw new Error(`System profile changed for ${name}; restore its original config.json or recreate the host.`);
   }
-  session.profileHash = hash;
+  node.profileHash = hash;
   return {
     schemaVersion: 3,
-    id: session.id,
+    id: node.id,
     name,
-    system: session.selectedImage.id,
-    engine: session.engine,
+    system: node.selectedImage.id,
+    engine: node.engine,
     profileHash: hash,
     config: sparseOverrides(profile, {...settings, startupDiskEnabled}),
     network: {interfaces}
@@ -1029,7 +1029,7 @@ function archivedSessionFiles(stage, paths) {
     throw new Error('Invalid session.json in archive.');
   }
   const ids = [...metadata.hosts, ...metadata.switches];
-  if (new Set(ids).size !== ids.length) throw new Error('Duplicate session entity ID.');
+  if (new Set(ids).size !== ids.length) throw new Error('Duplicate node entity ID.');
   const readEntity = (id, kind) => {
     entityKind(id, kind);
     const file = path.join(stage, id, kind === 'host' ? 'host.json' : 'switch.json');
@@ -1049,38 +1049,38 @@ function archivedSessionFiles(stage, paths) {
   return {engine: metadata.engine, hosts, switches, baseImages: metadata.baseImages, files: paths};
 }
 
-function persistHostConfiguration(session) {
-  writeJsonAtomic(tempFile(session, 'host.json'), hostConfiguration(session));
+function persistHostConfiguration(node) {
+  writeJsonAtomic(tempFile(node, 'host.json'), hostConfiguration(node));
 }
 
-function hostConfigurationResponse(session) {
-  return {...hostConfiguration(session), systemId: session.selectedImage.id, settings: session.launchSettings,
-    networkInterfaces: session.networkInterfaces, startupDiskEnabled: session.guestIsoAttached,
-    guestMedia: readStartupFiles(startupDirectory(session)), interfaces: session.networkInterfaces.map(nic => nic.switchId),
-    running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session),
-    guestCdrom: guestIsoStatus(session)};
+function hostConfigurationResponse(node) {
+  return {...hostConfiguration(node), systemId: node.selectedImage.id, settings: node.launchSettings,
+    networkInterfaces: node.networkInterfaces, startupDiskEnabled: node.guestIsoAttached,
+    guestMedia: readStartupFiles(startupDirectory(node)), interfaces: node.networkInterfaces.map(nic => nic.switchId),
+    running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node),
+    guestCdrom: guestIsoStatus(node)};
 }
 
 function imagePath(file) { return path.resolve(root, file); }
 
-function qemuArgs(session, image, overlay) {
-  const settings = session.qemuOptions;
+function qemuArgs(node, image, overlay) {
+  const settings = node.qemuOptions;
   const common = [
-    ...settings.extraOptions, '-accel', session.qemuAcceleration,
+    ...settings.extraOptions, '-accel', node.qemuAcceleration,
     '-display', settings.display, '-m', String(settings.memory), '-smp', String(settings.smp),
-    '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
-    '-serial', `unix:${session.socketPath},server=on,wait=off`
+    '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${node.monitorPath},server=on,wait=off`,
+    '-serial', `unix:${node.socketPath},server=on,wait=off`
   ];
   // QEMU PC boot notation: c = first hard disk.
   const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
-  if (session.guestIsoAttached && session.guestIso) args.push('-drive', `file=${session.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);
+  if (node.guestIsoAttached && node.guestIso) args.push('-drive', `file=${node.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);
   // The profile's -nic none disables QEMU's implicit user-network NIC.
-  for (const [index, nic] of session.networkInterfaces.entries()) {
+  for (const [index, nic] of node.networkInterfaces.entries()) {
     if (nic.switchId === null) {
       args.push('-device', `${settings.networkModel},mac=${nic.mac}`);
       continue;
     }
-    const sw = sessions.get(nic.switchId);
+    const sw = nodes.get(nic.switchId);
     const id = `lan${index}`;
     args.push('-netdev', `vde,id=${id},sock=${sw.socketDir},port=${nic.port}`,
       '-device', `${settings.networkModel},netdev=${id},mac=${nic.mac}`);
@@ -1093,17 +1093,17 @@ function validateNetworkInterfaces(value, engine, requireRunning = true) {
   if (!Array.isArray(value) || value.length > 4) throw new Error('At most four Ethernet interfaces are supported.');
   return value.map((switchId, index) => {
     if (switchId === null) return null;
-    const sw = getSession(switchId);
+    const sw = getNode(switchId);
     if (!sw || sw.kind !== 'switch' || (requireRunning && !sw.machine)) throw new Error(`Ethernet ${index}: start its VDE switch first.`);
     return sw;
   });
 }
 
-function assignNetworkInterfaces(session, switches) {
-  const previous = session.networkInterfaces || [];
+function assignNetworkInterfaces(node, switches) {
+  const previous = node.networkInterfaces || [];
   const planned = [];
   const otherInterfaces = [...sessions.values()].flatMap(other => [
-    ...(other.id === session.id ? [] : other.networkInterfaces || []),
+    ...(other.id === node.id ? [] : other.networkInterfaces || []),
     ...(other.activeConfig?.networkInterfaces || [])
   ]);
   const usedMacs = new Set(otherInterfaces.map(nic => nic.mac));
@@ -1117,7 +1117,7 @@ function assignNetworkInterfaces(session, switches) {
     }
     let mac;
     for (let salt = 0; ; salt++) {
-      const digest = crypto.createHash('sha256').update(`${session.id}:${index}${salt ? `:${salt}` : ''}`).digest();
+      const digest = crypto.createHash('sha256').update(`${node.id}:${index}${salt ? `:${salt}` : ''}`).digest();
       mac = `02:${[...digest.subarray(0, 5)].map(byte => byte.toString(16).padStart(2, '0')).join(':')}`;
       if (!usedMacs.has(mac)) break;
     }
@@ -1136,104 +1136,104 @@ function assignNetworkInterfaces(session, switches) {
 }
 
 function linkedHosts(switchId) {
-  return [...sessions.values()].filter(session => session.kind === 'host' &&
-    [...session.networkInterfaces, ...(session.machine ? session.activeConfig?.networkInterfaces || [] : [])]
+  return [...sessions.values()].filter(node => node.kind === 'host' &&
+    [...session.networkInterfaces, ...(node.machine ? node.activeConfig?.networkInterfaces || [] : [])]
       .some(nic => nic.switchId === switchId));
 }
 
-function stopSwitchTerminal(session) {
-  const terminal = session.switchTerminal;
-  session.switchTerminal = null;
+function stopSwitchTerminal(node) {
+  const terminal = node.switchTerminal;
+  node.switchTerminal = null;
   if (terminal) {
     try { terminal.kill('SIGTERM'); } catch (_) {}
   }
 }
 
-function startSwitchTerminal(session) {
-  stopSwitchTerminal(session);
-  session.serialBuffer = '';
-  io.to(session.id).emit('serial-reset', {sessionId: session.id, serial: ''});
-  const socketName = path.basename(session.mgmtPath);
-  appendLog(session, `$ ${[commands.VDETERM, socketName].map(shellQuote).join(' ')}  # cwd=${shellQuote(session.runtimeDir)}`);
+function startSwitchTerminal(node) {
+  stopSwitchTerminal(node);
+  node.serialBuffer = '';
+  io.to(node.id).emit('serial-reset', {sessionId: node.id, serial: ''});
+  const socketName = path.basename(node.mgmtPath);
+  appendLog(node, `$ ${[commands.VDETERM, socketName].map(shellQuote).join(' ')}  # cwd=${shellQuote(node.runtimeDir)}`);
   const terminal = pty.spawn(commands.VDETERM, [socketName], {
     name: 'xterm-256color',
     cols: 80,
     rows: 24,
-    cwd: session.runtimeDir,
+    cwd: node.runtimeDir,
     env: {...process.env, TERM: 'xterm-256color'}
   });
-  session.switchTerminal = terminal;
+  node.switchTerminal = terminal;
   terminal.onData(data => {
-    session.serialBuffer = (session.serialBuffer + data).slice(-262144);
-    io.to(session.id).emit('serial', {sessionId: session.id, data});
+    node.serialBuffer = (node.serialBuffer + data).slice(-262144);
+    io.to(node.id).emit('serial', {sessionId: node.id, data});
   });
   terminal.onExit(({exitCode}) => {
-    if (session.switchTerminal !== terminal) return;
-    session.switchTerminal = null;
-    if (!session.stopping && session.machine) publishState(session, `VDE terminal stopped (${exitCode})`);
+    if (node.switchTerminal !== terminal) return;
+    node.switchTerminal = null;
+    if (!node.stopping && node.machine) publishState(node, `VDE terminal stopped (${exitCode})`);
   });
 }
 
-async function startSwitch(session) {
-  if (session.kind !== 'switch' || session.machine) throw new Error('Switch is already running.');
-  fs.mkdirSync(session.socketDir, {recursive: true});
-  try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-  const args = ['-s', session.socketDir, '-M', session.mgmtPath];
-  appendLog(session, `$ ${[commands.VDE_SWITCH, ...args].map(shellQuote).join(' ')}`);
+async function startSwitch(node) {
+  if (node.kind !== 'switch' || node.machine) throw new Error('Switch is already running.');
+  fs.mkdirSync(node.socketDir, {recursive: true});
+  try { fs.unlinkSync(node.mgmtPath); } catch (_) {}
+  const args = ['-s', node.socketDir, '-M', node.mgmtPath];
+  appendLog(node, `$ ${[commands.VDE_SWITCH, ...args].map(shellQuote).join(' ')}`);
   const child = spawn(commands.VDE_SWITCH, args, {stdio: ['pipe', 'pipe', 'pipe']});
-  session.machine = child;
-  session.stopping = false;
-  child.stdout.on('data', data => appendLog(session, data.toString()));
-  child.stderr.on('data', data => appendLog(session, data.toString()));
+  node.machine = child;
+  node.stopping = false;
+  child.stdout.on('data', data => appendLog(node, data.toString()));
+  child.stderr.on('data', data => appendLog(node, data.toString()));
   child.once('error', error => {
-    stopSwitchTerminal(session);
-    session.lastMessage = `VDE error: ${error.message}`;
-    if (session.machine === child) session.machine = null;
-    publishState(session, session.lastMessage);
+    stopSwitchTerminal(node);
+    node.lastMessage = `VDE error: ${error.message}`;
+    if (node.machine === child) node.machine = null;
+    publishState(node, node.lastMessage);
   });
   child.once('exit', code => {
-    stopSwitchTerminal(session);
-    if (session.machine === child) session.machine = null;
-    try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-    fs.rmSync(session.socketDir, {recursive: true, force: true});
-    if (!session.stopping) publishState(session, `VDE stopped (${code})`);
+    stopSwitchTerminal(node);
+    if (node.machine === child) node.machine = null;
+    try { fs.unlinkSync(node.mgmtPath); } catch (_) {}
+    fs.rmSync(node.socketDir, {recursive: true, force: true});
+    if (!node.stopping) publishState(node, `VDE stopped (${code})`);
   });
   for (let attempt = 0; attempt < 60; attempt++) {
-    if (fs.existsSync(session.mgmtPath)) {
-      try { startSwitchTerminal(session); }
+    if (fs.existsSync(node.mgmtPath)) {
+      try { startSwitchTerminal(node); }
       catch (error) {
         child.kill('SIGTERM');
-        session.machine = null;
-        try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-        fs.rmSync(session.socketDir, {recursive: true, force: true});
+        node.machine = null;
+        try { fs.unlinkSync(node.mgmtPath); } catch (_) {}
+        fs.rmSync(node.socketDir, {recursive: true, force: true});
         throw new Error(`Cannot start VDE terminal: ${error.message}`);
       }
-      session.everStarted = true;
-      publishState(session);
+      node.everStarted = true;
+      publishState(node);
       return;
     }
-    if (!session.machine) break;
+    if (!node.machine) break;
     await new Promise(resolve => setTimeout(resolve, 50));
   }
-  if (session.machine) { session.machine.kill('SIGTERM'); session.machine = null; }
-  throw new Error(session.lastMessage || 'VDE management socket did not appear.');
+  if (node.machine) { node.machine.kill('SIGTERM'); node.machine = null; }
+  throw new Error(node.lastMessage || 'VDE management socket did not appear.');
 }
 
-async function stopSwitch(session, force = false) {
-  if (!force && linkedHosts(session.id).some(host => host.machine)) throw new Error('Stop connected hosts before stopping this switch.');
-  const child = session.machine;
-  session.stopping = true;
-  stopSwitchTerminal(session);
+async function stopSwitch(node, force = false) {
+  if (!force && linkedHosts(node.id).some(host => host.machine)) throw new Error('Stop connected hosts before stopping this switch.');
+  const child = node.machine;
+  node.stopping = true;
+  stopSwitchTerminal(node);
   if (child) {
     child.kill('SIGTERM');
     try { await waitForQemuExit(child, 3000); }
     catch (_) { child.kill('SIGKILL'); try { await waitForQemuExit(child, 3000); } catch (_) {} }
   }
-  session.machine = null;
-  try { fs.unlinkSync(session.mgmtPath); } catch (_) {}
-  fs.rmSync(session.socketDir, {recursive: true, force: true});
-  session.stopping = false;
-  publishState(session, 'VDE switch stopped');
+  node.machine = null;
+  try { fs.unlinkSync(node.mgmtPath); } catch (_) {}
+  fs.rmSync(node.socketDir, {recursive: true, force: true});
+  node.stopping = false;
+  publishState(node, 'VDE switch stopped');
 }
 
 function qemuAcceleration(engine, checkAvailability = true) {
@@ -1250,61 +1250,61 @@ function qemuOverlayArgs(image, overlay) {
   return ['create', '-f', 'qcow2', '-F', 'raw', '-b', imagePath(image.images.raw), overlay];
 }
 
-function spawnQemu(session, image, reuseDisk = false) {
-  const overlay = reuseDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
+function spawnQemu(node, image, reuseDisk = false) {
+  const overlay = reuseDisk ? node.runDisk : tempFile(node, 'disk.qcow2');
   if (!overlay || !fs.existsSync(overlay)) {
     if (reuseDisk) throw new Error('The current host disk was not found.');
-    execLogged(session, commands.QEMU_IMG, qemuOverlayArgs(image, overlay), {stdio: 'pipe'});
+    execLogged(node, commands.QEMU_IMG, qemuOverlayArgs(image, overlay), {stdio: 'pipe'});
   }
   image.runFiles = [overlay];
-  session.runDisk = overlay;
-  const args = qemuArgs(session, image, overlay);
-  appendLog(session, `$ ${[commands.QEMU_SYSTEM_X86_64, ...args].map(shellQuote).join(' ')}`);
+  node.runDisk = overlay;
+  const args = qemuArgs(node, image, overlay);
+  appendLog(node, `$ ${[commands.QEMU_SYSTEM_X86_64, ...args].map(shellQuote).join(' ')}`);
   const child = spawn(commands.QEMU_SYSTEM_X86_64, args, {stdio: ['ignore', 'pipe', 'pipe']});
-  session.machine = child;
-  child.stdout.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
-  child.stderr.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
+  node.machine = child;
+  child.stdout.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(node, data.toString()); });
+  child.stderr.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(node, data.toString()); });
   child.once('error', error => {
-    if (session.machine === child) {
-      session.machine = null;
-      session.activeConfig = null;
-      session.everStarted = !!session.runDisk;
-      try { fs.unlinkSync(session.socketPath); } catch (_) {}
-      try { fs.unlinkSync(session.monitorPath); } catch (_) {}
-      publishState(session, `QEMU error: ${error.message}`);
+    if (node.machine === child) {
+      node.machine = null;
+      node.activeConfig = null;
+      node.everStarted = !!node.runDisk;
+      try { fs.unlinkSync(node.socketPath); } catch (_) {}
+      try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+      publishState(node, `QEMU error: ${error.message}`);
     }
   });
   child.once('exit', code => {
-    try { fs.unlinkSync(session.socketPath); } catch (_) {}
-    try { fs.unlinkSync(session.monitorPath); } catch (_) {}
-    if (session.machine === child) { session.machine = null; session.activeConfig = null; }
-    if (session.stopping || session.action === 'reboot' || session.action === 'reset' || session.action === 'destroy') return;
-    publishState(session, `QEMU stopped (${code})`);
+    try { fs.unlinkSync(node.socketPath); } catch (_) {}
+    try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+    if (node.machine === child) { node.machine = null; node.activeConfig = null; }
+    if (node.stopping || node.action === 'reboot' || node.action === 'reset' || node.action === 'destroy') return;
+    publishState(node, `QEMU stopped (${code})`);
   });
 }
 
-function cleanupRunFiles(session, image) {
+function cleanupRunFiles(node, image) {
   for (const file of image.runFiles || []) { try { fs.unlinkSync(file); } catch (_) {} }
   image.runFiles = [];
-  session.runDisk = null;
+  node.runDisk = null;
 }
 
-function vbox(session, args) {
-  return execLogged(session, commands.VBOXMANAGE, args, {stdio: 'pipe'});
+function vbox(node, args) {
+  return execLogged(node, commands.VBOXMANAGE, args, {stdio: 'pipe'});
 }
 
-function virtualBoxNetworkArgs(session, image) {
+function virtualBoxNetworkArgs(node, image) {
   const args = [];
   for (let index = 0; index < 4; index++) {
     const number = index + 1;
-    const nic = session.networkInterfaces[index];
+    const nic = node.networkInterfaces[index];
     if (!nic) { args.push(`--nic${number}`, 'none'); continue; }
     args.push(`--nic${number}`, nic.switchId === null ? 'null' : 'generic',
       `--nictype${number}`, image.virtualbox.networkModel,
       `--macaddress${number}`, nic.mac.replaceAll(':', '').toUpperCase(),
       `--cableconnected${number}`, 'on');
     if (nic.switchId !== null) {
-      const sw = sessions.get(nic.switchId);
+      const sw = nodes.get(nic.switchId);
       if (!sw || sw.kind !== 'switch') throw new Error(`Unknown VDE switch for Ethernet ${index}.`);
       args.push(`--nicgenericdrv${number}`, 'VDE',
         `--nicproperty${number}`, `network=${sw.socketDir}[${nic.port}]`);
@@ -1313,19 +1313,19 @@ function virtualBoxNetworkArgs(session, image) {
   return args;
 }
 
-function virtualBoxCommands(session, image) {
-  const vmDir = tempFile(session, 'vbox-vm');
-  const disk = tempFile(session, 'disk.vdi');
+function virtualBoxCommands(node, image) {
+  const vmDir = tempFile(node, 'vbox-vm');
+  const disk = tempFile(node, 'disk.vdi');
   return [
-    ['createvm', '--name', session.vmName, '--basefolder', vmDir, '--ostype', image.virtualbox.osType, '--register'],
-    ['modifyvm', session.vmName, '--memory', String(session.launchSettings.memory), '--cpus', String(session.launchSettings.cpus), '--rtcuseutc', session.launchSettings.clock === 'utc' ? 'on' : 'off', '--firmware', image.virtualbox.firmware, ...virtualBoxNetworkArgs(session, image), '--uart1', '0x3F8', '4', '--uartmode1', 'server', session.socketPath],
+    ['createvm', '--name', node.vmName, '--basefolder', vmDir, '--ostype', image.virtualbox.osType, '--register'],
+    ['modifyvm', node.vmName, '--memory', String(node.launchSettings.memory), '--cpus', String(node.launchSettings.cpus), '--rtcuseutc', node.launchSettings.clock === 'utc' ? 'on' : 'off', '--firmware', image.virtualbox.firmware, ...virtualBoxNetworkArgs(node, image), '--uart1', '0x3F8', '4', '--uartmode1', 'server', node.socketPath],
     ['createmedium', 'disk', '--filename', disk, '--diffparent', imagePath(image.images.vdi), '--format', 'VDI'],
-    ['storagectl', session.vmName, '--name', 'SATA', '--add', image.virtualbox.diskBus, '--controller', image.virtualbox.diskController],
-    ['storageattach', session.vmName, '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', disk],
-    ['storagectl', session.vmName, '--name', 'Guest setup', '--add', image.virtualbox.cdromBus, '--controller', image.virtualbox.cdromController],
-    ...(session.guestIsoAttached ? [['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', session.guestIso]] : []),
-    ['modifyvm', session.vmName, '--boot1', 'disk', '--boot2', 'dvd', '--boot3', 'none', '--boot4', 'none'],
-    ['startvm', session.vmName, '--type', 'headless']
+    ['storagectl', node.vmName, '--name', 'SATA', '--add', image.virtualbox.diskBus, '--controller', image.virtualbox.diskController],
+    ['storageattach', node.vmName, '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', disk],
+    ['storagectl', node.vmName, '--name', 'Guest setup', '--add', image.virtualbox.cdromBus, '--controller', image.virtualbox.cdromController],
+    ...(node.guestIsoAttached ? [['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', node.guestIso]] : []),
+    ['modifyvm', node.vmName, '--boot1', 'disk', '--boot2', 'dvd', '--boot3', 'none', '--boot4', 'none'],
+    ['startvm', node.vmName, '--type', 'headless']
   ];
 }
 
@@ -1339,7 +1339,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     }
     const id = req.params.sessionId;
     entityKind(id, 'host');
-    const existing = getSession(id);
+    const existing = getNode(id);
     const launched = !!(existing && existing.everStarted && existing.selectedImage);
     const image = launched ? existing.selectedImage : imageById(req.query.system);
     const engine = launched ? existing.engine : req.query.engine;
@@ -1351,7 +1351,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     const savedInterfaces = existing?.networkInterfaces.map(nic => nic.switchId);
     const previewInterfaces = existing && JSON.stringify(requestedInterfaces) === JSON.stringify(savedInterfaces)
       ? existing.networkInterfaces : assignNetworkInterfaces(existing || {id}, switches);
-    const session = launched ? existing : {
+    const node = launched ? existing : {
       id, ...sessionPaths(id),
       generation: existing?.generation || 0,
       engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
@@ -1361,7 +1361,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     };
     const attachGuestCdrom = req.query.startupDiskEnabled === undefined
       ? (existing?.guestIsoAttached ?? image.startupDiskEnabled) : req.query.startupDiskEnabled === 'true';
-    if (!launched) session.guestIso = existing?.guestIso || null;
+    if (!launched) node.guestIso = existing?.guestIso || null;
     const isQemu = engine.startsWith('qemu');
     const draftSettings = req.query.settings ? JSON.parse(req.query.settings) : {};
     const userSettings = launched
@@ -1370,12 +1370,12 @@ app.get('/api/options/:sessionId', (req, res) => {
     const options = isQemu
       ? launched ? {...session.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
       : null;
-    if (!launched && isQemu) session.qemuOptions = options;
-    const nextGuestIso = tempFile(session, `startup-${session.generation + 1}.iso`);
-    const previewSession = {...session, launchSettings: userSettings, networkInterfaces: previewInterfaces, qemuOptions: options,
+    if (!launched && isQemu) node.qemuOptions = options;
+    const nextGuestIso = tempFile(node, `startup-${node.generation + 1}.iso`);
+    const previewNode = {...session, launchSettings: userSettings, networkInterfaces: previewInterfaces, qemuOptions: options,
       guestIsoAttached: attachGuestCdrom,
       guestIso: attachGuestCdrom ? nextGuestIso : null};
-    const overlay = launched && session.runDisk ? session.runDisk : tempFile(session, 'disk.qcow2');
+    const overlay = launched && node.runDisk ? node.runDisk : tempFile(node, 'disk.qcow2');
     const profile = selectedProfile(readConfig(), image.id, engine);
     const fixed = {
       type: profile.type, arch: profile.arch, mode: profile.mode,
@@ -1384,19 +1384,19 @@ app.get('/api/options/:sessionId', (req, res) => {
       cdromInterface: profile.cdromInterface, extraOptions: profile.extraOptions || []
     };
     const isoCommands = attachGuestCdrom
-      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(session, '.iso-stage')]]
+      ? [[commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(node, '.iso-stage')]]
       : [];
-    const vboxDetachCommand = launched && !isQemu && session.activeGuestIso
-      ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']]
+    const vboxDetachCommand = launched && !isQemu && node.activeGuestIso
+      ? [[commands.VBOXMANAGE, 'storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']]
       : [];
     const vboxAttachCommand = launched && !isQemu && attachGuestCdrom
-      ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso]]
+      ? [[commands.VBOXMANAGE, 'storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewNode.guestIso]]
       : [];
     const launchCommands = isQemu
-      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
+      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewNode, image, overlay)]]
       : launched
-        ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewSession, image)], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
-        : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
+        ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', node.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewNode, image)], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', node.vmName, '--type', 'headless']]
+        : virtualBoxCommands(previewNode, image).map(args => [commands.VBOXMANAGE, ...args]);
     const socketLabel = filePath => path.join('runtime', path.relative(runtime, filePath));
     const storage = isQemu
       ? [
@@ -1405,41 +1405,41 @@ app.get('/api/options/:sessionId', (req, res) => {
         ]
       : [
           {label: 'Base image (VDI)', path: path.relative(root, imagePath(image.images.vdi))},
-          {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, 'disk.vdi'))}
+          {label: 'Working disk (VDI differential)', path: path.relative(root, node.runDisk || tempFile(node, 'disk.vdi'))}
         ];
-    storage.push({label: 'Startup disk (cd-rom)', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
-    res.json({launched, engine, settings: userSettings, fields: launchSettingFields, fixed, storage, interfaces: previewInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
+    storage.push({label: 'Startup disk (cd-rom)', path: attachGuestCdrom ? socketLabel(nextGuestIso) : node.guestIso ? socketLabel(node.guestIso) : 'Not created'});
+    res.json({launched, engine, settings: userSettings, fields: launchSettingFields, fixed, storage, interfaces: previewInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${nodes.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(node.socketPath)}, monitor: isQemu ? socketLabel(node.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
-function spawnVirtualBox(session, image) {
-  const vmDir = tempFile(session, 'vbox-vm');
+function spawnVirtualBox(node, image) {
+  const vmDir = tempFile(node, 'vbox-vm');
   fs.mkdirSync(vmDir, {recursive: true});
   try {
-    const disk = tempFile(session, 'disk.vdi');
+    const disk = tempFile(node, 'disk.vdi');
     image.runFiles = [disk];
-    session.runDisk = disk;
-    for (const args of virtualBoxCommands(session, image)) vbox(session, args);
-    session.machine = {kind: 'vbox', vmDir};
+    node.runDisk = disk;
+    for (const args of virtualBoxCommands(node, image)) vbox(node, args);
+    node.machine = {kind: 'vbox', vmDir};
   } catch (error) {
-    try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {}
-    try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
-    for (const file of image.runFiles || []) { try { vbox(session, ['closemedium', 'disk', file, '--delete']); } catch (_) {} }
-    cleanupRunFiles(session, image);
+    try { vbox(node, ['controlvm', node.vmName, 'poweroff']); } catch (_) {}
+    try { vbox(node, ['unregistervm', node.vmName]); } catch (_) {}
+    for (const file of image.runFiles || []) { try { vbox(node, ['closemedium', 'disk', file, '--delete']); } catch (_) {} }
+    cleanupRunFiles(node, image);
     fs.rmSync(vmDir, {recursive: true, force: true});
     throw error;
   }
 }
 
-function start(sessionId, selectedEngine, imageId, options = {}) {
-  const session = getSession(sessionId);
-  if (!session) throw new Error('Unknown host configuration.');
-  if (session.kind !== 'host') throw new Error('This tab is a VDE switch.');
-  if (session.action && !options.reset && !(options.resume && session.action === 'reboot')) throw new Error('An action is already in progress for this host.');
-  if (session.machine) throw new Error('This host is already running.');
-  const resume = session.everStarted && !options.reset;
-  if (resume && (selectedEngine !== session.engine || imageId !== session.selectedImage?.id)) throw new Error('Resume must use the original system and engine.');
-  if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current host disk was not found.');
+function start(nodeId, selectedEngine, imageId, options = {}) {
+  const node = getNode(nodeId);
+  if (!node) throw new Error('Unknown host configuration.');
+  if (node.kind !== 'host') throw new Error('This tab is a VDE switch.');
+  if (node.action && !options.reset && !(options.resume && node.action === 'reboot')) throw new Error('An action is already in progress for this host.');
+  if (node.machine) throw new Error('This host is already running.');
+  const resume = node.everStarted && !options.reset;
+  if (resume && (selectedEngine !== node.engine || imageId !== node.selectedImage?.id)) throw new Error('Resume must use the original system and engine.');
+  if (resume && (!node.runDisk || !fs.existsSync(node.runDisk))) throw new Error('The current host disk was not found.');
   if (!['qemu', 'vbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
   requireSessionEngine(selectedEngine);
   const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
@@ -1447,17 +1447,17 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'host' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
-  const image = resume ? session.selectedImage : imageById(imageId);
+  const image = resume ? node.selectedImage : imageById(imageId);
   if (!image) throw new Error('Unknown system in config.json.');
-  if (session.profileHash && session.profileHash !== profileHash(selectedProfile(readConfig(), image.id, selectedEngine))) {
-    throw new Error(`System profile changed for ${session.hostname}; restore its original config.json or recreate the host.`);
+  if (node.profileHash && node.profileHash !== profileHash(selectedProfile(readConfig(), image.id, selectedEngine))) {
+    throw new Error(`System profile changed for ${node.hostname}; restore its original config.json or recreate the host.`);
   }
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
   if (selectedEngine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
-  session.guestMedia = readStartupFiles(startupDirectory(session));
+  node.guestMedia = readStartupFiles(startupDirectory(node));
   if (options.startupDiskEnabled !== undefined) {
     if (typeof options.startupDiskEnabled !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
-    session.guestIsoAttached = options.startupDiskEnabled;
+    node.guestIsoAttached = options.startupDiskEnabled;
   }
   const launchSettings = resume
     ? validateLaunchSettings({...session.launchSettings, ...(options.settings || {})})
@@ -1466,56 +1466,56 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
     ? resume ? {...session.qemuOptions, memory: launchSettings.memory, smp: launchSettings.cpus, rtcBase: launchSettings.clock} : qemuOptionsFor(image.id, launchSettings)
     : null;
   if (resume || options.reset) {
-    for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], selectedEngine);
+    for (const nic of node.networkInterfaces) validateNetworkInterfaces([nic.switchId], selectedEngine);
   } else {
     const switches = validateNetworkInterfaces(options.interfaces, selectedEngine);
-    const saved = session.networkInterfaces.map(nic => nic.switchId);
-    session.networkInterfaces = JSON.stringify(options.interfaces) === JSON.stringify(saved)
-      ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
+    const saved = node.networkInterfaces.map(nic => nic.switchId);
+    node.networkInterfaces = JSON.stringify(options.interfaces) === JSON.stringify(saved)
+      ? node.networkInterfaces : assignNetworkInterfaces(node, switches);
   }
-  const displayName = session.hostname || allocateName('h');
-  if (fs.existsSync(session.socketPath)) fs.unlinkSync(session.socketPath);
-  session.stopping = false;
-  session.generation += 1;
-  if (!options.reset && !resume) session.runLog = [];
-  session.serialBuffer = '';
-  session.serialFilterPending = '';
-  session.serialFilterPassThrough = false;
-  session.lastMessage = 'Starting…';
-  if (!options.reset && !resume) io.to(session.id).emit('logs-reset', {sessionId: session.id});
-  io.to(session.id).emit('serial-reset', {sessionId: session.id});
-  appendLog(session, `${options.reset ? '# Reset from base image' : resume ? '# Resuming from current disk' : '# Starting'} · ${selectedEngine} · ${image.label}`);
-  session.engine = selectedEngine;
-  session.qemuAcceleration = acceleration;
-  session.selectedImage = image;
-  setSessionHostname(session, displayName);
-  session.qemuOptions = qemuOptions;
-  session.launchSettings = launchSettings;
-  if (session.guestIsoAttached) buildGuestIso(session, tempFile(session, `startup-${session.generation}.iso`));
+  const displayName = node.hostname || allocateName('h');
+  if (fs.existsSync(node.socketPath)) fs.unlinkSync(node.socketPath);
+  node.stopping = false;
+  node.generation += 1;
+  if (!options.reset && !resume) node.runLog = [];
+  node.serialBuffer = '';
+  node.serialFilterPending = '';
+  node.serialFilterPassThrough = false;
+  node.lastMessage = 'Starting…';
+  if (!options.reset && !resume) io.to(node.id).emit('logs-reset', {sessionId: node.id});
+  io.to(node.id).emit('serial-reset', {sessionId: node.id});
+  appendLog(node, `${options.reset ? '# Reset from base image' : resume ? '# Resuming from current disk' : '# Starting'} · ${selectedEngine} · ${image.label}`);
+  node.engine = selectedEngine;
+  node.qemuAcceleration = acceleration;
+  node.selectedImage = image;
+  setNodeHostname(node, displayName);
+  node.qemuOptions = qemuOptions;
+  node.launchSettings = launchSettings;
+  if (node.guestIsoAttached) buildGuestIso(node, tempFile(node, `startup-${node.generation}.iso`));
   if (selectedEngine === 'vbox' && resume) {
-    if (!['poweroff', 'aborted'].includes(virtualBoxState(session))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
-    if (session.activeGuestIso) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
+    if (!['poweroff', 'aborted'].includes(virtualBoxState(node))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
+    if (node.activeGuestIso) vbox(node, ['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
   }
-  if (session.guestIsoAttached) appendLog(session, `# Guest setup ISO attached: ${session.guestIso} (read-only)`);
-  if (selectedEngine.startsWith('qemu')) spawnQemu(session, image, resume);
+  if (node.guestIsoAttached) appendLog(node, `# Guest setup ISO attached: ${node.guestIso} (read-only)`);
+  if (selectedEngine.startsWith('qemu')) spawnQemu(node, image, resume);
   else if (resume) {
-    vbox(session, ['modifyvm', session.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(session, image)]);
-    if (session.guestIsoAttached) vbox(session, ['storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', session.guestIso]);
-    vbox(session, ['startvm', session.vmName, '--type', 'headless']);
-    session.machine = {kind: 'vbox', vmDir: tempFile(session, 'vbox-vm')};
-  } else spawnVirtualBox(session, image);
-  session.activeGuestIso = session.guestIsoAttached ? session.guestIso : null;
-  for (const file of session.guestIsoFiles) if (file !== session.guestIso && file !== session.activeGuestIso) { fs.rmSync(file, {force: true}); session.guestIsoFiles.delete(file); }
-  session.everStarted = true;
-  session.activeConfig = activeConfiguration(session);
-  publishState(session, selectedEngine === 'qemu' ? `QEMU/${session.qemuAcceleration.toUpperCase()} · ${image.label} starting…` : `VirtualBox · ${image.label} starting…`);
-  connectSerial(session);
-  return session;
+    vbox(node, ['modifyvm', node.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(node, image)]);
+    if (node.guestIsoAttached) vbox(node, ['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', node.guestIso]);
+    vbox(node, ['startvm', node.vmName, '--type', 'headless']);
+    node.machine = {kind: 'vbox', vmDir: tempFile(node, 'vbox-vm')};
+  } else spawnVirtualBox(node, image);
+  node.activeGuestIso = node.guestIsoAttached ? node.guestIso : null;
+  for (const file of node.guestIsoFiles) if (file !== node.guestIso && file !== node.activeGuestIso) { fs.rmSync(file, {force: true}); node.guestIsoFiles.delete(file); }
+  node.everStarted = true;
+  node.activeConfig = activeConfiguration(node);
+  publishState(node, selectedEngine === 'qemu' ? `QEMU/${node.qemuAcceleration.toUpperCase()} · ${image.label} starting…` : `VirtualBox · ${image.label} starting…`);
+  connectSerial(node);
+  return node;
 }
 
-function sendMonitorCommand(session, command) {
+function sendMonitorCommand(node, command) {
   return new Promise((resolve, reject) => {
-    const monitor = net.createConnection(session.monitorPath);
+    const monitor = net.createConnection(node.monitorPath);
     let output = '';
     let sent = false;
     let settled = false;
@@ -1563,199 +1563,199 @@ function waitForQemuExit(child, timeoutMs = 30000) {
   });
 }
 
-function virtualBoxState(session) {
-  const output = execFileSync(commands.VBOXMANAGE, ['showvminfo', session.vmName, '--machinereadable'], {encoding: 'utf8'});
+function virtualBoxState(node) {
+  const output = execFileSync(commands.VBOXMANAGE, ['showvminfo', node.vmName, '--machinereadable'], {encoding: 'utf8'});
   const match = output.match(/^VMState="([^"]+)"/m);
   return match ? match[1] : 'unknown';
 }
 
-async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
+async function waitForVirtualBoxPowerOff(node, timeoutMs = 30000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const state = virtualBoxState(session);
+    const state = virtualBoxState(node);
     if (state === 'poweroff' || state === 'aborted' || state === 'saved') return;
     await new Promise(resolve => setTimeout(resolve, 500));
   }
   throw new Error('The host did not respond to the graceful shutdown request.');
 }
 
-function validateRestartPrerequisites(session) {
-  requireSessionEngine(session.engine);
-  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine);
-  else if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
+function validateRestartPrerequisites(node) {
+  requireSessionEngine(node.engine);
+  if (node.engine.startsWith('qemu')) qemuAcceleration(node.engine);
+  else if ([...sessions.values()].some(other => other.id !== node.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
     throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
-  const image = session.selectedImage;
+  const image = node.selectedImage;
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
-  if (session.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
-  for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
+  if (node.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  for (const nic of node.networkInterfaces) validateNetworkInterfaces([nic.switchId], node.engine);
 }
 
-async function reboot(session, startup = {}) {
-  if (session?.kind === 'switch') throw new Error('Reboot applies only to hosts.');
-  if (!session || !session.everStarted) throw new Error('This host has not started yet.');
-  if (!session.machine) throw new Error('The host is stopped; use Play to resume from its current disk.');
-  if (session.action) throw new Error('An action is already in progress for this host.');
-  if (!session.runDisk || !fs.existsSync(session.runDisk)) throw new Error('The current host disk was not found.');
-  validateRestartPrerequisites(session);
-  session.action = 'reboot';
+async function reboot(node, startup = {}) {
+  if (node?.kind === 'switch') throw new Error('Reboot applies only to hosts.');
+  if (!node || !node.everStarted) throw new Error('This host has not started yet.');
+  if (!node.machine) throw new Error('The host is stopped; use Play to resume from its current disk.');
+  if (node.action) throw new Error('An action is already in progress for this host.');
+  if (!node.runDisk || !fs.existsSync(node.runDisk)) throw new Error('The current host disk was not found.');
+  validateRestartPrerequisites(node);
+  node.action = 'reboot';
   try {
-    publishState(session, 'Graceful shutdown before reboot…');
-    await stop(session, {publish: false});
-    if (session.action !== 'reboot' || !sessions.has(session.id)) throw new Error('The session was deleted during reboot.');
-    publishState(session, 'Restarting from the current disk…');
-    start(session.id, session.engine, session.selectedImage.id, {resume: true, ...startup});
+    publishState(node, 'Graceful shutdown before reboot…');
+    await stop(node, {publish: false});
+    if (node.action !== 'reboot' || !nodes.has(node.id)) throw new Error('The node was deleted during reboot.');
+    publishState(node, 'Restarting from the current disk…');
+    start(node.id, node.engine, node.selectedImage.id, {resume: true, ...startup});
   } catch (error) {
-    publishState(session, error.message);
+    publishState(node, error.message);
     throw error;
   } finally {
-    session.action = null;
-    if (session.machine) publishState(session);
+    node.action = null;
+    if (node.machine) publishState(node);
   }
 }
 
-async function reset(session, settings, startup = {}) {
-  if (session?.kind === 'switch') throw new Error('Reset applies only to hosts.');
-  if (!session || !session.everStarted || !session.selectedImage) throw new Error('This host has not started yet.');
-  if (session.action) throw new Error('An action is already in progress for this host.');
-  validateRestartPrerequisites(session);
-  const engine = session.engine;
-  const imageId = session.selectedImage.id;
-  const launchSettings = settings ? validateLaunchSettings({...session.launchSettings, ...settings}) : session.launchSettings;
-  session.action = 'reset';
+async function reset(node, settings, startup = {}) {
+  if (node?.kind === 'switch') throw new Error('Reset applies only to hosts.');
+  if (!node || !node.everStarted || !node.selectedImage) throw new Error('This host has not started yet.');
+  if (node.action) throw new Error('An action is already in progress for this host.');
+  validateRestartPrerequisites(node);
+  const engine = node.engine;
+  const imageId = node.selectedImage.id;
+  const launchSettings = settings ? validateLaunchSettings({...session.launchSettings, ...settings}) : node.launchSettings;
+  node.action = 'reset';
   try {
-    publishState(session, 'Resetting from the base image…');
-    if (session.machine) await stop(session, {publish: false});
-    if (session.action !== 'reset' || !sessions.has(session.id)) throw new Error('The session was deleted during reset.');
-    discardSessionDisk(session);
-    session.everStarted = false;
-    start(session.id, engine, imageId, {reset: true, settings: launchSettings, ...startup});
+    publishState(node, 'Resetting from the base image…');
+    if (node.machine) await stop(node, {publish: false});
+    if (node.action !== 'reset' || !nodes.has(node.id)) throw new Error('The node was deleted during reset.');
+    discardNodeDisk(node);
+    node.everStarted = false;
+    start(node.id, engine, imageId, {reset: true, settings: launchSettings, ...startup});
   } catch (error) {
-    session.everStarted = !!session.runDisk;
-    publishState(session, error.message);
+    node.everStarted = !!node.runDisk;
+    publishState(node, error.message);
     throw error;
   } finally {
-    session.action = null;
-    if (session.machine) publishState(session);
+    node.action = null;
+    if (node.machine) publishState(node);
   }
 }
 
-function discardSessionDisk(session) {
-  const image = session.selectedImage;
-  if (session.engine === 'vbox') {
-    vbox(session, ['unregistervm', session.vmName]);
+function discardNodeDisk(node) {
+  const image = node.selectedImage;
+  if (node.engine === 'vbox') {
+    vbox(node, ['unregistervm', node.vmName]);
     for (const file of image.runFiles || []) {
-      try { vbox(session, ['closemedium', 'disk', file, '--delete']); }
-      catch (error) { appendLog(session, `# VirtualBox medium already unregistered: ${error.message}`); }
+      try { vbox(node, ['closemedium', 'disk', file, '--delete']); }
+      catch (error) { appendLog(node, `# VirtualBox medium already unregistered: ${error.message}`); }
     }
-    fs.rmSync(tempFile(session, 'vbox-vm'), {recursive: true, force: true});
+    fs.rmSync(tempFile(node, 'vbox-vm'), {recursive: true, force: true});
   }
-  cleanupRunFiles(session, image);
-  session.activeGuestIso = null;
-  for (const file of session.guestIsoFiles) if (file !== session.guestIso) { fs.rmSync(file, {force: true}); session.guestIsoFiles.delete(file); }
+  cleanupRunFiles(node, image);
+  node.activeGuestIso = null;
+  for (const file of node.guestIsoFiles) if (file !== node.guestIso) { fs.rmSync(file, {force: true}); node.guestIsoFiles.delete(file); }
 }
 
-async function stop(session, options = {}) {
-  if (!session || !session.machine) return;
-  const ownAction = !session.action;
-  if (ownAction) session.action = 'stop';
-  session.stopping = true;
-  const current = session.machine;
+async function stop(node, options = {}) {
+  if (!node || !node.machine) return;
+  const ownAction = !node.action;
+  if (ownAction) node.action = 'stop';
+  node.stopping = true;
+  const current = node.machine;
   try {
     if (current.kind === 'vbox') {
       try {
-        vbox(session, ['controlvm', session.vmName, 'acpipowerbutton']);
-        await waitForVirtualBoxPowerOff(session, 10000);
+        vbox(node, ['controlvm', node.vmName, 'acpipowerbutton']);
+        await waitForVirtualBoxPowerOff(node, 10000);
       } catch (error) {
-        const state = virtualBoxState(session);
+        const state = virtualBoxState(node);
         if (!['poweroff', 'aborted', 'saved'].includes(state)) {
           if (options.forceOnTimeout === false) throw new Error(`Host did not power off gracefully: ${error.message}`);
-          appendLog(session, `# Graceful VirtualBox shutdown failed: ${error.message}; forcing power off`);
-          vbox(session, ['controlvm', session.vmName, 'poweroff']);
+          appendLog(node, `# Graceful VirtualBox shutdown failed: ${error.message}; forcing power off`);
+          vbox(node, ['controlvm', node.vmName, 'poweroff']);
         }
       }
     } else {
       try {
-        appendLog(session, '$ QEMU monitor: system_powerdown');
-        await sendMonitorCommand(session, 'system_powerdown');
+        appendLog(node, '$ QEMU monitor: system_powerdown');
+        await sendMonitorCommand(node, 'system_powerdown');
         await waitForQemuExit(current, 10000);
       } catch (error) {
         if (options.forceOnTimeout === false) throw new Error(`Host did not power off gracefully: ${error.message}`);
-        appendLog(session, `# Graceful QEMU shutdown failed: ${error.message}; sending SIGTERM`);
+        appendLog(node, `# Graceful QEMU shutdown failed: ${error.message}; sending SIGTERM`);
         current.kill('SIGTERM');
         try { await waitForQemuExit(current, 2000); }
         catch (_) {
-          appendLog(session, '$ signal sent to qemu-system-x86_64: SIGKILL');
+          appendLog(node, '$ signal sent to qemu-system-x86_64: SIGKILL');
           current.kill('SIGKILL');
           await waitForQemuExit(current, 5000);
         }
       }
     }
-    if (session.serial) { session.serial.destroy(); session.serial = null; }
-    if (session.machine === current) session.machine = null;
-    session.activeConfig = null;
-    try { fs.unlinkSync(session.socketPath); } catch (_) {}
-    try { fs.unlinkSync(session.monitorPath); } catch (_) {}
-    if (options.publish !== false && session.action !== 'destroy') publishState(session, 'Host stopped; current disk kept');
+    if (node.serial) { node.serial.destroy(); node.serial = null; }
+    if (node.machine === current) node.machine = null;
+    node.activeConfig = null;
+    try { fs.unlinkSync(node.socketPath); } catch (_) {}
+    try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+    if (options.publish !== false && node.action !== 'destroy') publishState(node, 'Host stopped; current disk kept');
   } finally {
-    session.stopping = false;
-    if (ownAction && session.action === 'stop') session.action = null;
+    node.stopping = false;
+    if (ownAction && node.action === 'stop') node.action = null;
   }
 }
 
-async function destroySession(session) {
-  if (!session) return;
-  if (session.kind === 'switch') {
-    if (linkedHosts(session.id).length) throw new Error('Remove connected host tabs before deleting this switch.');
-    await stopSwitch(session, true);
-    removeHostnameAlias(session);
-    sessions.delete(session.id);
-    fs.rmSync(session.runtimeDir, {recursive: true, force: true});
+async function destroyNode(node) {
+  if (!node) return;
+  if (node.kind === 'switch') {
+    if (linkedHosts(node.id).length) throw new Error('Remove connected host tabs before deleting this switch.');
+    await stopSwitch(node, true);
+    removeHostnameAlias(node);
+    nodes.delete(node.id);
+    fs.rmSync(node.runtimeDir, {recursive: true, force: true});
     saveSessionMetadata();
     return;
   }
-  session.action = 'destroy';
-  session.stopping = true;
-  session.generation += 1;
-  if (session.serial) { session.serial.destroy(); session.serial = null; }
-  const current = session.machine;
-  const image = session.selectedImage || {};
-  session.machine = null;
-  session.activeConfig = null;
-  if (session.engine === 'vbox' && session.everStarted && session.selectedImage) {
-    if (current) { try { vbox(session, ['controlvm', session.vmName, 'poweroff']); } catch (_) {} }
-    try { vbox(session, ['unregistervm', session.vmName]); } catch (_) {}
+  node.action = 'destroy';
+  node.stopping = true;
+  node.generation += 1;
+  if (node.serial) { node.serial.destroy(); node.serial = null; }
+  const current = node.machine;
+  const image = node.selectedImage || {};
+  node.machine = null;
+  node.activeConfig = null;
+  if (node.engine === 'vbox' && node.everStarted && node.selectedImage) {
+    if (current) { try { vbox(node, ['controlvm', node.vmName, 'poweroff']); } catch (_) {} }
+    try { vbox(node, ['unregistervm', node.vmName]); } catch (_) {}
     for (const file of image.runFiles || []) {
-      try { vbox(session, ['closemedium', 'disk', file, '--delete']); } catch (_) {}
+      try { vbox(node, ['closemedium', 'disk', file, '--delete']); } catch (_) {}
     }
-    fs.rmSync(tempFile(session, 'vbox-vm'), {recursive: true, force: true});
+    fs.rmSync(tempFile(node, 'vbox-vm'), {recursive: true, force: true});
   } else if (current) {
-    appendLog(session, '$ force kill qemu-system-x86_64: SIGKILL');
+    appendLog(node, '$ force kill qemu-system-x86_64: SIGKILL');
     current.kill('SIGKILL');
     try { await waitForQemuExit(current, 5000); } catch (_) {}
   }
-  cleanupRunFiles(session, image);
-  try { fs.unlinkSync(session.socketPath); } catch (_) {}
-  try { fs.unlinkSync(session.monitorPath); } catch (_) {}
-  cleanupGuestIsoFiles(session);
-  session.runLog = [];
-  session.serialBuffer = '';
-  session.selectedImage = null;
-  session.qemuOptions = null;
-  session.everStarted = false;
-  removeHostnameAlias(session);
-  sessions.delete(session.id);
-  fs.rmSync(session.runtimeDir, {recursive: true, force: true});
+  cleanupRunFiles(node, image);
+  try { fs.unlinkSync(node.socketPath); } catch (_) {}
+  try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+  cleanupGuestIsoFiles(node);
+  node.runLog = [];
+  node.serialBuffer = '';
+  node.selectedImage = null;
+  node.qemuOptions = null;
+  node.everStarted = false;
+  removeHostnameAlias(node);
+  nodes.delete(node.id);
+  fs.rmSync(node.runtimeDir, {recursive: true, force: true});
   saveSessionMetadata();
 }
 
-async function exitAllSessions() {
+async function exitAllNodes() {
   const removed = [];
   try {
     for (const kind of ['host', 'switch']) {
-      for (const session of [...sessions.values()].filter(item => item.kind === kind)) {
-        await destroySession(session);
-        removed.push(session.id);
+      for (const node of [...sessions.values()].filter(item => item.kind === kind)) {
+        await destroyNode(node);
+        removed.push(node.id);
       }
     }
     return removed;
@@ -1766,7 +1766,7 @@ async function exitAllSessions() {
 
 app.post('/api/start', async (req, res) => {
   try {
-    const configured = getSession(req.body?.sessionId);
+    const configured = getNode(req.body?.sessionId);
     if (!configured || configured.kind !== 'host' || !configured.selectedImage) throw new Error('Unknown host configuration.');
     if (req.body.engine !== configured.engine || req.body.imageId !== configured.selectedImage.id) throw new Error('Host system and engine differ from the saved configuration.');
     start(configured.id, configured.engine, configured.selectedImage.id, {
@@ -1778,8 +1778,8 @@ app.post('/api/start', async (req, res) => {
     const message = error.stderr ? error.stderr.toString().trim() : error.message;
     console.error(message);
     try {
-      const session = getSession(req.body.sessionId);
-      if (session) publishState(session, message);
+      const node = getNode(req.body.sessionId);
+      if (node) publishState(node, message);
     } catch (_) {}
     res.status(500).json({error: message});
   }
@@ -1806,41 +1806,41 @@ app.post('/api/topology', async (req, res) => {
     const {topology, engine} = validateTopologyRequest(req.body);
     const {autostart = false, closePrevious = false} = req.body || {};
     if (typeof autostart !== 'boolean' || typeof closePrevious !== 'boolean') throw new Error('Invalid topology options.');
-    const used = new Set(closePrevious ? [] : [...sessions.values()].map(session => session.hostname?.toLowerCase()));
+    const used = new Set(closePrevious ? [] : [...sessions.values()].map(node => node.hostname?.toLowerCase()));
     for (const entry of [...topology.switches, ...topology.hosts]) if (used.has(entry.name.toLowerCase())) throw new Error(`Name already exists: ${entry.name}.`);
-    if (closePrevious) await exitAllSessions();
+    if (closePrevious) await exitAllNodes();
     const switchIds = new Map();
     for (const sw of topology.switches) {
       const id = newEntityId('switch');
-      const session = getSession(id, true, 'switch'); created.push(id);
-      setSessionHostname(session, sw.name); session.lastMessage = 'VDE switch ready to start';
-      persistSwitchConfiguration(session);
+      const node = getNode(id, true, 'switch'); created.push(id);
+      setNodeHostname(node, sw.name); node.lastMessage = 'VDE switch ready to start';
+      persistSwitchConfiguration(node);
       switchIds.set(sw.name, id);
     }
     for (const host of topology.hosts) {
       const id = newEntityId('host');
       const interfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(host.switches.map(name => switchIds.get(name)), engine, false));
-      const session = getSession(id, true, 'host'); created.push(id);
-      setSessionHostname(session, host.name); session.selectedImage = imageById(host.system); session.engine = engine;
-      session.networkInterfaces = interfaces; session.launchSettings = launchSettingsFor(host.system);
-      session.guestIsoAttached = session.selectedImage.startupDiskEnabled;
-      writeStartupScript(startupDirectory(session), defaultStartupScript(interfaces));
-      session.guestMedia = readStartupFiles(startupDirectory(session));
-      session.lastMessage = 'Host ready to start';
-      persistHostConfiguration(session);
+      const node = getNode(id, true, 'host'); created.push(id);
+      setNodeHostname(node, host.name); node.selectedImage = imageById(host.system); node.engine = engine;
+      node.networkInterfaces = interfaces; node.launchSettings = launchSettingsFor(host.system);
+      node.guestIsoAttached = node.selectedImage.startupDiskEnabled;
+      writeStartupScript(startupDirectory(node), defaultStartupScript(interfaces));
+      node.guestMedia = readStartupFiles(startupDirectory(node));
+      node.lastMessage = 'Host ready to start';
+      persistHostConfiguration(node);
     }
     saveSessionMetadata();
     const errors = [];
     if (autostart) {
       for (const id of created) {
-        const session = sessions.get(id);
+        const node = nodes.get(id);
         try {
-          if (session.kind === 'switch') await startSwitch(session);
-          else start(id, engine, session.selectedImage.id, {interfaces: session.networkInterfaces.map(nic => nic.switchId)});
+          if (node.kind === 'switch') await startSwitch(node);
+          else start(id, engine, node.selectedImage.id, {interfaces: node.networkInterfaces.map(nic => nic.switchId)});
         } catch (error) {
-          session.lastMessage = `Start failed: ${error.message}`;
-          errors.push(`${session.hostname}: ${error.message}`);
-          publishState(session, session.lastMessage);
+          node.lastMessage = `Start failed: ${error.message}`;
+          errors.push(`${node.hostname}: ${error.message}`);
+          publishState(node, node.lastMessage);
         }
       }
     }
@@ -1848,9 +1848,9 @@ app.post('/api/topology', async (req, res) => {
     res.json({created: created.length, errors});
   } catch (error) {
     for (const id of created.reverse()) {
-      const session = sessions.get(id);
-      if (session) {
-        try { await destroySession(session); }
+      const node = nodes.get(id);
+      if (node) {
+        try { await destroyNode(node); }
         catch (cleanupError) { console.error('Topology rollback:', cleanupError); }
       }
     }
@@ -1861,12 +1861,12 @@ app.post('/api/topology', async (req, res) => {
 app.get('/api/topology', (_req, res) => {
   try {
     const all = [...sessions.values()];
-    const switches = all.filter(session => session.kind === 'switch').map(session => ({name: session.hostname}));
-    const hosts = all.filter(session => session.kind === 'host').map(session => ({
-      name: session.hostname, system: session.selectedImage?.id,
-      switches: session.networkInterfaces.map(nic => {
-        const sw = nic.switchId && sessions.get(nic.switchId);
-        if (!sw || sw.kind !== 'switch') throw new Error(`Host ${session.hostname} has a disconnected interface; .topo cannot represent it.`);
+    const switches = all.filter(node => node.kind === 'switch').map(node => ({name: node.hostname}));
+    const hosts = all.filter(node => node.kind === 'host').map(node => ({
+      name: node.hostname, system: node.selectedImage?.id,
+      switches: node.networkInterfaces.map(nic => {
+        const sw = nic.switchId && nodes.get(nic.switchId);
+        if (!sw || sw.kind !== 'switch') throw new Error(`Host ${node.hostname} has a disconnected interface; .topo cannot represent it.`);
         return sw.hostname;
       })
     }));
@@ -1884,7 +1884,7 @@ app.post('/api/hosts', (req, res) => {
     }
     const {id, name, imageId, engine = sessionEngine, interfaces, settings, guestMedia, startupDiskEnabled} = req.body || {};
     entityKind(id, 'host');
-    if (sessions.has(id)) throw new Error('Host ID already exists.');
+    if (nodes.has(id)) throw new Error('Host ID already exists.');
     const image = imageById(imageId || Object.keys(readConfig().systems).find(id => id !== 'default'));
     if (!image) throw new Error('Unknown system in config.json.');
     if (!['qemu', 'vbox'].includes(engine)) throw new Error('Unknown engine.');
@@ -1900,245 +1900,245 @@ app.post('/api/hosts', (req, res) => {
     if (buildStartupDisk) {
       validateStartupTemplate(validatedMedia.script, networkInterfaces, true);
     }
-    const session = getSession(id, true, 'host');
-    session.selectedImage = image;
-    session.engine = engine;
-    session.networkInterfaces = networkInterfaces;
-    session.launchSettings = launchSettings;
+    const node = getNode(id, true, 'host');
+    node.selectedImage = image;
+    node.engine = engine;
+    node.networkInterfaces = networkInterfaces;
+    node.launchSettings = launchSettings;
     try {
-      writeStartupFiles(startupDirectory(session), validatedMedia);
-      session.guestMedia = readStartupFiles(startupDirectory(session));
-      setSessionHostname(session, hostname);
-      session.guestIsoAttached = buildStartupDisk;
-      persistHostConfiguration(session);
+      writeStartupFiles(startupDirectory(node), validatedMedia);
+      node.guestMedia = readStartupFiles(startupDirectory(node));
+      setNodeHostname(node, hostname);
+      node.guestIsoAttached = buildStartupDisk;
+      persistHostConfiguration(node);
       saveSessionMetadata();
     } catch (error) {
-      cleanupGuestIsoFiles(session);
-      removeHostnameAlias(session);
-      sessions.delete(id);
-      fs.rmSync(session.runtimeDir, {recursive: true, force: true});
+      cleanupGuestIsoFiles(node);
+      removeHostnameAlias(node);
+      nodes.delete(id);
+      fs.rmSync(node.runtimeDir, {recursive: true, force: true});
       throw error;
     }
-    session.lastMessage = 'Host ready to start';
-    io.emit('sessions-changed', {sessionId: id, running: false, hasLaunched: false, message: session.lastMessage});
-    res.json({...hostConfigurationResponse(session), imageId: image.id});
+    node.lastMessage = 'Host ready to start';
+    io.emit('sessions-changed', {sessionId: id, running: false, hasLaunched: false, message: node.lastMessage});
+    res.json({...hostConfigurationResponse(node), imageId: image.id});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.get('/api/hosts/:sessionId/config', (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'host' || !session.selectedImage) throw new Error('Unknown host.');
+    const node = getNode(req.params.sessionId);
+    if (!node || node.kind !== 'host' || !node.selectedImage) throw new Error('Unknown host.');
     res.set('Cache-Control', 'no-store');
-    res.json(hostConfigurationResponse(session));
+    res.json(hostConfigurationResponse(node));
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.put('/api/hosts/:sessionId/config', (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'host' || !session.selectedImage) throw new Error('Unknown host.');
-    if (session.action) throw new Error('Wait for the current host action to finish.');
+    const node = getNode(req.params.sessionId);
+    if (!node || node.kind !== 'host' || !node.selectedImage) throw new Error('Unknown host.');
+    if (node.action) throw new Error('Wait for the current host action to finish.');
     const body = req.body;
     if (!body || typeof body !== 'object' || Array.isArray(body)) throw new Error('Invalid host configuration.');
     const required = ['name', 'systemId', 'engine', 'settings', 'interfaces', 'guestMedia', 'startupDiskEnabled'];
     if (Object.keys(body).some(key => !required.includes(key)) || required.some(key => !Object.hasOwn(body, key))) throw new Error('Incomplete host configuration.');
-    if (body.systemId !== session.selectedImage.id || body.engine !== session.engine) throw new Error('System and engine are read-only for an existing host.');
+    if (body.systemId !== node.selectedImage.id || body.engine !== node.engine) throw new Error('System and engine are read-only for an existing host.');
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(body.name)) throw new Error('Invalid host name (1 to 64 characters).');
     const name = body.name.trim();
-    if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name)) throw new Error('Host name already exists.');
+    if ([...sessions.values()].some(other => other.id !== node.id && other.hostname === name)) throw new Error('Host name already exists.');
     const settings = validateLaunchSettings(body.settings);
     const media = validateBootFiles(body.guestMedia);
     const script = normalizeScript(media.script);
     if (typeof body.startupDiskEnabled !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
-    const switches = validateNetworkInterfaces(body.interfaces, session.engine, false);
-    const oldSwitches = session.networkInterfaces.map(nic => nic.switchId);
+    const switches = validateNetworkInterfaces(body.interfaces, node.engine, false);
+    const oldSwitches = node.networkInterfaces.map(nic => nic.switchId);
     const interfaces = JSON.stringify(body.interfaces) === JSON.stringify(oldSwitches)
-      ? session.networkInterfaces : assignNetworkInterfaces(session, switches);
+      ? node.networkInterfaces : assignNetworkInterfaces(node, switches);
     if (body.startupDiskEnabled) validateStartupTemplate(script, interfaces, true);
-    const previousName = session.hostname;
-    const previousMedia = readStartupFiles(startupDirectory(session));
+    const previousName = node.hostname;
+    const previousMedia = readStartupFiles(startupDirectory(node));
     const nextMedia = validateBootFiles({script, resources: media.resources});
     const mediaChanged = JSON.stringify(nextMedia) !== JSON.stringify(previousMedia);
     let mediaWritten = false;
-    if (name !== previousName) setSessionHostname(session, name);
+    if (name !== previousName) setNodeHostname(node, name);
     try {
       if (mediaChanged) {
-        writeStartupFiles(startupDirectory(session), nextMedia);
+        writeStartupFiles(startupDirectory(node), nextMedia);
         mediaWritten = true;
       }
-      writeJsonAtomic(tempFile(session, 'host.json'),
-        hostConfiguration(session, settings, interfaces, body.startupDiskEnabled, name));
+      writeJsonAtomic(tempFile(node, 'host.json'),
+        hostConfiguration(node, settings, interfaces, body.startupDiskEnabled, name));
     } catch (error) {
-      if (mediaWritten) writeStartupFiles(startupDirectory(session), previousMedia);
-      if (name !== previousName) setSessionHostname(session, previousName);
+      if (mediaWritten) writeStartupFiles(startupDirectory(node), previousMedia);
+      if (name !== previousName) setNodeHostname(node, previousName);
       throw error;
     }
-    session.launchSettings = settings;
-    session.networkInterfaces = interfaces;
-    session.guestMedia = readStartupFiles(startupDirectory(session));
-    session.guestIsoAttached = body.startupDiskEnabled;
-    if (mediaChanged || name !== previousName) session.guestIsoOutdated = !!session.guestIso;
-    if (name !== previousName) io.emit('session-renamed', {sessionId: session.id, name});
-    io.emit('sessions-changed', {sessionId: session.id, running: !!session.machine, hasLaunched: session.everStarted, pendingRestart: pendingRestart(session), message: stateMessage(session)});
-    res.json(hostConfigurationResponse(session));
+    node.launchSettings = settings;
+    node.networkInterfaces = interfaces;
+    node.guestMedia = readStartupFiles(startupDirectory(node));
+    node.guestIsoAttached = body.startupDiskEnabled;
+    if (mediaChanged || name !== previousName) node.guestIsoOutdated = !!node.guestIso;
+    if (name !== previousName) io.emit('session-renamed', {sessionId: node.id, name});
+    io.emit('sessions-changed', {sessionId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message: stateMessage(node)});
+    res.json(hostConfigurationResponse(node));
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.get('/api/hosts/:sessionId/guest-media', (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
-    res.json({...readStartupFiles(startupDirectory(session)), guestCdrom: guestIsoStatus(session)});
+    const node = getNode(req.params.sessionId);
+    if (!node || node.kind !== 'host') throw new Error('Unknown host.');
+    res.json({...readStartupFiles(startupDirectory(node)), guestCdrom: guestIsoStatus(node)});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.put('/api/hosts/:sessionId/guest-media', (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
+    const node = getNode(req.params.sessionId);
+    if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
-    if (session.guestIsoAttached) validateStartupTemplate(media.script, session.networkInterfaces, true);
-    writeStartupFiles(startupDirectory(session), media);
-    session.guestMedia = readStartupFiles(startupDirectory(session));
-    session.guestIsoOutdated = !!session.guestIso;
-    appendLog(session, '# Guest startup files saved; create the CD-ROM to include these changes.');
-    res.json({ok: true, files: session.guestMedia.resources.length, guestCdrom: guestIsoStatus(session)});
+    if (node.guestIsoAttached) validateStartupTemplate(media.script, node.networkInterfaces, true);
+    writeStartupFiles(startupDirectory(node), media);
+    node.guestMedia = readStartupFiles(startupDirectory(node));
+    node.guestIsoOutdated = !!node.guestIso;
+    appendLog(node, '# Guest startup files saved; create the CD-ROM to include these changes.');
+    res.json({ok: true, files: node.guestMedia.resources.length, guestCdrom: guestIsoStatus(node)});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.post('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
+    const node = getNode(req.params.sessionId);
+    if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     const media = validateBootFiles(req.body);
-    validateStartupTemplate(media.script, session.networkInterfaces, true);
-    writeStartupFiles(startupDirectory(session), media);
-    session.guestMedia = readStartupFiles(startupDirectory(session));
-    const status = buildGuestIso(session);
+    validateStartupTemplate(media.script, node.networkInterfaces, true);
+    writeStartupFiles(startupDirectory(node), media);
+    node.guestMedia = readStartupFiles(startupDirectory(node));
+    const status = buildGuestIso(node);
     res.json({ok: true, guestCdrom: status});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.patch('/api/hosts/:sessionId/guest-cdrom', (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
+    const node = getNode(req.params.sessionId);
+    if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     if (typeof req.body?.attached !== 'boolean') throw new Error('Invalid CD-ROM attachment option.');
-    if (req.body.attached && !guestIsoStatus(session).created) throw new Error('Create the CD-ROM before attaching it.');
-    const previous = session.guestIsoAttached;
-    session.guestIsoAttached = req.body.attached;
-    try { persistHostConfiguration(session); }
-    catch (error) { session.guestIsoAttached = previous; throw error; }
-    res.json({ok: true, guestCdrom: guestIsoStatus(session)});
+    if (req.body.attached && !guestIsoStatus(node).created) throw new Error('Create the CD-ROM before attaching it.');
+    const previous = node.guestIsoAttached;
+    node.guestIsoAttached = req.body.attached;
+    try { persistHostConfiguration(node); }
+    catch (error) { node.guestIsoAttached = previous; throw error; }
+    res.json({ok: true, guestCdrom: guestIsoStatus(node)});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.post('/api/switches', async (req, res) => {
-  let session;
+  let node;
   try {
     const {id, name, autostart = true} = req.body || {};
     if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)) throw new Error('Switch name must be 1–32 letters, digits, underscores or hyphens.');
     entityKind(id, 'switch');
-    if (sessions.has(id) || [...sessions.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
-    session = getSession(id, true, 'switch');
-    setSessionHostname(session, name);
-    session.lastMessage = 'VDE switch ready to start';
-    persistSwitchConfiguration(session);
+    if (nodes.has(id) || [...sessions.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
+    node = getNode(id, true, 'switch');
+    setNodeHostname(node, name);
+    node.lastMessage = 'VDE switch ready to start';
+    persistSwitchConfiguration(node);
     saveSessionMetadata();
-    if (autostart) await startSwitch(session);
-    io.emit('sessions-changed', {sessionId: id, running: !!session.machine, hasLaunched: session.everStarted, message: stateMessage(session)});
-    res.json({id, name, running: !!session.machine, message: stateMessage(session)});
+    if (autostart) await startSwitch(node);
+    io.emit('sessions-changed', {sessionId: id, running: !!node.machine, hasLaunched: node.everStarted, message: stateMessage(node)});
+    res.json({id, name, running: !!node.machine, message: stateMessage(node)});
   } catch (error) {
-    if (session) {
-      try { await destroySession(session); }
+    if (node) {
+      try { await destroyNode(node); }
       catch (cleanupError) { console.error('Cannot clean up failed switch:', cleanupError); }
     }
-    res.status(session ? 500 : 400).json({error: error.message});
+    res.status(node ? 500 : 400).json({error: error.message});
   }
 });
 
 app.post('/api/switches/:id/start', async (req, res) => {
   try {
-    const session = getSession(req.params.id);
-    if (!session || session.kind !== 'switch') throw new Error('Unknown switch.');
-    await startSwitch(session);
+    const node = getNode(req.params.id);
+    if (!node || node.kind !== 'switch') throw new Error('Unknown switch.');
+    await startSwitch(node);
     res.json({ok: true});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.post('/api/switches/:id/stop', async (req, res) => {
   try {
-    const session = getSession(req.params.id);
-    if (!session || session.kind !== 'switch') throw new Error('Unknown switch.');
-    await stopSwitch(session);
+    const node = getNode(req.params.id);
+    if (!node || node.kind !== 'switch') throw new Error('Unknown switch.');
+    await stopSwitch(node);
     res.json({ok: true});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.post('/api/stop/:sessionId', async (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (session && session.kind !== 'host') throw new Error('Use the switch stop action.');
-    if (session && session.action) throw new Error('An action is already in progress for this host.');
-    await stop(session);
+    const node = getNode(req.params.sessionId);
+    if (node && node.kind !== 'host') throw new Error('Use the switch stop action.');
+    if (node && node.action) throw new Error('An action is already in progress for this host.');
+    await stop(node);
     res.json({ok: true});
   }
   catch (error) {
     console.error(error);
-    try { const session = getSession(req.params.sessionId); if (session) publishState(session, error.message); } catch (_) {}
+    try { const node = getNode(req.params.sessionId); if (node) publishState(node, error.message); } catch (_) {}
     res.status(500).json({error: error.message});
   }
 });
 
 app.post('/api/reboot/:sessionId', async (req, res) => {
-  try { await reboot(getSession(req.params.sessionId)); res.json({ok: true}); }
+  try { await reboot(getNode(req.params.sessionId)); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
 app.post('/api/reset/:sessionId', async (req, res) => {
-  try { await reset(getSession(req.params.sessionId)); res.json({ok: true}); }
+  try { await reset(getNode(req.params.sessionId)); res.json({ok: true}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
 app.post('/api/monitor/:sessionId', async (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    if (!session || session.kind !== 'host' || !session.machine || !session.engine.startsWith('qemu') || session.action) throw new Error('Monitor is available only for a running QEMU host.');
+    const node = getNode(req.params.sessionId);
+    if (!node || node.kind !== 'host' || !node.machine || !node.engine.startsWith('qemu') || node.action) throw new Error('Monitor is available only for a running QEMU host.');
     const command = req.body && req.body.command;
     if (typeof command !== 'string' || !command.trim() || command.length > 256 || /[\r\n\x00-\x1f\x7f]/.test(command)) throw new Error('Enter a single-line QEMU command (maximum 256 characters).');
-    appendLog(session, `$ monitor: ${command}`);
-    const output = await sendMonitorCommand(session, command);
-    appendLog(session, output || '(no output)');
+    appendLog(node, `$ monitor: ${command}`);
+    const output = await sendMonitorCommand(node, command);
+    appendLog(node, output || '(no output)');
     res.json({ok: true, output});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.patch('/api/sessions/:sessionId', (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
+    const node = getNode(req.params.sessionId);
     const name = req.body && req.body.name;
-    if (!session || session.kind !== 'host') throw new Error('Unknown host.');
+    if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
-    if ([...sessions.values()].some(other => other.id !== session.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
-    const previous = session.hostname;
-    setSessionHostname(session, name.trim());
-    try { persistHostConfiguration(session); }
-    catch (error) { setSessionHostname(session, previous); throw error; }
-    io.emit('session-renamed', {sessionId: session.id, name: session.hostname});
-    res.json({name: session.hostname});
+    if ([...sessions.values()].some(other => other.id !== node.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
+    const previous = node.hostname;
+    setNodeHostname(node, name.trim());
+    try { persistHostConfiguration(node); }
+    catch (error) { setNodeHostname(node, previous); throw error; }
+    io.emit('session-renamed', {sessionId: node.id, name: node.hostname});
+    res.json({name: node.hostname});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
 app.delete('/api/sessions', async (_req, res) => {
-  try { res.json({removed: await exitAllSessions()}); }
+  try { res.json({removed: await exitAllNodes()}); }
   catch (error) { res.status(500).json({error: error.message}); }
 });
 
 app.delete('/api/sessions/:sessionId', async (req, res) => {
   try {
-    const session = getSession(req.params.sessionId);
-    await destroySession(session);
+    const node = getNode(req.params.sessionId);
+    await destroyNode(node);
     io.emit('sessions-removed', {ids: [req.params.sessionId]});
     res.json({ok: true});
   } catch (error) { res.status(500).json({error: error.message}); }
@@ -2148,19 +2148,19 @@ io.on('connection', socket => {
   let selectionQueue = Promise.resolve();
   socket.on('select-session', (id, token, acknowledge) => {
     selectionQueue = selectionQueue.then(async () => {
-      const session = getSession(id);
-      if (!session) throw new Error('Unknown session.');
-      if (socket.sessionId && socket.sessionId !== id) {
-        await socket.leave(socket.sessionId);
+      const node = getNode(id);
+      if (!node) throw new Error('Unknown node.');
+      if (socket.nodeId && socket.nodeId !== id) {
+        await socket.leave(socket.nodeId);
       }
       await socket.join(id);
-      socket.sessionId = session.id;
+      socket.nodeId = node.id;
       socket.emit('session-snapshot', {
-        sessionId: session.id,
+        sessionId: node.id,
         token,
-        state: {running: !!session.machine, message: stateMessage(session), hasLaunched: session.everStarted},
-        logs: session.runLog,
-        serial: session.serialBuffer
+        state: {running: !!node.machine, message: stateMessage(node), hasLaunched: node.everStarted},
+        logs: node.runLog,
+        serial: node.serialBuffer
       });
       if (typeof acknowledge === 'function') acknowledge({ok: true});
     }).catch(error => {
@@ -2169,33 +2169,33 @@ io.on('connection', socket => {
     });
   });
   socket.on('leave-session', id => {
-    if (id !== socket.sessionId) return;
+    if (id !== socket.nodeId) return;
     socket.leave(id);
-    socket.sessionId = null;
+    socket.nodeId = null;
   });
   socket.on('input', data => {
-    const session = socket.sessionId && sessions.get(socket.sessionId);
-    if (!session || typeof data !== 'string' || data.length > 4096) return;
-    if (session.kind === 'switch' && session.switchTerminal) session.switchTerminal.write(data);
-    else if (session.serial) session.serial.write(data);
+    const node = socket.nodeId && nodes.get(socket.nodeId);
+    if (!node || typeof data !== 'string' || data.length > 4096) return;
+    if (node.kind === 'switch' && node.switchTerminal) node.switchTerminal.write(data);
+    else if (node.serial) node.serial.write(data);
   });
   socket.on('terminal-resize', request => {
-    if (!request || request.id !== socket.sessionId) return;
-    const session = sessions.get(request.id);
-    if (!session || session.kind !== 'switch' || !session.switchTerminal) return;
+    if (!request || request.id !== socket.nodeId) return;
+    const node = nodes.get(request.id);
+    if (!node || node.kind !== 'switch' || !node.switchTerminal) return;
     const cols = Number(request.cols);
     const rows = Number(request.rows);
     if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) return;
-    try { session.switchTerminal.resize(cols, rows); } catch (_) {}
+    try { node.switchTerminal.resize(cols, rows); } catch (_) {}
   });
   socket.on('clear-console', request => {
-    if (!request || request.id !== socket.sessionId) return;
-    const session = sessions.get(request.id);
-    if (!session) return;
+    if (!request || request.id !== socket.nodeId) return;
+    const node = nodes.get(request.id);
+    if (!node) return;
     const line = typeof request.line === 'string' ? request.line.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 1024) : '';
     const column = Number.isInteger(request.column) ? Math.max(0, Math.min(request.column, 1024)) : line.length;
-    session.serialBuffer = line ? `${line}\x1b[${column + 1}G` : '';
-    io.to(request.id).emit('serial-reset', {sessionId: request.id, preserveLine: true, serial: session.serialBuffer});
+    node.serialBuffer = line ? `${line}\x1b[${column + 1}G` : '';
+    io.to(request.id).emit('serial-reset', {sessionId: request.id, preserveLine: true, serial: node.serialBuffer});
   });
 });
 
@@ -2213,11 +2213,11 @@ server.listen(port, '127.0.0.1', () => {
   fs.mkdirSync(runtimeInstance, {recursive: true});
   saveSessionMetadata();
   fs.writeFileSync(serverPidFile, `${process.pid}\n`, {mode: 0o600});
-  fs.writeFileSync(serverSessionFile, `${sessionId}\n${ephemeralServer ? 'test' : 'regular'}\n`, {mode: 0o600});
+  fs.writeFileSync(serverSessionFile, `${serverSessionId}\n${ephemeralServer ? 'test' : 'regular'}\n`, {mode: 0o600});
   linkCurrentSession();
   console.log('\nQemuWeb is ready.');
   console.log(`  Web interface      http://127.0.0.1:${port}`);
-  console.log(`  Session ID         ${sessionId}`);
+  console.log(`  Session ID         ${serverSessionId}`);
   console.log(`  Session directory  ${runtimeInstance}`);
   console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
 });
@@ -2228,7 +2228,7 @@ process.on('exit', () => {
     if (fs.readFileSync(serverPidFile, 'utf8').trim() === String(process.pid)) fs.rmSync(serverPidFile, {force: true});
   } catch (_) {}
   try {
-    if (fs.readFileSync(serverSessionFile, 'utf8').startsWith(`${sessionId}\n`)) fs.rmSync(serverSessionFile, {force: true});
+    if (fs.readFileSync(serverSessionFile, 'utf8').startsWith(`${serverSessionId}\n`)) fs.rmSync(serverSessionFile, {force: true});
   } catch (_) {}
   removeEmptyRuntimeSession();
 });
@@ -2240,8 +2240,8 @@ async function shutdown() {
   clearInterval(resourceTimer);
   const forceExit = setTimeout(() => process.exit(1), 10000);
   for (const kind of ['host', 'switch']) {
-    await Promise.all([...sessions.values()].filter(session => session.kind === kind)
-      .map(session => destroySession(session).catch(error => console.error('Session shutdown:', error))));
+    await Promise.all([...sessions.values()].filter(node => node.kind === kind)
+      .map(node => destroyNode(node).catch(error => console.error('Session shutdown:', error))));
   }
   io.close(() => {
     clearTimeout(forceExit);
