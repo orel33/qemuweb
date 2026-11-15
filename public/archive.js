@@ -89,11 +89,10 @@ async function checkArchiveBaseImages(file, {entries, diskHosts, session}) {
   for (const id of result.changed) {
     const stale = hosts.filter(host => host.system === id).map(host => host.name);
     staleDisks ||= stale.length > 0;
-    messages.push(stale.length
-      ? `Base image ${id} changed since this session was saved. The working disks of ${stale.join(', ')} cannot be reused.`
-      : `Base image ${id} changed since this session was saved. Its hosts will start from the current image.`);
+    if (stale.length) messages.push(`Base image ${id} changed since this session was saved. The working disks of ${stale.join(', ')} cannot be reused.`);
   }
-  return {messages, staleDisks};
+  // Hosts without a working disk simply start from the current image: no warning.
+  return {messages, staleDisks, changed: result.changed.length > 0};
 }
 // Uploads the ZIP with progress reporting, which fetch() cannot do.
 function importArchive(file, {autoStart, discardStaleDisks}, onProgress, onUploaded) {
@@ -240,7 +239,8 @@ export function initArchive() {
         setLoadStep('check', 'running');
         const check = await checkArchiveBaseImages(file, summary);
         if (selectedArchiveFile !== file) return;
-        setLoadStep('check', check.messages.length ? 'warning' : 'done', check.messages.join('\n') || 'Base images are up to date');
+        setLoadStep('check', check.messages.length ? 'warning' : 'done', check.messages.join('\n') ||
+          (check.changed ? 'No working disk depends on the saved base images; hosts start from the current images.' : 'Base images are up to date'));
         setArchiveLoadDiscardRelevant(check.staleDisks);
       }
     } catch (_) {
