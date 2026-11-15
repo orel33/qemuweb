@@ -4,9 +4,9 @@
 
 ## Contexte et architecture cible
 
-QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les cinq jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, puis runners.
+QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les six jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, runners, puis durcissement applicatif.
 
-Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est livré sous forme d'une bêta, et 0.9.0 sort une fois les critères du jalon 5 remplis.
+Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est livré sous forme d'une bêta, et 0.9.0 sort une fois les critères du jalon 6 remplis.
 
 | Jalon | Version livrée |
 | --- | --- |
@@ -15,6 +15,7 @@ Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est liv
 | 3 — Multi-utilisateurs, auth simple | 0.9.0-beta.3 |
 | 4 — Rôle admin | 0.9.0-beta.4 |
 | 5 — Runners et jail minimaliste | 0.9.0-beta.5 |
+| 6 — Durcissement applicatif | 0.9.0-beta.6 |
 | Stabilisation | 0.9.0 |
 
 ```
@@ -168,13 +169,8 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 
 - Chaque route résout `req.user → session`, puis cherche le `nodeId` uniquement dans cette session (404 sinon).
 - Les 12 `io.emit` deviennent `io.to('session:<id>')`.
-- Liste blanche HMP sur `/api/nodes/:nodeId/monitor` : `info …`, `system_reset`, `system_powerdown`, `stop`, `cont`, `sendkey`, `nmi`.
 
-**Quotas** (nouvelle section `limits` de `config.json`)
-
-- Par VM : mémoire et vCPU maximum, au lieu des 32 768 Mo et 64 vCPU actuels.
-- Par session : nombre de nodes, RAM totale réservée.
-- Pour le serveur : refus de démarrer une VM au-delà de la RAM disponible.
+**Hors périmètre de ce jalon** : mot de passe minimal, ralentissement des échecs de connexion, liste blanche HMP et quotas sont au jalon 6. Jusqu'à ce jalon, le Monitor accepte toute commande HMP d'une ligne et les limites de mémoire et de vCPU restent celles du code (32 768 Mo, 64 vCPU) : n'ouvrir QemuWeb qu'à des utilisateurs de confiance.
 
 **Exposition** : le serveur reste sur `127.0.0.1`, nginx assure le TLS et le passage en WebSocket (`client_max_body_size` adapté aux imports ZIP).
 
@@ -182,8 +178,6 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 
 - [ ] Deux utilisateurs connectés en même temps ne voient ni ne pilotent les nodes de l'autre (test d'intégration dédié).
 - [ ] Fermer le navigateur puis se reconnecter retrouve les VM en cours et leurs consoles.
-- [ ] Une commande HMP hors liste blanche est refusée.
-- [ ] Un dépassement de quota est refusé avec un message clair.
 
 ## Jalon 4 — Rôle admin
 
@@ -195,7 +189,7 @@ L'admin voit toutes les sessions en cours, peut entrer dans n'importe laquelle p
 | --- | --- |
 | Utilisateur, date de création | `session.json` (`owner`) |
 | Nodes, VM en marche | `session.nodes` |
-| RAM réservée, CPU | quotas + `runner/metrics.js` |
+| RAM réservée, CPU | mémoire des hôtes démarrés (`session.nodes`) + `runner/metrics.js` |
 | Dernière activité | nouvel horodatage (entrée console, appel API) |
 
 **Actions**
@@ -245,7 +239,7 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 - Le runner tourne sous un compte système dédié `qemuweb-runner` (groupe `kvm`), distinct du plan de contrôle.
 - Chaque session est lancée dans un scope systemd (`systemd-run --scope -p MemoryMax=… -p CPUQuota=…`), comme garde-fou au-delà des limites QEMU.
 - `runtime/` en `0700`, images de base en lecture seule.
-- Le runner applique lui-même la liste blanche HMP et les quotas : il ne fait pas confiance aveuglément au plan de contrôle.
+- La liste blanche HMP et les quotas, appliqués par le runner lui-même, arrivent au jalon 6.
 - VirtualBox reste supporté mais hors jail : ses VM sont lancées par le démon VBoxSVC, donc hors du scope systemd. Un runner annonce `qemu`, `vbox` ou les deux ; QEMU reste la priorité.
 - Plus tard si besoin : un uid par session, bubblewrap ou nsjail, namespace réseau.
 
@@ -263,7 +257,34 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 - [ ] Couper puis rétablir le réseau du runner ne tue aucune VM et l'interface se resynchronise.
 - [ ] Une VM qui dépasse sa RAM est tuée par son scope sans affecter les autres sessions.
 
-## Après le jalon 5, et décisions prises
+## Jalon 6 — Durcissement applicatif
+
+Les protections applicatives sont regroupées ici, après les runners, pour être appliquées par le runner lui-même : il ne fait pas confiance aveuglément au plan de contrôle, y compris quand il est distant. Jusqu'au jalon 5, QemuWeb ne doit être ouvert qu'à des utilisateurs de confiance.
+
+**Comptes**
+
+- Mot de passe : longueur minimale de 8 caractères imposée par `scripts/user.sh` et par la réinitialisation depuis `/admin`, avec une option explicite `--allow-weak` pour les comptes de test.
+- Ralentissement des échecs de connexion (par login et par adresse IP), sans verrouillage définitif.
+
+**Liste blanche HMP**
+
+- `/api/nodes/:nodeId/monitor` n'accepte que `info …`, `system_reset`, `system_powerdown`, `stop`, `cont`, `sendkey`, `nmi`. Le runner la vérifie lui-même.
+
+**Quotas** (nouvelle section `limits` de `config.json`, validée par `common/system-config.js`)
+
+- Par VM : mémoire et vCPU maximum, au lieu des 32 768 Mo et 64 vCPU codés en dur dans `common/launch-settings.js` ; les champs de l'interface en dérivent.
+- Par session : nombre de nodes, RAM totale des hôtes démarrés.
+- Pour le serveur ou le runner : refus de démarrer une VM au-delà de la RAM disponible.
+- Appliqués par le runner, avec un message d'erreur clair. Les limites propres à un runner distant restent dans son `config.toml` (jalon 5).
+
+**Critères de fin**
+
+- [ ] Une commande HMP hors liste blanche est refusée, y compris sur un runner distant.
+- [ ] Un dépassement de quota (VM, session ou serveur) est refusé avec un message clair.
+- [ ] Un mot de passe trop court est refusé par `scripts/user.sh`, sauf avec `--allow-weak`.
+- [ ] Les échecs de connexion répétés sont ralentis.
+
+## Après le jalon 6, et décisions prises
 
 **Pistes suivantes**
 
@@ -281,3 +302,4 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 | Console admin | Lecture seule, jamais d'écriture |
 | Sessions par utilisateur | Une seule, définitivement |
 | Identifiant de session | Aléatoire, login dans `owner`, lien `runtime/users/<login>` |
+| Sécurité applicative (mot de passe minimal, quotas, liste blanche HMP) | Jalon 6, après les runners ; jusque-là, utilisateurs de confiance uniquement |
