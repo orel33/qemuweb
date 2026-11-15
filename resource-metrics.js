@@ -1,5 +1,7 @@
 'use strict';
 
+const os = require('os');
+
 // CPU is host process time: 100% is one fully occupied logical CPU.
 function parseHostCpu(stat) {
   const lines = stat.split('\n');
@@ -10,6 +12,29 @@ function parseHostCpu(stat) {
   if (!cores || ticks.some(value => !Number.isFinite(value))) return null;
   // guest and guest_nice are already included in user and nice.
   return {totalTicks: ticks.slice(0, 8).reduce((sum, value) => sum + value, 0), cores};
+}
+
+function getHostCpuTicks() {
+  const cpus = os.cpus();
+  if (!cpus || !cpus.length) return null;
+  let totalTicks = 0;
+  for (const cpu of cpus) {
+    const {user, nice, sys, idle, irq} = cpu.times;
+    totalTicks += (user + nice + sys + idle + irq);
+  }
+  return {totalTicks, cores: cpus.length};
+}
+
+function parsePsOutput(stdout) {
+  const parts = stdout.trim().split(/\s+/);
+  if (parts.length < 2) return null;
+  const cpu = parseFloat(parts[0]);
+  const rssKb = parseInt(parts[1], 10);
+  if (!Number.isFinite(cpu) || !Number.isFinite(rssKb)) return null;
+  return {
+    cpuPercent: Math.round(cpu * 10) / 10,
+    ramBytes: rssKb * 1024
+  };
 }
 
 function parseProcessCpu(stat) {
@@ -54,4 +79,4 @@ function parseVBoxMetrics(output) {
   };
 }
 
-module.exports = {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics};
+module.exports = {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics, getHostCpuTicks, parsePsOutput};

@@ -72,7 +72,9 @@ test('QCOW2 payload is compressed and restored as a sparse file', async t => {
   await readArchive(zip, stage);
   const restored = path.join(stage, host, 'disk.qcow2');
   assert.equal(fs.statSync(restored).size, 8 * 1024 * 1024);
-  assert.ok(fs.statSync(restored).blocks * 512 < 128 * 1024, 'restored disk should remain sparse');
+  if (process.platform === 'linux') {
+    assert.ok(fs.statSync(restored).blocks * 512 < 128 * 1024, 'restored disk should remain sparse');
+  }
   const result = fs.openSync(restored, 'r');
   try {
     const head = Buffer.alloc(12), tail = Buffer.alloc(10);

@@ -50,6 +50,19 @@
       "memory": 256,
       "image:qemu": "images/openwrt.raw",
       "image:vbox": "images/openwrt.vdi"
+    },
+    "container": {
+      "basedOn": "default",
+      "label": "OCI Container (b2c)",
+      "arch:qemu": "auto",
+      "memory": 1024,
+      "cpus": 2,
+      "boot:qemu": "kernel",
+      "kernel:qemu": "images/b2c/linux-x86_64-qemu",
+      "initrd:qemu": "images/b2c/initramfs.linux_amd64.cpio.xz",
+      "image:qemu": "images/container.raw",
+      "image:vbox": "images/container.vdi",
+      "containerImage": "docker.io/library/alpine:3.20"
     }
   }
 }

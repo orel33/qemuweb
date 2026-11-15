@@ -6,13 +6,14 @@ const net = require('net');
 const {StringDecoder} = require('string_decoder');
 const path = require('path');
 const crypto = require('crypto');
-const {spawn, execFileSync, execFile} = require('child_process');
+const {spawn, spawnSync, execFileSync, execFile} = require('child_process');
 const {promisify} = require('util');
 const express = require('express');
-const {Server: SocketIoServer} = require('socket.io');
+const socketIo = require('socket.io');
+const SocketIoServer = socketIo.Server || socketIo;
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
-const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
+const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics, getHostCpuTicks, parsePsOutput} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
 const {writeArchive, readArchive} = require('./session-archive');
 const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./system-config');
@@ -32,7 +33,7 @@ const sessionFile = path.join(runtimeInstance, 'session.json');
 const currentSessionLink = path.join(runtime, 'current');
 const ephemeralServer = process.env.QEMUWEB_TEST_SERVER === '1';
 const configPath = path.join(root, 'config.json');
-const qemuProfileFields = ['machine', 'cpuKvm', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
+const qemuProfileFields = ['machine', 'cpuKvm', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic', 'boot', 'kernel', 'initrd', 'containerImage'];
 const qemuFields = [...qemuProfileFields, 'extraOptions', 'memory', 'smp', 'rtcBase'];
 const launchSettingFields = {
   memory: {label: 'Memory', type: 'number', unit: 'MB', min: 64, max: 32768, step: 64},
@@ -55,8 +56,60 @@ let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
 readCatalog(configPath);
 let sessionEngine = 'qemu';
-try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
+
+function qemuBinaryFor(arch = 'x86_64') {
+  if (arch === 'aarch64' || arch === 'arm64') {
+    if (!commands.QEMU_SYSTEM_AARCH64) {
+      throw new Error('QEMU for ARM64 (qemu-system-aarch64) is not installed or available in PATH.');
+    }
+    return commands.QEMU_SYSTEM_AARCH64;
+  }
+  return commands.QEMU_SYSTEM_X86_64;
+}
+
+function detectSupportedQemuAccelerators(binary) {
+  try {
+    const qemuBin = binary || commands.QEMU_SYSTEM_X86_64;
+    const result = spawnSync(qemuBin, ['-accel', 'help'], {encoding: 'utf8', timeout: 5000});
+    if (result.status === 0) {
+      return result.stdout.split('\n')
+        .map(line => line.trim().toLowerCase())
+        .filter(line => line && !line.includes('accelerators supported'));
+    }
+  } catch (_) {}
+  return ['tcg'];
+}
+
+function detectBestQemuAcceleration(arch = 'x86_64') {
+  if (process.env.QEMU_ACCEL) return process.env.QEMU_ACCEL;
+  let binary;
+  try { binary = qemuBinaryFor(arch); } catch (_) { return 'tcg'; }
+  const supported = detectSupportedQemuAccelerators(binary);
+  if (process.platform === 'linux') {
+    try {
+      fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
+      if (supported.includes('kvm')) return 'kvm';
+    } catch (_) {}
+  } else if (process.platform === 'darwin') {
+    if (supported.includes('hvf')) return 'hvf';
+  }
+  return 'tcg';
+}
+
+const activeQemuAccel = detectBestQemuAcceleration();
+if (process.platform === 'linux' && activeQemuAccel !== 'kvm') {
+  console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
+}
+if (process.platform === 'darwin') {
+  const armAccel = commands.QEMU_SYSTEM_AARCH64 ? detectBestQemuAcceleration('aarch64') : null;
+  if (armAccel === 'hvf') {
+    console.log(`QEMU acceleration: \x1b[32mHVF\x1b[0m (Apple Silicon native for ARM64), TCG for x86_64.`);
+  } else {
+    console.log(`QEMU acceleration: \x1b[32m${activeQemuAccel.toUpperCase()}\x1b[0m${activeQemuAccel === 'tcg' ? ' (software emulation)' : ''}.`);
+  }
+} else {
+  console.log(`QEMU acceleration: \x1b[32m${activeQemuAccel.toUpperCase()}\x1b[0m${activeQemuAccel === 'tcg' ? ' (software emulation)' : ''}.`);
+}
 
 function pointCurrentSession(id) {
   const temporary = path.join(runtime, `.current-${sessionId}`);
@@ -197,7 +250,8 @@ async function sampleResources() {
   try {
     const running = [...sessions.values()].filter(session => session.kind === 'vm' && session.machine);
     const qemuRunning = running.some(session => session.engine?.startsWith('qemu'));
-    const hostCpu = qemuRunning ? parseHostCpu(await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '')) : null;
+    const hostStat = await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '');
+    const hostCpu = qemuRunning ? (parseHostCpu(hostStat) || getHostCpuTicks()) : null;
     await Promise.all(running.map(async session => {
       const machine = session.machine;
       let result;
@@ -212,7 +266,15 @@ async function sampleResources() {
         const cpuPercent = previous?.machine === machine ? processCpuPercent(previous, processCpu, hostCpu) : null;
         const ramBytes = parseProcessRss(status);
         if (processCpu && hostCpu) previousProcessSamples.set(session.id, {...processCpu, hostTicks: hostCpu.totalTicks, machine});
-        result = resourceResult(cpuPercent, ramBytes);
+        if (cpuPercent !== null || ramBytes !== null) {
+          result = resourceResult(cpuPercent, ramBytes);
+        } else if (Number.isInteger(pid)) {
+          try {
+            const {stdout} = await execFileAsync('ps', ['-p', String(pid), '-o', '%cpu=,rss='], {encoding: 'utf8', timeout: 2000});
+            const psMetrics = parsePsOutput(stdout);
+            if (psMetrics) result = resourceResult(psMetrics.cpuPercent, psMetrics.ramBytes);
+          } catch (_) {}
+        }
       } else if (session.engine === 'vbox') {
         try {
           if (vboxMetricSetup.get(session.id) !== machine) {
@@ -422,8 +484,28 @@ app.use('/api', (req, res, next) => {
   if (archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
   next();
 });
-app.use('/vendor', express.static(path.join(root, 'node_modules/@xterm/xterm')));
-app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/@xterm/addon-fit')));
+const xtermDir = fs.existsSync(path.join(root, 'node_modules/@xterm/xterm'))
+  ? path.join(root, 'node_modules/@xterm/xterm')
+  : path.join(root, 'node_modules/xterm');
+const xtermFitDir = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit'))
+  ? path.join(root, 'node_modules/@xterm/addon-fit')
+  : path.join(root, 'node_modules/xterm-addon-fit');
+app.use('/vendor', express.static(xtermDir));
+app.get('/vendor-addon-fit/lib/addon-fit.js', (_req, res, next) => {
+  const file = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js'))
+    ? path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js')
+    : path.join(root, 'node_modules/xterm-addon-fit/lib/xterm-addon-fit.js');
+  if (fs.existsSync(file)) return res.sendFile(path.resolve(file));
+  next();
+});
+app.get('/vendor-addon-fit/lib/addon-fit.js.map', (_req, res, next) => {
+  const file = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js.map'))
+    ? path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js.map')
+    : path.join(root, 'node_modules/xterm-addon-fit/lib/xterm-addon-fit.js.map');
+  if (fs.existsSync(file)) return res.sendFile(path.resolve(file));
+  next();
+});
+app.use('/vendor-addon-fit', express.static(xtermFitDir));
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');
   next();
@@ -437,6 +519,7 @@ function imageById(id) {
   const vbox = selectedProfile(catalog, id, 'vbox');
   const active = selectedProfile(catalog, id, sessionEngine);
   return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled,
+    arch: active.arch || 'x86_64',
     images: {raw: qemu.image, vdi: vbox.image},
     virtualbox: {osType: 'Linux_64', networkModel: vbox.networkModel === 'virtio' ? 'virtio' : '82540EM',
       firmware: vbox.firmware, diskBus: vbox.diskInterface,
@@ -460,6 +543,9 @@ function validateQemuOptions(options, partial = false) {
   }
   if (!partial && qemuFields.some(key => !Object.hasOwn(options, key))) throw new Error('Incomplete QEMU settings.');
   for (const [key, value] of Object.entries(options)) {
+    if (['kernel', 'initrd', 'containerImage'].includes(key) && value === null) {
+      continue;
+    }
     if (key === 'extraOptions') {
       if (!Array.isArray(value) || value.some(arg => typeof arg !== 'string' || !arg || /[\x00-\x1f\x7f]/.test(arg))) throw new Error('Invalid QEMU extra options.');
       continue;
@@ -479,6 +565,7 @@ function validateQemuOptions(options, partial = false) {
   if (options.rtcBase && !['utc', 'localtime'].includes(options.rtcBase)) throw new Error('QEMU RTC base must be utc or localtime.');
   if (options.diskInterface && !['virtio', 'ide'].includes(options.diskInterface)) throw new Error('QEMU disk bus must be virtio or ide.');
   if (options.networkModel && !['virtio-net-pci', 'e1000'].includes(options.networkModel)) throw new Error('QEMU network model must be virtio-net-pci or e1000.');
+  if (options.boot && !['disk', 'kernel'].includes(options.boot)) throw new Error('QEMU boot must be disk or kernel.');
   for (const key of ['bootDisk']) {
     if (options[key] && !/^[a-dn]{1,5}$/.test(options[key])) throw new Error(`Invalid QEMU boot order: ${key}.`);
   }
@@ -487,12 +574,17 @@ function validateQemuOptions(options, partial = false) {
 
 function validateLaunchSettings(settings, partial = false) {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Invalid launch settings.');
-  const allowed = ['memory', 'cpus', 'clock'];
+  const allowed = ['memory', 'cpus', 'clock', 'containerImage'];
   for (const key of Object.keys(settings)) if (!allowed.includes(key)) throw new Error(`Unknown launch setting: ${key}.`);
-  if (!partial && allowed.some(key => !Object.hasOwn(settings, key))) throw new Error('Incomplete launch settings.');
+  if (!partial && ['memory', 'cpus', 'clock'].some(key => !Object.hasOwn(settings, key))) throw new Error('Incomplete launch settings.');
   if (settings.memory !== undefined && (!Number.isInteger(settings.memory) || settings.memory < 64 || settings.memory > 32768)) throw new Error('Memory must be between 64 and 32768 MB.');
   if (settings.cpus !== undefined && (!Number.isInteger(settings.cpus) || settings.cpus < 1 || settings.cpus > 64)) throw new Error('Processors must be between 1 and 64.');
   if (settings.clock !== undefined && !['utc', 'localtime'].includes(settings.clock)) throw new Error('Hardware clock must be utc or localtime.');
+  if (settings.containerImage !== undefined && settings.containerImage !== null) {
+    if (typeof settings.containerImage !== 'string' || !settings.containerImage.trim() || settings.containerImage.length > 256 || /[\s"']/.test(settings.containerImage)) {
+      throw new Error('Container image must be a valid image reference without spaces or quotes.');
+    }
+  }
   return settings;
 }
 
@@ -502,22 +594,34 @@ function readConfig() {
 
 function qemuOptionsFor(imageId, overrides = {}) {
   const p = selectedProfile(readConfig(), imageId, 'qemu');
-  const settings = validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, ...overrides});
+  const baseLaunch = {memory: p.memory, cpus: p.cpus, clock: p.clock};
+  if (p.containerImage) baseLaunch.containerImage = p.containerImage;
+  const settings = validateLaunchSettings({...baseLaunch, ...overrides});
   const extra = Object.fromEntries([0, 2, 4].map(index => [p.extraOptions[index], p.extraOptions[index + 1]]));
   return validateQemuOptions({machine: extra['-machine'], cpuKvm: extra['-cpu'], display: p.mode === 'text' ? 'none' : null,
     diskInterface: p.diskInterface, networkModel: p.networkModel === 'virtio' ? 'virtio-net-pci' : 'e1000',
     bootDisk: 'c', nic: extra['-nic'], extraOptions: [...p.extraOptions],
-    memory: settings.memory, smp: settings.cpus, rtcBase: settings.clock});
+    memory: settings.memory, smp: settings.cpus, rtcBase: settings.clock,
+    boot: p.boot || 'disk', kernel: p.kernel || null, initrd: p.initrd || null,
+    containerImage: settings.containerImage || p.containerImage || null});
 }
 
 function launchSettingsFor(imageId, overrides = {}) {
   const p = selectedProfile(readConfig(), imageId, sessionEngine);
-  return validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, ...overrides});
+  const baseLaunch = {memory: p.memory, cpus: p.cpus, clock: p.clock};
+  if (p.containerImage) baseLaunch.containerImage = p.containerImage;
+  return validateLaunchSettings({...baseLaunch, ...overrides});
 }
 
 app.get('/api/general-settings', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({sessionId, engine: sessionEngine, availableEngines});
+  res.json({
+    sessionId,
+    engine: sessionEngine,
+    availableEngines,
+    vboxAvailable: availableEngines.includes('vbox'),
+    qemuAcceleration: detectBestQemuAcceleration()
+  });
 });
 
 app.put('/api/general-settings', (req, res) => {
@@ -542,8 +646,16 @@ app.get('/api/systems', (_req, res) => {
     const config = readConfig();
     res.json(Object.keys(config.systems).filter(id => id !== 'default').map(id => {
       const p = selectedProfile(config, id, sessionEngine);
+      const rawFile = config.systems[id].qemu.image;
+      const vdiFile = config.systems[id].vbox.image;
       return {id, label: p.label,
-        images: {raw: config.systems[id].qemu.image, vdi: config.systems[id].vbox.image},
+        images: {raw: rawFile, vdi: vdiFile},
+        imageExists: {
+          raw: !!(rawFile && fs.existsSync(imagePath(rawFile))),
+          vdi: !!(vdiFile && fs.existsSync(imagePath(vdiFile)))
+        },
+        boot: p.boot || 'disk',
+        containerImage: p.containerImage || null,
         memory: p.memory, cpus: p.cpus, clock: p.clock,
         startupDiskEnabled: p.startupDiskEnabled,
         vboxNetworkModel: p.networkModel === 'virtio' ? 'virtio' : '82540EM',
@@ -1065,19 +1177,46 @@ function imagePath(file) { return path.resolve(root, file); }
 
 function qemuArgs(session, image, overlay) {
   const settings = session.qemuOptions;
+  const extraOptions = [...settings.extraOptions];
+  if (session.qemuAcceleration === 'tcg') {
+    const cpuIndex = extraOptions.indexOf('-cpu');
+    if (cpuIndex !== -1 && extraOptions[cpuIndex + 1] === 'host') {
+      extraOptions[cpuIndex + 1] = 'max';
+    }
+  }
   const common = [
-    ...settings.extraOptions, '-accel', session.qemuAcceleration,
+    ...extraOptions, '-accel', session.qemuAcceleration,
     '-display', settings.display, '-m', String(settings.memory), '-smp', String(settings.smp),
     '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
     '-serial', `unix:${session.socketPath},server=on,wait=off`
   ];
-  // QEMU PC boot notation: c = first hard disk.
-  const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
+  let args;
+  if (settings.boot === 'kernel' && settings.kernel) {
+    const kernelPath = path.resolve(root, settings.kernel);
+    const initrdPath = settings.initrd ? path.resolve(root, settings.initrd) : null;
+    const containerImg = session.launchSettings?.containerImage || settings.containerImage || 'docker.io/library/alpine:3.20';
+    const serialConsole = (image.arch === 'aarch64' || image.arch === 'arm64') ? 'console=ttyAMA0 console=ttyS0' : 'console=ttyS0';
+    const appendCmd = `${serialConsole} b2c.cache_device=/dev/vda,use=existing|free-space b2c.run="-it ${containerImg}"`;
+    args = [
+      ...common,
+      '-kernel', kernelPath,
+      ...(initrdPath ? ['-initrd', initrdPath] : []),
+      '-append', appendCmd,
+      '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`
+    ];
+  } else {
+    args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
+  }
   if (session.guestIsoAttached && session.guestIso) args.push('-drive', `file=${session.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);
   // The profile's -nic none disables QEMU's implicit user-network NIC.
   for (const [index, nic] of session.networkInterfaces.entries()) {
     if (nic.switchId === null) {
       args.push('-device', `${settings.networkModel},mac=${nic.mac}`);
+      continue;
+    }
+    if (nic.switchId === 'nat') {
+      const id = `nat${index}`;
+      args.push('-netdev', `user,id=${id}`, '-device', `${settings.networkModel},netdev=${id},mac=${nic.mac}`);
       continue;
     }
     const sw = sessions.get(nic.switchId);
@@ -1093,6 +1232,7 @@ function validateNetworkInterfaces(value, engine, requireRunning = true) {
   if (!Array.isArray(value) || value.length > 4) throw new Error('At most four Ethernet interfaces are supported.');
   return value.map((switchId, index) => {
     if (switchId === null) return null;
+    if (switchId === 'nat') return 'nat';
     const sw = getSession(switchId);
     if (!sw || sw.kind !== 'switch' || (requireRunning && !sw.machine)) throw new Error(`Ethernet ${index}: start its VDE switch first.`);
     return sw;
@@ -1108,7 +1248,7 @@ function assignNetworkInterfaces(session, switches) {
   ]);
   const usedMacs = new Set(otherInterfaces.map(nic => nic.mac));
   for (const [index, sw] of switches.entries()) {
-    const switchId = sw?.id ?? null;
+    const switchId = sw === 'nat' ? 'nat' : (sw?.id ?? null);
     const retained = previous[index];
     if (retained && retained.switchId === switchId) {
       planned.push(retained);
@@ -1124,6 +1264,10 @@ function assignNetworkInterfaces(session, switches) {
     usedMacs.add(mac);
     if (sw === null) {
       planned.push({switchId: null, port: null, mac});
+      continue;
+    }
+    if (sw === 'nat') {
+      planned.push({switchId: 'nat', port: null, mac});
       continue;
     }
     const usedPorts = new Set([...otherInterfaces, ...planned]
@@ -1236,14 +1380,19 @@ async function stopSwitch(session, force = false) {
   publishState(session, 'VDE switch stopped');
 }
 
-function qemuAcceleration(engine, checkAvailability = true) {
+function qemuAcceleration(engine, arch = 'x86_64', checkAvailability = true) {
   if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
-  if (!checkAvailability) return 'kvm';
+  const accel = detectBestQemuAcceleration(arch);
+  if (!checkAvailability) return accel;
   const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'vbox');
-  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
-  try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or select VirtualBox if it is installed.'); }
-  return 'kvm';
+  if (virtualBoxRunning && accel === 'kvm') {
+    throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
+  }
+  if (accel === 'kvm') {
+    try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
+    catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or select VirtualBox if it is installed.'); }
+  }
+  return accel;
 }
 
 function qemuOverlayArgs(image, overlay) {
@@ -1258,9 +1407,10 @@ function spawnQemu(session, image, reuseDisk = false) {
   }
   image.runFiles = [overlay];
   session.runDisk = overlay;
+  const qemuBin = qemuBinaryFor(image.arch);
   const args = qemuArgs(session, image, overlay);
-  appendLog(session, `$ ${[commands.QEMU_SYSTEM_X86_64, ...args].map(shellQuote).join(' ')}`);
-  const child = spawn(commands.QEMU_SYSTEM_X86_64, args, {stdio: ['ignore', 'pipe', 'pipe']});
+  appendLog(session, `$ ${[qemuBin, ...args].map(shellQuote).join(' ')}`);
+  const child = spawn(qemuBin, args, {stdio: ['ignore', 'pipe', 'pipe']});
   session.machine = child;
   child.stdout.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
   child.stderr.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
@@ -1379,7 +1529,9 @@ app.get('/api/options/:sessionId', (req, res) => {
     const profile = selectedProfile(readConfig(), image.id, engine);
     const fixed = {
       type: profile.type, arch: profile.arch, mode: profile.mode,
-      firmware: profile.firmware, acceleration: profile.acceleration, boot: profile.boot,
+      firmware: profile.firmware,
+      acceleration: isQemu ? (previewSession.qemuAcceleration || 'tcg') : profile.acceleration,
+      boot: profile.boot,
       diskInterface: profile.diskInterface, networkModel: profile.networkModel,
       cdromInterface: profile.cdromInterface, extraOptions: profile.extraOptions || []
     };
@@ -1392,8 +1544,9 @@ app.get('/api/options/:sessionId', (req, res) => {
     const vboxAttachCommand = launched && !isQemu && attachGuestCdrom
       ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso]]
       : [];
+    const qemuBin = qemuBinaryFor(image.arch);
     const launchCommands = isQemu
-      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
+      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [qemuBin, ...qemuArgs(previewSession, image, overlay)]]
       : launched
         ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewSession, image)], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
@@ -1408,7 +1561,17 @@ app.get('/api/options/:sessionId', (req, res) => {
           {label: 'Working disk (VDI differential)', path: path.relative(root, session.runDisk || tempFile(session, 'disk.vdi'))}
         ];
     storage.push({label: 'Startup disk (cd-rom)', path: attachGuestCdrom ? socketLabel(nextGuestIso) : session.guestIso ? socketLabel(session.guestIso) : 'Not created'});
-    res.json({launched, engine, settings: userSettings, fields: launchSettingFields, fixed, storage, interfaces: previewInterfaces.map((nic, index) => ({index: index + 1, switch: nic.switchId === null ? 'Disconnected' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`, port: nic.port, mac: nic.mac})), console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
+    const fields = {...launchSettingFields};
+    if (profile.boot === 'kernel' || profile.containerImage) {
+      fields.containerImage = {label: 'Container image', type: 'text'};
+    }
+    const interfaceList = previewInterfaces.map((nic, index) => ({
+      index: index + 1,
+      switch: nic.switchId === null ? 'Disconnected' : nic.switchId === 'nat' ? 'Internet (NAT)' : `${sessions.get(nic.switchId)?.hostname || nic.switchId} · port ${nic.port}`,
+      port: nic.port,
+      mac: nic.mac
+    }));
+    res.json({launched, engine, settings: userSettings, fields, fixed, storage, interfaces: interfaceList, console: {guest: 'ttyS0 · 115200 baud', socket: socketLabel(session.socketPath)}, monitor: isQemu ? socketLabel(session.monitorPath) : null, commands: [...isoCommands, ...launchCommands].map(args => args.map(shellQuote).join(' '))});
   } catch (error) { res.status(400).json({error: error.message}); }
 });
 
@@ -1442,18 +1605,35 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current host disk was not found.');
   if (!['qemu', 'vbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
   requireSessionEngine(selectedEngine);
-  const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
+  const image = resume ? session.selectedImage : imageById(imageId);
+  if (!image) throw new Error('Unknown system in config.json.');
   if (selectedEngine === 'vbox') {
+    if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
-  const image = resume ? session.selectedImage : imageById(imageId);
-  if (!image) throw new Error('Unknown system in config.json.');
+  const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine, image.arch) : null;
   if (session.profileHash && session.profileHash !== profileHash(selectedProfile(readConfig(), image.id, selectedEngine))) {
     throw new Error(`System profile changed for ${session.hostname}; restore its original config.json or recreate the host.`);
   }
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
-  if (selectedEngine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  if (selectedEngine === 'vbox') {
+    if (image.boot === 'kernel' || image.id === 'container') {
+      throw new Error('OCI Container hosts (b2c direct kernel boot) are only supported with QEMU.');
+    }
+    if (!fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  }
+  if (selectedEngine.startsWith('qemu')) {
+    const p = selectedProfile(readConfig(), image.id, 'qemu');
+    if (p.boot === 'kernel') {
+      if (p.kernel && !fs.existsSync(path.resolve(root, p.kernel))) {
+        throw new Error(`Kernel for ${image.label} is missing (${p.kernel}); run bash scripts/prepare.sh.`);
+      }
+      if (p.initrd && !fs.existsSync(path.resolve(root, p.initrd))) {
+        throw new Error(`Initramfs for ${image.label} is missing (${p.initrd}); run bash scripts/prepare.sh.`);
+      }
+    }
+  }
   session.guestMedia = readStartupFiles(startupDirectory(session));
   if (options.startupDiskEnabled !== undefined) {
     if (typeof options.startupDiskEnabled !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
@@ -1581,13 +1761,21 @@ async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
 
 function validateRestartPrerequisites(session) {
   requireSessionEngine(session.engine);
-  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine);
-  else if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
-    throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
+  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine, session.selectedImage?.arch);
+  else {
+    if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
+    if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
+      throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
+    }
   }
   const image = session.selectedImage;
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
-  if (session.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  if (session.engine === 'vbox') {
+    if (image.boot === 'kernel' || image.id === 'container') {
+      throw new Error('OCI Container hosts (b2c direct kernel boot) are only supported with QEMU.');
+    }
+    if (!fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+  }
   for (const nic of session.networkInterfaces) validateNetworkInterfaces([nic.switchId], session.engine);
 }
 
@@ -1779,7 +1967,7 @@ app.post('/api/start', async (req, res) => {
     console.error(message);
     try {
       const session = getSession(req.body.sessionId);
-      if (session) publishState(session, message);
+      if (session) publishState(session, message.startsWith('Start failed:') ? message : `Start failed: ${message}`);
     } catch (_) {}
     res.status(500).json({error: message});
   }

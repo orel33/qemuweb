@@ -4,41 +4,76 @@ const fs = require('fs');
 const crypto = require('crypto');
 
 const engines = ['qemu', 'vbox'];
-const editableKeys = ['memory', 'cpus', 'clock', 'startupDiskEnabled'];
+const editableKeys = ['memory', 'cpus', 'clock', 'startupDiskEnabled', 'containerImage'];
 const keywords = new Set(['type', 'arch', 'mode', 'label', ...editableKeys, 'firmware',
-  'acceleration', 'boot', 'extraOptions', 'cdromInterface', 'diskInterface', 'networkModel', 'image']);
+  'acceleration', 'boot', 'extraOptions', 'cdromInterface', 'diskInterface', 'networkModel', 'image', 'kernel', 'initrd']);
 
 function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 
 function validateOverrides(overrides) {
   if (!isObject(overrides) || Object.keys(overrides).some(key => !editableKeys.includes(key))) {
-    throw new Error('Host config may only override memory, cpus, clock and startupDiskEnabled.');
+    throw new Error('Host config may only override memory, cpus, clock, startupDiskEnabled and containerImage.');
   }
   if (overrides.memory !== undefined && (!Number.isInteger(overrides.memory) || overrides.memory < 64 || overrides.memory > 32768)) throw new Error('Memory must be between 64 and 32768 MB.');
   if (overrides.cpus !== undefined && (!Number.isInteger(overrides.cpus) || overrides.cpus < 1 || overrides.cpus > 64)) throw new Error('Processors must be between 1 and 64.');
   if (overrides.clock !== undefined && !['utc', 'localtime'].includes(overrides.clock)) throw new Error('Clock must be utc or localtime.');
   if (overrides.startupDiskEnabled !== undefined && typeof overrides.startupDiskEnabled !== 'boolean') throw new Error('startupDiskEnabled must be boolean.');
+  if (overrides.containerImage !== undefined && (typeof overrides.containerImage !== 'string' || !overrides.containerImage.trim() || overrides.containerImage.length > 256 || /[\s"']/.test(overrides.containerImage))) {
+    throw new Error('Container image must be a valid image reference without spaces or quotes.');
+  }
   return overrides;
 }
 
+function hostArchitecture() {
+  return (process.arch === 'arm64' || process.arch === 'aarch64') ? 'aarch64' : 'x86_64';
+}
+
 function validateProfile(profile, id, engine) {
-  if (profile.type !== 'linux' || profile.arch !== 'x86_64' || profile.mode !== 'text' ||
-      typeof profile.label !== 'string' || !profile.label.trim()) throw new Error(`Invalid Linux/x86_64/text profile: ${id}/${engine}.`);
+  if (profile.arch === 'auto') {
+    profile.arch = engine === 'qemu' ? hostArchitecture() : 'x86_64';
+  }
+  if (profile.type !== 'linux' || !['x86_64', 'aarch64'].includes(profile.arch) || profile.mode !== 'text' ||
+      typeof profile.label !== 'string' || !profile.label.trim()) throw new Error(`Invalid Linux/${profile.arch}/text profile: ${id}/${engine}.`);
   validateOverrides(Object.fromEntries(editableKeys.map(key => [key, profile[key]])));
-  if (profile.firmware !== 'bios' || profile.boot !== 'disk' || profile.cdromInterface !== 'ide' ||
+  if (profile.firmware !== 'bios' || !['disk', 'kernel'].includes(profile.boot) || profile.cdromInterface !== 'ide' ||
       !['virtio', 'e1000'].includes(profile.networkModel) ||
-      (engine === 'qemu' && (profile.acceleration !== 'kvm' || !['ide', 'virtio'].includes(profile.diskInterface))) ||
+      (engine === 'qemu' && (!['kvm', 'hvf', 'tcg', 'auto'].includes(profile.acceleration) || !['ide', 'virtio'].includes(profile.diskInterface))) ||
       (engine === 'vbox' && (profile.acceleration !== 'default' || profile.diskInterface !== 'sata'))) {
     throw new Error(`Invalid hardware profile: ${id}/${engine}.`);
+  }
+  if (engine === 'vbox' && profile.arch !== 'x86_64') {
+    throw new Error(`VirtualBox engine only supports x86_64 architecture: ${id}/vbox.`);
+  }
+  if (engine === 'vbox' && profile.boot === 'kernel') {
+    throw new Error(`Direct kernel boot is only supported with QEMU: ${id}/vbox.`);
+  }
+  if (profile.arch === 'aarch64' && Array.isArray(profile.extraOptions) && profile.extraOptions[1] === 'q35') {
+    profile.extraOptions = ['-machine', 'virt', profile.extraOptions[2], profile.extraOptions[3], profile.extraOptions[4], profile.extraOptions[5]];
+  }
+  if (profile.boot === 'kernel') {
+    if (profile.arch === 'aarch64') {
+      if (profile.kernel === 'images/b2c/linux-x86_64-qemu') profile.kernel = 'images/b2c/linux-arm64-qemu';
+      if (profile.initrd === 'images/b2c/initramfs.linux_amd64.cpio.xz') profile.initrd = 'images/b2c/initramfs.linux_arm64.cpio.xz';
+    }
+    if (typeof profile.kernel !== 'string' || !profile.kernel || /[\x00-\x1f\x7f]/.test(profile.kernel)) {
+      throw new Error(`Missing or invalid kernel for ${id}/${engine}.`);
+    }
+    if (typeof profile.initrd !== 'string' || !profile.initrd || /[\x00-\x1f\x7f]/.test(profile.initrd)) {
+      throw new Error(`Missing or invalid initrd for ${id}/${engine}.`);
+    }
   }
   if (engine === 'qemu') {
     const args = profile.extraOptions;
     const pairs = Array.isArray(args) && args.length === 6
       ? Object.fromEntries([0, 2, 4].map(index => [args[index], args[index + 1]]))
       : {};
+    const validMachine = profile.arch === 'aarch64' ? pairs['-machine'] === 'virt' : pairs['-machine'] === 'q35';
+    const validCpu = profile.arch === 'aarch64'
+      ? ['host', 'max', 'cortex-a57', 'cortex-a72'].includes(pairs['-cpu'])
+      : ['host', 'max', 'qemu64'].includes(pairs['-cpu']);
     if (!Array.isArray(args) || args.length !== 6 || args.some(value => typeof value !== 'string') ||
         new Set(args.filter((_, index) => index % 2 === 0)).size !== 3 ||
-        pairs['-machine'] !== 'q35' || pairs['-cpu'] !== 'host' || pairs['-nic'] !== 'none') {
+        !validMachine || !validCpu || pairs['-nic'] !== 'none') {
       throw new Error(`Invalid extraOptions:qemu for ${id}.`);
     }
   } else if (profile.extraOptions !== undefined) {
