@@ -115,6 +115,23 @@ tab and call it from `start.sh`, for example `sh /mnt/cdrom/firewall.sh`. Each
 extra file is limited to 1 MiB, and all startup files together to 4 MiB. Save
 the settings and restart the host to use the rebuilt disk.
 
+### OCI Containers with Boot2container (b2c)
+
+QemuWeb supports launching virtual machines directly from OCI / Docker container images using [Boot2container](https://gitlab.freedesktop.org/gfx-ci/boot2container) without building full OS disk images:
+
+1. Prepare container assets: `bash scripts/prepare.sh --system container`.
+   - The preparation script automatically detects the host architecture (`uname -m`):
+     - On Apple Silicon (`arm64`), downloads `linux-arm64-qemu` and `initramfs.linux_arm64.cpio.xz`.
+     - On x86_64 (`amd64`), downloads `linux-x86_64-qemu` and `initramfs.linux_amd64.cpio.xz`.
+   - Initializes a 10 GB sparse cache disk (`images/container.raw`) to persist container layers locally.
+2. In the Web interface, add a new host and choose system **OCI Container (b2c)**.
+3. In **Host Settings**, enter any public or private container image (e.g. `docker.io/library/alpine:3.20` or `docker.io/library/nginx:alpine`).
+4. Networking:
+   - Interface `eth0` defaults to **Internet (NAT)**, which provides transparent DHCP and outbound internet access for Boot2container to pull container layers from Docker Hub or OCI registries.
+   - Additional interfaces (`eth1`, `eth2`, ...) can connect to virtual switches (`s1`, `s2`, ...) to participate in private topologies alongside regular VMs.
+5. Multi-architecture execution:
+   - Boot2container uses `"arch:qemu": "auto"`. On Apple Silicon Macs, QemuWeb automatically executes native ARM64 QEMU (`qemu-system-aarch64`) with **HVF hardware acceleration**, boots the ARM64 kernel, and pulls native ARM64 container layers. On x86_64 hosts, it runs `qemu-system-x86_64` with KVM.
+
 ## Images
 
 `scripts/prepare.sh` prepares the systems listed in [`config.json`](config.json):
