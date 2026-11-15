@@ -1,0 +1,10 @@
+{
+  "schemaVersion": 1,
+  "users": [
+    {
+      "login": "alice",
+      "hash": "scrypt$16384$8$1$c2FsdC1leGFtcGxlLTEyMw==$ZXhhbXBsZS1oYXNoLW5vdC1hLXJlYWwtcGFzc3dvcmQtaGFzaC1yZXBsYWNlLXdpdGgtdXNlci5zaA==",
+      "role": "student"
+    }
+  ]
+}

@@ -8,6 +8,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 
 | File | Purpose |
 |---|---|
+| `auth.test.js` | Check authentication: scrypt hash round trip, login character set, `users.json` validation and mode 0600, signed cookie expiry and tampering, the page/API gate, the Socket.IO handshake, `QEMUWEB_AUTH=off`, and `scripts/user.js` (add, passwd, role, remove, list, import-csv). |
 | `guest-hook-filter.test.js` | Hide startup hook markers from the serial console, including split and prefixed lines. |
 | `guest-media.test.js` | Validate startup files and resource paths; check that separate read-only ISOs contain the right script and resources when `genisoimage` and `isoinfo` are available. |
 | `host-settings-naming.test.js` | Check automatic host names (from `public/nodes.js`) and the shared Add host/Host Settings dialog. |
@@ -18,6 +19,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `resource-metrics.test.js` | Parse CPU and memory metrics for Linux processes and VirtualBox. |
 | `runner.test.js` | Drive `runner/` through its facade with an injected in-memory session and a temporary runtime directory: node layout, hostname aliases, state/log events, NIC MAC and port assignment, engine checks, catalog lookups and launch preview commands. No HTTP server is started and no process is spawned. |
 | `runner-boundaries.test.js` | Check the dependency rules: `runner/` requires only `runner/`, `common/`, Node built-ins and `node-pty`; the rest of the server requires only `runner/index.js`. |
+| `session-manager.test.js` | Check one session per user (random ID, `owner`, `runtime/users/<login>` alias), independent runners and events, deletion, exit cleanup, server records, and that archives never carry the owner. |
 | `session-archive.test.js` | Write and read session ZIP archives; reject modified, unsafe or incomplete ones. |
 | `session-log.test.js` | Check log replay, clearing and history limits. |
 | `tcg09-graphic.test.js` | Build the network graph from example topologies and check links, positions and states. |
@@ -29,10 +31,14 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 
 ## Integration tests (`test/integration/`)
 
+Every scenario logs in for real: `qemuweb-client.js` writes a temporary users file with random passwords, starts the server with `QEMUWEB_USERS_FILE`, and drives it with an HTTP and Socket.IO client that keeps the session cookie like a browser. The server has no test backdoor.
+
 These scenarios require QEMU and prepared RAW images. The two-hosts and four-hosts scenarios require a QEMU build with VDE support and the VDE tools. The two-hosts scenario uses KVM when available and falls back to QEMU/TCG otherwise; `two-hosts-tcg` forces TCG. The four-hosts scenario uses KVM by default and can use TCG with `FOUR_HOSTS_ENGINE=qemu-tcg`.
 
 | Command | Script | Purpose |
 |---|---|---|
+| `./scripts/run-tests.sh two-users-isolation` | `two-users-isolation.js` | Two users logged in at once: each lists only its own nodes; every cross-session node route answers 404 and changes nothing; Socket.IO cannot select, type into, clear or resize the other user's consoles; no event of one session reaches the other; anonymous requests and sockets are refused; deleting one session leaves the other intact; logging out stops nothing. Needs only the VDE tools (no image, no KVM). |
+| `./scripts/run-tests.sh session-reconnect` | `session-reconnect.js` | Start a VDE switch (and a Debian 13 Legacy host when its image and KVM are available), type into the consoles, close every socket and log out, then log in again: same session, nodes still running, console and log history replayed by `node-snapshot`, input works. `RECONNECT_HOST=0` skips the host. |
 | `./scripts/run-tests.sh two-hosts` | `two-hosts-ping.js` | Boot two Debian 13 Legacy guests on one VDE switch; verify distinct ports and MACs, serial login, static IPs, bidirectional ping, and Stop/Resume. Requires `images/debian13-legacy.raw`. |
 | `./scripts/run-tests.sh two-hosts-tcg` | `two-hosts-ping.js` | Run the same two-hosts scenario with QEMU software emulation. |
 | `./scripts/run-tests.sh four-hosts-startup` | `four-hosts-startup.js` | Boot four Debian 13 Legacy guests on one VDE switch with automatic startup ISOs. Verify the default `start.sh` keeps `@HOSTNAME@`, `@IFNAME0@` and `@SWPORT0@`, each guest receives `192.168.0.<its VDE port>/24` without serial configuration, and all 12 directed ping paths work. Requires `images/debian13-legacy.raw` and about 4 GiB of guest memory. |
@@ -45,3 +51,14 @@ To run the profile scenario for Debian Legacy alone, use `STARTUP_MEDIA_PROFILES
 To keep the four-hosts guest commands and replies, use `./scripts/run-tests.sh four-hosts-startup 2>&1 | tee four-hosts-startup.log`. Set `FOUR_HOSTS_TIMEOUT_MS` for slower boots. The scenario starts an isolated test server and removes its hosts and switch when finished; it does not rebuild the base image.
 
 To narrow the network diagnostic, set `GUEST_NETWORK_PROFILES` to comma-separated IDs, for example `GUEST_NETWORK_PROFILES=openwrt ./scripts/run-tests.sh guest-network`. Set `GUEST_NETWORK_ENGINE=qemu-tcg` for software emulation or `GUEST_NETWORK_TIMEOUT_MS` for slower boots. Keep the command and guest output with `./scripts/run-tests.sh guest-network 2>&1 | tee guest-network.log`. This test uses only temporary working disks and an isolated test server; it does not rebuild or overwrite the base images.
+
+## Manual tests of the Web interface
+
+`./scripts/run-tests.sh web` starts the application on port 3003. It needs accounts in the local, git-ignored `users.json`, for example two students for checking isolation in two browsers (or a private window):
+
+```bash
+./scripts/user.sh add toto     # type the password toto twice
+./scripts/user.sh add titi     # type the password titi twice
+```
+
+or, without prompts, `printf 'toto,toto\ntiti,titi\n' > /tmp/accounts.csv && ./scripts/user.sh import-csv /tmp/accounts.csv`. These weak passwords are for local tests only. `./scripts/user.sh remove toto` deletes an account.

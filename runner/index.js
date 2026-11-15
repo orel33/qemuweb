@@ -1,8 +1,9 @@
 'use strict';
 
 // Runner facade: the only module the rest of the code may require from runner/.
-// The runner depends only on common/ and Node built-ins. It receives its session by injection
-// and reports everything through an EventEmitter (runner.events):
+// The runner depends only on common/ and Node built-ins. One runner drives one session, received
+// by injection (createRunner() is called once per session), and reports everything through its
+// own EventEmitter (runner.events):
 //   state         {nodeId, running, hasLaunched, pendingRestart, message}
 //   log           {nodeId, line}
 //   logs-reset    {nodeId}
@@ -10,26 +11,51 @@
 //   serial-reset  {nodeId, serial?, preserveLine?}
 //   nodes-removed {ids}
 // Their payloads are exactly what the web layer forwards to browsers over Socket.IO.
-const {configure, ctx} = require('./context');
+const {createContext} = require('./context');
 const {resolveCommands} = require('./preflight');
 const guestMedia = require('./media/guest-media');
 const {fileSha256} = require('./media/image-hash');
-const catalog = require('./catalog');
-const runtime = require('./session-runtime');
-const hostConfig = require('./host-config');
-const guestIso = require('./media/guest-iso');
-const serial = require('./console/serial');
-const nics = require('./network/nics');
-const vde = require('./network/vde-switch');
-const lifecycle = require('./node-lifecycle');
-const {monitor} = require('./engines/qemu-monitor');
-const {previewLaunch} = require('./launch-preview');
-const {sampleResources, metricsSnapshot} = require('./resources');
+const {createCatalog} = require('./catalog');
+const {createSessionRuntime} = require('./session-runtime');
+const {createDisks} = require('./media/disks');
+const {createGuestIsoManager} = require('./media/guest-iso');
+const {createNics} = require('./network/nics');
+const {createQemu} = require('./engines/qemu');
+const {createVirtualBox} = require('./engines/vbox');
+const {createMonitor} = require('./engines/qemu-monitor');
+const {createSerial} = require('./console/serial');
+const {createVdeSwitch} = require('./network/vde-switch');
+const {createHostConfig} = require('./host-config');
+const {createLaunchPreview} = require('./launch-preview');
+const {createLifecycle} = require('./node-lifecycle');
+const {createResources} = require('./resources');
 
 const SAMPLING_INTERVAL_MS = 2000;
 
-function createRunner({session, commands, root, runtimeRoot, configPath}) {
-  configure({session, commands, root, runtimeRoot, configPath});
+// Creates one runner for one session. Each call returns an independent instance with its
+// own context, EventEmitter and resource sampling timer. hostNodes() optionally lists the
+// nodes of every session on this machine (see context.js).
+function createRunner({session, commands, root, runtimeRoot, configPath, hostNodes}) {
+  const ctx = createContext({session, commands, root, runtimeRoot, configPath, hostNodes});
+  // Dependency order: each module uses only the modules created before it.
+  ctx.catalog = createCatalog(ctx);
+  ctx.runtime = createSessionRuntime(ctx);
+  ctx.disks = createDisks(ctx);
+  ctx.guestIso = createGuestIsoManager(ctx);
+  ctx.nics = createNics(ctx);
+  ctx.qemu = createQemu(ctx);
+  ctx.vbox = createVirtualBox(ctx);
+  ctx.monitor = createMonitor(ctx);
+  ctx.serial = createSerial(ctx);
+  ctx.vde = createVdeSwitch(ctx);
+  ctx.hostConfig = createHostConfig(ctx);
+  ctx.preview = createLaunchPreview(ctx);
+  ctx.lifecycle = createLifecycle(ctx);
+  ctx.resources = createResources(ctx);
+  const {catalog, runtime, guestIso, nics, vde, hostConfig, lifecycle, serial} = ctx;
+  const {previewLaunch} = ctx.preview;
+  const {monitor} = ctx.monitor;
+  const {sampleResources, metricsSnapshot} = ctx.resources;
   let resourceTimer = null;
   return {
     events: ctx.events,

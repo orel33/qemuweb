@@ -24,7 +24,9 @@ function register({app, session, runner, commands, emit}) {
   });
   app.post('/api/session-archive/export', async (req, res) => {
     session.archiveBusy = true;
-    const archive = path.join(session.runtimeDir, `.session-export-${crypto.randomBytes(8).toString('hex')}.zip`);
+    const exportName = `.session-export-${crypto.randomBytes(8).toString('hex')}`;
+    const archive = path.join(session.runtimeDir, `${exportName}.zip`);
+    const exportMetadata = path.join(session.runtimeDir, `${exportName}.json`);
     try {
       const includeDisks = req.body?.includeDisks;
       const prepared = archiveSources(includeDisks, includeDisks);
@@ -44,16 +46,21 @@ function register({app, session, runner, commands, emit}) {
         }
       }
       const {sources} = includeDisks ? archiveSources(includeDisks) : prepared;
-      writeJsonAtomic(session.metadataFile, {...session.metadata(), baseImages});
-      await writeArchive(archive, sources);
+      const metadata = {...session.metadata(), baseImages};
+      writeJsonAtomic(session.metadataFile, metadata);
+      // The owner stays out of archives, so that any user can load them.
+      delete metadata.owner;
+      writeJsonAtomic(exportMetadata, metadata);
+      await writeArchive(archive, sources.map(item => item.name === 'session.json' ? {...item, file: exportMetadata} : item));
       res.set('Cache-Control', 'no-store');
       // The temporary archive is dot-prefixed; sendFile ignores dotfiles by default.
       res.download(archive, 'qemuweb-session-v4.zip', {dotfiles: 'allow'}, error => {
         session.archiveBusy = false;
         fs.rmSync(archive, {force: true});
+        fs.rmSync(exportMetadata, {force: true});
         if (error && !res.headersSent) res.status(500).json({error: error.message});
       });
-    } catch (error) { session.archiveBusy = false; fs.rmSync(archive, {force: true}); res.status(400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to save session archive.' : error.message}); }
+    } catch (error) { session.archiveBusy = false; fs.rmSync(archive, {force: true}); fs.rmSync(exportMetadata, {force: true}); res.status(400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to save session archive.' : error.message}); }
   });
   // Lets the load dialog warn before upload: returns the systems whose current base
   // image differs from the one recorded in an archive's session.json.

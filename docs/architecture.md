@@ -8,7 +8,8 @@ and relays their consoles.
 
 | Term | Meaning |
 | --- | --- |
-| Session | The workspace of QemuWeb: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `runtime/sessions/<id>/`. The server currently holds one session. A session ZIP archive and `session.json` describe it. |
+| Session | A user's workspace: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `runtime/sessions/<id>/`. Each user owns exactly one session, with a random ID, recorded as `owner` in `session.json`. A session ZIP archive and `session.json` describe it. |
+| User | A login from `users.json` (or the implicit `local` user when `QEMUWEB_AUTH=off`). |
 | Node | An element of a session: a host or a switch. API routes and Socket.IO events use `nodeId`. |
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
 | Switch | A node that is a VDE switch. |
@@ -21,10 +22,12 @@ flowchart TB
   end
 
   subgraph Server["Node.js server · server.js"]
-    Routes["HTTP API · routes/"]
-    Sockets["Socket.IO · sockets.js"]
+    Auth["Authentication · lib/auth/ (signed cookie)"]
+    Manager["Session manager · lib/session-manager.js (login → session + runner)"]
+    Routes["HTTP API · one router per session · routes/"]
+    Sockets["Socket.IO · rooms session:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
     Session["Session · lib/session.js, archives, topology"]
-    Runner["Runner facade · runner/index.js"]
+    Runner["Runner instance per session · runner/index.js"]
   end
 
   subgraph Local["Local processes"]
@@ -34,13 +37,18 @@ flowchart TB
     VDeterm["vdeterm · switch console"]
   end
 
-  UI -->|"HTTP / JSON"| Routes
-  Terminal <-->|"Socket.IO"| Sockets
+  UI -->|"HTTP / JSON + cookie"| Auth
+  Terminal <-->|"Socket.IO + cookie"| Auth
+  Auth -->|"req.user"| Manager
+  Auth -->|"socket.data.user"| Sockets
+  Manager -->|"req.workspace"| Routes
+  Manager -->|"creates"| Session
+  Manager -->|"createRunner per session"| Runner
   Routes --> Session
   Routes -->|"actions, configuration, monitor"| Runner
   Sockets -->|"console input"| Runner
   Runner -.->|"events: state, log, serial, ..."| Sockets
-  Session -->|"injected at startup"| Runner
+  Session -->|"injected at creation"| Runner
   Runner -->|"launch and control"| QEMU
   Runner -->|"VBoxManage"| VBox
   Runner -->|"launch"| VDE
@@ -65,6 +73,14 @@ flowchart TB
 - **Actions and status:** the HTTP API asks the runner to start and stop
   processes. The runner reports state, logs and serial output as events, which
   `sockets.js` forwards over Socket.IO to the relevant browser tabs.
+- **Users and sessions:** `lib/auth/` checks the signed cookie of every request
+  and of the Socket.IO handshake (Origin checks are planned for milestone 6).
+  `lib/session-manager.js` maps the login to its workspace `{session, runner}`,
+  creating it at first use; it survives logouts and closed tabs until the user
+  deletes it or the server stops. Each HTTP request goes to the router of the
+  user's own session, so a node ID is looked up only there (404 otherwise).
+  Per-session events go to the room `session:<id>`, per-node events to
+  `node:<id>:<nodeId>`, which a socket joins only for a node of its own session.
 
 ## Module map
 
@@ -72,31 +88,40 @@ The server is split into layers with one-way dependencies:
 
 - **`runner/`** manages node processes. It depends only on `common/`, Node
   built-ins and `node-pty`. The rest of the server requires only its facade
-  `runner/index.js` (`createRunner`), which receives the session by injection
-  and reports `state`, `log`, `logs-reset`, `serial`, `serial-reset` and
-  `nodes-removed` events through an `EventEmitter`.
-- **`lib/`** holds the session and what describes it: `session.js`,
-  `session-snapshot.js` and `session-archive.js` (ZIP export/import),
-  `topology.js` (`.topo` files).
+  `runner/index.js` (`createRunner`), called once per session: each runner
+  receives its session by injection, has its own context (no module-level
+  state), its own resource sampling timer, and reports `state`, `log`,
+  `logs-reset`, `serial`, `serial-reset` and `nodes-removed` events through its
+  own `EventEmitter`. Its modules are factories (`createCatalog(ctx)`, ...)
+  attached to that context in dependency order.
+- **`lib/`** is the control plane: `session-manager.js` (one session and one
+  runner per user), `server-instance.js` (server records used by the scripts),
+  `auth/` (authentication), and the session and what describes it:
+  `session.js`, `session-snapshot.js` and `session-archive.js` (ZIP
+  export/import), `topology.js` (`.topo` files).
 - **`routes/`** and **`sockets.js`** form the web layer: HTTP routes by area and
   Socket.IO wiring. `server.js` only starts and wires everything.
 - **`common/`** holds code shared by the runner and the server.
 
 | Module | Role |
 | --- | --- |
-| `server.js` | Startup and wiring: HTTP server, Socket.IO, session, runner and routes. |
-| `sockets.js` | Forwards runner events to browsers and relays console input. |
+| `server.js` | Startup and wiring: HTTP server, Socket.IO, authentication, session manager and routes. |
+| `sockets.js` | Forwards each runner's events to the rooms of its session and relays console input. |
+| `routes/index.js` | Builds the router of one session from the route modules; 404 for a node ID outside the session. |
 | `routes/settings.js` | General settings, system catalog and startup CD-ROM capability. |
 | `routes/nodes.js` | Node listing, switches, start, stop, reboot, reset, monitor, rename and deletion. |
 | `routes/hosts.js` | Host creation, configuration and startup CD-ROM. |
 | `routes/topology.js` | Topology (`.topo`) preview, creation and export. |
 | `routes/archives.js` | Session ZIP size estimate, export, base image check and import. |
 | `routes/metrics.js` | Per-host CPU and memory metrics. |
-| `lib/session.js` | The session: engine, nodes, runtime directory and `session.json`. |
+| `lib/session-manager.js` | Login → `{session, runner}`; creation at first use, deletion, shutdown, `runtime/users/<login>` links. |
+| `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
+| `lib/auth/` | `index.js` facade (login routes, middleware, Socket.IO handshake), `users-store.js` (`users.json`), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
+| `lib/session.js` | One session: engine, nodes, runtime directory and `session.json` (with `owner`). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
 | `lib/topology.js` | `.topo` parsing and formatting. |
 | `runner/index.js` | Runner facade and event list. |
-| `runner/context.js` | Context injected by `createRunner`: session, commands, paths, events. |
+| `runner/context.js` | Per-runner context created by `createRunner`: session, commands, paths, `hostNodes()` of every session, events. |
 | `runner/session-runtime.js` | Node records, runtime directories, hostname aliases, state and log publishing. |
 | `runner/node-lifecycle.js` | Host start, stop, reboot, reset and deletion. |
 | `runner/catalog.js`, `runner/host-config.js` | System catalog and `host.json`. |
@@ -116,12 +141,14 @@ bundler) loaded from `public/app.js`, which runs their initialization in a fixed
 order. State that several modules reassign lives on the `store` object of
 `state.js`. `monitor-terminal.js`, `session-log.js`, `network-node-icons.js` and
 `topology-graphic.js` remain classic scripts, also loaded by unit tests.
+`login.html` and its module `login.js` form the separate login page.
 
 | Module | Role |
 | --- | --- |
 | `app.js` | Entry point: initializes the other modules. |
+| `account.js` | User name, Delete session and Log out in the header; authentication-disabled warning. |
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
-| `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL. |
+| `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |
 | `terminal.js` | Console panes, menus, font size and Console/Monitor/Log views. |
 | `workspace.js` | Pane layout, paging, node tabs, state badges and metrics. |
@@ -141,6 +168,9 @@ QEMU and VDI for VirtualBox. At runtime, each host gets its own working disk
 under `runtime/sessions/<id>/` without changing the base image. QEMU uses a QCOW2
 disk backed by RAW; VirtualBox uses a differential VDI. `session.json`,
 `host.json`, `switch.json`, startup scripts, and sockets also live in `runtime/`.
+`runtime/users/<login>` links to the user's session directory. The session ID
+stays random and never contains the login, which keeps socket paths short and
+logins out of archives.
 
 Stopping a host keeps its working disk for a later start. Resetting recreates
 the disk from the base image. Removing a node or stopping the server cleans

@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QemuWeb · Log in</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="login-page">
+  <header>
+    <h1><img src="/favicon.svg" width="26" height="26" alt="">QemuWeb<span class="beta-badge" aria-label="Beta version">BETA</span></h1>
+  </header>
+  <main class="login-main">
+    <form id="login-form" class="login-card" autocomplete="on">
+      <h2>Log in</h2>
+      <label class="create-field">Login<input id="login-name" name="username" required maxlength="64" autocomplete="username" autocapitalize="none" spellcheck="false" autofocus></label>
+      <label class="create-field">Password<input id="login-password" name="password" type="password" required maxlength="1024" autocomplete="current-password"></label>
+      <p id="login-error" role="alert" hidden></p>
+      <button id="login-submit" type="submit">Log in</button>
+    </form>
+  </main>
+  <script type="module" src="/login.js"></script>
+</body>
+</html>

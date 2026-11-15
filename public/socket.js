@@ -4,8 +4,15 @@ import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderCons
 import {renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
+import {redirectToLogin} from './api.js';
 
 let socket = null;
+
+function socketConnectError(error) {
+  if (error?.message === 'Authentication required.') { redirectToLogin(); return; }
+  showStatusError('WebSocket unavailable');
+  console.error(error);
+}
 
 function attachPaneSocket(pane) {
   pane.socket.on('connect', () => {
@@ -78,7 +85,7 @@ function attachPaneSocket(pane) {
     if (machine.id === store.activeId) updateControls();
   });
   pane.socket.on('node-error', showStatusError);
-  pane.socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
+  pane.socket.on('connect_error', socketConnectError);
 }
 
 export function initSockets() {
@@ -109,5 +116,7 @@ export function initSockets() {
     showPage();
   });
   socket.on('node-error', showStatusError);
-  socket.on('connect_error', error => { showStatusError('WebSocket unavailable'); console.error(error); });
+  // The session was deleted (here or in another tab): reload into the new, empty one.
+  socket.on('session-deleted', () => location.reload());
+  socket.on('connect_error', socketConnectError);
 }

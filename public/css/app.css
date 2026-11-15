@@ -280,3 +280,15 @@ main[data-columns="4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 @media (max-width: 850px) { .nic-row { grid-template-columns: 95px minmax(0, 1fr) 36px; gap: 6px; } .nic-row .nic-meta { grid-column: 2; grid-row: 2; } .nic-row button { grid-column: 3; grid-row: 1; } }
 @media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } #graphic-workspace { margin: 10px; } .graphic-heading { flex-wrap: wrap; gap: 4px 12px; padding: 12px; } }
 @media (max-width: 600px) { .host-create-actions { flex-wrap: wrap; } .host-action-options { flex-basis: 100%; } }
+/* Login page and account controls. */
+.login-page { overflow: auto; }
+.login-main { display: grid; flex: 1; place-items: center; padding: 24px 16px; }
+.login-card { display: grid; gap: 14px; width: min(360px, 100%); padding: 24px; border: 1px solid #35404c; border-radius: 10px; background: #10151c; box-shadow: 0 16px 60px #0008; }
+.login-card h2 { margin: 0 0 4px; font-size: 18px; }
+.login-card input { width: 100%; box-sizing: border-box; }
+.login-card button[type="submit"] { justify-self: end; min-width: 110px; border-color: #5b7998; background: #203247; color: #cce3ff; font-weight: 700; }
+#login-error { margin: 0; color: #ffb4a8; }
+.account[hidden] { display: none; }
+.account { display: inline-flex; flex: none; align-items: center; gap: 8px; }
+.account-name { max-width: 180px; overflow: hidden; color: #b8c7d8; text-overflow: ellipsis; white-space: nowrap; }
+.auth-off-warning { flex: none; padding: 4px 8px; border: 1px solid #b1452f; border-radius: 6px; color: #ffd2c8; background: #4a1f17; font-size: 12px; font-weight: 700; }

@@ -8,7 +8,9 @@ usage() {
 Usage: ./scripts/run-tests.sh <test>
 
 Available tests:
-  unit                      Unit tests: topology, UI helpers, guest media and metrics
+  unit                      Unit tests: topology, UI helpers, guest media, metrics, auth and sessions
+  two-users-isolation       Two logged-in users: no shared nodes, events or controls (VDE only)
+  session-reconnect         Log out and back in: running nodes, consoles and logs restored
   two-hosts                 Two Debian Legacy hosts: VDE, ping and Stop/Resume
   two-hosts-tcg             Same two-hosts scenario using QEMU software emulation
   two-hosts-startup-media   Two hosts plus per-host startup ISO, resources and Reboot
@@ -31,7 +33,9 @@ run_test() {
 
 case "${1:-}" in
   ''|--help|-h|--list) usage ;;
-  unit) run_test 'Unit tests: topology, UI helpers, guest media and metrics' npm test ;;
+  unit) run_test 'Unit tests: topology, UI helpers, guest media, metrics, auth and sessions' npm test ;;
+  two-users-isolation) run_test 'Two logged-in users: isolation of nodes, consoles and events' npm run test:two-users-isolation ;;
+  session-reconnect) run_test 'Reconnection: running nodes, consoles and logs restored' npm run test:session-reconnect ;;
   two-hosts) run_test 'Two Debian Legacy hosts: VDE, ping and Stop/Resume' npm run test:two-hosts ;;
   two-hosts-tcg) run_test 'Two Debian Legacy hosts using QEMU/TCG' env TWO_HOSTS_ENGINE=qemu-tcg npm run test:two-hosts ;;
   two-hosts-startup-media) run_test 'Two Debian Legacy hosts with per-host startup ISO and Reboot' npm run test:two-hosts-startup-media ;;

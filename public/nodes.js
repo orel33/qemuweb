@@ -51,7 +51,7 @@ export async function addSwitch({name, autostart}) {
   selectMachine(id);
 }
 
-function confirmAction(title, message, action) {
+export function confirmAction(title, message, action) {
   if (confirmDialog.open) return Promise.resolve(false);
   confirmTitle.textContent = `QemuWeb · ${title}`;
   confirmMessage.textContent = message;
