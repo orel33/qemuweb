@@ -5,11 +5,12 @@ const path = require('path');
 const {spawnSync} = require('child_process');
 
 const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
-const optionalKeys = ['QEMU_SYSTEM_AARCH64', 'VBOXMANAGE'];
+const optionalKeys = ['QEMU_SYSTEM_AARCH64', 'QEMU_EFI_AARCH64', 'VBOXMANAGE'];
 const allKeys = [...requiredKeys, ...optionalKeys];
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU (x86_64)',
   QEMU_SYSTEM_AARCH64: 'QEMU (ARM64)',
+  QEMU_EFI_AARCH64: 'ARM64 EFI firmware',
   QEMU_IMG: 'QEMU disk tools',
   VBOXMANAGE: 'VirtualBox',
   VDE_SWITCH: 'VDE switch',
@@ -64,6 +65,20 @@ function findCommandCandidates(value, key) {
       try { return findCommand(name); } catch (_) {}
     }
   }
+  if (key === 'QEMU_EFI_AARCH64') {
+    const candidates = [
+      value,
+      '/opt/homebrew/share/qemu/edk2-aarch64-code.fd',
+      '/usr/local/share/qemu/edk2-aarch64-code.fd',
+      '/usr/share/qemu-efi-aarch64/QEMU_EFI.fd',
+      '/usr/share/AAVMF/AAVMF_CODE.fd',
+      '/usr/share/edk2/aarch64/QEMU_EFI.silent.fd',
+      '/usr/share/edk2/aarch64/QEMU_EFI.fd'
+    ];
+    for (const candidate of candidates) {
+      if (candidate && fs.existsSync(candidate)) return candidate;
+    }
+  }
   return findCommand(value);
 }
 
@@ -101,7 +116,10 @@ function resolveCommands(root) {
       const configured = local[key] || process.env[key] || defaultCommand;
       const resolved = findCommandCandidates(configured, key);
       // vdeterm treats its first argument as a management socket and has no version flag.
-      if (key !== 'VDETERM') {
+      // Firmware images (.fd) are read-only data files, not executables.
+      if (key === 'QEMU_EFI_AARCH64') {
+        fs.accessSync(resolved, fs.constants.R_OK);
+      } else if (key !== 'VDETERM') {
         const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
         if (result.error) throw result.error;
         if (result.status !== 0) throw new Error((result.stderr || result.stdout || `exit status ${result.status}`).trim().split('\n')[0]);

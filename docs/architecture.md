@@ -81,6 +81,7 @@ QemuWeb dynamically inspects host virtualization capabilities to select the opti
 
 - System profiles define their architecture requirement via `arch:qemu` (`x86_64`, `aarch64`, or `auto`).
 - When `arch:qemu` is `auto`, the engine automatically selects the native host architecture (`aarch64` on Apple Silicon, `x86_64` on Intel/AMD PCs) and the matching binary (`qemu-system-aarch64` or `qemu-system-x86_64`).
+- **UEFI Firmware for ARM64 Guest Disks:** ARM64 `virt` machines boot disk images using EDK2 UEFI firmware (`-bios`), automatically discovered from Homebrew (`/opt/homebrew/share/qemu/edk2-aarch64-code.fd`), system paths (`/usr/share/qemu-efi-aarch64/QEMU_EFI.fd`), or overridden via `QEMU_EFI_AARCH64`.
 - VirtualBox (`VBoxManage`) remains supported as an optional alternative for x86_64 profiles when installed.
 
 ## Direct Kernel Boot and OCI Containers (Boot2container)

@@ -37,12 +37,30 @@
       "image:qemu": "images/alpine.raw",
       "image:vbox": "images/alpine.vdi"
     },
+    "alpine-arm64": {
+      "basedOn": "default",
+      "label": "Alpine Linux 3.24 (ARM64)",
+      "arch:qemu": "aarch64",
+      "firmware:qemu": "efi",
+      "memory": 512,
+      "image:qemu": "images/alpine-arm64.raw",
+      "image:vbox": "images/alpine-arm64.vdi"
+    },
     "debian13-cloud": {
       "basedOn": "default",
       "label": "Debian 13 Cloud",
       "memory": 1024,
       "image:qemu": "images/debian13-cloud.raw",
       "image:vbox": "images/debian13-cloud.vdi"
+    },
+    "debian13-cloud-arm64": {
+      "basedOn": "default",
+      "label": "Debian 13 Cloud (ARM64)",
+      "arch:qemu": "aarch64",
+      "firmware:qemu": "efi",
+      "memory": 1024,
+      "image:qemu": "images/debian13-cloud-arm64.raw",
+      "image:vbox": "images/debian13-cloud-arm64.vdi"
     },
     "openwrt": {
       "basedOn": "default",

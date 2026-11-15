@@ -71,15 +71,40 @@ base64_encode_file() {
 }
 
 prep_acceleration() {
+  local target_arch="${1:-x86_64}"
+  local qemu_bin="qemu-system-x86_64"
+  if [[ "$target_arch" == 'aarch64' || "$target_arch" == 'arm64' ]]; then
+    qemu_bin="qemu-system-aarch64"
+  fi
   # Avoid nested KVM when VirtualBox is already running; otherwise use hardware
   # acceleration when available (KVM on Linux, HVF on macOS) and fall back to TCG.
   if command -v VBoxManage >/dev/null 2>&1 && [[ -n "$(VBoxManage list runningvms 2>/dev/null || true)" ]]; then
     printf 'tcg'
-  elif [[ -r /dev/kvm && -w /dev/kvm ]]; then
+  elif [[ -r /dev/kvm && -w /dev/kvm ]] && [[ "$target_arch" == 'x86_64' || "$(uname -m)" == 'aarch64' || "$(uname -m)" == 'arm64' ]]; then
     printf 'kvm'
-  elif [[ "$(uname -s)" == 'Darwin' ]] && qemu-system-x86_64 -accel help 2>/dev/null | grep -qw 'hvf'; then
+  elif [[ "$(uname -s)" == 'Darwin' ]] && "$qemu_bin" -accel help 2>/dev/null | grep -qw 'hvf'; then
     printf 'hvf'
   else
     printf 'tcg'
   fi
+}
+
+find_edk2_firmware() {
+  local candidates=(
+    "${QEMU_EFI_AARCH64:-}"
+    "/opt/homebrew/share/qemu/edk2-aarch64-code.fd"
+    "/usr/local/share/qemu/edk2-aarch64-code.fd"
+    "/usr/share/qemu-efi-aarch64/QEMU_EFI.fd"
+    "/usr/share/AAVMF/AAVMF_CODE.fd"
+    "/usr/share/edk2/aarch64/QEMU_EFI.silent.fd"
+    "/usr/share/edk2/aarch64/QEMU_EFI.fd"
+  )
+  for c in "${candidates[@]}"; do
+    if [[ -n "$c" && -r "$c" ]]; then
+      printf '%s' "$c"
+      return 0
+    fi
+  done
+  echo "ARM64 EFI firmware (edk2-aarch64-code.fd / QEMU_EFI.fd) not found" >&2
+  return 1
 }

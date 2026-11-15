@@ -35,7 +35,7 @@ function validateProfile(profile, id, engine) {
   if (profile.type !== 'linux' || !['x86_64', 'aarch64'].includes(profile.arch) || profile.mode !== 'text' ||
       typeof profile.label !== 'string' || !profile.label.trim()) throw new Error(`Invalid Linux/${profile.arch}/text profile: ${id}/${engine}.`);
   validateOverrides(Object.fromEntries(editableKeys.map(key => [key, profile[key]])));
-  if (profile.firmware !== 'bios' || !['disk', 'kernel'].includes(profile.boot) || profile.cdromInterface !== 'ide' ||
+  if (!['bios', 'efi'].includes(profile.firmware) || !['disk', 'kernel'].includes(profile.boot) || profile.cdromInterface !== 'ide' ||
       !['virtio', 'e1000'].includes(profile.networkModel) ||
       (engine === 'qemu' && (!['kvm', 'hvf', 'tcg', 'auto'].includes(profile.acceleration) || !['ide', 'virtio'].includes(profile.diskInterface))) ||
       (engine === 'vbox' && (profile.acceleration !== 'default' || profile.diskInterface !== 'sata'))) {

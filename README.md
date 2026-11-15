@@ -135,11 +135,11 @@ QemuWeb supports launching virtual machines directly from OCI / Docker container
 ## Images
 
 `scripts/prepare.sh` prepares the systems listed in [`config.json`](config.json):
-Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, OpenWrt 25.12, and OCI Container (Boot2container).
+Alpine Linux 3.24 (x86_64 & ARM64), Debian 13 Cloud (x86_64 & ARM64), Debian 13 Legacy (x86_64), OpenWrt 25.12 (x86_64), and OCI Container (Boot2container).
 
 ```sh
 bash scripts/prepare.sh                      # all systems
-bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt, container
+bash scripts/prepare.sh --system <id>        # alpine, alpine-arm64, debian13-cloud, debian13-cloud-arm64, debian13-legacy, openwrt, container
 bash scripts/prepare.sh --list               # show prepared images
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 ```
@@ -228,6 +228,7 @@ To use custom builds or non-standard install paths, override them in `.env.local
 ```text
 QEMU_SYSTEM_X86_64=/custom/path/bin/qemu-system-x86_64
 QEMU_SYSTEM_AARCH64=/custom/path/bin/qemu-system-aarch64
+QEMU_EFI_AARCH64=/custom/path/share/qemu/edk2-aarch64-code.fd
 ```
 
-Note that `QEMU_SYSTEM_AARCH64` is optional and non-blocking: on systems without an ARM64 QEMU binary, server startup proceeds normally as long as `qemu-system-x86_64` is available.
+Note that `QEMU_SYSTEM_AARCH64` and `QEMU_EFI_AARCH64` are optional and non-blocking: on systems without an ARM64 QEMU binary or firmware, server startup proceeds normally as long as `qemu-system-x86_64` is available.

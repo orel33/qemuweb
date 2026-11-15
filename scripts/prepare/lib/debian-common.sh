@@ -6,23 +6,43 @@ prepare_debian_image() {
   # The caller's ID keeps downloaded source, raw output, and VDI output isolated
   # for each Debian cloud profile.
   local id="$1"
+  local arch="amd64"
+  if [[ "$id" == *-arm64* ]]; then
+    arch="arm64"
+  fi
   local source_dir="$SOURCES/$id" raw="$IMAGES/$id.raw" vdi="$IMAGES/$id.vdi"
-  local cloud_source sums url='https://cloud.debian.org/images/cloud/trixie/latest'
+  local cloud_filename="debian-13-genericcloud-${arch}.qcow2"
+  local cloud_source="$source_dir/$cloud_filename"
+  local sums="$source_dir/SHA512SUMS"
+  local url='https://cloud.debian.org/images/cloud/trixie/latest'
   local temp_dir='' qemu_pid=''
   mkdir -p "$source_dir"
-  cloud_source="$source_dir/debian-13-genericcloud-amd64.qcow2"
-  sums="$source_dir/SHA512SUMS"
   if prepare_sources; then
-    fetch_file "$url/debian-13-genericcloud-amd64.qcow2" "$cloud_source"
+    fetch_file "$url/$cloud_filename" "$cloud_source"
     fetch_file "$url/SHA512SUMS" "$sums"
     # Verify the downloaded cloud image against Debian's published checksum list.
-    (cd "$source_dir" && grep -E '[ *]debian-13-genericcloud-amd64\.qcow2$' SHA512SUMS | sha512sum -c -)
+    (cd "$source_dir" && grep -E "[ *]${cloud_filename}\$" SHA512SUMS | sha512sum -c -)
   fi
   if ! prepare_images; then return 0; fi
 
   if [[ ! -s "$raw" ]]; then
     [[ -s "$cloud_source" ]] || { echo "Missing source image: $cloud_source (run --sources first)." >&2; return 1; }
-    require_commands qemu-system-x86_64 qemu-img genisoimage python3 base64
+    local qemu_bin="qemu-system-x86_64"
+    local accel
+    local machine_args=()
+    if [[ "$arch" == 'arm64' ]]; then
+      qemu_bin="qemu-system-aarch64"
+      accel="$(prep_acceleration aarch64)"
+      local edk2
+      edk2="$(find_edk2_firmware)"
+      local cpu
+      cpu="$([[ "$accel" == 'hvf' ]] && echo host || echo max)"
+      machine_args=(-machine virt -accel "$accel" -cpu "$cpu" -bios "$edk2")
+    else
+      accel="$(prep_acceleration x86_64)"
+      machine_args=(-machine q35 -accel "$accel")
+    fi
+    require_commands "$qemu_bin" qemu-img genisoimage python3 base64
     temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
     chmod 700 "$temp_dir"
     local overlay="$temp_dir/debian-bootstrap.qcow2" seed="$temp_dir/debian-seed.iso"
@@ -117,13 +137,14 @@ write_files:
 runcmd:
   - [passwd, -d, root]
   - [systemctl, enable, serial-getty@ttyS0.service]
+  - [systemctl, enable, serial-getty@ttyAMA0.service]
   - [systemctl, enable, getty@tty1.service]
   - [systemctl, enable, systemd-networkd.service]
   - [systemctl, enable, qemuweb-start.service]
   - [touch, /etc/cloud/cloud-init.disabled]
   # Finish the template with no fixed machine ID. This is the last guest-side
   # change before the temporary preparation VM is shut down.
-  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null && command -v resize >/dev/null; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
+  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null && command -v resize >/dev/null; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0 && echo QEMUNET_IMAGE_PREPARED >/dev/ttyAMA0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyAMA0; exit 1; fi']
 CLOUD_CONFIG
     cat > "$meta_data" <<EOF_META
 instance-id: qemuweb-$id-$(date +%s)
@@ -144,10 +165,10 @@ NETWORK_CONFIG
     local iso_cmd
     iso_cmd="$(command -v genisoimage 2>/dev/null || command -v mkisofs 2>/dev/null || echo genisoimage)"
     "$iso_cmd" -quiet -output "$seed" -volid cidata -joliet -rock "$user_data" "$meta_data" "$network_config"
-    qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 1024 -smp 1 \
+    "$qemu_bin" "${machine_args[@]}" -m 1024 -smp 1 \
       -display none -monitor none -qmp "unix:$qmp_socket,server=on,wait=off" -serial "file:$serial_log" \
       -no-reboot -drive "file=$overlay,if=virtio,format=qcow2" \
-      -drive "file=$seed,media=cdrom,readonly=on" -boot order=c -nic user,model=virtio-net-pci \
+      -cdrom "$seed" -boot order=c -nic user,model=virtio-net-pci \
       >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
     qemu_pid=$!
     local prepared=0
