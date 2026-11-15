@@ -105,6 +105,19 @@ action. After approval, it integrates, resolves conflicts, verifies the result
 within the user's test authorization, and handles any authorized commit, push,
 or tag.
 
+Integration of a finished task or milestone is done together with the user, in
+this order:
+
+1. The orchestrator merges the task branch into `main` **locally** (no push, no
+   tag) and tells the user the checkout is on `main` and ready.
+2. The user tests the Web interface manually on `main` (for example with
+   `./scripts/run-tests.sh web`), not inside the task worktree.
+3. Only when the user explicitly confirms that this manual test passed, the
+   orchestrator bumps the version, creates the annotated tag and pushes `main`
+   and the tag. Never treat an ambiguous message as that confirmation: ask.
+
+The same goes for any release tag: a tag is pushed only after step 3.
+
 ## Tests
 
 Before running unit or integration tests, ask the user and wait for explicit
