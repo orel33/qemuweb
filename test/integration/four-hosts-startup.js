@@ -12,8 +12,8 @@ const io = require('socket.io-client');
 
 const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
-const engine = process.env.LAN4_ENGINE || 'qemu';
-const timeoutMs = Number(process.env.LAN4_TIMEOUT_MS || 120000);
+const engine = process.env.FOUR_HOSTS_ENGINE || 'qemu';
+const timeoutMs = Number(process.env.FOUR_HOSTS_TIMEOUT_MS || 120000);
 const newId = prefix => `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
 const switchId = newId('s');
 const hosts = Array.from({length: 4}, (_, index) => ({id: newId('h'), name: `lan4-h${index + 1}`, label: `h${index + 1}`}));
@@ -151,7 +151,7 @@ class GuestConsole {
 
 async function run() {
   assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh --system debian13-legacy first.`);
-  assert.equal(engine, 'qemu', `Unsupported LAN4_ENGINE: ${engine}`);
+  assert.equal(engine, 'qemu', `Unsupported FOUR_HOSTS_ENGINE: ${engine}`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
   child = spawn(process.execPath, ['server.js'], {
@@ -167,7 +167,7 @@ async function run() {
     try { return (await request('/api/systems')).some(system => system.id === 'debian13-legacy'); }
     catch (_) { return false; }
   }, 30000);
-  console.log(`LAN4: QemuWeb started with ${engine === 'qemu' ? 'KVM' : 'TCG'}`);
+  console.log(`Four hosts: QemuWeb started with ${engine === 'qemu' ? 'KVM' : 'TCG'}`);
   await request('/api/general-settings', 'PUT', {engine});
   const sw = await request('/api/switches', 'POST', {id: switchId, name: 'lan4sw', autostart: true});
   switchCreated = true;
@@ -206,7 +206,7 @@ async function run() {
   }
   assert.equal(ports.size, 4, 'VDE ports are not distinct.');
   assert.equal(macs.size, 4, 'MAC addresses are not distinct.');
-  console.log(`LAN4: four distinct ports (${[...ports].join(', ')}) and MAC addresses`);
+  console.log(`Four hosts: four distinct ports (${[...ports].join(', ')}) and MAC addresses`);
 
   await Promise.all(hosts.map(host => host.console.loginRoot()));
   for (const host of hosts) {
@@ -216,7 +216,7 @@ async function run() {
     const address = await shell.success("ip -o -4 addr show dev eth0 | awk '{print $4}'");
     assert.equal(address.trim(), `${host.address}/24`, `${host.label}: startup template did not configure Ethernet 0`);
   }
-  console.log('LAN4: startup service, hostnames and template addresses verified');
+  console.log('Four hosts: startup service, hostnames and template addresses verified');
 
   for (const source of hosts) {
     for (const target of hosts) {
@@ -226,7 +226,7 @@ async function run() {
         `${source.label} could not ping ${target.label} at ${target.address}`);
     }
   }
-  console.log('LAN4: all 12 directed ping paths verified');
+  console.log('Four hosts: all 12 directed ping paths verified');
 }
 
 async function cleanup() {
@@ -247,7 +247,7 @@ async function cleanup() {
 }
 
 run().catch(error => {
-  console.error(`\nLAN4 FAILED: ${error.stack || error.message}`);
+  console.error(`\nFour-hosts test FAILED: ${error.stack || error.message}`);
   if (serverOutput.length) console.error(`\n--- QemuWeb output ---\n${tail()}`);
   process.exitCode = 1;
 }).finally(cleanup);

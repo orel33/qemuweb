@@ -10,8 +10,8 @@ const path = require('node:path');
 const io = require('socket.io-client');
 
 const root = path.resolve(__dirname, '../..');
-const profiles = process.env.GTS16_PROFILES ? process.env.GTS16_PROFILES.split(',') : ['alpine', 'debian13-cloud', 'openwrt'];
-const engine = process.env.GTS16_ENGINE || 'qemu';
+const profiles = process.env.STARTUP_MEDIA_PROFILES ? process.env.STARTUP_MEDIA_PROFILES.split(',') : ['alpine', 'debian13-cloud', 'openwrt'];
+const engine = process.env.STARTUP_MEDIA_ENGINE || 'qemu';
 const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;
 const ids = profiles.map(() => newHostId());
 let child;
@@ -126,7 +126,7 @@ async function verifyConcurrentIsolation() {
   }));
   for (const host of hosts) {
     ids.push(host.id);
-    await request('/api/hosts', 'POST', {id: host.id, name: `GTS16 isolated ${host.id}`, imageId: 'openwrt', engine, interfaces: [], guestMedia: host.media.files});
+    await request('/api/hosts', 'POST', {id: host.id, name: `Startup media isolated ${host.id}`, imageId: 'openwrt', engine, interfaces: [], guestMedia: host.media.files});
     await request(`/api/nodes/${host.id}/guest-cdrom`, 'POST', host.media.files);
     await request(`/api/nodes/${host.id}/guest-cdrom`, 'PATCH', {attached: true});
     host.state = watchSession(host.id);
@@ -173,7 +173,7 @@ async function run() {
     const first = mediaFor(profile, 1);
     const second = mediaFor(profile, 2);
     const startOptions = {engine, imageId: profile, interfaces: [], settings: {memory: profile === 'openwrt' ? 256 : 1024, cpus: 1, clock: 'utc'}};
-    await request('/api/hosts', 'POST', {id, name: `GTS16 ${profile}`, imageId: profile, engine, interfaces: [], guestMedia: first.files});
+    await request('/api/hosts', 'POST', {id, name: `Startup media ${profile}`, imageId: profile, engine, interfaces: [], guestMedia: first.files});
     await request(`/api/nodes/${id}/guest-cdrom`, 'POST', first.files);
     await request(`/api/nodes/${id}/guest-cdrom`, 'PATCH', {attached: true});
     const state = watchSession(id);
@@ -212,7 +212,7 @@ async function run() {
     for (const scenario of missingCases) {
       const id = newHostId();
       ids.push(id);
-      await request('/api/hosts', 'POST', {id, name: `GTS16 missing ${scenario.suffix}`, imageId: 'openwrt', engine: 'qemu', interfaces: [], guestMedia: {script: scenario.script, resources: []}});
+      await request('/api/hosts', 'POST', {id, name: `Startup media missing ${scenario.suffix}`, imageId: 'openwrt', engine: 'qemu', interfaces: [], guestMedia: {script: scenario.script, resources: []}});
       if (scenario.attach) {
         await request(`/api/nodes/${id}/guest-cdrom`, 'POST', {script: scenario.script, resources: []});
         await request(`/api/nodes/${id}/guest-cdrom`, 'PATCH', {attached: true});
