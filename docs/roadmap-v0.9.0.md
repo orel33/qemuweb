@@ -128,10 +128,19 @@ server.js                démarrage et câblage
 
 **Critères de fin**
 
-- [ ] Tests unitaires et d'intégration verts, plus des tests unitaires des modules `runner/` sans serveur HTTP.
-- [ ] `server.js` sous 300 lignes, aucun fichier au-delà d'environ 600 lignes.
-- [ ] Aucun import de `express`, `socket.io` ou `lib/` sous `runner/`, et aucun accès au runner hors de `runner/index.js`.
-- [ ] La démo `demo/lan.zip` fonctionne à l'identique (test manuel).
+- [x] Tests unitaires et d'intégration verts, plus des tests unitaires des modules `runner/` sans serveur HTTP.
+- [x] `server.js` sous 300 lignes (102), aucun fichier au-delà d'environ 600 lignes (le plus gros : `public/host-settings.js`, 498).
+- [x] Aucun import de `express`, `socket.io` ou `lib/` sous `runner/`, et aucun accès au runner hors de `runner/index.js`.
+- [x] La démo `demo/lan.zip` fonctionne à l'identique (test manuel).
+
+**Écarts par rapport au découpage prévu**
+
+- `common/` contient aussi `launch-settings.js`, `node-id.js`, `shell-quote.js` et `json-file.js` : ces helpers servent au plan de contrôle comme au runner.
+- `runner/` contient des modules en plus de ceux listés (`context.js`, `catalog.js`, `host-config.js`, `launch-preview.js`, `resources.js`, `node-lifecycle.js`, `engines/child-exit.js`, `media/guest-iso.js`, `media/image-hash.js`). Le contexte du runner (`runner/context.js`) est un singleton de module configuré par `createRunner` : il suffit tant qu'il n'y a qu'une `Session`, et sera à reprendre pour le jalon 5.
+- `runner/network/vde-switch.js` requiert `node-pty` (paquet, pas module natif de Node), inhérent à `vdeterm`.
+- `lib/session-snapshot.js` porte la logique d'archive côté plan de contrôle, à côté de `lib/session-archive.js`.
+- Interface web : modules ajoutés à ceux prévus (`app.js`, `state.js`, `workspace.js`, `node-dialogs.js`, `startup-media.js`, `general-settings.js`). Les modules ont des imports circulaires, sans effet à l'exécution tant qu'ils ne font que déclarer au chargement.
+- Les commits intermédiaires du découpage serveur ne sont pas exécutables isolément (les modules sont arrivés avant le basculement de `server.js`).
 
 ## Jalon 3 — Multi-utilisateurs, authentification simple
 
