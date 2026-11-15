@@ -159,7 +159,7 @@ function saveSessionMetadata(engine = sessionEngine) {
 }
 
 function sessionMetadata(engine = sessionEngine) {
-  const ids = kind => [...sessions.values()]
+  const ids = kind => [...nodes.values()]
     .filter(node => node.kind === kind && node.hostname && (kind === 'switch' || node.selectedImage))
     .map(node => node.id).sort();
   return {schemaVersion: 4, engine, hosts: ids('host'), switches: ids('switch'), baseImages: {}};
@@ -195,7 +195,7 @@ async function sampleResources() {
   if (samplingResources) return;
   samplingResources = true;
   try {
-    const running = [...sessions.values()].filter(node => node.kind === 'host' && node.machine);
+    const running = [...nodes.values()].filter(node => node.kind === 'host' && node.machine);
     const qemuRunning = running.some(node => node.engine?.startsWith('qemu'));
     const hostCpu = qemuRunning ? parseHostCpu(await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '')) : null;
     await Promise.all(running.map(async node => {
@@ -445,7 +445,7 @@ function imageById(id) {
 }
 
 function allocateName(prefix) {
-  const used = new Set([...sessions.values()].map(node => node.hostname).filter(Boolean));
+  const used = new Set([...nodes.values()].map(node => node.hostname).filter(Boolean));
   for (let n = 1; n <= 99; n++) {
     const name = `${prefix}${n}`;
     if (!used.has(name)) return name;
@@ -526,7 +526,7 @@ app.put('/api/general-settings', (req, res) => {
     if (!['qemu', 'vbox'].includes(engine) || Object.keys(req.body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
     if (!availableEngines.includes(engine)) throw new Error('VirtualBox is unavailable on this server.');
     if (engine !== sessionEngine) {
-      if ([...sessions.values()].some(node => node.kind === 'host')) {
+      if ([...nodes.values()].some(node => node.kind === 'host')) {
         return res.status(409).json({error: 'Delete existing hosts before changing the session engine.'});
       }
       saveSessionMetadata(engine);
@@ -555,7 +555,7 @@ app.get('/api/systems', (_req, res) => {
 app.get('/api/guest-cdrom-capability', (_req, res) => res.json({autoBuild: true, previewIso: true}));
 
 app.get('/api/nodes', (_req, res) => {
-  res.json([...sessions.values()].map(node => ({
+  res.json([...nodes.values()].map(node => ({
     id: node.id,
     kind: node.kind,
     running: !!node.machine,
@@ -598,14 +598,14 @@ function fileSha256(file) {
 function archiveSources(includeDisks, allowRunning = false) {
   if (typeof includeDisks !== 'boolean') throw new Error('Invalid working disk option.');
   if (includeDisks && sessionEngine === 'vbox') throw new Error('VirtualBox working disk archives are not supported.');
-  const runningHosts = [...sessions.values()].filter(item => item.kind === 'host' && item.machine);
-  if (includeDisks && [...sessions.values()].some(item => item.kind === 'host' && item.action)) {
+  const runningHosts = [...nodes.values()].filter(item => item.kind === 'host' && item.machine);
+  if (includeDisks && [...nodes.values()].some(item => item.kind === 'host' && item.action)) {
     throw new Error('Wait for the current host action to finish before saving working disks.');
   }
   if (includeDisks && !allowRunning && runningHosts.length) {
     throw new Error('Stop every host before saving working disks.');
   }
-  const all = [...sessions.values()];
+  const all = [...nodes.values()];
   const sources = [{name: 'session.json', file: sessionFile}], systems = new Set();
   const switches = all.filter(item => item.kind === 'switch').map(item => {
     sources.push({name: `${item.id}/switch.json`, file: tempFile(item, 'switch.json')});
@@ -895,7 +895,7 @@ app.post('/api/session-archive/import', async (req, res) => {
 
 app.get('/api/metrics', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json(Object.fromEntries([...sessions.values()].filter(node => node.kind === 'host').map(node => {
+  res.json(Object.fromEntries([...nodes.values()].filter(node => node.kind === 'host').map(node => {
     if (!node.machine) return [node.id, {status: 'stopped', cpuPercent: null, ramBytes: null}];
     const sample = resourceSamples.get(node.id);
     return [node.id, sample?.machine === node.machine
@@ -984,7 +984,7 @@ function persistSwitchConfiguration(node) {
 
 function activeConfiguration(node) {
   return {
-    settings: {...session.launchSettings},
+    settings: {...node.launchSettings},
     networkInterfaces: node.networkInterfaces.map(nic => ({...nic})),
     guestMedia: readStartupFiles(startupDirectory(node)),
     startupDiskEnabled: node.guestIsoAttached
@@ -1102,7 +1102,7 @@ function validateNetworkInterfaces(value, engine, requireRunning = true) {
 function assignNetworkInterfaces(node, switches) {
   const previous = node.networkInterfaces || [];
   const planned = [];
-  const otherInterfaces = [...sessions.values()].flatMap(other => [
+  const otherInterfaces = [...nodes.values()].flatMap(other => [
     ...(other.id === node.id ? [] : other.networkInterfaces || []),
     ...(other.activeConfig?.networkInterfaces || [])
   ]);
@@ -1136,8 +1136,8 @@ function assignNetworkInterfaces(node, switches) {
 }
 
 function linkedHosts(switchId) {
-  return [...sessions.values()].filter(node => node.kind === 'host' &&
-    [...session.networkInterfaces, ...(node.machine ? node.activeConfig?.networkInterfaces || [] : [])]
+  return [...nodes.values()].filter(node => node.kind === 'host' &&
+    [...node.networkInterfaces, ...(node.machine ? node.activeConfig?.networkInterfaces || [] : [])]
       .some(nic => nic.switchId === switchId));
 }
 
@@ -1239,7 +1239,7 @@ async function stopSwitch(node, force = false) {
 function qemuAcceleration(engine, checkAvailability = true) {
   if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
   if (!checkAvailability) return 'kvm';
-  const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'vbox');
+  const virtualBoxRunning = [...nodes.values()].some(other => other.machine && other.engine === 'vbox');
   if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
   try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
   catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or select VirtualBox if it is installed.'); }
@@ -1365,14 +1365,14 @@ app.get('/api/nodes/:nodeId/options', (req, res) => {
     const isQemu = engine.startsWith('qemu');
     const draftSettings = req.query.settings ? JSON.parse(req.query.settings) : {};
     const userSettings = launched
-      ? validateLaunchSettings({...session.launchSettings, ...draftSettings})
+      ? validateLaunchSettings({...node.launchSettings, ...draftSettings})
       : launchSettingsFor(image.id, draftSettings);
     const options = isQemu
-      ? launched ? {...session.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
+      ? launched ? {...node.qemuOptions, memory: userSettings.memory, smp: userSettings.cpus, rtcBase: userSettings.clock} : qemuOptionsFor(image.id, userSettings)
       : null;
     if (!launched && isQemu) node.qemuOptions = options;
     const nextGuestIso = tempFile(node, `startup-${node.generation + 1}.iso`);
-    const previewNode = {...session, launchSettings: userSettings, networkInterfaces: previewInterfaces, qemuOptions: options,
+    const previewNode = {...node, launchSettings: userSettings, networkInterfaces: previewInterfaces, qemuOptions: options,
       guestIsoAttached: attachGuestCdrom,
       guestIso: attachGuestCdrom ? nextGuestIso : null};
     const overlay = launched && node.runDisk ? node.runDisk : tempFile(node, 'disk.qcow2');
@@ -1444,7 +1444,7 @@ function start(nodeId, selectedEngine, imageId, options = {}) {
   requireSessionEngine(selectedEngine);
   const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
   if (selectedEngine === 'vbox') {
-    const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'host' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
+    const qemuWithKvm = [...nodes.values()].some(other => other.kind === 'host' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
   const image = resume ? node.selectedImage : imageById(imageId);
@@ -1460,10 +1460,10 @@ function start(nodeId, selectedEngine, imageId, options = {}) {
     node.guestIsoAttached = options.startupDiskEnabled;
   }
   const launchSettings = resume
-    ? validateLaunchSettings({...session.launchSettings, ...(options.settings || {})})
+    ? validateLaunchSettings({...node.launchSettings, ...(options.settings || {})})
     : launchSettingsFor(image.id, options.settings || {});
   const qemuOptions = selectedEngine.startsWith('qemu')
-    ? resume ? {...session.qemuOptions, memory: launchSettings.memory, smp: launchSettings.cpus, rtcBase: launchSettings.clock} : qemuOptionsFor(image.id, launchSettings)
+    ? resume ? {...node.qemuOptions, memory: launchSettings.memory, smp: launchSettings.cpus, rtcBase: launchSettings.clock} : qemuOptionsFor(image.id, launchSettings)
     : null;
   if (resume || options.reset) {
     for (const nic of node.networkInterfaces) validateNetworkInterfaces([nic.switchId], selectedEngine);
@@ -1582,7 +1582,7 @@ async function waitForVirtualBoxPowerOff(node, timeoutMs = 30000) {
 function validateRestartPrerequisites(node) {
   requireSessionEngine(node.engine);
   if (node.engine.startsWith('qemu')) qemuAcceleration(node.engine);
-  else if ([...sessions.values()].some(other => other.id !== node.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
+  else if ([...nodes.values()].some(other => other.id !== node.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
     throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
   const image = node.selectedImage;
@@ -1621,7 +1621,7 @@ async function reset(node, settings, startup = {}) {
   validateRestartPrerequisites(node);
   const engine = node.engine;
   const imageId = node.selectedImage.id;
-  const launchSettings = settings ? validateLaunchSettings({...session.launchSettings, ...settings}) : node.launchSettings;
+  const launchSettings = settings ? validateLaunchSettings({...node.launchSettings, ...settings}) : node.launchSettings;
   node.action = 'reset';
   try {
     publishState(node, 'Resetting from the base image…');
@@ -1753,7 +1753,7 @@ async function exitAllNodes() {
   const removed = [];
   try {
     for (const kind of ['host', 'switch']) {
-      for (const node of [...sessions.values()].filter(item => item.kind === kind)) {
+      for (const node of [...nodes.values()].filter(item => item.kind === kind)) {
         await destroyNode(node);
         removed.push(node.id);
       }
@@ -1810,7 +1810,7 @@ app.post('/api/topology', async (req, res) => {
     const {topology, engine} = validateTopologyRequest(req.body);
     const {autostart = false, closePrevious = false} = req.body || {};
     if (typeof autostart !== 'boolean' || typeof closePrevious !== 'boolean') throw new Error('Invalid topology options.');
-    const used = new Set(closePrevious ? [] : [...sessions.values()].map(node => node.hostname?.toLowerCase()));
+    const used = new Set(closePrevious ? [] : [...nodes.values()].map(node => node.hostname?.toLowerCase()));
     for (const entry of [...topology.switches, ...topology.hosts]) if (used.has(entry.name.toLowerCase())) throw new Error(`Name already exists: ${entry.name}.`);
     if (closePrevious) await exitAllNodes();
     const switchIds = new Map();
@@ -1864,7 +1864,7 @@ app.post('/api/topology', async (req, res) => {
 
 app.get('/api/topology', (_req, res) => {
   try {
-    const all = [...sessions.values()];
+    const all = [...nodes.values()];
     const switches = all.filter(node => node.kind === 'switch').map(node => ({name: node.hostname}));
     const hosts = all.filter(node => node.kind === 'host').map(node => ({
       name: node.hostname, system: node.selectedImage?.id,
@@ -1895,7 +1895,7 @@ app.post('/api/hosts', (req, res) => {
     requireSessionEngine(engine);
     if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name))) throw new Error('Invalid host name (1 to 64 characters).');
     const hostname = name === undefined ? allocateName('h') : name.trim();
-    if ([...sessions.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
+    if ([...nodes.values()].some(other => other.hostname === hostname)) throw new Error('Host name already exists.');
     const networkInterfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(interfaces, engine, false));
     const launchSettings = launchSettingsFor(image.id, settings || {});
     const validatedMedia = guestMedia === undefined ? {script: defaultStartupScript(networkInterfaces), resources: []} : validateBootFiles(guestMedia);
@@ -1950,7 +1950,7 @@ app.put('/api/nodes/:nodeId/config', (req, res) => {
     if (body.systemId !== node.selectedImage.id || body.engine !== node.engine) throw new Error('System and engine are read-only for an existing host.');
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(body.name)) throw new Error('Invalid host name (1 to 64 characters).');
     const name = body.name.trim();
-    if ([...sessions.values()].some(other => other.id !== node.id && other.hostname === name)) throw new Error('Host name already exists.');
+    if ([...nodes.values()].some(other => other.id !== node.id && other.hostname === name)) throw new Error('Host name already exists.');
     const settings = validateLaunchSettings(body.settings);
     const media = validateBootFiles(body.guestMedia);
     const script = normalizeScript(media.script);
@@ -2044,7 +2044,7 @@ app.post('/api/switches', async (req, res) => {
     const {id, name, autostart = true} = req.body || {};
     if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)) throw new Error('Switch name must be 1–32 letters, digits, underscores or hyphens.');
     entityKind(id, 'switch');
-    if (nodes.has(id) || [...sessions.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
+    if (nodes.has(id) || [...nodes.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
     node = getNode(id, true, 'switch');
     setNodeHostname(node, name);
     node.lastMessage = 'VDE switch ready to start';
@@ -2110,7 +2110,7 @@ app.patch('/api/nodes/:nodeId', (req, res) => {
     const name = req.body && req.body.name;
     if (!node || node.kind !== 'host') throw new Error('Unknown host.');
     if (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name)) throw new Error('Invalid name (1 to 64 characters).');
-    if ([...sessions.values()].some(other => other.id !== node.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
+    if ([...nodes.values()].some(other => other.id !== node.id && other.hostname === name.trim())) throw new Error('Host name already exists.');
     const previous = node.hostname;
     setNodeHostname(node, name.trim());
     try { persistHostConfiguration(node); }
@@ -2230,7 +2230,7 @@ async function shutdown() {
   clearInterval(resourceTimer);
   const forceExit = setTimeout(() => process.exit(1), 10000);
   for (const kind of ['host', 'switch']) {
-    await Promise.all([...sessions.values()].filter(node => node.kind === kind)
+    await Promise.all([...nodes.values()].filter(node => node.kind === kind)
       .map(node => destroyNode(node).catch(error => console.error('Session shutdown:', error))));
   }
   io.close(() => {
