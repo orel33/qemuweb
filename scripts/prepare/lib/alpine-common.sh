@@ -45,7 +45,7 @@ prepare_alpine_image() {
       cdrom_args=(-drive "file=$source_dir/$iso,media=cdrom,readonly=on")
     fi
     require_commands "$qemu_bin" qemu-img python3 base64
-    local temp_dir disk serial_socket serial_log guest_script payload qemu_pid
+    local temp_dir disk serial_socket serial_log guest_script payload qemu_pid=''
     temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
     disk="$temp_dir/$id.raw"
     serial_socket="$temp_dir/$id-serial.sock"
@@ -145,7 +145,7 @@ ALPINE_HOOK
       "${cdrom_args[@]}" -boot order=d \
       -nic user,model=virtio-net-pci >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
     qemu_pid=$!
-    trap 'kill -TERM "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true' EXIT
+    trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; [[ -n "${qemu_pid:-}" ]] && wait "$qemu_pid" 2>/dev/null || true' EXIT
     python3 - "$serial_socket" "$serial_log" "$payload" <<'PY'
 import os, re, socket, sys, time
 socket_path, log_path, payload = sys.argv[1:]
@@ -165,9 +165,12 @@ def wait_for(patterns):
             try: chunk = sock.recv(4096)
             except TimeoutError: continue
             if not chunk: raise RuntimeError('Alpine serial console closed')
+            if b'\x1b[6n' in chunk:
+                sock.sendall(b'\x1b[1;1R')
             log.write(chunk); log.flush(); buffer = (buffer + chunk)[-65536:]
+            clean = re.sub(rb'\x1b\[[0-9;]*[a-zA-Z]', b'', buffer)
             for index, pattern in enumerate(compiled):
-                if pattern.search(buffer): return index
+                if pattern.search(clean): return index
     raise RuntimeError('Alpine preparation timed out')
 wait_for([rb'login:\s*$'])
 sock.sendall(b'root\r')
@@ -187,8 +190,8 @@ if wait_for([rb'QEMUNET_ALPINE_STATUS_0', rb'QEMUNET_ALPINE_STATUS_[1-9][0-9]*']
     raise RuntimeError('Alpine installation failed')
 sock.close()
 PY
-    kill -TERM "$qemu_pid"
-    wait "$qemu_pid" || true
+    kill -TERM "$qemu_pid" 2>/dev/null || true
+    wait "$qemu_pid" 2>/dev/null || true
     trap - EXIT
     chmod 444 "$disk"
     mv "$disk" "$raw"
