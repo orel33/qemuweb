@@ -3,12 +3,11 @@
 // Four Debian Legacy hosts configure their LAN from the startup template values.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const {spawn} = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
-const io = require('socket.io-client');
+const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
 
 const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
@@ -21,6 +20,17 @@ const expectedScript = '#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.1
 const serverOutput = [];
 let child;
 let baseUrl;
+let client;
+let testUsers;
+process.on('exit', () => testUsers?.cleanup());
+
+// Waits for the server, then logs in as the scenario's temporary user.
+async function signInTestUser() {
+  client = new QemuWebClient(baseUrl);
+  await client.waitForServer(30000, () => child.exitCode === null);
+  const [user] = testUsers.users;
+  await client.signIn(user.login, user.password);
+}
 let switchCreated = false;
 
 function tail() { return serverOutput.join('').slice(-12000); }
@@ -53,10 +63,7 @@ async function waitFor(label, predicate, limit = timeoutMs) {
 }
 
 async function request(route, method = 'GET', body) {
-  const response = await fetch(`${baseUrl}${route}`, {
-    method, headers: body === undefined ? {} : {'content-type': 'application/json'},
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
+  const response = await client.fetch(route, {method, body});
   const value = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${method} ${route}: ${value.error || response.status}`);
   return value;
@@ -67,7 +74,7 @@ class GuestConsole {
     this.host = host;
     this.output = '';
     this.selected = false;
-    this.socket = io(baseUrl, {reconnection: false, timeout: 10000});
+    this.socket = client.socket();
     this.socket.on('connect', () => this.socket.emit('select-node', host.id, host.id, reply => {
       if (reply?.error) this.error = reply.error;
       else this.selected = true;
@@ -154,15 +161,14 @@ async function run() {
   assert.equal(engine, 'qemu', `Unsupported FOUR_HOSTS_ENGINE: ${engine}`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
-  child = spawn(process.execPath, ['server.js'], {
-    cwd: root, env: {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1'},
-    stdio: ['ignore', 'pipe', 'pipe']
-  });
+  testUsers = await createTestUsers([{login: 'integration'}]);
+  child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', chunk => {
     serverOutput.push(chunk.toString());
     if (serverOutput.join('').length > 30000) serverOutput.splice(0, serverOutput.length - 1);
   });
 
+  await signInTestUser();
   await waitFor('QemuWeb API', async () => {
     try { return (await request('/api/systems')).some(system => system.id === 'debian13-legacy'); }
     catch (_) { return false; }

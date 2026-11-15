@@ -3,12 +3,11 @@
 // Diagnostic of the four rebuilt guest images on an isolated VDE LAN.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
-const {spawn} = require('node:child_process');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
-const io = require('socket.io-client');
+const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
 
 const root = path.resolve(__dirname, '../..');
 const supported = ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt'];
@@ -22,6 +21,17 @@ const created = [];
 const results = [];
 let child;
 let baseUrl;
+let client;
+let testUsers;
+process.on('exit', () => testUsers?.cleanup());
+
+// Waits for the server, then logs in as the scenario's temporary user.
+async function signInTestUser() {
+  client = new QemuWebClient(baseUrl);
+  await client.waitForServer(30000, () => child.exitCode === null);
+  const [user] = testUsers.users;
+  await client.signIn(user.login, user.password);
+}
 let serverOutput = '';
 
 function stripAnsi(value) {
@@ -52,10 +62,7 @@ async function freePort() {
 }
 
 async function request(route, method = 'GET', body) {
-  const response = await fetch(`${baseUrl}${route}`, {
-    method, headers: body === undefined ? {} : {'content-type': 'application/json'},
-    body: body === undefined ? undefined : JSON.stringify(body)
-  });
+  const response = await client.fetch(route, {method, body});
   const data = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(`${method} ${route}: ${data.error || response.status}`);
   return data;
@@ -67,7 +74,7 @@ class GuestConsole {
     this.label = label;
     this.output = '';
     this.selected = false;
-    this.socket = io(baseUrl, {reconnection: false, timeout: 10000});
+    this.socket = client.socket();
     this.socket.on('connect', () => this.socket.emit('select-node', id, id, reply => {
       if (reply?.error) this.error = reply.error;
       else this.selected = true;
@@ -261,12 +268,12 @@ async function run() {
   }
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
-  child = spawn(process.execPath, ['server.js'], {
-    cwd: root, env: {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1'}, stdio: ['ignore', 'pipe', 'pipe']
-  });
+  testUsers = await createTestUsers([{login: 'integration'}]);
+  child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', value => {
     serverOutput = (serverOutput + value.toString()).slice(-15000);
   });
+  await signInTestUser();
   await waitFor('QemuWeb server', () => serverOutput.includes('QemuWeb is ready.'), 30000);
   await request('/api/general-settings', 'PUT', {engine});
   await request('/api/switches', 'POST', {id: switchId, name: `guestnet-${process.pid}`, autostart: true});
