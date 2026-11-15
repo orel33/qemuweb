@@ -154,11 +154,31 @@ async function run() {
   console.log('Isolation: bob cannot select, type into, clear or resize alice\'s consoles');
 
   // A node ID is unique within a session only: bob may hold the same ID without effect on alice.
-  await bob.request('/api/switches', {method: 'POST', body: {id: aliceSwitch, name: 'bobcopy', autostart: false}});
+  const bobCopy = await bob.request('/api/switches', {method: 'POST', body: {id: aliceSwitch, name: 'bobcopy', autostart: false}});
+  assert.equal(bobCopy.name, 'bobcopy');
+  assert.equal(bobCopy.running, false);
+  assert.equal((await bob.request('/api/nodes')).find(node => node.id === aliceSwitch).hostname, 'bobcopy');
+  assert.equal((await alice.request('/api/nodes')).find(node => node.id === aliceSwitch).hostname, 'alicesw');
   await bob.request(`/api/nodes/${aliceSwitch}`, {method: 'DELETE'});
   assert.equal((await alice.request('/api/nodes')).find(node => node.id === aliceSwitch).running, true);
+  await delay(300);
+  // Bob's events about the shared ID concern his own stopped copy only: alice's switch was
+  // running the whole time, so none of them may report it running or name it.
+  for (const recorded of [bobSession, bobConsole, bobProbe]) {
+    assert.deepEqual(mentions(recorded.events, aliceIds.filter(id => id !== aliceSwitch)), [], `${recorded.label} received alice's events`);
+    assert.deepEqual(mentions(recorded.events, ['alicesw', 'alice-host']), [], `${recorded.label} received alice's node names`);
+    for (const item of recorded.events.filter(entry => mentions([entry], [aliceSwitch]).length)) {
+      const ownCopy = (item.event === 'nodes-changed' && item.payload.running === false) ||
+        (item.event === 'nodes-removed' && item.payload.ids.length === 1);
+      assert.ok(ownCopy, `${recorded.label} received an event about alice's switch: ${JSON.stringify(item)}`);
+    }
+  }
+  assert.ok(bobSession.events.some(item => item.event === 'nodes-removed' && item.payload.ids.includes(aliceSwitch)),
+    'bob was not told about the deletion of his own copy');
 
-  // Activity in alice's session reaches alice only.
+  // Activity in alice's session reaches alice only. Bob's recorders are checked on the
+  // events received from here on, after his own copy of the shared ID is gone.
+  const bobMarks = new Map([bobSession, bobConsole, bobProbe].map(recorded => [recorded, recorded.events.length]));
   const aliceConsole = recorder(alice, 'alice console');
   await aliceConsole.connected;
   assert.deepEqual(await select(aliceConsole.socket, aliceSwitch), {ok: true});
@@ -169,10 +189,13 @@ async function run() {
   await waitFor('alice events', () => ['node-renamed', 'nodes-changed'].every(name => aliceSession.events.some(item => item.event === name)));
   await waitFor('alice console output', () => aliceConsole.events.some(item => item.event === 'serial'));
   await delay(500);
-  for (const recorded of [bobSession, bobConsole, bobProbe]) {
-    assert.deepEqual(mentions(recorded.events, aliceIds), [], `${recorded.label} received alice's events: ${JSON.stringify(recorded.events).slice(0, 400)}`);
+  for (const [recorded, mark] of bobMarks) {
+    const since = recorded.events.slice(mark);
+    assert.deepEqual(mentions(since, aliceIds), [], `${recorded.label} received alice's events: ${JSON.stringify(since).slice(0, 400)}`);
+    assert.deepEqual(mentions(since, ['alicesw', 'alice-renamed']), [], `${recorded.label} received alice's node names`);
     assert.ok(!recorded.events.some(item => item.event === 'node-renamed'), `${recorded.label} received a rename`);
   }
+  // Bob's IDs never occur in alice's session, so alice's whole history is checked.
   assert.deepEqual(mentions(aliceSession.events, bobIds), [], 'alice received bob\'s events');
   assert.deepEqual(mentions(aliceConsole.events, bobIds), [], 'alice\'s console received bob\'s events');
   console.log('Isolation: no event of alice\'s session reached bob, and none of bob\'s reached alice');
