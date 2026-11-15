@@ -132,6 +132,42 @@ QemuWeb supports launching virtual machines directly from OCI / Docker container
 5. Multi-architecture execution:
    - Boot2container uses `"arch:qemu": "auto"`. On Apple Silicon Macs, QemuWeb automatically executes native ARM64 QEMU (`qemu-system-aarch64`) with **HVF hardware acceleration**, boots the ARM64 kernel, and pulls native ARM64 container layers. On x86_64 hosts, it runs `qemu-system-x86_64` with KVM.
 
+### Example: Interconnecting an ARM64 VM and a Container
+
+To test native ARM64 virtualization with hardware acceleration on Apple Silicon:
+
+1. **Prepare the images** from the repository root:
+   ```sh
+   bash scripts/prepare.sh --system alpine-arm64
+   bash scripts/prepare.sh --system container
+   ```
+2. **Start QemuWeb**:
+   ```sh
+   ./start.sh
+   ```
+   Open <http://127.0.0.1:3002> in your web browser.
+3. **Create the virtual switch**:
+   - Click **Add a switch** (creates switch `s1`), then click **Start** on `s1`.
+4. **Create the Alpine ARM64 VM**:
+   - Click **Add a new host**, select system **Alpine Linux 3.24 (ARM64)**.
+   - In **Host Settings → Network**, connect `eth0` to switch `s1`.
+   - Start the host, open its console, and assign an IP:
+     ```sh
+     ifconfig eth0 192.168.0.1/24
+     ```
+5. **Create the Alpine ARM64 container**:
+   - Click **Add a new host**, select system **OCI Container (b2c)**.
+   - In **Host Settings → Network**:
+     - Leave `eth0` on **Internet (NAT)** (required for Boot2container to pull the image layers on first boot).
+     - Set `eth1` to switch `s1`.
+   - Start the container. Once the shell prompt appears in the console, configure `eth1`:
+     ```sh
+     ip addr add 192.168.0.2/24 dev eth1 && ip link set eth1 up
+     ```
+6. **Test network communication**:
+   - From the container console: `ping 192.168.0.1`.
+   - Both machines run with native `qemu-system-aarch64` and display the **QEMU · HVF** badge.
+
 ## Images
 
 `scripts/prepare.sh` prepares the systems listed in [`config.json`](config.json):
