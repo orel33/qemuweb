@@ -5,7 +5,8 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'HELP'
-Usage: bash scripts/prepare.sh [--all | --system <sysname>] [--force]
+Usage: bash scripts/prepare.sh [--all | --system <sysname>] [--force] [--update-demo-hashes]
+       bash scripts/prepare.sh --update-demo-hashes [--system <sysname>]
        bash scripts/prepare.sh --list
        bash scripts/prepare.sh --help
 
@@ -20,6 +21,15 @@ The elapsed time of each step and the system total are displayed.
 --force            Rebuild and replace existing images. Save the old pair in
                    images/backups/ for recovery. Running VMs and old working
                    disks may become incompatible with the new base.
+--update-demo-hashes
+                   Record the current base image SHA-256 in demo/*.zip so that
+                   loading them no longer warns about a changed image. Used
+                   alone it only updates the archives (no build); combined with
+                   --all, --system or --force it runs after the build, for the
+                   prepared systems. An archive that contains working disks
+                   (qcow2) is only updated after a warning and a y/n question
+                   (skipped when there is no terminal): those disks belong to
+                   the old base image and could be corrupted on a different one.
 HELP
 }
 
@@ -34,6 +44,7 @@ selected_system=''
 explicit_all=false
 list_only=false
 force=false
+update_demo=false
 while (( $# )); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -46,11 +57,18 @@ while (( $# )); do
       [[ -n "$2" && "$2" != --* ]] || fail 'Expected one system ID after --system.'
       selected_system="$2"; shift 2 ;;
     --force) force=true; shift ;;
+    --update-demo-hashes) update_demo=true; shift ;;
     *) fail "Unknown option: $1 (see --help)." ;;
   esac
 done
 
-if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true ) ]]; then
+update_only=false
+if [[ "$update_demo" == true && "$explicit_all" == false && "$force" == false ]]; then
+  # --system alone with --update-demo-hashes selects the systems to update, not to build.
+  update_only=true
+fi
+
+if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true || "$update_demo" == true ) ]]; then
   fail '--list cannot be combined with preparation options.'
 fi
 
@@ -98,6 +116,17 @@ if [[ -n "$selected_system" ]]; then
   for id in "${system_ids[@]}"; do [[ "$id" == "$selected_system" ]] && found=true; done
   [[ "$found" == true ]] || fail "Unknown system: $selected_system (see --list)."
   target_ids=("$selected_system")
+fi
+
+update_demo_hashes() {
+  echo
+  echo "== Demo archives: base image hashes =="
+  node "$ROOT/scripts/update-demo-hashes.js" "$@"
+}
+
+if [[ "$update_only" == true ]]; then
+  update_demo_hashes "${target_ids[@]}"
+  exit $?
 fi
 
 verify_images() {
@@ -185,3 +214,4 @@ done
 echo
 echo "Prepared ${#target_ids[@]} system(s)."
 if [[ -n "$backup_dir" ]]; then echo "Previous images: $backup_dir"; fi
+if [[ "$update_demo" == true ]]; then update_demo_hashes "${target_ids[@]}"; fi

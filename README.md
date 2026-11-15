@@ -108,6 +108,8 @@ bash scripts/prepare.sh                      # all systems
 bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt
 bash scripts/prepare.sh --list               # show prepared images
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
+bash scripts/prepare.sh --all --force --update-demo-hashes  # rebuild all, then refresh demo/*.zip
+bash scripts/prepare.sh --update-demo-hashes # only refresh the hashes in demo/*.zip
 ```
 
 Downloads go to `sources/<system>/`. Each system gets a RAW base image for QEMU
@@ -115,6 +117,13 @@ and a VDI base image for VirtualBox in `images/`; VirtualBox is not needed to
 build them. Existing images are reused. `--force` keeps the previous RAW/VDI
 pair in `images/backups/`; stop the system's machines first, because their
 working disks depend on the base image.
+
+The demo archives in [`demo/`](demo/) record the SHA-256 of the base image they
+were saved with; loading one after a rebuild shows a "base image changed"
+warning. `--update-demo-hashes` records the new hash (see
+`scripts/update-demo-hashes.js`). An archive that contains working disks (qcow2)
+is updated only after a warning and a `y/N` question, because those disks belong
+to the old base image.
 
 Guests log in as `root` without a password on the serial console.
 
@@ -150,6 +159,7 @@ the server stops. Use **Save session** to keep a portable copy.
 | `common/` | Code shared by the runner and the server: IDs, launch settings, `config.json` validation. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |
+| `scripts/update-demo-hashes.js` | Records the current base image hashes in `demo/*.zip` (called by `prepare.sh --update-demo-hashes`). |
 
 See [docs/architecture.md](docs/architecture.md) for the data paths between the
 browser, the server, and QEMU, VirtualBox, and VDE.
