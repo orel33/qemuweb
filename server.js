@@ -629,9 +629,14 @@ app.get('/api/sessions', (_req, res) => {
 });
 
 const MAX_SESSION_ARCHIVE = 0xffffffff;
+// Base images are large and rarely change: cache their digest by file identity.
+const sha256Cache = new Map();
 function fileSha256(file) {
   const stat = fs.statSync(file);
   if (!stat.isFile()) throw new Error(`Base image is not a regular file: ${file}`);
+  const key = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeMs}`;
+  const cached = sha256Cache.get(file);
+  if (cached?.key === key) return {size: stat.size, sha256: cached.sha256};
   const hash = crypto.createHash('sha256');
   const fd = fs.openSync(file, 'r');
   const chunk = Buffer.alloc(1024 * 1024);
@@ -643,7 +648,9 @@ function fileSha256(file) {
       hash.update(chunk.subarray(0, count)); offset += count;
     }
   } finally { fs.closeSync(fd); }
-  return {size: stat.size, sha256: hash.digest('hex')};
+  const sha256 = hash.digest('hex');
+  sha256Cache.set(file, {key, sha256});
+  return {size: stat.size, sha256};
 }
 function archiveSources(includeDisks, allowRunning = false) {
   if (typeof includeDisks !== 'boolean') throw new Error('Invalid working disk option.');
@@ -690,7 +697,8 @@ function archiveSources(includeDisks, allowRunning = false) {
   if (logicalBytes > 256 * 1024 * 1024 * 1024) throw new Error('Session archive logical size exceeds 256 GiB limit.');
   return {sources, hosts, switches, systems, logicalBytes, allocatedBytes, estimatedBytes, runningHosts: runningHosts.length};
 }
-function validateArchiveSession(snapshot, stage) {
+function validateArchiveSession(snapshot, stage, {discardStaleDisks = false} = {}) {
+  const warnings = [];
   if (!['qemu', 'vbox'].includes(snapshot.engine) ||
       !Array.isArray(snapshot.hosts) || !Array.isArray(snapshot.switches) ||
       !snapshot.baseImages || typeof snapshot.baseImages !== 'object' || Array.isArray(snapshot.baseImages)) {
@@ -753,7 +761,21 @@ function validateArchiveSession(snapshot, stage) {
         !Number.isSafeInteger(expected.size) || !/^[0-9a-f]{64}$/.test(expected.sha256)) throw new Error(`Invalid base image identity: ${id}.`);
     if (expected.format !== (snapshot.engine === 'vbox' ? 'vdi' : 'raw')) throw new Error(`Base image format incompatible: ${id}.`);
     const actual = fileSha256(imagePath(image.images[expected.format]));
-    if (expected.size !== actual.size || expected.sha256 !== actual.sha256) throw new Error(`Base image incompatible: ${id}.`);
+    if (expected.size === actual.size && expected.sha256 === actual.sha256) continue;
+    // A working disk only stores differences from its base image, so it is never
+    // reused on a changed base image. Hosts without a working disk start fresh.
+    const stale = snapshot.hosts.filter(host => host.system === id && host.disk);
+    if (stale.length && !discardStaleDisks) {
+      throw new Error(`Base image ${id} changed since this session was saved; working disks of ${stale.map(host => host.name).join(', ')} cannot be reused. Enable "Discard working disks whose base image changed" to load the session without them.`);
+    }
+    for (const host of stale) {
+      host.disk = false;
+      fs.rmSync(path.join(stage, host.id, 'disk.qcow2'), {force: true});
+    }
+    warnings.push({system: id, hosts: snapshot.hosts.filter(host => host.system === id).map(host => host.id),
+      message: stale.length
+        ? `Base image ${id} changed since this session was saved; working disks of ${stale.map(host => host.name).join(', ')} were discarded and these hosts will start from the current image.`
+        : `Base image ${id} changed since this session was saved; its hosts will start from the current image.`});
   }
   for (const file of snapshot.files) {
     const match = /^(h-[0-9a-f]{16})\/startup\/(.+)$/.exec(file);
@@ -770,6 +792,7 @@ function validateArchiveSession(snapshot, stage) {
     execFileSync(commands.QEMU_IMG, ['rebase', '-u', '-f', 'qcow2', '-F', 'raw', '-b', imagePath(image.images.raw), disk], {maxBuffer: 1024 * 1024});
     execFileSync(commands.QEMU_IMG, ['check', '-f', 'qcow2', disk], {maxBuffer: 1024 * 1024});
   }
+  return warnings;
 }
 function installArchive(snapshot, stage) {
   if (sessions.size) throw new Error('Load requires an empty session.');
@@ -858,6 +881,23 @@ app.post('/api/session-archive/export', async (req, res) => {
     });
   } catch (error) { archiveBusy = false; fs.rmSync(archive, {force: true}); res.status(400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to save session archive.' : error.message}); }
 });
+// Lets the load dialog warn before upload: returns the systems whose current base
+// image differs from the one recorded in an archive's session.json.
+app.post('/api/session-archive/check', (req, res) => {
+  try {
+    const {engine, baseImages} = req.body || {};
+    if (!['qemu', 'vbox'].includes(engine) || !baseImages || typeof baseImages !== 'object' || Array.isArray(baseImages)) throw new Error('Invalid archived session.');
+    const format = engine === 'vbox' ? 'vdi' : 'raw', changed = [];
+    for (const [id, expected] of Object.entries(baseImages)) {
+      const image = imageById(id);
+      if (!image || !expected || expected.format !== format) { changed.push(id); continue; }
+      const actual = fileSha256(imagePath(image.images[format]));
+      if (actual.size !== expected.size || actual.sha256 !== expected.sha256) changed.push(id);
+    }
+    res.set('Cache-Control', 'no-store');
+    res.json({changed});
+  } catch (error) { res.status(400).json({error: error.message}); }
+});
 app.post('/api/session-archive/import', async (req, res) => {
   archiveBusy = true;
   const upload = path.join(runtimeInstance, `.session-upload-${crypto.randomBytes(8).toString('hex')}.zip`);
@@ -865,6 +905,8 @@ app.post('/api/session-archive/import', async (req, res) => {
   try {
     const autoStart = req.query.autoStart === 'true';
     if (req.query.autoStart !== undefined && !['true', 'false'].includes(req.query.autoStart)) throw new Error('Invalid automatic start option.');
+    const discardStaleDisks = req.query.discardStaleDisks === 'true';
+    if (req.query.discardStaleDisks !== undefined && !['true', 'false'].includes(req.query.discardStaleDisks)) throw new Error('Invalid working disk option.');
     stage = fs.mkdtempSync(path.join(runtimeInstance, '.session-import-'));
     if (sessions.size) throw new Error('Load requires an empty session.');
     if (req.headers['content-type'] !== 'application/zip') throw new Error('Choose a QemuWeb ZIP archive.');
@@ -880,7 +922,7 @@ app.post('/api/session-archive/import', async (req, res) => {
     if (sessions.size) throw new Error('Load requires an empty session.');
     const files = await readArchive(upload, stage);
     const snapshot = archivedSessionFiles(stage, files);
-    validateArchiveSession(snapshot, stage);
+    const warnings = validateArchiveSession(snapshot, stage, {discardStaleDisks});
     installArchive(snapshot, stage);
     const startErrors = [];
     if (autoStart) {
@@ -898,7 +940,12 @@ app.post('/api/session-archive/import', async (req, res) => {
         }
       }
     }
-    res.json({ok: true, hosts: snapshot.hosts.length, switches: snapshot.switches.length, startErrors});
+    // Log after automatic starts, which reset the run log of fresh hosts.
+    for (const warning of warnings) {
+      for (const id of warning.hosts) { const session = sessions.get(id); if (session) appendLog(session, `# Warning: ${warning.message}`); }
+    }
+    res.json({ok: true, hosts: snapshot.hosts.length, switches: snapshot.switches.length, startErrors,
+      warnings: warnings.map(warning => warning.message)});
   } catch (error) { res.status(error.message === 'Load requires an empty session.' ? 409 : 400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to load session archive.' : error.message}); }
   finally { archiveBusy = false; fs.rmSync(upload, {force: true}); if (stage) fs.rmSync(stage, {recursive: true, force: true}); }
 });

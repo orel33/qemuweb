@@ -1,138 +1,226 @@
 # <img src="public/favicon.svg" alt="" width="32" height="32"> QemuWeb
 
 QemuWeb lets you create and control Linux machines running in QEMU or VirtualBox
-from a browser. You can connect them through VDE switches, use their serial
-consoles, and import or export sessions and network topologies. The
-[architecture](docs/architecture.md) is documented separately.
+from a browser. Connect them through VDE switches, use their serial consoles,
+and import or export sessions and network topologies.
 
-## Installation
+## Quick start
 
 You need a **Linux** or **macOS** host, **Node.js 18 or newer** with npm, Bash, Python 3,
 QEMU (`qemu-system-x86_64` with VDE support), `qemu-img`, `vde_switch`, `vdeterm`, and
 an ISO image tool (`genisoimage` or `mkisofs`). VirtualBox (`VBoxManage`) is optional.
 On Linux, QEMU uses KVM hardware acceleration when `/dev/kvm` is accessible. On macOS,
 QEMU uses HVF acceleration on Intel hosts and TCG emulation on Apple Silicon.
-Image preparation downloads official sources and uses `curl`, `gzip`, `isoinfo`, and standard Unix tools.
 
-For **Ubuntu 24.04 on x86-64**, install **Node.js 24 LTS** with npm from the
-[official Node.js download page](https://nodejs.org/en/download). Ubuntu 24.04's
-`nodejs` package is older. The repository includes `.nvmrc` for users of nvm.
-Check `node --version` and `npm --version` before installing dependencies;
-npm rejects unsupported Node versions.
+### On Ubuntu 24.04:
 
-QEMU installations need `qemu-system-x86_64` with VDE support, `qemu-img`,
-`vde_switch`, `vdeterm`, and access to `/dev/kvm`. VirtualBox is optional:
-install it separately to provide `VBoxManage` if you want VirtualBox hosts.
+1. Install the system packages. `build-essential` and `python3` are needed to
+   compile `node-pty`, which has no Linux prebuild:
 
-On Ubuntu 24.04, install the distribution packages:
+   ```sh
+   sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
+   ```
 
-```sh
-sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
-```
+2. Install **Node.js 24 LTS** with npm. Ubuntu's `nodejs` package is too old,
+   and `npm ci` fails with `EBADENGINE` on other Node versions. Use one of:
 
-On macOS, install the dependencies with Homebrew:
+   ```sh
+   nvm install                 # with nvm; reads .nvmrc
+   sudo n 24                   # with n
+   ```
+
+   Or use the [official download](https://nodejs.org/en/download). Then check
+   that `node --version` prints `v24.x` (run `hash -r` first if the shell still
+   finds the old version).
+
+3. Check QEMU prerequisites:
+   - `qemu-system-x86_64 -netdev help` must list `vde`. If it does not, see
+     [QEMU without VDE support](#qemu-without-vde-support).
+   - Your user must be able to read and write `/dev/kvm`. If not, run
+     `sudo usermod -aG kvm $USER` and log in again.
+
+### On macOS:
+
+Install the dependencies with Homebrew:
 
 ```sh
 brew install node python3 qemu vde cdrtools
 ```
 
-Install VirtualBox separately if you plan to use the VirtualBox engine.
+### Setup and Start
 
-Clone the repository:
+From the repository root:
+
+   ```sh
+   sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
+   ```
+
+2. Install **Node.js 24 LTS** with npm. Ubuntu's `nodejs` package is too old,
+   and `npm ci` fails with `EBADENGINE` on other Node versions. Use one of:
+
+   ```sh
+   nvm install                 # with nvm; reads .nvmrc
+   sudo n 24                   # with n
+   ```
+
+   Or use the [official download](https://nodejs.org/en/download). Then check
+   that `node --version` prints `v24.x` (run `hash -r` first if the shell still
+   finds the old version).
+
+3. Check QEMU prerequisites:
+   - `qemu-system-x86_64 -netdev help` must list `vde`. If it does not, see
+     [QEMU without VDE support](#qemu-without-vde-support).
+   - Your user must be able to read and write `/dev/kvm`. If not, run
+     `sudo usermod -aG kvm $USER` and log in again.
+
+4. Clone, install, prepare one image, and start:
+
+   ```sh
+   git clone https://github.com/orel33/qemuweb.git
+   cd qemuweb
+   npm ci
+   bash scripts/prepare.sh --system alpine
+   ./start.sh
+   ```
+
+Open <http://127.0.0.1:3002>. Press `Ctrl+C` to stop the server, or use
+`PORT=3003 ./start.sh` to choose another port.
+
+The server listens only on `127.0.0.1` and has no authentication. To use it
+from another machine, forward the port over SSH:
+`ssh -L 3002:127.0.0.1:3002 <server>`.
+
+VirtualBox is optional: install it separately to provide `VBoxManage`. The
+VirtualBox engine is disabled in the Web interface when `VBoxManage` is
+unavailable.
+
+## Using QemuWeb
+
+### Included LAN demo
+
+1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
+2. In the Web interface, choose an engine in **General Settings**, click
+   **Load session ZIP**, and select [`demo/lan.zip`](demo/lan.zip).
+3. Start the hosts and the switch. Their startup scripts assign `192.168.0.x`
+   addresses to the four hosts. Open their consoles and `ping` between them.
+
+The archive contains settings and startup scripts but no working disks, so hosts
+start from fresh images. [`demo/`](demo/) also contains DMZ and gateway sessions
+(`dmz0.zip`, `dmz1.zip`, `gw0.zip`, `gw1.zip`).
+
+### Sessions and topologies
+
+- **Save session** exports hosts, switches, settings, and startup scripts as a
+  ZIP archive; **Load session ZIP** restores it.
+- Before loading, the dialog summarizes the archive and warns when a base image
+  changed since the session was saved. Hosts on a changed image start from the
+  current image; their working disks (qcow2) are discarded, never reused.
+- **Load topology** reads a `.topo` text file that describes only hosts,
+  switches, and their links, without disks or startup scripts. Examples:
+  [`topo/lan.topo`](topo/lan.topo), [`topo/dmz.topo`](topo/dmz.topo),
+  [`topo/gw.topo`](topo/gw.topo).
+
+### Startup scripts
+
+Each host can run `start.sh` at boot from an automatically built startup disk.
+Enable **Auto-build and attach startup disk** in **Host Settings → Startup**,
+then edit `start.sh`. The default script uses placeholders replaced for each
+host:
 
 ```sh
-git clone https://github.com/orel33/qemuweb.git
-cd qemuweb
+#!/bin/sh
+hostname @HOSTNAME@
+ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24
 ```
 
-If QEMU lacks VDE support, see [Install QEMU](#install-qemu). On Linux, confirm that your
-user can read and write `/dev/kvm` before starting QEMU hosts. Then install
-the Node.js dependencies, prepare one image, and start QemuWeb:
+To ship another file, such as `firewall.sh`, use **Add extra files** in the same
+tab and call it from `start.sh`, for example `sh /mnt/cdrom/firewall.sh`. Each
+extra file is limited to 1 MiB, and all startup files together to 4 MiB. Save
+the settings and restart the host to use the rebuilt disk.
+
+## Images
+
+`scripts/prepare.sh` prepares the systems listed in [`config.json`](config.json):
+Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, and OpenWrt 25.12.
 
 ```sh
-npm ci
-bash scripts/prepare.sh --system alpine
-./start.sh
+bash scripts/prepare.sh                      # all systems
+bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt
+bash scripts/prepare.sh --list               # show prepared images
+bash scripts/prepare.sh --system <id> --force  # rebuild one system
 ```
 
-Open <http://127.0.0.1:3002>. Press `Ctrl+C` to stop the server. Use
-`PORT=3003 ./start.sh` to choose another port. The project's `allowScripts`
-entry lets npm 11 run the pinned `node-pty` install script. VirtualBox is
-disabled in the Web interface when `VBoxManage` is unavailable. Image
-preparation creates both RAW and VDI files with QEMU tools; it does not need
-VirtualBox. Running a QEMU host requires usable `/dev/kvm` access.
+Downloads go to `sources/<system>/`. Each system gets a RAW base image for QEMU
+and a VDI base image for VirtualBox in `images/`; VirtualBox is not needed to
+build them. Existing images are reused. `--force` keeps the previous RAW/VDI
+pair in `images/backups/`; stop the system's machines first, because their
+working disks depend on the base image.
 
-## Try the included LAN demo
+Guests log in as `root` without a password on the serial console.
 
-1. Prepare at least the Debian Legacy image with `bash scripts/prepare.sh --system debian13-legacy`.
-2. In the Web interface, choose an engine in **General Settings**, click **Load session ZIP**, and select [`demo/lan.zip`](demo/lan.zip).
-3. Start the hosts and switch if they are not running. Their startup scripts assign `192.168.0.x` addresses to the four hosts. Open their consoles and try `ping` between them.
-
-The archive includes settings and startup scripts, but no working disks, so
-hosts start from fresh images. [`topo/lan.topo`](topo/lan.topo) describes the same
-layout for **Load topology**, without startup scripts or IP addresses. You can
-also add hosts and switches in the Web interface, connect them, and save the
-session as a ZIP archive.
-
-To include a file such as `firewall.sh` in a host's startup disk, open **Host
-Settings → Startup → Add extra files** and select it. Enable **Auto-build and
-attach startup disk** in the same tab, then call the file from `start.sh` if
-it should run at boot, for example `sh /mnt/cdrom/firewall.sh`. Save the settings
-and restart the host to use the rebuilt disk. Each extra file can be at most
-1 MiB; all startup files together can be at most 4 MiB.
-
-## Prepare the available images
-
-`bash scripts/prepare.sh` prepares the four systems listed in
-[`config.json`](config.json): Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy,
-and OpenWrt 25.12. Newly built Debian images include the `resize` command. To prepare
-one system or list existing images:
-
-```sh
-bash scripts/prepare.sh --system alpine
-bash scripts/prepare.sh --system debian13-cloud
-bash scripts/prepare.sh --system debian13-legacy
-bash scripts/prepare.sh --system openwrt
-bash scripts/prepare.sh --list
-```
-
-Downloads and checksums go to `sources/<system>/`. Preparation creates RAW
-base images for QEMU and VDI base images for VirtualBox in `images/`. Existing
-images are reused. `--force` rebuilds a selected system and saves the previous
-RAW/VDI pair in `images/backups/`. Stop its machines first: their working disks
-may depend on the previous base image.
-
-## Configuration files
+## Configuration
 
 | File | Purpose |
 | --- | --- |
 | [`config.json`](config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. |
-| `.env` and `.env.local` | Executable names and local path overrides; `.env.local` is specific to your machine. |
-| `runtime/<session>/session.json` | Engine and inventory for the current session. |
-| `runtime/<session>/<host>/host.json` and `runtime/<session>/<switch>/switch.json` | Saved host and switch settings. |
-| `runtime/<session>/<host>/startup/start.sh` | Commands run when a host starts. |
-| [`topo/lan.topo`](topo/lan.topo) and other `.topo` files | Text descriptions of topologies, without disks or startup scripts. |
+| [`.env`](.env) | Executable names used by QemuWeb. |
+| `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
+| `runtime/<session>/` | Current session: `session.json`, `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. |
 
-The [JSON examples](docs/samples/) show the session file formats. `runtime/`
-contains temporary files that are removed with their session; use **Save session**
-to keep a portable copy.
+`runtime/` is temporary: a session's files are removed with the session or when
+the server stops. Use **Save session** to keep a portable copy.
+
+## Maintenance scripts
+
+| Command | Effect |
+| --- | --- |
+| `scripts/stop.sh` | Stop the server started on `PORT` (default 3002). |
+| `scripts/killall.sh [--dry-run]` | Stop this project's servers, QEMU processes, and VirtualBox VMs, including orphans. |
+| `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads. |
+
+## Development
+
+| Path | Role |
+| --- | --- |
+| `server.js` | HTTP API, Socket.IO consoles, and process management. |
+| `topology.js` | `.topo` parsing and formatting. |
+| `session-archive.js` | Session ZIP import and export. |
+| `guest-media.js` | Startup disk (ISO) generation. |
+| `resource-metrics.js` | CPU and memory metrics for VMs. |
+| `command-preflight.js`, `system-config.js` | Executable checks, and `config.json` and host settings validation. |
+| `public/` | Web interface (HTML, xterm.js terminals, network graph). |
+| `scripts/prepare/` | One image preparation script per system. |
+
+See [docs/architecture.md](docs/architecture.md) for the data paths between the
+browser, the server, and QEMU, VirtualBox, and VDE.
+
+Tests:
+
+```sh
+npm test                          # unit tests only
+./scripts/run-tests.sh --list     # unit and integration scenarios
+```
+
+Integration tests need prepared images, QEMU with VDE, and usually KVM. See
+[test/TESTS.md](test/TESTS.md) for each scenario and its prerequisites.
 
 ## Troubleshooting
 
-### Install QEMU
+### QEMU without VDE support
 
-Ubuntu 24.04's packaged QEMU may not include the VDE network backend. Check
-whether `qemu-system-x86_64 -netdev help` lists `vde`. If it does not, follow
-the [QEMU installation notes](misc/install-qemu.md) to build a compatible
-binary. For example, if the installer puts QEMU 11.1.3 in `/opt`, create
-`.env.local` in the repository root with:
+Ubuntu 24.04's packaged QEMU may lack the VDE network backend. Build a
+compatible binary with the [QEMU installation notes](misc/install-qemu.md), then
+create `.env.local` in the repository root:
 
 ```text
-QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64
+QEMU_SYSTEM_X86_64=/opt/qemu-<version>/bin/qemu-system-x86_64
 ```
 
-Use the actual version installed on your machine. This local setting overrides
-only `QEMU_SYSTEM_X86_64` from `.env`; `qemu-img` still uses the distribution
-package. `.env.local` is ignored by Git. Confirm that the selected binary lists
-`vde` with `/opt/qemu-11.1.3/bin/qemu-system-x86_64 -netdev help`, then run
-`./start.sh` again.
+This overrides only `QEMU_SYSTEM_X86_64`; `qemu-img` still comes from the
+distribution. Check that `/opt/qemu-<version>/bin/qemu-system-x86_64 -netdev help`
+lists `vde`, then run `./start.sh` again.
+
+### Port already in use
+
+Another QemuWeb server is probably running. Stop it with `scripts/stop.sh`, or
+start on another port with `PORT=3003 ./start.sh`.
