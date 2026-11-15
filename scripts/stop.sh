@@ -42,5 +42,5 @@ for _ in {1..60}; do
   sleep 0.2
 done
 
-echo 'QemuWeb is still shutting down; its sessions may need a little more time.' >&2
+echo 'QemuWeb is still shutting down; its nodes may need a little more time.' >&2
 exit 1
