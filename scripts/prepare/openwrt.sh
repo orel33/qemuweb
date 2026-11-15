@@ -83,18 +83,31 @@ done
 [ "$(uci -q get 'network.@device[0].name')" = br-lan ] || { echo 'Unexpected OpenWrt LAN device layout' >&2; exit 1; }
 uci delete 'network.@device[0]'
 uci set 'network.lan.device=eth0'
+# The stock config gives lan 192.168.1.1/24 (static ipaddr/netmask, plus
+# ip6assign). Every host would then share that address until start.sh runs, and
+# two hosts on one switch would conflict. Remove the stock address so the lab
+# LAN stays unconfigured until the startup script assigns one. proto becomes
+# "none" so netifd brings the device up without any address.
+uci -q delete network.lan.ipaddr
+uci -q delete network.lan.netmask
+uci -q delete network.lan.ip6assign
+uci set network.lan.proto=none
 uci commit network
+[ "$(uci -q get network.lan.proto)" = none ] || { echo 'OpenWrt LAN proto not none' >&2; exit 1; }
+if uci -q get network.lan.ipaddr >/dev/null; then echo 'OpenWrt LAN still has a static address' >&2; exit 1; fi
 # A plain lab image must not hand out addresses on a static-IP-only LAN.
-# Keep OpenWrt's LAN interface, but disable its stock DHCPv4, DHCPv6 and RA.
-if uci -q get dhcp.lan >/dev/null; then
-  uci set 'dhcp.lan.ignore=1'
-  uci set 'dhcp.lan.dhcpv6=disabled'
-  uci set 'dhcp.lan.ra=disabled'
-fi
-if uci -q get 'dhcp.@dnsmasq[0]' >/dev/null; then
-  uci set 'dhcp.@dnsmasq[0].port=0'
-fi
+# Disable DHCPv4, DHCPv6 and RA unconditionally (no existence guards that
+# could silently skip a section on another OpenWrt release) and verify.
+# uci set creates the section options even when the section is missing.
+uci set 'dhcp.lan=dhcp'
+uci set 'dhcp.lan.interface=lan'
+uci set 'dhcp.lan.ignore=1'
+uci set 'dhcp.lan.dhcpv6=disabled'
+uci set 'dhcp.lan.ra=disabled'
+uci set 'dhcp.@dnsmasq[0].port=0'
 uci commit dhcp
+[ "$(uci -q get dhcp.lan.ignore)" = 1 ] && [ "$(uci -q get 'dhcp.@dnsmasq[0].port')" = 0 ] \
+  || { echo 'OpenWrt DHCP was not disabled' >&2; exit 1; }
 /etc/init.d/odhcpd disable
 OPENWRT_PREPARE
   cat >> "$guest_script" <<'OPENWRT_HOOK'
