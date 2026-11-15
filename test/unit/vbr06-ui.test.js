@@ -1,11 +1,9 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const test = require('node:test');
-const vm = require('node:vm');
+const {read, uiSource} = require('./web-ui-source');
 
-const root = path.join(__dirname, '..', '..');
-const html = fs.readFileSync(path.join(root, 'public', 'index.html'), 'utf8');
+const html = read('index.html');
+const ui = uiSource();
 const monitorTerminal = require('../../public/monitor-terminal');
 
 test('QEMU monitor capability excludes engines without an HMP monitor', () => {
@@ -52,24 +50,26 @@ test('each console pane owns an in-place Console/Monitor/Log switch and one xter
 });
 
 test('Log is read-only and exposes Monitor only when the selected machine supports QEMU HMP', () => {
-  assert.match(html, /else if \(pane\.view === 'console'\) \{[\s\S]*?if \(input\) pane\.socket\.emit\('input', input\)/);
-  assert.match(html, /if \(view === 'monitor' && !MonitorTerminal\.isSupported\(machine\)\) return/);
-  assert.match(html, /button\.dataset\.view === 'monitor'\) button\.hidden = !monitorSupported/);
-  assert.match(html, /pane\.view === 'log'\) renderLogView\(pane\)/);
-  assert.match(html, /SessionLog\.reset\(machine\);\s*refreshLogViews\(machine\)/);
+  assert.match(ui, /else if \(pane\.view === 'console'\) \{[\s\S]*?if \(input\) pane\.socket\.emit\('input', input\)/);
+  assert.match(ui, /if \(view === 'monitor' && !MonitorTerminal\.isSupported\(machine\)\) return/);
+  assert.match(ui, /button\.dataset\.view === 'monitor'\) button\.hidden = !monitorSupported/);
+  assert.match(ui, /pane\.view === 'log'\) renderLogView\(pane\)/);
+  assert.match(ui, /SessionLog\.reset\(machine\);\s*refreshLogViews\(machine\)/);
 });
 
 test('Log view scroll position updates after xterm finishes each write', () => {
   for (const output of ['SessionLog.terminalText(machine)', 'SessionLog.terminalEntry(line)']) {
     const escaped = output.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    assert.match(html, new RegExp(`pane\\.terminal\\.write\\(${escaped}, \\(\\) => \\{\\s*pane\\.terminal\\.scrollToBottom\\(\\);\\s*syncConsoleScroll\\(pane\\);\\s*\\}\\);`));
+    assert.match(ui, new RegExp(`pane\\.terminal\\.write\\(${escaped}, \\(\\) => \\{\\s*pane\\.terminal\\.scrollToBottom\\(\\);\\s*syncConsoleScroll\\(pane\\);\\s*\\}\\);`));
   }
 });
 
-test('the inline browser program is valid JavaScript', () => {
+test('index.html keeps only the structure and loads the Web UI as an ES module', () => {
   const inlineScripts = [...html.matchAll(/<script(?:\s[^>]*)?>([\s\S]*?)<\/script>/g)]
     .map(match => match[1])
     .filter(source => source.trim());
-  assert.equal(inlineScripts.length, 1);
-  assert.doesNotThrow(() => new vm.Script(inlineScripts[0]));
+  assert.deepEqual(inlineScripts, []);
+  assert.doesNotMatch(html, /<style/);
+  assert.match(html, /<link rel="stylesheet" href="\/css\/app\.css">/);
+  assert.match(html, /<script type="module" src="\/app\.js"><\/script>/);
 });

@@ -142,13 +142,13 @@ the server stops. Use **Save session** to keep a portable copy.
 
 | Path | Role |
 | --- | --- |
-| `server.js` | HTTP API, Socket.IO consoles, and process management. |
-| `lib/topology.js` | `.topo` parsing and formatting. |
-| `lib/session-archive.js` | Session ZIP import and export. |
-| `runner/media/guest-media.js` | Startup disk (ISO) generation. |
-| `runner/metrics.js` | CPU and memory metrics for VMs. |
-| `runner/preflight.js`, `common/system-config.js` | Executable checks, and `config.json` and host settings validation. |
-| `public/` | Web interface (HTML, xterm.js terminals, network graph). |
+| `server.js` | Startup: preflight, session, runner, HTTP routes and Socket.IO wiring. |
+| `routes/` | HTTP API by area: settings, nodes, hosts, topology, archives, metrics. |
+| `sockets.js` | Socket.IO consoles; forwards runner events to browsers. |
+| `runner/` | Node processes behind the facade `runner/index.js`: QEMU, VirtualBox, VDE switches, consoles, startup media, metrics. |
+| `lib/` | Session, session ZIP archives and snapshots, `.topo` parsing. |
+| `common/` | Code shared by the runner and the server: IDs, launch settings, `config.json` validation. |
+| `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |
 
 See [docs/architecture.md](docs/architecture.md) for the data paths between the

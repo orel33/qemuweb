@@ -8,14 +8,24 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 
 | File | Purpose |
 |---|---|
+| `guest-hook-filter.test.js` | Hide startup hook markers from the serial console, including split and prefixed lines. |
 | `guest-media.test.js` | Validate startup files and resource paths; check that separate read-only ISOs contain the right script and resources when `genisoimage` and `isoinfo` are available. |
-| `host-settings-naming.test.js` | Check automatic host names and the Host Settings Close button. |
+| `host-settings-naming.test.js` | Check automatic host names (from `public/nodes.js`) and the shared Add host/Host Settings dialog. |
+| `image-hash.test.js` | Check base image hashing and shell quoting of logged commands. |
+| `launch-settings.test.js` | Validate launch settings and QEMU options against their field limits. |
+| `node-id.test.js` | Check host and switch ID format and kind. |
 | `pud84-ui.test.js` | Check the position of Exit All in the host/switch toolbar. |
 | `resource-metrics.test.js` | Parse CPU and memory metrics for Linux processes and VirtualBox. |
+| `runner.test.js` | Drive `runner/` through its facade with an injected in-memory session and a temporary runtime directory: node layout, hostname aliases, state/log events, NIC MAC and port assignment, engine checks, catalog lookups and launch preview commands. No HTTP server is started and no process is spawned. |
+| `runner-boundaries.test.js` | Check the dependency rules: `runner/` requires only `runner/`, `common/`, Node built-ins and `node-pty`; the rest of the server requires only `runner/index.js`. |
+| `session-archive.test.js` | Write and read session ZIP archives; reject modified, unsafe or incomplete ones. |
 | `session-log.test.js` | Check log replay, clearing and history limits. |
 | `tcg09-graphic.test.js` | Build the network graph from example topologies and check links, positions and states. |
 | `topology.test.js` | Parse and format example topologies; reject invalid references and directives. |
-| `vbr06-ui.test.js` | Check the QEMU monitor behavior and Console/Monitor/Log views. |
+| `vbr06-ui.test.js` | Check the QEMU monitor behavior and Console/Monitor/Log views; check that `index.html` has no inline script or style. |
+| `web-modules.test.js` | Check the Web UI ES modules in `public/`: syntax, size, import/export resolution and initialization from `app.js`. |
+
+`web-ui-source.js` is a helper shared by the tests that read the Web UI sources.
 
 ## Integration tests (`test/integration/`)
 
