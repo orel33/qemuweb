@@ -115,3 +115,10 @@ whether the agent runs them or the user validates the Web interface manually.
 A request to implement, review, commit, push, or integrate is not permission to
 run tests. If tests are declined or not yet approved, report that they were not
 run and continue with work that does not depend on test execution.
+
+The user alone gives the order to run tests and to integrate. There is no
+standing or per-milestone approval: an earlier approval covers only the
+commands it named, and an agent never runs tests, or starts the application
+to check a change, on its own initiative. Static checks (`node --check`,
+`bash -n`, a lint) are not tests and may be run freely. Implementation agents
+ask the orchestrator, which asks the user.
