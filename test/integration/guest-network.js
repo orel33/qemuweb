@@ -215,6 +215,9 @@ async function runProfile(profile) {
         assert.notEqual(bridge.status, 0, 'br-lan still exists.');
       });
       await check(profile, `${host.label} startup hostname`, async () => {
+        // The console shell can be ready before the START=99 init service has
+        // run the startup script (OpenWrt), so wait for its exit marker.
+        await waitFor(`${host.label} startup script exit`, () => /QEMUWEB_START_EXIT \d+/.test(shell.output));
         const output = await success(shell, 'hostname');
         assert.equal(output.trim(), host.name);
       });

@@ -146,7 +146,7 @@ host:
 ```sh
 #!/bin/sh
 hostname @HOSTNAME@
-ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24
+ifconfig @IFNAME0@ 192.168.0.@SWPORT0@ netmask 255.255.255.0 up
 ```
 
 To ship another file, such as `firewall.sh`, use **Add extra files** in the same

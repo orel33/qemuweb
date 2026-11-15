@@ -11,7 +11,7 @@ const {validateBootFiles, validateStartupTemplate, readStartupFiles, writeStartu
 test('startup template validation catches missing interfaces and malformed tokens before ISO creation', () => {
   const connected = [{switchId: 's1', port: 2}];
   const disconnected = [{switchId: null, port: null}];
-  const script = '#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n';
+  const script = '#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@ netmask 255.255.255.0 up\n';
   assert.equal(validateStartupTemplate(script, connected, true), script);
   assert.equal(validateStartupTemplate('printf "%s\\n" "$@"\n', [], true), 'printf "%s\\n" "$@"\n');
   assert.throws(() => validateStartupTemplate(script, []), /Error: unresolved variables in start\.sh: @IFNAME0@, @SWPORT0@/);
@@ -61,7 +61,7 @@ test('separate read-only ISOs include external companion files under each host',
       const host = path.join(root, name);
       fs.mkdirSync(host);
       const startup = path.join(host, 'startup');
-      writeStartupFiles(startup, {script: `#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\necho ${name}\ncat config/message.txt\n`, resources: []});
+      writeStartupFiles(startup, {script: `#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@ netmask 255.255.255.0 up\necho ${name}\ncat config/message.txt\n`, resources: []});
       fs.mkdirSync(path.join(startup, 'config'));
       fs.writeFileSync(path.join(startup, 'config', 'message.txt'), name);
       const iso = path.join(host, 'startup-1.iso');
@@ -72,9 +72,9 @@ test('separate read-only ISOs include external companion files under each host',
       assert.equal(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/config/message.txt'], {encoding: 'utf8'}), name);
       assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`echo ${name}`));
       assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`hostname ${name}`));
-      assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`ifconfig eth0 192\\.168\\.0\\.${index + 1}/24`));
+      assert.match(execFileSync('/usr/bin/isoinfo', ['-R', '-i', iso, '-x', '/start.sh'], {encoding: 'utf8'}), new RegExp(`ifconfig eth0 192\\.168\\.0\\.${index + 1} netmask 255\\.255\\.255\\.0 up`));
       assert.match(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), /hostname @HOSTNAME@/);
-      assert.match(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), /ifconfig @IFNAME0@ 192\.168\.0\.@SWPORT0@\/24/);
+      assert.match(fs.readFileSync(path.join(startup, 'start.sh'), 'utf8'), /ifconfig @IFNAME0@ 192\.168\.0\.@SWPORT0@ netmask 255\.255\.255\.0 up/);
       assert.throws(() => createGuestIso({directory: startup, destination: path.join(host, 'disconnected.iso'),
         genisoimage: '/usr/bin/genisoimage', hostname: name, interfaces: [{switchId: null, port: null}]}),
       /Error: unresolved variables in start\.sh: @SWPORT0@/);

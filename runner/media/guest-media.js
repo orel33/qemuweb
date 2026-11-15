@@ -241,7 +241,7 @@ function createGuestIso({directory, destination, genisoimage, hostname, interfac
 // Startup script written for a new host: sets the hostname and addresses the first interface.
 function defaultStartupScript(interfaces) {
   return '#!/bin/sh\nhostname @HOSTNAME@\n' +
-    (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n' : '');
+    (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@ netmask 255.255.255.0 up\n' : '');
 }
 
 module.exports = {LABEL, defaultStartupScript, validateBootFiles, validateStartupTemplate, normalizeScript, readStartupFiles, writeStartupScript, writeStartupFiles, createGuestIso};

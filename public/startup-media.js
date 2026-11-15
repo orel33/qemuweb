@@ -83,7 +83,7 @@ export function renderStartupTemplateValues(machine, interfaces = store.startupT
 }
 export function defaultStartScript(interfaces) {
   return '#!/bin/sh\nhostname @HOSTNAME@\n' +
-    (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@/24\n' : '');
+    (interfaces.length ? 'ifconfig @IFNAME0@ 192.168.0.@SWPORT0@ netmask 255.255.255.0 up\n' : '');
 }
 export function validateStartScriptDraft(machine) {
   if (!machine.startupDiskEnabled) return;
