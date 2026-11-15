@@ -15,17 +15,7 @@ const archiveConfirm = document.getElementById('confirm-session-archive');
 const archiveFile = document.getElementById('session-archive-file');
 const archiveLoadDialog = document.getElementById('session-archive-load-dialog');
 const archiveLoadFileLabel = document.getElementById('session-archive-load-file');
-const archiveLoadAutoStart = document.getElementById('session-archive-autostart');
-const archiveLoadDiscardStaleDisks = document.getElementById('session-archive-discard-stale-disks');
-// The discard option only applies to working disks whose base image changed.
-let archiveLoadDiscardRelevant = false;
-function setArchiveLoadDiscardRelevant(relevant) {
-  archiveLoadDiscardRelevant = relevant;
-  archiveLoadDiscardStaleDisks.checked = relevant;
-  archiveLoadDiscardStaleDisks.disabled = !relevant;
-}
 const archiveLoadSteps = document.getElementById('session-archive-load-steps');
-const archiveRestoreLabel = document.getElementById('session-archive-restore-label');
 const stepStateText = {pending: 'Pending', running: 'In progress', done: 'Done', warning: 'Warning', error: 'Failed'};
 const loadStepNames = ['read', 'check', 'upload', 'restore'];
 // One line per stage of loading a session: a state icon (spinner, green tick, warning, error) and an optional detail.
@@ -38,9 +28,6 @@ function setLoadStep(name, state, detail = '') {
   text.hidden = !detail;
 }
 function resetLoadSteps(names = loadStepNames) { for (const name of names) setLoadStep(name, 'pending'); }
-function updateRestoreLabel() {
-  archiveRestoreLabel.textContent = archiveLoadAutoStart.checked ? 'Restore session and start hosts and switches' : 'Restore session';
-}
 const countLabel = (count, noun, plural = `${noun}s`) => `${count} ${count === 1 ? noun : plural}`;
 // Reads the ZIP central directory. QemuWeb archives always end with a 32-bit
 // end-of-central-directory record, so only the file tail is read.
@@ -113,7 +100,6 @@ function importArchive(file, {autoStart, discardStaleDisks}, onProgress, onUploa
     request.send(file);
   });
 }
-const archiveLoadError = document.getElementById('session-archive-load-error');
 const archiveLoadCancel = document.getElementById('cancel-session-archive-load');
 const archiveLoadConfirm = document.getElementById('confirm-session-archive-load');
 let selectedArchiveFile = null;
@@ -144,6 +130,45 @@ async function updateArchiveEstimate() {
 const archiveLoadBlockedDialog = document.getElementById('session-archive-load-blocked-dialog');
 function showArchiveLoadBlockedWarning() {
   if (!archiveLoadBlockedDialog.open) archiveLoadBlockedDialog.showModal();
+}
+
+// Uploads and restores the archive, one visible step at a time. Hosts and switches are always started.
+async function loadArchive(file, {discardStaleDisks}) {
+  if (!file || archiveLoadBusy) return;
+  archiveLoadBusy = true;
+  archiveLoadCancel.disabled = true;
+  archiveLoadConfirm.hidden = true;
+  resetLoadSteps(['upload', 'restore']);
+  archiveLoadDialog.setAttribute('aria-busy', 'true');
+  let activeStep = 'upload';
+  try {
+    setLoadStep('upload', 'running', '0%');
+    const result = await importArchive(file, {autoStart: true, discardStaleDisks},
+      percent => setLoadStep('upload', 'running', `${percent}%`),
+      () => { setLoadStep('upload', 'done'); activeStep = 'restore'; setLoadStep('restore', 'running'); });
+    archiveLoadImported = true;
+    store.graphicZoom = 1;
+    saveViewSettings();
+    localStorage.removeItem(graphicLayoutKey);
+    if (result.startErrors?.length) {
+      setLoadStep('restore', 'warning', `Session loaded, but some instances could not start:\n${result.startErrors.join('\n')}`);
+      archiveLoadCancel.textContent = 'Close';
+    } else {
+      setLoadStep('restore', 'done');
+      // Leave the final tick visible for a moment before the page reloads.
+      await new Promise(resolve => setTimeout(resolve, 700));
+      archiveLoadDialog.close();
+    }
+  } catch (error) {
+    setLoadStep(activeStep, 'error', error.message);
+    archiveLoadCancel.textContent = 'Close';
+    // The server refuses working disks recorded for another base image unless told to discard them.
+    if (/Discard working disks/.test(error.message)) archiveLoadConfirm.hidden = false;
+  } finally {
+    archiveLoadBusy = false;
+    archiveLoadCancel.disabled = false;
+    archiveLoadDialog.removeAttribute('aria-busy');
+  }
 }
 
 export function initArchive() {
@@ -210,16 +235,12 @@ export function initArchive() {
     selectedArchiveFile = file;
     archiveLoadImported = false;
     archiveLoadFileLabel.textContent = file.name;
-    archiveLoadAutoStart.checked = true;
-    updateRestoreLabel();
-    setArchiveLoadDiscardRelevant(false);
     resetLoadSteps();
-    archiveLoadError.hidden = true;
     archiveLoadCancel.textContent = 'Cancel';
-    archiveLoadConfirm.hidden = false;
-    archiveLoadConfirm.disabled = true;
+    archiveLoadConfirm.hidden = true;
     archiveLoadDialog.showModal();
-    // The first two steps only read the local file and ask the server about base images: nothing is uploaded yet.
+    // Everything runs by itself, with no confirmation. It only stops when working
+    // disks recorded for another base image would be lost.
     let summary = null;
     setLoadStep('read', 'running');
     try {
@@ -228,73 +249,31 @@ export function initArchive() {
       setLoadStep('read', 'done', archiveSummaryText(summary));
     } catch (_) {
       if (selectedArchiveFile !== file) return;
-      // The server validates the archive on load; offer the option if disks may be present.
       setLoadStep('read', 'warning', 'Cannot read the archive here; the server will validate it on load.');
     }
+    let check = null;
     try {
       if (!summary) {
-        setLoadStep('check', 'warning', 'Skipped: the base images are checked on load.');
-        setArchiveLoadDiscardRelevant(true);
+        setLoadStep('check', 'warning', 'Skipped: the server checks the base images on load.');
       } else {
         setLoadStep('check', 'running');
-        const check = await checkArchiveBaseImages(file, summary);
+        check = await checkArchiveBaseImages(file, summary);
         if (selectedArchiveFile !== file) return;
         setLoadStep('check', check.messages.length ? 'warning' : 'done', check.messages.join('\n') ||
           (check.changed ? 'No working disk depends on the saved base images; hosts start from the current images.' : 'Base images are up to date'));
-        setArchiveLoadDiscardRelevant(check.staleDisks);
       }
     } catch (_) {
       if (selectedArchiveFile !== file) return;
       setLoadStep('check', 'warning', 'Cannot check base images; the server will validate them on load.');
-      setArchiveLoadDiscardRelevant(true);
-    } finally {
-      if (selectedArchiveFile === file) archiveLoadConfirm.disabled = false;
     }
+    if (selectedArchiveFile !== file) return;
+    if (check?.staleDisks) {
+      // The only decision left to the user: losing working disks that cannot be reused.
+      archiveLoadConfirm.hidden = false;
+      return;
+    }
+    await loadArchive(file, {discardStaleDisks: false});
   });
-  archiveLoadAutoStart.addEventListener('change', updateRestoreLabel);
   archiveLoadCancel.addEventListener('click', () => archiveLoadDialog.close());
-  archiveLoadConfirm.addEventListener('click', async () => {
-    if (!selectedArchiveFile || archiveLoadBusy) return;
-    archiveLoadBusy = true;
-    archiveLoadCancel.disabled = true;
-    archiveLoadConfirm.disabled = true;
-    archiveLoadAutoStart.disabled = true;
-    archiveLoadDiscardStaleDisks.disabled = true;
-    archiveLoadError.hidden = true;
-    updateRestoreLabel();
-    resetLoadSteps(['upload', 'restore']);
-    archiveLoadDialog.setAttribute('aria-busy', 'true');
-    let activeStep = 'upload';
-    try {
-      const autoStart = archiveLoadAutoStart.checked;
-      const discardStaleDisks = archiveLoadDiscardRelevant && archiveLoadDiscardStaleDisks.checked;
-      setLoadStep('upload', 'running', '0%');
-      const result = await importArchive(selectedArchiveFile, {autoStart, discardStaleDisks},
-        percent => setLoadStep('upload', 'running', `${percent}%`),
-        () => { setLoadStep('upload', 'done'); activeStep = 'restore'; setLoadStep('restore', 'running'); });
-      archiveLoadImported = true;
-      store.graphicZoom = 1;
-      saveViewSettings();
-      localStorage.removeItem(graphicLayoutKey);
-      if (result.startErrors?.length) {
-        setLoadStep('restore', 'warning', `Session loaded, but some instances could not start:\n${result.startErrors.join('\n')}`);
-        archiveLoadCancel.textContent = 'Close';
-        archiveLoadConfirm.hidden = true;
-      } else {
-        setLoadStep('restore', 'done');
-        // Leave the final tick visible for a moment before the page reloads.
-        await new Promise(resolve => setTimeout(resolve, 700));
-        archiveLoadDialog.close();
-      }
-    } catch (error) {
-      setLoadStep(activeStep, 'error', error.message);
-    } finally {
-      archiveLoadBusy = false;
-      archiveLoadCancel.disabled = false;
-      archiveLoadConfirm.disabled = false;
-      archiveLoadAutoStart.disabled = false;
-      archiveLoadDiscardStaleDisks.disabled = !archiveLoadDiscardRelevant;
-      archiveLoadDialog.removeAttribute('aria-busy');
-    }
-  });
+  archiveLoadConfirm.addEventListener('click', () => loadArchive(selectedArchiveFile, {discardStaleDisks: true}));
 }

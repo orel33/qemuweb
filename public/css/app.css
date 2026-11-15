@@ -134,10 +134,8 @@ button:disabled { opacity: .45; cursor: default; }
 .archive-progress-spinner { flex: none; width: 17px; height: 17px; border: 2px solid #526781; border-top-color: #9cc8ff; border-radius: 50%; animation: archive-spin .8s linear infinite; }
 .archive-progress-track { height: 6px; margin: -8px 0 18px; overflow: hidden; border-radius: 6px; background: #26374c; }
 .archive-progress-track::after { content: ""; display: block; width: 38%; height: 100%; border-radius: inherit; background: #9cc8ff; animation: archive-sweep 1.4s ease-in-out infinite alternate; }
-.archive-load-option { display: flex; align-items: center; gap: 9px; margin: 0 0 18px; font-size: 13px; }
 .archive-warning { display: flex; align-items: flex-start; gap: 8px; margin: 9px 0 0; color: #ffc36b; font-size: 13px; line-height: 1.4; }
 .archive-warning span { white-space: pre-line; }
-.archive-load-option:has(input:disabled) { opacity: .5; }
 .archive-warning svg { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .archive-steps { margin: 0 0 16px; padding: 0; list-style: none; display: grid; gap: 9px; }
 .archive-steps li { position: relative; display: flex; align-items: flex-start; gap: 10px; font-size: 13px; line-height: 1.4; color: #9daec0; }
