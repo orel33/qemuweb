@@ -2206,7 +2206,7 @@
         staleDisks ||= stale.length > 0;
         messages.push(stale.length
           ? `Base image ${id} changed since this session was saved. The working disks of ${stale.join(', ')} cannot be reused.`
-          : `Base image ${id} changed since this session was saved. Its hosts will start from the current image.`);
+          : `Base image ${id} changed since this session was saved.`);
       }
       return {messages, staleDisks};
     }
