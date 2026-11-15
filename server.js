@@ -9,7 +9,8 @@ const crypto = require('crypto');
 const {spawn, spawnSync, execFileSync, execFile} = require('child_process');
 const {promisify} = require('util');
 const express = require('express');
-const {Server: SocketIoServer} = require('socket.io');
+const socketIo = require('socket.io');
+const SocketIoServer = socketIo.Server || socketIo;
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
 const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics, getHostCpuTicks, parsePsOutput} = require('./resource-metrics');
@@ -460,8 +461,14 @@ app.use('/api', (req, res, next) => {
   if (archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
   next();
 });
-app.use('/vendor', express.static(path.join(root, 'node_modules/@xterm/xterm')));
-app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/@xterm/addon-fit')));
+const xtermDir = fs.existsSync(path.join(root, 'node_modules/@xterm/xterm'))
+  ? path.join(root, 'node_modules/@xterm/xterm')
+  : path.join(root, 'node_modules/xterm');
+const xtermFitDir = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit'))
+  ? path.join(root, 'node_modules/@xterm/addon-fit')
+  : path.join(root, 'node_modules/xterm-addon-fit');
+app.use('/vendor', express.static(xtermDir));
+app.use('/vendor-addon-fit', express.static(xtermFitDir));
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');
   next();
