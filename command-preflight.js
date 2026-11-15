@@ -5,10 +5,11 @@ const path = require('path');
 const {spawnSync} = require('child_process');
 
 const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
-const optionalKeys = ['VBOXMANAGE'];
+const optionalKeys = ['QEMU_SYSTEM_AARCH64', 'VBOXMANAGE'];
 const allKeys = [...requiredKeys, ...optionalKeys];
 const commandLabels = {
-  QEMU_SYSTEM_X86_64: 'QEMU',
+  QEMU_SYSTEM_X86_64: 'QEMU (x86_64)',
+  QEMU_SYSTEM_AARCH64: 'QEMU (ARM64)',
   QEMU_IMG: 'QEMU disk tools',
   VBOXMANAGE: 'VirtualBox',
   VDE_SWITCH: 'VDE switch',
@@ -112,6 +113,13 @@ function resolveCommands(root) {
           throw new Error('QEMU lacks VDE support. See README.md > Troubleshooting > Install QEMU.');
         }
       }
+      if (key === 'QEMU_SYSTEM_AARCH64') {
+        const result = spawnSync(resolved, ['-machine', 'none', '-netdev', 'help'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
+        if (result.error) throw result.error;
+        if (!/(^|\s)vde(\s|$)/m.test(`${result.stdout}\n${result.stderr}`)) {
+          throw new Error('QEMU ARM64 lacks VDE support.');
+        }
+      }
       commands[key] = resolved;
       console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}`);
     } catch (error) {
@@ -120,7 +128,8 @@ function resolveCommands(root) {
         console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
       } else {
         commands[key] = null;
-        console.log(`  - ${label}  unavailable (${error.message}); VirtualBox hosts disabled`);
+        const disabledReason = key === 'VBOXMANAGE' ? 'VirtualBox hosts disabled' : 'ARM64 QEMU hosts disabled';
+        console.log(`  - ${label}  unavailable (${error.message}); ${disabledReason}`);
       }
     }
   }

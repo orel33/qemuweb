@@ -56,9 +56,21 @@ let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
 readCatalog(configPath);
 let sessionEngine = 'qemu';
-function detectSupportedQemuAccelerators() {
+
+function qemuBinaryFor(arch = 'x86_64') {
+  if (arch === 'aarch64' || arch === 'arm64') {
+    if (!commands.QEMU_SYSTEM_AARCH64) {
+      throw new Error('QEMU for ARM64 (qemu-system-aarch64) is not installed or available in PATH.');
+    }
+    return commands.QEMU_SYSTEM_AARCH64;
+  }
+  return commands.QEMU_SYSTEM_X86_64;
+}
+
+function detectSupportedQemuAccelerators(binary) {
   try {
-    const result = spawnSync(commands.QEMU_SYSTEM_X86_64, ['-accel', 'help'], {encoding: 'utf8', timeout: 5000});
+    const qemuBin = binary || commands.QEMU_SYSTEM_X86_64;
+    const result = spawnSync(qemuBin, ['-accel', 'help'], {encoding: 'utf8', timeout: 5000});
     if (result.status === 0) {
       return result.stdout.split('\n')
         .map(line => line.trim().toLowerCase())
@@ -68,9 +80,11 @@ function detectSupportedQemuAccelerators() {
   return ['tcg'];
 }
 
-function detectBestQemuAcceleration() {
+function detectBestQemuAcceleration(arch = 'x86_64') {
   if (process.env.QEMU_ACCEL) return process.env.QEMU_ACCEL;
-  const supported = detectSupportedQemuAccelerators();
+  let binary;
+  try { binary = qemuBinaryFor(arch); } catch (_) { return 'tcg'; }
+  const supported = detectSupportedQemuAccelerators(binary);
   if (process.platform === 'linux') {
     try {
       fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
@@ -496,6 +510,7 @@ function imageById(id) {
   const vbox = selectedProfile(catalog, id, 'vbox');
   const active = selectedProfile(catalog, id, sessionEngine);
   return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled,
+    arch: active.arch || 'x86_64',
     images: {raw: qemu.image, vdi: vbox.image},
     virtualbox: {osType: 'Linux_64', networkModel: vbox.networkModel === 'virtio' ? 'virtio' : '82540EM',
       firmware: vbox.firmware, diskBus: vbox.diskInterface,
@@ -1314,9 +1329,9 @@ async function stopSwitch(session, force = false) {
   publishState(session, 'VDE switch stopped');
 }
 
-function qemuAcceleration(engine, checkAvailability = true) {
+function qemuAcceleration(engine, arch = 'x86_64', checkAvailability = true) {
   if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
-  const accel = detectBestQemuAcceleration();
+  const accel = detectBestQemuAcceleration(arch);
   if (!checkAvailability) return accel;
   const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'vbox');
   if (virtualBoxRunning && accel === 'kvm') {
@@ -1341,9 +1356,10 @@ function spawnQemu(session, image, reuseDisk = false) {
   }
   image.runFiles = [overlay];
   session.runDisk = overlay;
+  const qemuBin = qemuBinaryFor(image.arch);
   const args = qemuArgs(session, image, overlay);
-  appendLog(session, `$ ${[commands.QEMU_SYSTEM_X86_64, ...args].map(shellQuote).join(' ')}`);
-  const child = spawn(commands.QEMU_SYSTEM_X86_64, args, {stdio: ['ignore', 'pipe', 'pipe']});
+  appendLog(session, `$ ${[qemuBin, ...args].map(shellQuote).join(' ')}`);
+  const child = spawn(qemuBin, args, {stdio: ['ignore', 'pipe', 'pipe']});
   session.machine = child;
   child.stdout.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
   child.stderr.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
@@ -1477,8 +1493,9 @@ app.get('/api/options/:sessionId', (req, res) => {
     const vboxAttachCommand = launched && !isQemu && attachGuestCdrom
       ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso]]
       : [];
+    const qemuBin = qemuBinaryFor(image.arch);
     const launchCommands = isQemu
-      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
+      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [qemuBin, ...qemuArgs(previewSession, image, overlay)]]
       : launched
         ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewSession, image)], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
@@ -1527,14 +1544,14 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current host disk was not found.');
   if (!['qemu', 'vbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
   requireSessionEngine(selectedEngine);
-  const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
+  const image = resume ? session.selectedImage : imageById(imageId);
+  if (!image) throw new Error('Unknown system in config.json.');
   if (selectedEngine === 'vbox') {
     if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
-  const image = resume ? session.selectedImage : imageById(imageId);
-  if (!image) throw new Error('Unknown system in config.json.');
+  const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine, image.arch) : null;
   if (session.profileHash && session.profileHash !== profileHash(selectedProfile(readConfig(), image.id, selectedEngine))) {
     throw new Error(`System profile changed for ${session.hostname}; restore its original config.json or recreate the host.`);
   }
@@ -1667,7 +1684,7 @@ async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
 
 function validateRestartPrerequisites(session) {
   requireSessionEngine(session.engine);
-  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine);
+  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine, session.selectedImage?.arch);
   else {
     if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
     if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
