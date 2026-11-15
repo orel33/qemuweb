@@ -6,13 +6,14 @@ const net = require('net');
 const {StringDecoder} = require('string_decoder');
 const path = require('path');
 const crypto = require('crypto');
-const {spawn, execFileSync, execFile} = require('child_process');
+const {spawn, spawnSync, execFileSync, execFile} = require('child_process');
 const {promisify} = require('util');
 const express = require('express');
-const {Server: SocketIoServer} = require('socket.io');
+const socketIo = require('socket.io');
+const SocketIoServer = socketIo.Server || socketIo;
 const pty = require('node-pty');
 const {resolveCommands} = require('./command-preflight');
-const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics} = require('./resource-metrics');
+const {parseHostCpu, parseProcessCpu, parseProcessRss, processCpuPercent, parseVBoxMetrics, getHostCpuTicks, parsePsOutput} = require('./resource-metrics');
 const {parseTopology, formatTopology} = require('./topology');
 const {writeArchive, readArchive} = require('./session-archive');
 const {readCatalog, selectedProfile, profileHash, sparseOverrides, validateOverrides} = require('./system-config');
@@ -55,8 +56,51 @@ let samplingResources = false;
 fs.mkdirSync(runtime, {recursive: true});
 readCatalog(configPath);
 let sessionEngine = 'qemu';
-try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
+
+function qemuBinaryFor(arch = 'x86_64') {
+  if (arch === 'aarch64' || arch === 'arm64') {
+    if (!commands.QEMU_SYSTEM_AARCH64) {
+      throw new Error('QEMU for ARM64 (qemu-system-aarch64) is not installed or available in PATH.');
+    }
+    return commands.QEMU_SYSTEM_AARCH64;
+  }
+  return commands.QEMU_SYSTEM_X86_64;
+}
+
+function detectSupportedQemuAccelerators(binary) {
+  try {
+    const qemuBin = binary || commands.QEMU_SYSTEM_X86_64;
+    const result = spawnSync(qemuBin, ['-accel', 'help'], {encoding: 'utf8', timeout: 5000});
+    if (result.status === 0) {
+      return result.stdout.split('\n')
+        .map(line => line.trim().toLowerCase())
+        .filter(line => line && !line.includes('accelerators supported'));
+    }
+  } catch (_) {}
+  return ['tcg'];
+}
+
+function detectBestQemuAcceleration(arch = 'x86_64') {
+  if (process.env.QEMU_ACCEL) return process.env.QEMU_ACCEL;
+  let binary;
+  try { binary = qemuBinaryFor(arch); } catch (_) { return 'tcg'; }
+  const supported = detectSupportedQemuAccelerators(binary);
+  if (process.platform === 'linux') {
+    try {
+      fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
+      if (supported.includes('kvm')) return 'kvm';
+    } catch (_) {}
+  } else if (process.platform === 'darwin') {
+    if (supported.includes('hvf')) return 'hvf';
+  }
+  return 'tcg';
+}
+
+const activeQemuAccel = detectBestQemuAcceleration();
+if (process.platform === 'linux' && activeQemuAccel !== 'kvm') {
+  console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
+}
+console.log(`QEMU acceleration: \x1b[32m${activeQemuAccel.toUpperCase()}\x1b[0m${activeQemuAccel === 'tcg' ? ' (software emulation)' : ''}.`);
 
 function pointCurrentSession(id) {
   const temporary = path.join(runtime, `.current-${sessionId}`);
@@ -197,7 +241,8 @@ async function sampleResources() {
   try {
     const running = [...sessions.values()].filter(session => session.kind === 'vm' && session.machine);
     const qemuRunning = running.some(session => session.engine?.startsWith('qemu'));
-    const hostCpu = qemuRunning ? parseHostCpu(await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '')) : null;
+    const hostStat = await fs.promises.readFile('/proc/stat', 'utf8').catch(() => '');
+    const hostCpu = qemuRunning ? (parseHostCpu(hostStat) || getHostCpuTicks()) : null;
     await Promise.all(running.map(async session => {
       const machine = session.machine;
       let result;
@@ -212,7 +257,15 @@ async function sampleResources() {
         const cpuPercent = previous?.machine === machine ? processCpuPercent(previous, processCpu, hostCpu) : null;
         const ramBytes = parseProcessRss(status);
         if (processCpu && hostCpu) previousProcessSamples.set(session.id, {...processCpu, hostTicks: hostCpu.totalTicks, machine});
-        result = resourceResult(cpuPercent, ramBytes);
+        if (cpuPercent !== null || ramBytes !== null) {
+          result = resourceResult(cpuPercent, ramBytes);
+        } else if (Number.isInteger(pid)) {
+          try {
+            const {stdout} = await execFileAsync('ps', ['-p', String(pid), '-o', '%cpu=,rss='], {encoding: 'utf8', timeout: 2000});
+            const psMetrics = parsePsOutput(stdout);
+            if (psMetrics) result = resourceResult(psMetrics.cpuPercent, psMetrics.ramBytes);
+          } catch (_) {}
+        }
       } else if (session.engine === 'vbox') {
         try {
           if (vboxMetricSetup.get(session.id) !== machine) {
@@ -422,8 +475,28 @@ app.use('/api', (req, res, next) => {
   if (archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
   next();
 });
-app.use('/vendor', express.static(path.join(root, 'node_modules/@xterm/xterm')));
-app.use('/vendor-addon-fit', express.static(path.join(root, 'node_modules/@xterm/addon-fit')));
+const xtermDir = fs.existsSync(path.join(root, 'node_modules/@xterm/xterm'))
+  ? path.join(root, 'node_modules/@xterm/xterm')
+  : path.join(root, 'node_modules/xterm');
+const xtermFitDir = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit'))
+  ? path.join(root, 'node_modules/@xterm/addon-fit')
+  : path.join(root, 'node_modules/xterm-addon-fit');
+app.use('/vendor', express.static(xtermDir));
+app.get('/vendor-addon-fit/lib/addon-fit.js', (_req, res, next) => {
+  const file = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js'))
+    ? path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js')
+    : path.join(root, 'node_modules/xterm-addon-fit/lib/xterm-addon-fit.js');
+  if (fs.existsSync(file)) return res.sendFile(path.resolve(file));
+  next();
+});
+app.get('/vendor-addon-fit/lib/addon-fit.js.map', (_req, res, next) => {
+  const file = fs.existsSync(path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js.map'))
+    ? path.join(root, 'node_modules/@xterm/addon-fit/lib/addon-fit.js.map')
+    : path.join(root, 'node_modules/xterm-addon-fit/lib/xterm-addon-fit.js.map');
+  if (fs.existsSync(file)) return res.sendFile(path.resolve(file));
+  next();
+});
+app.use('/vendor-addon-fit', express.static(xtermFitDir));
 app.use((req, res, next) => {
   if (req.path === '/' || req.path === '/index.html') res.set('Cache-Control', 'no-store');
   next();
@@ -437,6 +510,7 @@ function imageById(id) {
   const vbox = selectedProfile(catalog, id, 'vbox');
   const active = selectedProfile(catalog, id, sessionEngine);
   return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled,
+    arch: active.arch || 'x86_64',
     images: {raw: qemu.image, vdi: vbox.image},
     virtualbox: {osType: 'Linux_64', networkModel: vbox.networkModel === 'virtio' ? 'virtio' : '82540EM',
       firmware: vbox.firmware, diskBus: vbox.diskInterface,
@@ -517,7 +591,13 @@ function launchSettingsFor(imageId, overrides = {}) {
 
 app.get('/api/general-settings', (_req, res) => {
   res.set('Cache-Control', 'no-store');
-  res.json({sessionId, engine: sessionEngine, availableEngines});
+  res.json({
+    sessionId,
+    engine: sessionEngine,
+    availableEngines,
+    vboxAvailable: availableEngines.includes('vbox'),
+    qemuAcceleration: detectBestQemuAcceleration()
+  });
 });
 
 app.put('/api/general-settings', (req, res) => {
@@ -542,8 +622,14 @@ app.get('/api/systems', (_req, res) => {
     const config = readConfig();
     res.json(Object.keys(config.systems).filter(id => id !== 'default').map(id => {
       const p = selectedProfile(config, id, sessionEngine);
+      const rawFile = config.systems[id].qemu.image;
+      const vdiFile = config.systems[id].vbox.image;
       return {id, label: p.label,
-        images: {raw: config.systems[id].qemu.image, vdi: config.systems[id].vbox.image},
+        images: {raw: rawFile, vdi: vdiFile},
+        imageExists: {
+          raw: !!(rawFile && fs.existsSync(imagePath(rawFile))),
+          vdi: !!(vdiFile && fs.existsSync(imagePath(vdiFile)))
+        },
         memory: p.memory, cpus: p.cpus, clock: p.clock,
         startupDiskEnabled: p.startupDiskEnabled,
         vboxNetworkModel: p.networkModel === 'virtio' ? 'virtio' : '82540EM',
@@ -1065,8 +1151,15 @@ function imagePath(file) { return path.resolve(root, file); }
 
 function qemuArgs(session, image, overlay) {
   const settings = session.qemuOptions;
+  const extraOptions = [...settings.extraOptions];
+  if (session.qemuAcceleration === 'tcg') {
+    const cpuIndex = extraOptions.indexOf('-cpu');
+    if (cpuIndex !== -1 && extraOptions[cpuIndex + 1] === 'host') {
+      extraOptions[cpuIndex + 1] = 'max';
+    }
+  }
   const common = [
-    ...settings.extraOptions, '-accel', session.qemuAcceleration,
+    ...extraOptions, '-accel', session.qemuAcceleration,
     '-display', settings.display, '-m', String(settings.memory), '-smp', String(settings.smp),
     '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${session.monitorPath},server=on,wait=off`,
     '-serial', `unix:${session.socketPath},server=on,wait=off`
@@ -1236,14 +1329,19 @@ async function stopSwitch(session, force = false) {
   publishState(session, 'VDE switch stopped');
 }
 
-function qemuAcceleration(engine, checkAvailability = true) {
+function qemuAcceleration(engine, arch = 'x86_64', checkAvailability = true) {
   if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
-  if (!checkAvailability) return 'kvm';
+  const accel = detectBestQemuAcceleration(arch);
+  if (!checkAvailability) return accel;
   const virtualBoxRunning = [...sessions.values()].some(other => other.machine && other.engine === 'vbox');
-  if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
-  try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-  catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or select VirtualBox if it is installed.'); }
-  return 'kvm';
+  if (virtualBoxRunning && accel === 'kvm') {
+    throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
+  }
+  if (accel === 'kvm') {
+    try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
+    catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or select VirtualBox if it is installed.'); }
+  }
+  return accel;
 }
 
 function qemuOverlayArgs(image, overlay) {
@@ -1258,9 +1356,10 @@ function spawnQemu(session, image, reuseDisk = false) {
   }
   image.runFiles = [overlay];
   session.runDisk = overlay;
+  const qemuBin = qemuBinaryFor(image.arch);
   const args = qemuArgs(session, image, overlay);
-  appendLog(session, `$ ${[commands.QEMU_SYSTEM_X86_64, ...args].map(shellQuote).join(' ')}`);
-  const child = spawn(commands.QEMU_SYSTEM_X86_64, args, {stdio: ['ignore', 'pipe', 'pipe']});
+  appendLog(session, `$ ${[qemuBin, ...args].map(shellQuote).join(' ')}`);
+  const child = spawn(qemuBin, args, {stdio: ['ignore', 'pipe', 'pipe']});
   session.machine = child;
   child.stdout.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
   child.stderr.on('data', data => { console.log('qemu:', data.toString().trim()); appendLog(session, data.toString()); });
@@ -1379,7 +1478,9 @@ app.get('/api/options/:sessionId', (req, res) => {
     const profile = selectedProfile(readConfig(), image.id, engine);
     const fixed = {
       type: profile.type, arch: profile.arch, mode: profile.mode,
-      firmware: profile.firmware, acceleration: profile.acceleration, boot: profile.boot,
+      firmware: profile.firmware,
+      acceleration: isQemu ? (previewSession.qemuAcceleration || 'tcg') : profile.acceleration,
+      boot: profile.boot,
       diskInterface: profile.diskInterface, networkModel: profile.networkModel,
       cdromInterface: profile.cdromInterface, extraOptions: profile.extraOptions || []
     };
@@ -1392,8 +1493,9 @@ app.get('/api/options/:sessionId', (req, res) => {
     const vboxAttachCommand = launched && !isQemu && attachGuestCdrom
       ? [[commands.VBOXMANAGE, 'storageattach', session.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewSession.guestIso]]
       : [];
+    const qemuBin = qemuBinaryFor(image.arch);
     const launchCommands = isQemu
-      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewSession, image, overlay)]]
+      ? [...(launched ? [] : [[commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [qemuBin, ...qemuArgs(previewSession, image, overlay)]]
       : launched
         ? [...vboxDetachCommand, [commands.VBOXMANAGE, 'modifyvm', session.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewSession, image)], ...vboxAttachCommand, [commands.VBOXMANAGE, 'startvm', session.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewSession, image).map(args => [commands.VBOXMANAGE, ...args]);
@@ -1442,13 +1544,14 @@ function start(sessionId, selectedEngine, imageId, options = {}) {
   if (resume && (!session.runDisk || !fs.existsSync(session.runDisk))) throw new Error('The current host disk was not found.');
   if (!['qemu', 'vbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
   requireSessionEngine(selectedEngine);
-  const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
+  const image = resume ? session.selectedImage : imageById(imageId);
+  if (!image) throw new Error('Unknown system in config.json.');
   if (selectedEngine === 'vbox') {
+    if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
     const qemuWithKvm = [...sessions.values()].some(other => other.kind === 'vm' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
     if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
   }
-  const image = resume ? session.selectedImage : imageById(imageId);
-  if (!image) throw new Error('Unknown system in config.json.');
+  const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine, image.arch) : null;
   if (session.profileHash && session.profileHash !== profileHash(selectedProfile(readConfig(), image.id, selectedEngine))) {
     throw new Error(`System profile changed for ${session.hostname}; restore its original config.json or recreate the host.`);
   }
@@ -1581,9 +1684,12 @@ async function waitForVirtualBoxPowerOff(session, timeoutMs = 30000) {
 
 function validateRestartPrerequisites(session) {
   requireSessionEngine(session.engine);
-  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine);
-  else if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
-    throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
+  if (session.engine.startsWith('qemu')) qemuAcceleration(session.engine, session.selectedImage?.arch);
+  else {
+    if (!commands.VBOXMANAGE) throw new Error('VirtualBox is unavailable: VBoxManage is not installed on this host.');
+    if ([...sessions.values()].some(other => other.id !== session.id && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
+      throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
+    }
   }
   const image = session.selectedImage;
   if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
@@ -1779,7 +1885,7 @@ app.post('/api/start', async (req, res) => {
     console.error(message);
     try {
       const session = getSession(req.body.sessionId);
-      if (session) publishState(session, message);
+      if (session) publishState(session, message.startsWith('Start failed:') ? message : `Start failed: ${message}`);
     } catch (_) {}
     res.status(500).json({error: message});
   }

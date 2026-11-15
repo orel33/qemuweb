@@ -11,37 +11,57 @@ elif (( $# != 0 )); then
   exit 2
 fi
 
-# Seuls les serveurs dont le répertoire de travail est ce projet sont concernés.
+# Only servers whose working directory is this project are affected.
 matching_pids() {
   local kind="$1" proc pid exe cwd arg matched
-  local -a args
-  for proc in /proc/[0-9]*; do
-    pid="${proc##*/}"
-    [[ "$pid" != "$$" && -r "$proc/cmdline" ]] || continue
-    exe="$(readlink -f -- "$proc/exe" 2>/dev/null || true)"
-    args=()
-    mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || continue
-    (( ${#args[@]} )) || continue
-    if [[ "$kind" == server ]]; then
-      [[ "${exe##*/}" == node ]] || continue
-      cwd="$(readlink -f -- "$proc/cwd" 2>/dev/null || true)"
-      matched=0
-      for arg in "${args[@]:1}"; do
-        if [[ "$arg" == "$ROOT/server.js" || ( "$arg" == server.js && "$cwd" == "$ROOT" ) ]]; then
-          matched=1
+  if [[ -d /proc && -e /proc/version ]]; then
+    local -a args
+    for proc in /proc/[0-9]*; do
+      [[ -d "$proc" ]] || continue
+      pid="${proc##*/}"
+      [[ "$pid" != "$$" && -r "$proc/cmdline" ]] || continue
+      exe="$(readlink -f -- "$proc/exe" 2>/dev/null || true)"
+      args=()
+      mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || continue
+      (( ${#args[@]} )) || continue
+      if [[ "$kind" == server ]]; then
+        [[ "${exe##*/}" == node ]] || continue
+        cwd="$(readlink -f -- "$proc/cwd" 2>/dev/null || true)"
+        matched=0
+        for arg in "${args[@]:1}"; do
+          if [[ "$arg" == "$ROOT/server.js" || ( "$arg" == server.js && "$cwd" == "$ROOT" ) ]]; then
+            matched=1
+          fi
+        done
+        (( matched )) && printf '%s\n' "$pid"
+      else
+        [[ "${exe##*/}" == qemu-system-x86_64 ]] || continue
+        for arg in "${args[@]:1}"; do
+          if [[ "$arg" == *"$RUNTIME/"* || "$arg" == *"$ROOT/images/"* ]]; then
+            printf '%s\n' "$pid"
+            break
+          fi
+        done
+      fi
+    done
+  else
+    # Fallback using ps for systems without /proc (such as macOS)
+    local p_pid p_cmd
+    while IFS= read -r line; do
+      p_pid="$(echo "$line" | awk '{print $1}')"
+      p_cmd="${line#*"$p_pid"}"
+      [[ "$p_pid" != "$$" && -n "$p_pid" ]] || continue
+      if [[ "$kind" == server ]]; then
+        if [[ "$p_cmd" == *node*server.js* && ( "$p_cmd" == *"$ROOT"* || "$p_cmd" == *server.js* ) ]]; then
+          printf '%s\n' "$p_pid"
         fi
-      done
-      (( matched )) && printf '%s\n' "$pid"
-    else
-      [[ "${exe##*/}" == qemu-system-x86_64 ]] || continue
-      for arg in "${args[@]:1}"; do
-        if [[ "$arg" == *"$RUNTIME/"* || "$arg" == *"$ROOT/images/"* ]]; then
-          printf '%s\n' "$pid"
-          break
+      else
+        if [[ "$p_cmd" == *qemu-system-x86_64* && ( "$p_cmd" == *"$RUNTIME/"* || "$p_cmd" == *"$ROOT/images/"* ) ]]; then
+          printf '%s\n' "$p_pid"
         fi
-      done
-    fi
-  done
+      fi
+    done < <(ps -eo pid,command 2>/dev/null || true)
+  fi
 }
 
 signal_pids() {
@@ -54,7 +74,7 @@ signal_pids() {
   done < <(matching_pids "$kind")
 }
 
-# SIGTERM déclenche la fermeture des sessions et des VM gérées par server.js.
+# SIGTERM triggers shutting down sessions and VMs managed by server.js.
 signal_pids TERM server
 if (( ! DRY_RUN )); then
   for _ in {1..12}; do
@@ -64,7 +84,7 @@ if (( ! DRY_RUN )); then
   signal_pids KILL server
 fi
 
-# Récupère les QEMU de ce projet, y compris ceux orphelins ou en préparation.
+# Collect QEMU processes for this project, including orphaned ones or during preparation.
 signal_pids TERM qemu
 if (( ! DRY_RUN )); then
   for _ in {1..3}; do
@@ -74,7 +94,7 @@ if (( ! DRY_RUN )); then
   signal_pids KILL qemu
 fi
 
-# Une VM VirtualBox peut survivre au serveur qui l'a créée.
+# A VirtualBox VM can survive the server that created it.
 if command -v VBoxManage >/dev/null 2>&1; then
   while IFS= read -r entry; do
     [[ "$entry" =~ ^\"(qemuweb-[0-9]+-[A-Za-z0-9_-]+)\"[[:space:]] ]] || continue

@@ -118,7 +118,7 @@ test ! -s /etc/machine-id
 sync
 echo QEMUWEB_OPENWRT_PREPARED
 OPENWRT_HOOK
-  payload="$(base64 -w 0 "$guest_script")"
+  payload="$(base64_encode_file "$guest_script")"
   gzip -dc "$source_dir/$archive" > "$disk"
   qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 256 -smp 1 \
     -display none -monitor none -serial "unix:$serial_socket,server=on,wait=off" -no-reboot \

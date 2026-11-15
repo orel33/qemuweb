@@ -6,7 +6,14 @@ and import or export sessions and network topologies.
 
 ## Quick start
 
-QemuWeb targets **Ubuntu 24.04 on x86-64**.
+You need a **Linux** or **macOS** host, **Node.js 18 or newer** with npm, Bash, Python 3,
+QEMU (`qemu-system-x86_64`, and optionally `qemu-system-aarch64` on Apple Silicon, with VDE support), `qemu-img`, `vde_switch`, `vdeterm`, and
+an ISO image tool (`genisoimage` or `mkisofs`). VirtualBox (`VBoxManage`) is optional.
+On Linux, QEMU uses KVM hardware acceleration when `/dev/kvm` is accessible. On macOS,
+QEMU uses HVF acceleration when running native architectures (e.g. ARM64 guests on Apple Silicon,
+or x86_64 guests on Intel) and TCG emulation when running x86_64 guests on Apple Silicon.
+
+### On Ubuntu 24.04:
 
 1. Install the system packages. `build-essential` and `python3` are needed to
    compile `node-pty`, which has no Linux prebuild:
@@ -33,15 +40,25 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    - Your user must be able to read and write `/dev/kvm`. If not, run
      `sudo usermod -aG kvm $USER` and log in again.
 
-4. Clone, install, prepare one image, and start:
+### On macOS:
 
-   ```sh
-   git clone https://github.com/orel33/qemuweb.git
-   cd qemuweb
-   npm ci
-   bash scripts/prepare.sh --system alpine
-   ./start.sh
-   ```
+Install the dependencies with Homebrew:
+
+```sh
+brew install node python3 qemu vde cdrtools
+```
+
+### Setup and Start
+
+Clone, install dependencies, prepare one image, and start:
+
+```sh
+git clone https://github.com/orel33/qemuweb.git
+cd qemuweb
+npm ci
+bash scripts/prepare.sh --system alpine
+./start.sh
+```
 
 Open <http://127.0.0.1:3002>. Press `Ctrl+C` to stop the server, or use
 `PORT=3003 ./start.sh` to choose another port.
@@ -184,3 +201,16 @@ lists `vde`, then run `./start.sh` again.
 
 Another QemuWeb server is probably running. Stop it with `scripts/stop.sh`, or
 start on another port with `PORT=3003 ./start.sh`.
+
+### Custom QEMU paths and .env configuration
+
+By default, QemuWeb resolves QEMU executables (`qemu-system-x86_64` and `qemu-system-aarch64`) from the system `PATH` (such as `/opt/homebrew/bin` on macOS or `/usr/bin` on Linux).
+
+To use custom builds or non-standard install paths, override them in `.env.local` (ignored by Git):
+
+```text
+QEMU_SYSTEM_X86_64=/custom/path/bin/qemu-system-x86_64
+QEMU_SYSTEM_AARCH64=/custom/path/bin/qemu-system-aarch64
+```
+
+Note that `QEMU_SYSTEM_AARCH64` is optional and non-blocking: on systems without an ARM64 QEMU binary, server startup proceeds normally as long as `qemu-system-x86_64` is available.
