@@ -71,7 +71,7 @@ if [[ "$list_only" == true ]]; then
 const fs = require('fs');
 const path = require('path');
 const [configFile, root] = process.argv.slice(2);
-const systems = require(path.join(root, 'system-config')).readCatalog(configFile).systems;
+const systems = require(path.join(root, 'common', 'system-config')).readCatalog(configFile).systems;
 const heading = ['System', 'RAW GB', 'VDI GB', 'Total GB', 'Built (local time)'];
 const rows = [heading];
 for (const [id, system] of Object.entries(systems)) {
@@ -105,7 +105,7 @@ verify_images() {
 const fs = require('fs');
 const path = require('path');
 const [configFile, id, root] = process.argv.slice(2);
-const system = require(path.join(root, 'system-config')).readCatalog(configFile).systems[id];
+const system = require(path.join(root, 'common', 'system-config')).readCatalog(configFile).systems[id];
 for (const format of ['raw', 'vdi']) {
   const file = path.resolve(root, system[format === 'raw' ? 'qemu' : 'vbox'].image);
   const stat = fs.statSync(file);
