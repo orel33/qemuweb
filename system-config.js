@@ -24,7 +24,14 @@ function validateOverrides(overrides) {
   return overrides;
 }
 
+function hostArchitecture() {
+  return (process.arch === 'arm64' || process.arch === 'aarch64') ? 'aarch64' : 'x86_64';
+}
+
 function validateProfile(profile, id, engine) {
+  if (profile.arch === 'auto') {
+    profile.arch = engine === 'qemu' ? hostArchitecture() : 'x86_64';
+  }
   if (profile.type !== 'linux' || !['x86_64', 'aarch64'].includes(profile.arch) || profile.mode !== 'text' ||
       typeof profile.label !== 'string' || !profile.label.trim()) throw new Error(`Invalid Linux/${profile.arch}/text profile: ${id}/${engine}.`);
   validateOverrides(Object.fromEntries(editableKeys.map(key => [key, profile[key]])));
@@ -40,7 +47,14 @@ function validateProfile(profile, id, engine) {
   if (engine === 'vbox' && profile.boot === 'kernel') {
     throw new Error(`Direct kernel boot is only supported with QEMU: ${id}/vbox.`);
   }
+  if (profile.arch === 'aarch64' && Array.isArray(profile.extraOptions) && profile.extraOptions[1] === 'q35') {
+    profile.extraOptions = ['-machine', 'virt', profile.extraOptions[2], profile.extraOptions[3], profile.extraOptions[4], profile.extraOptions[5]];
+  }
   if (profile.boot === 'kernel') {
+    if (profile.arch === 'aarch64') {
+      if (profile.kernel === 'images/b2c/linux-x86_64-qemu') profile.kernel = 'images/b2c/linux-arm64-qemu';
+      if (profile.initrd === 'images/b2c/initramfs.linux_amd64.cpio.xz') profile.initrd = 'images/b2c/initramfs.linux_arm64.cpio.xz';
+    }
     if (typeof profile.kernel !== 'string' || !profile.kernel || /[\x00-\x1f\x7f]/.test(profile.kernel)) {
       throw new Error(`Missing or invalid kernel for ${id}/${engine}.`);
     }

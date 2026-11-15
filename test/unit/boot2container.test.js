@@ -13,8 +13,19 @@ test('config.json declares valid container system profile with kernel boot', () 
   assert.ok(catalog.systems.container, 'container profile must be defined');
   const qemuProfile = catalog.systems.container.qemu;
   assert.equal(qemuProfile.boot, 'kernel');
-  assert.ok(qemuProfile.kernel.includes('linux-x86_64-qemu'));
-  assert.ok(qemuProfile.initrd.includes('initramfs.linux_amd64.cpio.xz'));
+  assert.ok(qemuProfile.kernel.includes('linux-'));
+  assert.ok(qemuProfile.initrd.includes('initramfs.'));
+  if (process.arch === 'arm64' || process.arch === 'aarch64') {
+    assert.equal(qemuProfile.arch, 'aarch64');
+    assert.ok(qemuProfile.kernel.includes('linux-arm64-qemu'));
+    assert.ok(qemuProfile.initrd.includes('initramfs.linux_arm64.cpio.xz'));
+    assert.equal(qemuProfile.extraOptions[1], 'virt');
+  } else {
+    assert.equal(qemuProfile.arch, 'x86_64');
+    assert.ok(qemuProfile.kernel.includes('linux-x86_64-qemu'));
+    assert.ok(qemuProfile.initrd.includes('initramfs.linux_amd64.cpio.xz'));
+    assert.equal(qemuProfile.extraOptions[1], 'q35');
+  }
   assert.equal(qemuProfile.containerImage, 'docker.io/library/alpine:3.20');
 });
 

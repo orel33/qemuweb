@@ -16,6 +16,14 @@ base_url="https://gitlab.freedesktop.org/mupuf/boot2container/-/releases/$versio
 kernel_sha256="dc43b12fb09124617cfc102fdd468050d7cd2868f3ce8203e6b28141f2c6fd77"
 initrd_sha256="a5af790c115e2dd6ea43a43232110087368384701197dc139ebe2cf7b8732955"
 
+host_arch="$(uname -m)"
+if [[ "$host_arch" == 'arm64' || "$host_arch" == 'aarch64' ]]; then
+  kernel_name="linux-arm64-qemu"
+  initrd_name="initramfs.linux_arm64.cpio.xz"
+  kernel_sha256="8dbeacb8367c96b1372144d661ba8a9009dd40a620d1f3fa3464c4a7808c4056"
+  initrd_sha256="ee0863f6f7dab1dab50535bb03b2970a9b218484fca8ef95f18ef7563f87c886"
+fi
+
 mkdir -p "$source_dir"
 
 if prepare_sources; then
