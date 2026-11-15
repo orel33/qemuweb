@@ -26,9 +26,8 @@ button { cursor: pointer; }
 #toggle-console-columns { color: #9fc5ef; }
 #exit-all { color: #ff777d; }
 #toggle-switch-consoles { color: #9fc5ef; }
-#toggle-graphic-view { flex: none; min-width: 112px; margin-left: auto; border-color: #5b7998; background: #203247; color: #cce3ff; font-weight: 700; }
-#toggle-graphic-view:hover { background: #304b68; }
-#toggle-graphic-view:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+#toggle-graphic-view { margin-left: auto; color: #8ec5ff; }
+body[data-view="graphic"] #toggle-graphic-view { color: #7ee2a8; }
 body[data-view="graphic"] .page-controls, body[data-view="graphic"] #toggle-console-columns, body[data-view="graphic"] #toggle-switch-consoles { display: none; }
 button:disabled { opacity: .45; cursor: default; }
 .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }

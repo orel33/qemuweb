@@ -8,6 +8,8 @@ const graphicWorkspace = document.getElementById('graphic-workspace');
 const graphicCanvas = document.getElementById('graphic-canvas');
 const graphicSummary = document.getElementById('graphic-summary');
 const graphicToggle = document.getElementById('toggle-graphic-view');
+const GRAPHIC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>';
+const TERMINALS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>';
 const graphicZoomOut = document.getElementById('graphic-zoom-out');
 const graphicZoomIn = document.getElementById('graphic-zoom-in');
 const graphicZoomLevel = document.getElementById('graphic-zoom-level');
@@ -87,8 +89,11 @@ function setGraphicView(visible, persist = true) {
   document.body.dataset.view = visible ? 'graphic' : 'terminals';
   workspace.hidden = visible;
   graphicWorkspace.hidden = !visible;
-  graphicToggle.textContent = visible ? 'Terminals' : 'Graphic';
-  graphicToggle.setAttribute('aria-label', visible ? 'Show Terminals view' : 'Show Graphic view');
+  // The icon shows the view the button switches to: Lucide Network, or SquareTerminal.
+  graphicToggle.innerHTML = visible ? TERMINALS_ICON : GRAPHIC_ICON;
+  const label = visible ? 'Show Terminals view' : 'Show Graphic view';
+  graphicToggle.setAttribute('aria-label', label);
+  graphicToggle.title = label;
   if (visible) renderGraphic();
   else requestAnimationFrame(fitTerminals);
   if (persist) saveViewSettings();
