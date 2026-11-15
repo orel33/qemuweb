@@ -33,3 +33,12 @@ test('command-preflight detects optional ARM64 EFI firmware and binaries', () =>
     assert.ok(cmds.QEMU_EFI_AARCH64.includes('edk2') || cmds.QEMU_EFI_AARCH64.includes('EFI') || cmds.QEMU_EFI_AARCH64.includes('AAVMF'), 'EFI firmware path must be recognized');
   }
 });
+
+test('ARM64 system profiles declare aarch64 architecture for acceleration resolution', () => {
+  const catalog = readCatalog(path.join(root, 'config.json'));
+  for (const id of ['debian13-cloud-arm64', 'alpine-arm64']) {
+    const profile = catalog.systems[id].qemu;
+    assert.equal(profile.arch, 'aarch64');
+  }
+});
+

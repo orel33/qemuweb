@@ -719,6 +719,11 @@
     const cloneButton = document.getElementById('clone-machine');
     const imageSelect = document.getElementById('os-image');
     const engineSelect = document.getElementById('engine');
+    function updateEngineOptionLabel(accel) {
+      const label = `QEMU · ${(accel || 'tcg').toUpperCase()}`;
+      const opt = engineSelect?.querySelector('option[value="qemu"]');
+      if (opt) opt.textContent = label;
+    }
     const createDialog = document.getElementById('create-dialog');
     const createForm = document.getElementById('create-form');
     const createTitle = document.getElementById('create-title');
@@ -1652,6 +1657,8 @@
       optionsStatus.textContent = '';
       clearStartupTemplateError();
       const image = images.find(item => item.id === machine.imageId);
+      const targetAccel = image?.qemuAcceleration || (image?.arch === 'aarch64' ? 'hvf' : 'tcg');
+      updateEngineOptionLabel(targetAccel);
       settingsTitle.textContent = creating ? 'Add a new host' : `Host Settings · ${machineDialogName(machine)}`;
       settingsEditable.replaceChildren();
       settingsFixed.replaceChildren();
@@ -1850,6 +1857,8 @@
       if (!isSwitch && !createDialog.open) {
         imageSelect.value = machine.imageId;
         engineSelect.value = machine.engine;
+        const img = images.find(item => item.id === machine.imageId);
+        if (img) updateEngineOptionLabel(img.qemuAcceleration || (img.arch === 'aarch64' ? 'hvf' : 'tcg'));
       }
     }
     function renderNicControls(machine, list = nicList, addButton = addNic, onChange = () => { clearStartupTemplateError(); refreshLaunchPreview(machine); }) {
@@ -1942,6 +1951,7 @@
       imageSelect.value = defaultImageId;
       const defaultImage = images.find(item => item.id === defaultImageId);
       const isContainer = host && (defaultImage?.boot === 'kernel' || defaultImage?.containerImage);
+      if (defaultImage) updateEngineOptionLabel(defaultImage.qemuAcceleration || (defaultImage.arch === 'aarch64' ? 'hvf' : 'tcg'));
       engineSelect.value = generalSettings.engine;
       createDraft = host ? {engine: generalSettings.engine, interfaces: [isContainer ? 'nat' : null], hasLaunched: false, busy: false} : null;
       createNetwork.hidden = !host;
@@ -2506,6 +2516,7 @@
     consoleFontSizeSelect.addEventListener('change', () => { generalSettings.consoleFontSize = Number(consoleFontSizeSelect.value); consoleAppearanceChangedWhileOpen = true; saveGeneralSettings(); applyConsoleAppearance(true); });
     imageSelect.addEventListener('change', () => {
       const img = images.find(item => item.id === imageSelect.value);
+      if (img) updateEngineOptionLabel(img.qemuAcceleration || (img.arch === 'aarch64' ? 'hvf' : 'tcg'));
       if (createDraft && (img?.boot === 'kernel' || img?.containerImage)) {
         if (!createDraft.interfaces.length || (createDraft.interfaces.length === 1 && createDraft.interfaces[0] === null)) {
           createDraft.interfaces = ['nat'];
@@ -2899,6 +2910,8 @@
       machine.operation = 'starting';
       machine.error = null;
       const image = images.find(item => item.id === machine.imageId);
+      const targetAccel = image?.qemuAcceleration || (image?.arch === 'aarch64' ? 'hvf' : 'tcg');
+      updateEngineOptionLabel(targetAccel);
       machine.osHint = image?.label || 'System';
       machine.hasDifferentialDisk = !!image?.hasDifferentialDisk;
       machine.message = 'Starting…';

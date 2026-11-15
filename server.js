@@ -80,7 +80,7 @@ function detectSupportedQemuAccelerators(binary) {
   return ['tcg'];
 }
 
-function detectBestQemuAcceleration(arch = 'x86_64') {
+function detectBestQemuAcceleration(arch = ((process.arch === 'arm64' || process.arch === 'aarch64') ? 'aarch64' : 'x86_64')) {
   if (process.env.QEMU_ACCEL) return process.env.QEMU_ACCEL;
   let binary;
   try { binary = qemuBinaryFor(arch); } catch (_) { return 'tcg'; }
@@ -648,7 +648,10 @@ app.get('/api/systems', (_req, res) => {
       const p = selectedProfile(config, id, sessionEngine);
       const rawFile = config.systems[id].qemu.image;
       const vdiFile = config.systems[id].vbox.image;
+      const arch = p.arch || 'x86_64';
       return {id, label: p.label,
+        arch,
+        qemuAcceleration: detectBestQemuAcceleration(arch),
         images: {raw: rawFile, vdi: vdiFile},
         imageExists: {
           raw: !!(rawFile && fs.existsSync(imagePath(rawFile))),
@@ -1532,7 +1535,7 @@ app.get('/api/options/:sessionId', (req, res) => {
     const session = launched ? existing : {
       id, ...sessionPaths(id),
       generation: existing?.generation || 0,
-      engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, false) : null,
+      engine, qemuAcceleration: engine.startsWith('qemu') ? qemuAcceleration(engine, image?.arch, false) : null,
       launchSettings: launchSettingsFor(image.id, req.query.settings ? JSON.parse(req.query.settings) : {}),
       qemuOptions: null,
       networkInterfaces: previewInterfaces
