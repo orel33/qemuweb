@@ -14,10 +14,10 @@ Available tests:
   admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
   two-hosts                      Two Debian Legacy hosts: VDE, ping and Stop/Resume
   four-hosts-startup             Four Debian Legacy hosts configured by start.sh templates
-  check-startup-debian13-legacy  Debian Legacy startup disk: script, resource, Reboot with edited files, Stop/Resume
-  check-startup-debian13-cloud   Debian Cloud startup disk: script, resource, Reboot with edited files, Stop/Resume
-  check-startup-alpine           Alpine startup disk: script, resource, Reboot with edited files, Stop/Resume
-  check-startup-openwrt          OpenWrt startup disk: script, resource, Reboot with edited files, Stop/Resume, concurrent hosts, missing script/media
+  check-host-debian13-legacy     Debian Legacy host with startup disk: script, resource, Reboot with edited files, Stop/Resume
+  check-host-debian13-cloud      Debian Cloud host with startup disk: script, resource, Reboot with edited files, Stop/Resume
+  check-host-alpine              Alpine host with startup disk: script, resource, Reboot with edited files, Stop/Resume
+  check-host-openwrt             OpenWrt host with startup disk: script, resource, Reboot with edited files, Stop/Resume, concurrent hosts, missing script/media
   check-network-debian13-legacy  Two Debian Legacy hosts on one VDE switch: eth0, hostname, ping, tcpdump
   check-network-debian13-cloud   Two Debian Cloud hosts on one VDE switch: eth0, hostname, ping, tcpdump
   check-network-alpine           Two Alpine hosts on one VDE switch: eth0, hostname, ping, tcpdump
@@ -79,10 +79,10 @@ case "${1:-}" in
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
   two-hosts) run_test 'Two Debian Legacy hosts: VDE, ping and Stop/Resume' npm run test:two-hosts ;;
   four-hosts-startup) run_test 'Four Debian Legacy hosts: startup templates and full LAN ping' npm run test:four-hosts-startup ;;
-  check-startup-debian13-legacy) run_test 'Debian Legacy startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-startup-debian13-legacy ;;
-  check-startup-debian13-cloud) run_test 'Debian Cloud startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-startup-debian13-cloud ;;
-  check-startup-alpine) run_test 'Alpine startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-startup-alpine ;;
-  check-startup-openwrt) run_test 'OpenWrt startup disk: script, resource, Reboot with edited files, Stop/Resume, concurrent hosts, missing script/media' npm run test:check-startup-openwrt ;;
+  check-host-debian13-legacy) run_test 'Debian Legacy host with startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-host-debian13-legacy ;;
+  check-host-debian13-cloud) run_test 'Debian Cloud host with startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-host-debian13-cloud ;;
+  check-host-alpine) run_test 'Alpine host with startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-host-alpine ;;
+  check-host-openwrt) run_test 'OpenWrt host with startup disk: script, resource, Reboot with edited files, Stop/Resume, concurrent hosts, missing script/media' npm run test:check-host-openwrt ;;
   check-network-debian13-legacy) run_test 'Two Debian Legacy hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-debian13-legacy ;;
   check-network-debian13-cloud) run_test 'Two Debian Cloud hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-debian13-cloud ;;
   check-network-alpine) run_test 'Two Alpine hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-alpine ;;

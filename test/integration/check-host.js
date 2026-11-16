@@ -2,7 +2,7 @@
 
 // Startup disk (cd-rom) check of one guest system: script, resource, disk marker, Reboot with
 // edited files, Stop/Resume; on OpenWrt also concurrent hosts and missing script/media reports.
-// CHECK_STARTUP_PROFILE names the system; each run-tests.sh entry sets it to one system.
+// CHECK_HOST_PROFILE names the system; each run-tests.sh entry sets it to one system.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -12,7 +12,7 @@ const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client'
 
 const root = path.resolve(__dirname, '../..');
 const supported = ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt'];
-const profiles = [(process.env.CHECK_STARTUP_PROFILE || '').trim()];
+const profiles = [(process.env.CHECK_HOST_PROFILE || '').trim()];
 const engine = process.env.STARTUP_MEDIA_ENGINE || 'qemu';
 const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;
 const ids = profiles.map(() => newHostId());
@@ -173,7 +173,7 @@ async function verifyConcurrentIsolation() {
 }
 
 async function run() {
-  assert.ok(supported.includes(profiles[0]), `Set CHECK_STARTUP_PROFILE to one of: ${supported.join(', ')}.`);
+  assert.ok(supported.includes(profiles[0]), `Set CHECK_HOST_PROFILE to one of: ${supported.join(', ')}.`);
   for (const profile of profiles) assert.ok(fs.existsSync(path.join(root, 'images', `${profile}.raw`)), `Missing prepared ${profile} RAW base`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
