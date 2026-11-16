@@ -403,38 +403,85 @@ the runner pauses the serial sockets and `vdeterm` terminals until the buffer
 drains: the guest blocks on its UART instead of growing the server's memory.
 Order is kept since nothing is dropped.
 
+### Runners in the control plane
+
+`lib/runner-registry.js` holds every runner the control plane knows, each
+with its own client (`lib/runner-client.js`, one instance per connection,
+never a global): `id`, `state` (`starting`, `online`, `lost`), the
+capabilities from `hello` (engines, later images and capacity), `ownerLogin`
+(null for a shared runner; reserved for a runner owned by one student, unused
+in 5a/5b) and a per-runner `lost` handler set by whoever started it. In 5a/5b
+it holds one entry, `local`, started by `server.js`.
+
+The session manager binds each session ID to a runner ID. The control plane
+assigns session IDs (the runner never invents one) and chooses the runner in
+one place, `pickRunner(login)`, called once when a session is created; it
+returns the local runner until placement arrives in 5c. Resource rules that
+span sessions (QEMU/KVM next to VirtualBox, metrics, later capacity) are
+evaluated by each runner over its own sessions.
+
 ### Connection lifecycle (local runner, 5b)
 
 1. `server.js` listens on `runtime/runner-<port>.sock`, then spawns
-   `node runner/main.js <socket path>` as its child in its own process group
-   (`detached`, so a terminal Ctrl+C reaches the server only).
+   `node runner/main.js --connect <socket path> --exit-on-disconnect` in its
+   own process group (`detached`, so a terminal Ctrl+C reaches the server
+   only).
 2. The runner resolves its executables (`runner/preflight.js`), connects and
-   sends `hello`. The server accepts one runner connection at a time, waits
-   up to 10 s for `hello` (an executable missing: the runner's message is
-   printed and the server exits), and starts listening for browsers only
-   then.
-3. On `hello`, the control plane resynchronises: a session it knows but the
-   runner does not is gone, a session the runner reports but the control plane
-   does not know is deleted with `session.delete`. On a fresh local runner both
-   lists are empty; the same step serves the reconnection of remote runners.
+   sends `hello`. The server accepts one connection per spawned runner, waits
+   up to 10 s for `hello`, marks the runner `online`, and only then listens
+   for browsers. At startup, a runner that cannot start (an executable
+   missing) is fatal: its message is printed and the server exits.
+3. On `hello`, the control plane resynchronises: a session bound to that
+   runner but absent from `hello` is dropped (as below), a session reported by
+   the runner but unknown to the control plane is deleted with
+   `session.delete`. On a fresh local runner both lists are empty; the same
+   step serves the reconnection of remote runners in 5c.
 4. Server stop (SIGINT, SIGTERM, `./scripts/stop.sh`): `runner.shutdown`
    destroys every node of every session and removes `runtime/sessions/<id>/`
    (as today), the runner exits, the server removes the socket and exits.
-5. The runner treats the loss of its control connection as the end of its
-   life: it destroys every node, removes its session directories and exits.
-   A server killed with SIGKILL therefore leaves no VM behind.
+5. `--exit-on-disconnect` is a choice of whoever starts the runner, not part
+   of the protocol: the local runner, a child of the server, treats the loss
+   of its control connection as the end of its life (it destroys every node,
+   removes its session directories and exits), so a server killed with
+   SIGKILL leaves no VM behind. A remote runner (5c) runs without it: it
+   keeps its VMs, reconnects and resynchronises with `hello`.
 
-**Runner death (proposed: the server fails).** If the runner process exits or
-its connection drops while the server runs, the server logs it, kills the
-runner's process group with SIGKILL (QEMU and `vde_switch` are in it;
-`vdeterm` ends with its pseudo-terminal), removes the directories of its
-sessions, and exits with status 1. This matches the decision "a server
-restart erases everything" and leaves no half-alive session (browsers see the
-server go away, as for any restart). The alternative, restarting the runner
-and reopening every session empty, keeps logins alive but loses every node
-anyway and needs browsers to reload: more code for no data kept. VirtualBox
-VMs run under VBoxSVC, outside the process group: after a runner crash they
-are left registered (as after a server crash today).
+**Runner loss.** The server never exits because a runner died. When a
+runner's connection drops or its process exits, the registry marks it `lost`
+and calls its `lost` handler. For the local runner, `server.js`:
+
+1. kills the runner's process group with SIGKILL (QEMU and `vde_switch` are
+   in it; `vdeterm` ends with its pseudo-terminal) and removes the runtime
+   directories of its sessions;
+2. drops every session bound to it like a deleted session (users.log
+   `session-deleted` with the reason `runner lost`; browsers get
+   `session-deleted` and reload into a new, empty session): the VMs died with
+   the runner, so there is nothing to keep;
+3. respawns the local runner, with a short backoff (1, 2, 4 s); after three
+   failed respawns in a row the server exits with status 1 and a clear
+   message. Requests reaching a session while no runner is online answer 503.
+
+VirtualBox VMs run under VBoxSVC, outside the process group: after a runner
+crash they stay registered, as after a server crash today.
+
+### Multiple runners and untrusted runners
+
+The 5a/5b choices hold for N runners: one client per runner, sessions bound
+to a runner, `pickRunner` as the single placement point, per-runner
+accounting. A runner on a student's own machine (owned by that student) flips
+the trust model of the local runner: the control plane must not trust it.
+
+- Everything from a runner is checked: an event or a response is accepted
+  only for a session ID bound to that runner, frames and payloads have size
+  limits, and payloads are validated before they reach a browser (console data
+  is untrusted text, as it already is for guests).
+- A runner provides no identity or authorization: logins, roles, console
+  control and audit stay in the control plane, and a runner only ever receives
+  commands for its own sessions.
+- Later (5c/6, no code now): runner tokens bound to a user (`ownerLogin`),
+  placement restricted to the owner's runners, quotas enforced by the control
+  plane as well as by the runner, and archive streams size-limited on both
+  sides.
 
 ### Testing
 
