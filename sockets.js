@@ -6,6 +6,8 @@
 //   session:<sessionId>           every browser of the session's owner, and of the admins
 //                                 observing it (per-session events)
 //   observers:<sessionId>         the admins observing the session (owner-view)
+// While an admin controls a console of a session, the view goes the other way: the admin's
+// page publishes controller-view, relayed to the session room and shown by the owner's pages.
 //   node:<sessionId>:<nodeId>     browsers that selected that node (per-node events); a socket
 //                                 joins it only for a node of its own or observed session
 // The handshake must already have set socket.data.user (see lib/auth/). An admin observes
@@ -73,7 +75,10 @@ function bindWorkspace(io, {session, runner}, control) {
 // audit: lib/audit.js. currentUser(login) returns the account as it is now ({login, role}),
 // or null once it is disabled or removed (lib/auth). Returns {disconnectUser(login), browsers(login)}.
 function attachSockets(io, manager, {audit, currentUser, control: options = {}}) {
+  // The controlling admin's last view, per session ID, kept only while a lock exists there.
+  const controllerViews = new Map();
   const control = new ConsoleControl({...options, onRelease: (lock, reason) => {
+    if (!control.hasLock(lock.sessionId)) controllerViews.delete(lock.sessionId);
     io.to(`session:${lock.sessionId}`).emit('console-control', {nodeId: lock.nodeId, admin: lock.admin, active: false});
     audit.record(lock.admin, 'control-end', {login: lock.login, nodeId: lock.nodeId, reason});
   }});
@@ -88,6 +93,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   // Browsers of a deleted session reload, which opens the user's new session.
   manager.on('removed', ({session}) => {
     ownerViews.delete(session.id);
+    controllerViews.delete(session.id);
     control.releaseSession(session.id, 'session deleted');
     io.to(sessionRoom(session)).emit('session-deleted', {sessionId: session.id});
     io.in(sessionRoom(session)).disconnectSockets(true);
@@ -175,6 +181,15 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       io.to(observerRoom(session)).emit('owner-view', view);
     }));
     if (observer && ownerViews.has(session.id)) socket.emit('owner-view', ownerViews.get(session.id));
+    // The reverse direction, while this observer's user holds control of a node of the session:
+    // the owner's pages show the controller's view (validated like an owner view).
+    socket.on('controller-view', guard(received => {
+      const view = observer && control.heldBy(session.id, user.login) && ownerViewOf(received, session);
+      if (!view) return;
+      controllerViews.set(session.id, view);
+      io.to(sessionRoom(session)).emit('controller-view', view);
+    }));
+    if (!observer && controllerViews.has(session.id)) socket.emit('controller-view', controllerViews.get(session.id));
     socket.on('leave-node', id => {
       if (id !== socket.data.nodeId) return;
       socket.leave(nodeRoom(session, id));

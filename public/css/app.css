@@ -376,3 +376,7 @@ body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailab
 .admin-log-tabs button { height: var(--control-small); padding: 0 10px; font-size: 13px; }
 .admin-log-tabs button[aria-selected="true"] { background: #355177; border-color: #70a8ff; }
 .admin-log-view { height: 260px; margin: 0; padding: 8px 10px; overflow: auto; color: #cfd9e4; background: #0b0f14; border: 1px solid #2c3743; border-radius: 6px; font: 12px/1.45 var(--console-font-family); white-space: pre; }
+/* The owner's page while an administrator controls one of its consoles: its view follows the
+   controller's, so the controls that change the view or the layout are disabled. */
+body[data-controlled="true"] :is(#toggle-graphic-view, #toggle-console-columns, #toggle-switch-consoles, #previous-page, #next-page,
+  .pane-expand-button, .machine-name, .pane-session-menu) { pointer-events: none; opacity: .45; }

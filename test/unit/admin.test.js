@@ -229,7 +229,11 @@ test('console control is exclusive, renewed by input and released once', t => {
   control.take('s1', 'n1', {admin: 'boss', login: 'toto', holder: first});
   control.take('s1', 'n2', {admin: 'boss', login: 'toto', holder: first});
   control.take('s2', 'n1', {admin: 'chef', login: 'titi', holder: second});
+  assert.equal(control.heldBy('s1', 'boss'), true);
+  assert.equal(control.heldBy('s1', 'chef'), false);
+  assert.equal(control.hasLock('s2'), true);
   control.releaseHolder(first, 'disconnected');
+  assert.equal(control.hasLock('s1'), false);
   assert.deepEqual(released.slice(1), [['n1', 'boss', 'disconnected'], ['n2', 'boss', 'disconnected']]);
   control.releaseSession('s2', 'session deleted');
   assert.deepEqual(released.slice(3), [['n1', 'chef', 'session deleted']]);

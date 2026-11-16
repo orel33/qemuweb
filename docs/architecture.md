@@ -102,7 +102,12 @@ flowchart TB
   sockets attaching; the last one is also sent to a new observer), sends `observe-unavailable` when the login has no session, and
   lets it type only into a node it controls
   (`take-control`, `lib/console-control.js`; the owner's input on that node is
-  then dropped and both sides get `console-control`). Every privileged socket
+  then dropped and both sides get `console-control`). While an admin holds
+  control, the view goes the other way: the admin's page publishes
+  `controller-view` (same fields and validation, accepted only from that admin
+  while they hold a lock on the session, kept for a page opening meanwhile) and
+  the owner's pages show it, with their layout controls disabled and their own
+  `owner-view` paused, so the two never drive each other at once. Every privileged socket
   event re-reads the account, so a disabled or removed account loses its
   sockets. `sockets.js` also counts each user's connected browser tabs (the
   tab's session socket carries `auth.main`), shown as online/offline in

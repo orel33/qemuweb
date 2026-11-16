@@ -128,8 +128,12 @@ can:
   console input, Clear and resizing.
 - **Take control** of the selected console: an exclusive lock on that node.
   The student's keyboard is blocked on it and a banner tells them who controls
-  it; they still see the commands and their output. Control ends with **Release
-  control**, when the admin's page closes, or after 10 minutes without input.
+  it; they still see the commands and their output. While the admin holds
+  control, the student's page follows the admin's view and layout (the reverse
+  of **Follow**) and its view and layout buttons are disabled. Control ends
+  with **Release control**, when the admin's page closes, or after 10 minutes
+  without input; the student's page then keeps what it shows and is free
+  again.
 - **Stop all** VMs and switches of a session (nodes kept) or **Delete** it
   (disks included); the student's browsers reload into a new, empty session.
 - Delete several sessions at once (select them, then **Delete selected**,

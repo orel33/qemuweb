@@ -10,6 +10,7 @@ import {panes} from './terminal.js';
 import {showOwnerLayout, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {setGraphicView} from './topology.js';
+import {publishOwnerView} from './socket.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -76,19 +77,30 @@ function renderControl() {
     return;
   }
   const lines = [...controls].map(([nodeId, admin]) => `${admin} controls the console of ${nodeName(nodeId)}`);
-  controlBanner.textContent = lines.length ? `${lines.join(' · ')}. You see the commands and their output; your keyboard is blocked on that console.` : '';
+  controlBanner.textContent = lines.length ? `${lines.join(' · ')}. You see the commands and their output; your keyboard is blocked on that console, and your view follows the administrator's.` : '';
   controlBanner.hidden = !lines.length;
+  // While controlled, the owner's page is driven by the controller: its layout controls are
+  // disabled (CSS) and it does not publish its own view.
+  document.body.dataset.controlled = String(lines.length > 0);
 }
 
 // console-control {nodeId, admin, active} and the control field of node-snapshot.
 export function applyControl(nodeId, admin, active) {
+  const wasControlled = controlledByAdmin();
   if (active) controls.set(nodeId, admin);
   else {
     controls.delete(nodeId);
     if (held?.nodeId === nodeId) { held = null; applyOwnerView(true); }
   }
   renderControl();
+  // Control over: the owner keeps what is displayed and publishes its own view again.
+  if (wasControlled && !controlledByAdmin()) { controllerView = null; publishOwnerView({force: true}); }
 }
+
+// The admin's page holds control of a node: it publishes its view to the owner (controller-view).
+export const holdingControl = () => observing && !!held;
+// The owner's page while an administrator controls one of its consoles.
+export const controlledByAdmin = () => !observing && controls.size > 0;
 
 // The observed login has no session: it never used QemuWeb since the server started, or its
 // session was deleted. The page replaces the workspace with a message and a way back.
@@ -113,17 +125,35 @@ let ownerView = null;
 let taking = false;
 const following = () => observing && !held && !taking && document.getElementById('observe-follow').checked;
 
-// mayRefresh: a node unknown here (created meanwhile) triggers one refresh of the node list,
-// which calls refollow() when it is done.
-function applyOwnerView(mayRefresh) {
-  if (!following() || !ownerView) return;
-  const graphic = ownerView.mode === 'graphic';
+// Shows a published view (owner-view or controller-view) without saving it in this browser's
+// view settings. mayRefresh: a node unknown here (created meanwhile) triggers one refresh of
+// the node list, which calls refollow() when it is done.
+function showView(view, mayRefresh) {
+  const graphic = view.mode === 'graphic';
   if (graphic !== store.graphicVisible) setGraphicView(graphic, false);
-  if (ownerView.nodeId && !machines.has(ownerView.nodeId)) {
+  if (view.nodeId && !machines.has(view.nodeId)) {
     if (mayRefresh) syncSessionsFromServer();
     return;
   }
-  showOwnerLayout(ownerView);
+  showOwnerLayout(view);
+}
+
+// Observer side: the owner's view, while following.
+function applyOwnerView(mayRefresh) {
+  if (following() && ownerView) showView(ownerView, mayRefresh);
+}
+
+// Owner side: while an administrator controls one of its consoles, the owner's page shows the
+// controller's view (the reverse of Follow). Only the latest one counts.
+let controllerView = null;
+function applyControllerView(mayRefresh) {
+  if (controlledByAdmin() && controllerView) showView(controllerView, mayRefresh);
+}
+
+export function followController(view) {
+  if (observing || !view) return;
+  controllerView = view;
+  applyControllerView(true);
 }
 
 export function followOwnerView(view) {
@@ -133,7 +163,10 @@ export function followOwnerView(view) {
 }
 
 // After the node list was (re)loaded: show the owner's node again.
-export function refollow() { applyOwnerView(false); }
+export function refollow() {
+  applyOwnerView(false);
+  applyControllerView(false);
+}
 
 export function controlChanged() { renderControl(); }
 
@@ -154,6 +187,8 @@ function toggleControl() {
     taking = false;
     if (result?.error) { showStatusError(result.error); applyOwnerView(true); return; }
     held = {pane, nodeId};
+    // From now on the owner's page follows this one.
+    publishOwnerView({force: true});
     controls.set(nodeId, 'you');
     renderControl();
     pane.terminal.focus();

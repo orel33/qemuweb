@@ -5,23 +5,30 @@ import {renderTabs, showPage, showStatusError, updateControls} from './workspace
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
-import {applyControl, followOwnerView, observationUnavailable, observing, socketOptions} from './observe.js';
+import {applyControl, controlledByAdmin, followController, followOwnerView, holdingControl, observationUnavailable, observing, socketOptions} from './observe.js';
 
 let socket = null;
 
-// The owner's page tells observers what it shows: the active node, the view (Terminals or
-// Graphic) and the console layout (panes, switch consoles, page, pane shown alone). The panes'
-// nodes follow from these and the node list, so they are not sent. Called whenever any of it
-// may have changed; sends only actual changes (and everything again after a reconnection).
+// The page tells the other side what it shows: the active node, the view (Terminals or Graphic)
+// and the console layout (panes, switch consoles, page, pane shown alone). The panes' nodes
+// follow from these and the node list, so they are not sent. One rule decides who drives:
+//   - the owner's page publishes owner-view (followed by observers), except while an
+//     administrator controls one of its consoles;
+//   - an observer's page publishes controller-view (followed by the owner's page) only while it
+//     holds control.
+// So there is never a loop. Called whenever any of it may have changed; sends only actual changes
+// (force: send again, after a reconnection or when the driver changes).
 let publishedView = null;
-export function publishOwnerView() {
-  if (observing || !socket?.connected) return;
+export function publishOwnerView({force = false} = {}) {
+  if (!socket?.connected) return;
+  const event = observing ? (holdingControl() ? 'controller-view' : null) : (controlledByAdmin() ? null : 'owner-view');
+  if (!event) return;
   const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layoutSize,
     switches: store.showSwitchConsoles, page: store.pageIndex, expanded: store.expandedPaneIndex};
-  const key = JSON.stringify(view);
-  if (key === publishedView) return;
+  const key = `${event} ${JSON.stringify(view)}`;
+  if (!force && key === publishedView) return;
   publishedView = key;
-  socket.emit('owner-view', view);
+  socket.emit(event, view);
 }
 
 function socketConnectError(error) {
@@ -120,7 +127,7 @@ export function initSockets() {
     if (machine.id === store.activeId) updateControls();
     if (store.graphicVisible) scheduleSessionSync();
   });
-  socket.on('connect', () => { syncSessionsFromServer(); publishedView = null; publishOwnerView(); });
+  socket.on('connect', () => { syncSessionsFromServer(); publishOwnerView({force: true}); });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;
@@ -139,5 +146,6 @@ export function initSockets() {
   socket.on('observe-unavailable', () => observationUnavailable());
   socket.on('console-control', event => applyControl(event.nodeId, event.admin, event.active));
   socket.on('owner-view', followOwnerView);
+  socket.on('controller-view', followController);
   socket.on('connect_error', socketConnectError);
 }

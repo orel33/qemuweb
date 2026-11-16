@@ -235,12 +235,30 @@ async function run() {
   assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
   observer.socket.emit('input', 'adminagain\r');
   await waitFor('the admin types again on the held node', () => /adminagain/.test(aliceConsole.output()));
+  // While the admin holds control, the view goes the other way: controller-view from the
+  // admin's page reaches alice's pages; never from alice, nor once control has ended.
+  const controllerView = {nodeId: aliceSwitch, mode: 'terminals', layout: 4, switches: true, page: 0, expanded: 0};
+  aliceSession.socket.emit('controller-view', controllerView);
+  observer.socket.emit('controller-view', {...controllerView, layout: 3}); // Invalid: dropped.
+  observer.socket.emit('controller-view', controllerView);
+  await waitFor('controller-view at alice', () => aliceSession.events.some(item => item.event === 'controller-view'));
+  assert.deepEqual(aliceSession.events.filter(item => item.event === 'controller-view').map(item => item.payload), [controllerView]);
+  const aliceLateTab = recorder(alice, 'alice late tab', {auth: {main: true}});
+  await waitFor('controller-view for a page opened during control', () => aliceLateTab.events.some(item => item.event === 'controller-view'));
+  aliceLateTab.socket.close();
   aliceSecondTab.socket.close();
   await alice.request(`/api/nodes/${aliceOther}`, {method: 'DELETE'});
   observer.socket.close();
   await waitFor('control released at alice', () => aliceSession.events.some(item => item.event === 'console-control' && !item.payload.active));
   aliceConsole.socket.emit('input', 'alicefree\r');
   await waitFor('alice types again', () => /alicefree/.test(aliceConsole.output()));
+  const formerController = recorder(boss, 'boss after control', {auth: {observe: 'alice'}});
+  await formerController.connected;
+  const viewsBefore = aliceSession.events.filter(item => item.event === 'controller-view').length;
+  formerController.socket.emit('controller-view', controllerView);
+  await delay(300);
+  assert.equal(aliceSession.events.filter(item => item.event === 'controller-view').length, viewsBefore, 'controller-view relayed without control');
+  formerController.socket.close();
   console.log('Admin: take control blocks the student, shows the commands and ends with the admin\'s socket');
 
   // (5) Stop-all keeps the nodes; bulk deletion frees processes and runtime directories.
