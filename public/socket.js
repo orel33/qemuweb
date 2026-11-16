@@ -1,11 +1,11 @@
 // Socket.IO wiring: per-pane console sockets and the shared notification socket.
 import {generalSettings, machines, store} from './state.js';
 import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderConsoleView, renderLogView, syncConsoleScroll} from './terminal.js';
-import {renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
+import {captureView, renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
-import {applyControl, controlledByAdmin, followController, followOwnerView, holdingControl, observationUnavailable, observing, socketOptions} from './observe.js';
+import {applyControl, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
 let socket = null;
 
@@ -15,26 +15,22 @@ export function emitOnSession(event, ...args) {
   else args.find(arg => typeof arg === 'function')?.({error: 'Not connected to the server.'});
 }
 
-// The page tells the other side what it shows: the active node, the view (Terminals or Graphic),
-// the console layout, the node of each visible pane (as assigned, also by the pane node menu,
-// which the other side's node order cannot reproduce), switch consoles, page and the pane
-// shown alone. One rule decides who drives:
+// The page tells the other side what it shows: its view state (captureView, public/view-state.js).
+// One rule decides who drives:
 //   - the owner's page publishes owner-view (followed by observers), except while an
 //     administrator controls one of its consoles;
 //   - an observer's page publishes controller-view (followed by the owner's page) only while it
 //     holds control.
-// So there is never a loop. Called whenever any of it may have changed; sends only actual changes
+// So there is never a loop. Called by viewChanged() (workspace.js); sends only actual changes
 // (force: send again, after a reconnection or when the driver changes).
-let publishedView = null;
-export function publishOwnerView({force = false} = {}) {
+let published = null;
+export function publishView({force = false} = {}) {
   if (!socket?.connected) return;
   const event = observing ? (holdingControl() ? 'controller-view' : null) : (controlledByAdmin() ? null : 'owner-view');
   if (!event) return;
-  const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout,
-    panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null), switches: store.showSwitchConsoles, page: store.pageIndex, expanded: store.expandedPaneIndex};
-  const key = `${event} ${JSON.stringify(view)}`;
-  if (!force && key === publishedView) return;
-  publishedView = key;
+  const view = captureView();
+  if (!force && published?.event === event && ViewState.sameView(published.view, view)) return;
+  published = {event, view};
   socket.emit(event, view);
 }
 
@@ -133,7 +129,7 @@ export function initSockets() {
     if (machine.id === store.activeId) updateControls();
     if (store.graphicVisible) scheduleSessionSync();
   });
-  socket.on('connect', () => { syncSessionsFromServer(); publishOwnerView({force: true}); });
+  socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;
@@ -151,7 +147,7 @@ export function initSockets() {
   socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
   socket.on('observe-unavailable', () => observationUnavailable());
   socket.on('console-control', applyControl);
-  socket.on('owner-view', followOwnerView);
-  socket.on('controller-view', followController);
+  socket.on('owner-view', view => viewReceived('owner', view));
+  socket.on('controller-view', view => viewReceived('controller', view));
   socket.on('connect_error', socketConnectError);
 }

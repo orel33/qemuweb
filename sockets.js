@@ -17,6 +17,7 @@
 // controls a session, the view goes the other way: the admin's page publishes controller-view,
 // relayed to the session room and shown by the owner's pages.
 const {ConsoleControl} = require('./lib/console-control');
+const {normalizeView} = require('./public/view-state');
 
 function sessionRoom(session) { return `session:${session.id}`; }
 function observerRoom(session) { return `observers:${session.id}`; }
@@ -48,27 +49,6 @@ function createObservationTracker(audit) {
       return Math.max(0, count);
     }
   };
-}
-
-// The console layouts of the UI (public/state.js) and their number of panes.
-const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
-
-// What the owner's page shows, from an owner-view event: its active node (a node of the session,
-// else null), the view (terminals or graphic), the console layout (LAYOUT_PANES), the node of
-// each pane of that layout (`panes`: a node of the session, else null; a node appears once),
-// whether switch consoles are shown, the console page (its page indicator and paging), and the
-// pane shown alone (or null). Unknown fields are dropped; returns null for an invalid view.
-function ownerViewOf(view, session) {
-  if (!view || typeof view !== 'object' || !['terminals', 'graphic'].includes(view.mode)) return null;
-  if (typeof view.layout !== 'string' || !Object.hasOwn(LAYOUT_PANES, view.layout) || typeof view.switches !== 'boolean') return null;
-  if (!Number.isInteger(view.page) || view.page < 0 || view.page > 999) return null;
-  if (view.expanded !== null && !(Number.isInteger(view.expanded) && view.expanded >= 0 && view.expanded < LAYOUT_PANES[view.layout])) return null;
-  if (!Array.isArray(view.panes) || view.panes.length !== LAYOUT_PANES[view.layout]) return null;
-  if (view.panes.some(id => id !== null && typeof id !== 'string')) return null;
-  const known = id => (typeof id === 'string' && session.nodes.has(id) ? id : null);
-  const panes = view.panes.map(known).map((id, index, ids) => (id && ids.indexOf(id) === index ? id : null));
-  return {nodeId: known(view.nodeId), mode: view.mode, layout: view.layout, panes, switches: view.switches, page: view.page,
-    expanded: view.expanded};
 }
 
 // Forwards the events of one session's runner to that session's browsers only.
@@ -178,11 +158,11 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
         if (typeof acknowledge === 'function') acknowledge({error: error.message});
       });
     }));
-    // What the owner looks at (ownerViewOf), published by the owner's page itself whenever it
-    // changes. Console sockets attaching in the background (select-node) say nothing about it.
+    // What the owner looks at (a view state, public/view-state.js, validated by normalizeView
+    // against the session's nodes), published by the owner's page itself whenever it changes. Console sockets attaching in the background (select-node) say nothing about it.
     // Relayed to observers as owner-view.
     socket.on('owner-view', guard(received => {
-      const view = !observer && ownerViewOf(received, session);
+      const view = !observer && normalizeView(received, session.nodes);
       if (!view) return;
       ownerViews.set(session.id, view);
       io.to(observerRoom(session)).emit('owner-view', view);
@@ -191,7 +171,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     // The reverse direction, while this observer's user holds control of a node of the session:
     // the owner's pages show the controller's view (validated like an owner view).
     socket.on('controller-view', guard(received => {
-      const view = observer && control.heldBy(session.id, user.login) && ownerViewOf(received, session);
+      const view = observer && control.heldBy(session.id, user.login) && normalizeView(received, session.nodes);
       if (!view) return;
       controllerViews.set(session.id, view);
       io.to(sessionRoom(session)).emit('controller-view', view);
@@ -261,4 +241,4 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   };
 }
 
-module.exports = {attachSockets, sessionRoom, nodeRoom, inputRefusal, createObservationTracker, ownerViewOf};
+module.exports = {attachSockets, sessionRoom, nodeRoom, inputRefusal, createObservationTracker};

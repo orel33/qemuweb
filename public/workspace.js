@@ -1,13 +1,13 @@
 // Pane layout, paging, node tabs, pane state badges and resource metrics.
-import {LAYOUT_PANES, machines, saveViewSettings, store} from './state.js';
+import {machines, saveViewSettings, savedView, store} from './state.js';
 import {jsonRequest, nodeUrl} from './api.js';
 import {fitTerminal, fitTerminals, panes, updatePaneViewControls} from './terminal.js';
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
-import {renderGraphic} from './topology.js';
+import {renderGraphic, setGraphicView} from './topology.js';
 import {controlChanged, observedLogin, observing} from './observe.js';
-import {publishOwnerView} from './socket.js';
+import {publishView} from './socket.js';
 
 let workspaceError = null;
 const resourceMetrics = new Map();
@@ -187,14 +187,13 @@ const LAYOUTS = [
   {id: 'columns-2', label: '2 terminals, side by side', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>'},
   {id: 'rows-2', label: '2 terminals, stacked', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/>'},
   {id: 'grid-4', label: '4 terminals', icon: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>'}
-].filter(layout => Object.hasOwn(LAYOUT_PANES, layout.id));
+].filter(layout => ViewState.paneCount(layout.id));
 const layoutIcon = layout => `${LAYOUT_SVG}${layout.icon}</svg>`;
 const layoutMenu = document.createElement('div');
 
 function setLayout(id) {
   const selected = store.activeId;
   store.layout = id;
-  saveViewSettings();
   const index = consoleSessions().findIndex(machine => machine.id === selected);
   store.pageIndex = index >= 0 ? Math.floor(index / store.layoutSize) : 0;
   showPage(selected);
@@ -259,18 +258,55 @@ function initLayoutMenu() {
   window.addEventListener('resize', () => closeLayoutMenu());
 }
 
-// A page following the other side (observer, or owner under control): its console layout,
-// the node of each pane as assigned there and its active node, not saved in this browser's
-// view settings. Only the panes whose node changes attach their console.
-export function showOwnerLayout({layout, panes: ids, switches, page, expanded, nodeId}) {
-  closeLayoutMenu();
-  store.layout = layout;
-  store.showSwitchConsoles = switches;
-  updateSwitchConsoleToggle();
-  store.pageIndex = page;
-  store.expandedPaneIndex = expanded;
-  const assigned = ids.map(id => (id && machines.has(id) ? id : null));
-  setPaneSessions(assigned, Math.max(0, assigned.indexOf(nodeId)), true);
+// The view state of this page (public/view-state.js): the only way the view is read for
+// publishing and saving.
+export function captureView() {
+  return {mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout,
+    panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null), expanded: store.expandedPaneIndex,
+    switches: store.showSwitchConsoles, active: store.activeId || null};
+}
+
+// Shows a view state (already normalized against this page's nodes; unknown nodes are left
+// out): the only way a view is applied, for Follow, for the owner's page under control and to
+// restore the saved view. It is not saved here, and only the panes whose node changes attach
+// their console. The console page is derived from the first pane's node.
+let applying = false;
+export function applyView(view) {
+  applying = true;
+  try {
+    closeLayoutMenu();
+    store.layout = view.layout;
+    store.showSwitchConsoles = view.switches;
+    updateSwitchConsoleToggle();
+    store.expandedPaneIndex = view.expanded;
+    const ids = view.panes.map(id => (id && machines.has(id) ? id : null));
+    const first = consoleSessions().findIndex(machine => ids.includes(machine.id));
+    store.pageIndex = first >= 0 ? Math.floor(first / store.layoutSize) : 0;
+    setPaneSessions(ids, Math.max(0, ids.indexOf(view.active)), true);
+    if (view.active && machines.has(view.active)) store.activeId = view.active;
+    if ((view.mode === 'graphic') !== store.graphicVisible) setGraphicView(view.mode === 'graphic');
+  } finally { applying = false; }
+}
+
+// Called after every change of the view (showPage/setPaneSessions, focusPane, setGraphicView):
+// publishes the view state (socket.js decides whether this page publishes) and saves it, except
+// while a received view is applied and before the saved view was restored.
+let viewRestored = false;
+export function viewChanged() {
+  if (applying) return;
+  publishView();
+  if (viewRestored) saveViewSettings(captureView());
+}
+
+// Once the node list is loaded: restores the view saved in this browser (its nodes that still
+// exist), then the view is saved on each change. An observation tab restores nothing.
+export function restoreSavedView() {
+  if (viewRestored) return;
+  viewRestored = true;
+  if (observing || !savedView) return;
+  const view = ViewState.normalizeView(savedView, machines);
+  if (view && view.panes.some(Boolean)) applyView(view);
+  publishView();
 }
 
 export function togglePaneExpansion(pane) {
@@ -298,7 +334,6 @@ function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
   });
   store.activePaneIndex = activeIndex;
   store.activeId = panes[activeIndex].machineId;
-  publishOwnerView();
   if (store.activeId) workspaceError = null;
   updateWorkspaceLayout();
   renderTabs();
@@ -319,6 +354,7 @@ function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
     if (before[pane.index] && !pane.machineId) pane.socket.emit('leave-node', before[pane.index]);
   });
   requestAnimationFrame(fitTerminals);
+  viewChanged();
 }
 export function showPage(preferredId = null, preserveExpansion = false) {
   const sessions = consoleSessions();
@@ -334,10 +370,10 @@ export function focusPane(index) {
   store.activePaneIndex = index;
   const pane = panes[index];
   store.activeId = pane.machineId;
-  publishOwnerView();
   panes.forEach(item => item.element.dataset.active = String(item.index === index));
   updateWorkspaceLayout();
   tabs.querySelectorAll('.machine-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.nodeId === store.activeId)));
+  viewChanged();
   updateControls();
   const machine = activeMachine();
   if (machine) {
@@ -421,7 +457,6 @@ export function selectMachine(id) {
   if (machine?.kind === 'switch' && !store.showSwitchConsoles) {
     store.showSwitchConsoles = true;
     updateSwitchConsoleToggle();
-    saveViewSettings();
   }
   const index = consoleSessions().findIndex(item => item.id === id);
   if (index < 0) return;
@@ -451,7 +486,6 @@ export function initWorkspace() {
     const selected = store.activeId;
     store.showSwitchConsoles = !store.showSwitchConsoles;
     updateSwitchConsoleToggle();
-    saveViewSettings();
     const index = consoleSessions().findIndex(machine => machine.id === selected);
     store.pageIndex = index >= 0 ? Math.floor(index / store.layoutSize) : Math.min(store.pageIndex, Math.max(0, Math.ceil(consoleSessions().length / store.layoutSize) - 1));
     showPage(index >= 0 ? selected : null);

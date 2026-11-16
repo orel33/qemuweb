@@ -16,7 +16,8 @@ const {userEvent} = require('../../routes');
 const {Session} = require('../../lib/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../lib/console-control');
 const {observationGate, sessionSummary} = require('../../routes/admin');
-const {inputRefusal, createObservationTracker, ownerViewOf} = require('../../sockets');
+const {inputRefusal, createObservationTracker} = require('../../sockets');
+const {paneCount, normalizeView, sameView} = require('../../public/view-state');
 
 const root = path.join(__dirname, '..', '..');
 const FAST = {N: 1024};
@@ -331,22 +332,35 @@ test('the login routes write login, login-failed and logout to users.log, never 
   assert.doesNotMatch(JSON.stringify(lines), /pw/);
 });
 
-test('an owner view is validated: known fields and ranges only, unknown nodes become null', () => {
+test('a view state is normalized: known keys, layouts, lengths and ranges; unknown nodes become null', () => {
   const sw = 's-0123456789abcdef', host = 'h-0123456789abcdef';
-  const session = {nodes: new Map([[sw, {}], [host, {}]])};
-  const view = {nodeId: sw, mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], switches: false, page: 2, expanded: 3};
-  assert.deepEqual(ownerViewOf({...view, extra: 1}, session), view);
-  assert.deepEqual(ownerViewOf({...view, panes: ['h-0000000000000000', sw, sw, host]}, session).panes, [null, sw, null, host],
-    'unknown pane nodes become null, a node is kept once');
-  assert.equal(ownerViewOf({...view, nodeId: 'h-0000000000000000'}, session).nodeId, null);
-  assert.equal(ownerViewOf({...view, expanded: null}, session).expanded, null);
+  const nodes = new Map([[sw, {}], [host, {}]]);
+  assert.deepEqual([paneCount('single'), paneCount('columns-2'), paneCount('rows-2'), paneCount('grid-4'), paneCount('grid-9'), paneCount('toString')],
+    [1, 2, 2, 4, 0, 0]);
+  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], expanded: 3, switches: false, active: sw};
+  assert.deepEqual(normalizeView({...view, page: 2, extra: 1}, nodes), view, 'extra keys (page too) are dropped');
+  assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
+  assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
+    {...view, panes: [null, sw, null, host], active: null}, 'unknown nodes become null, a node is kept in its first pane');
+  assert.deepEqual(normalizeView({...view, panes: ['x', null, null, null]}, null).panes, ['x', null, null, null], 'shape check only');
+  assert.equal(normalizeView({...view, expanded: null}, nodes).expanded, null);
   for (const [layout, panes] of [['single', [sw]], ['columns-2', [sw, host]], ['rows-2', [null, null]]]) {
-    assert.equal(ownerViewOf({...view, layout, panes, expanded: 0}, session).layout, layout);
+    assert.deepEqual(normalizeView({...view, layout, panes, expanded: 0}, nodes).panes, panes);
   }
-  for (const invalid of [null, 'x', {...view, mode: 'list'}, {...view, layout: 4}, {...view, layout: 'grid-9'}, {...view, layout: 'toString'},
-    {...view, switches: 1}, {...view, page: 1.5}, {...view, page: 1000}, {...view, expanded: 4}, {...view, layout: 'rows-2', expanded: 2},
-    {...view, layout: 'single', expanded: 1}, {...view, expanded: undefined}, {...view, panes: undefined}, {...view, panes: [sw]},
-    {...view, layout: 'columns-2', expanded: 0}, {...view, panes: [sw, null, null, 7]}, {...view, panes: 'sw'}]) {
-    assert.equal(ownerViewOf(invalid, session), null, JSON.stringify(invalid));
+  const invalid = [null, undefined, 'x', 42, [], [view], {...view, mode: 'list'}, {...view, mode: undefined},
+    {...view, layout: 4}, {...view, layout: 'grid-9'}, {...view, layout: 'toString'}, {...view, layout: '__proto__'},
+    {...view, panes: undefined}, {...view, panes: 'sw'}, {...view, panes: [sw]}, {...view, panes: [sw, null, null, 7]},
+    {...view, layout: 'columns-2'}, {...view, expanded: 4}, {...view, expanded: -1}, {...view, expanded: 1.5}, {...view, expanded: undefined},
+    {...view, layout: 'rows-2', panes: [null, null], expanded: 2}, {...view, layout: 'single', panes: [null], expanded: 1},
+    {...view, switches: 1}, {...view, switches: undefined}, {...view, active: 7}, {...view, active: undefined}];
+  for (const raw of invalid) assert.equal(normalizeView(raw, nodes), null, JSON.stringify(raw));
+});
+
+test('two view states are compared field by field', () => {
+  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], expanded: null, switches: true, active: 'a'};
+  assert.equal(sameView(view, {...view, panes: ['a', null]}), true);
+  for (const change of [{mode: 'graphic'}, {layout: 'rows-2'}, {panes: [null, 'a']}, {expanded: 0}, {switches: false}, {active: null}]) {
+    assert.equal(sameView(view, {...view, ...change}), false, JSON.stringify(change));
   }
+  assert.equal(sameView(view, null), false);
 });

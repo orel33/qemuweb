@@ -7,10 +7,9 @@
 // the hidden controls below are a convenience, the server refusal is the protection.
 import {machines, store} from './state.js';
 import {panes} from './terminal.js';
-import {showOwnerLayout, showStatusError} from './workspace.js';
+import {applyView, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
-import {setGraphicView} from './topology.js';
-import {emitOnSession, publishOwnerView} from './socket.js';
+import {emitOnSession, publishView} from './socket.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -92,11 +91,11 @@ export function applyControl({admin, active} = {}) {
   control = active && admin ? {admin} : null;
   renderControl();
   // Control over, on the owner's page: keep what is displayed and publish its own view again.
-  if (wasControlled && !controlledByAdmin()) { controllerView = null; publishOwnerView({force: true}); }
+  if (wasControlled && !controlledByAdmin()) { received.controller = null; publishView({force: true}); }
   // On the controlling admin's page: from now on the owner's page follows this one; when
   // control ends, Follow resumes.
-  if (!wasMine && heldByMe()) publishOwnerView({force: true});
-  if (wasMine && !heldByMe()) applyOwnerView(true);
+  if (!wasMine && heldByMe()) publishView({force: true});
+  if (wasMine && !heldByMe()) followView('owner', true);
 }
 
 // The admin's page holds control: it publishes its view to the owner (controller-view).
@@ -118,57 +117,42 @@ export function observationUnavailable(reason = 'no session') {
   document.body.dataset.observeUnavailable = 'true';
 }
 
-// What the owner shows (owner-view: active node, Terminals or Graphic, console layout), followed
-// while Follow is on and the admin does not hold control, never saved in the admin's own view
-// settings. With Follow off the admin navigates freely. Only the latest owner view counts.
-let ownerView = null;
+// Received views (view states, public/view-state.js), the latest of each kind:
+//   owner       the owner's view, on an observer's page: followed while Follow is on and this
+//               admin does not hold control (with Follow off the admin navigates freely);
+//   controller  the controlling admin's view, on the owner's page, while the session is controlled.
+// A followed view is normalized against this page's nodes, then shown with applyView (never
+// saved here).
+const received = {owner: null, controller: null};
 // Following also pauses while a take-control request is pending: re-laying out the panes
 // then could move the pane that is taking control to another node.
 let taking = false;
 const following = () => observing && !heldByMe() && !taking && document.getElementById('observe-follow').checked;
+const shouldFollow = kind => (kind === 'owner' ? following() : controlledByAdmin());
 
-// Shows a published view (owner-view or controller-view) without saving it in this browser's
-// view settings.
-function showView(view, mayRefresh) {
-  const graphic = view.mode === 'graphic';
-  if (graphic !== store.graphicVisible) setGraphicView(graphic, false);
-  // A node not known here yet (created meanwhile): refresh the node list first, which applies
-  // the view again (refollow); a node still unknown after that leaves its pane empty.
-  if (mayRefresh && [view.nodeId, ...view.panes].some(id => id && !machines.has(id))) {
+// mayRefresh: a view naming a node not known here yet (created meanwhile) first refreshes the
+// node list, which follows the view again (refollow); a node still unknown then is left out.
+function followView(kind, mayRefresh) {
+  const view = received[kind];
+  if (!view || !shouldFollow(kind)) return;
+  if (mayRefresh && [view.active, ...view.panes].some(id => id && !machines.has(id))) {
     syncSessionsFromServer();
     return;
   }
-  showOwnerLayout(view);
+  const normalized = ViewState.normalizeView(view, machines);
+  if (normalized) applyView(normalized);
 }
 
-// Observer side: the owner's view, while following.
-function applyOwnerView(mayRefresh) {
-  if (following() && ownerView) showView(ownerView, mayRefresh);
+export function viewReceived(kind, view) {
+  if ((kind === 'owner') !== observing) return;
+  received[kind] = ViewState.normalizeView(view, null);
+  followView(kind, true);
 }
 
-// Owner side: while an administrator controls one of its consoles, the owner's page shows the
-// controller's view (the reverse of Follow). Only the latest one counts.
-let controllerView = null;
-function applyControllerView(mayRefresh) {
-  if (controlledByAdmin() && controllerView) showView(controllerView, mayRefresh);
-}
-
-export function followController(view) {
-  if (observing || !view) return;
-  controllerView = view;
-  applyControllerView(true);
-}
-
-export function followOwnerView(view) {
-  if (!observing || !view) return;
-  ownerView = view;
-  applyOwnerView(true);
-}
-
-// After the node list was (re)loaded: show the owner's node again.
+// After the node list was (re)loaded.
 export function refollow() {
-  applyOwnerView(false);
-  applyControllerView(false);
+  followView('owner', false);
+  followView('controller', false);
 }
 
 export function controlChanged() { renderControl(); }
@@ -183,7 +167,7 @@ function toggleControl() {
   emitOnSession('take-control', result => {
     taking = false;
     renderControl();
-    if (result?.error) { showStatusError(result.error); applyOwnerView(true); return; }
+    if (result?.error) { showStatusError(result.error); followView('owner', true); return; }
     panes[store.activePaneIndex]?.terminal.focus();
   });
 }
@@ -228,9 +212,9 @@ export function initObserve() {
   fetch('/auth/me', {cache: 'no-store'}).then(response => (response.ok ? response.json() : null)).then(me => {
     myLogin = me?.login || null;
     renderControl();
-    if (heldByMe()) publishOwnerView({force: true});
+    if (heldByMe()) publishView({force: true});
   }).catch(() => {});
-  document.getElementById('observe-follow').addEventListener('change', () => applyOwnerView(true));
+  document.getElementById('observe-follow').addEventListener('change', () => followView('owner', true));
   renderSessionNavigation();
   setInterval(renderSessionNavigation, 10000);
   renderControl();

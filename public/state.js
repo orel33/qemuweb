@@ -3,16 +3,17 @@
 import {observing} from './observe.js';
 export const machines = new Map();
 
-// The console layouts and their number of panes.
-export const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
-
 const viewSettingsKey = 'qemuweb.view-settings';
 export const graphicLayoutKey = 'qemuweb.graphic-layout';
-export let savedViewSettings = {};
+// View settings saved in this browser: {view: a view state (public/view-state.js), graphicZoom}.
+// savedView is the last saved view state (node IDs unchecked), or null; anything unreadable
+// gives the defaults.
+let savedSettings = {};
 try {
   const saved = JSON.parse(localStorage.getItem(viewSettingsKey) || '{}');
-  if (saved && typeof saved === 'object' && !Array.isArray(saved)) savedViewSettings = saved;
+  if (saved && typeof saved === 'object' && !Array.isArray(saved)) savedSettings = saved;
 } catch (_) {}
+export let savedView = ViewState.normalizeView(savedSettings.view, null);
 
 const generalSettingsKey = 'qemuweb.general-settings';
 export const generalSettings = {engine: 'qemu', namingScheme: 'classicLong', consoleFontFamily: 'system', consoleFontSize: 17};
@@ -30,28 +31,26 @@ export const store = {
   activePaneIndex: 0,
   exitAllBusy: false,
   // Console layout: 'single', 'columns-2' (side by side), 'rows-2' (stacked) or 'grid-4'.
-  // An unknown saved value falls back to 'single'.
-  layout: Object.hasOwn(LAYOUT_PANES, savedViewSettings.layout) ? savedViewSettings.layout : 'single',
+  layout: savedView?.layout || 'single',
   // Number of console panes of the layout.
-  get layoutSize() { return LAYOUT_PANES[this.layout]; },
+  get layoutSize() { return ViewState.paneCount(this.layout); },
   expandedPaneIndex: null,
-  showSwitchConsoles: typeof savedViewSettings.showSwitchConsoles === 'boolean' ? savedViewSettings.showSwitchConsoles : true,
+  showSwitchConsoles: savedView ? savedView.switches : true,
   pageIndex: 0,
   selectionToken: 0,
   graphicVisible: false,
-  graphicZoom: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].includes(savedViewSettings.graphicZoom) ? savedViewSettings.graphicZoom : 1,
+  graphicZoom: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].includes(savedSettings.graphicZoom) ? savedSettings.graphicZoom : 1,
   startupTemplatePreview: [],
   autoCdromSupported: false,
   isoPreviewSupported: false
 };
 
-// An observation tab never saves its view: the admin's own layout belongs to their own session's
-// tabs, and following the owner changes the view many times.
-export function saveViewSettings() {
+// Saves the view state (the last one when not given) and the graphic zoom. An observation tab
+// never saves: the admin's own layout belongs to their own session's tabs.
+export function saveViewSettings(view = savedView) {
   if (observing) return;
-  try {
-    localStorage.setItem(viewSettingsKey, JSON.stringify({view: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout, showSwitchConsoles: store.showSwitchConsoles, graphicZoom: store.graphicZoom}));
-  } catch (_) {}
+  savedView = view;
+  try { localStorage.setItem(viewSettingsKey, JSON.stringify({view, graphicZoom: store.graphicZoom})); } catch (_) {}
 }
 
 export function saveGeneralSettings() {

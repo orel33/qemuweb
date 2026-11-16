@@ -1,9 +1,8 @@
 // Graphic network view and .topo topology load/save.
-import {generalSettings, graphicLayoutKey, machines, saveViewSettings, savedViewSettings, store} from './state.js';
+import {generalSettings, graphicLayoutKey, machines, saveViewSettings, savedView, store} from './state.js';
 import {jsonRequest, requestJson} from './api.js';
 import {fitTerminals} from './terminal.js';
-import {closeLayoutMenu, selectMachine, workspace} from './workspace.js';
-import {publishOwnerView} from './socket.js';
+import {closeLayoutMenu, selectMachine, viewChanged, workspace} from './workspace.js';
 
 const graphicWorkspace = document.getElementById('graphic-workspace');
 const graphicCanvas = document.getElementById('graphic-canvas');
@@ -85,8 +84,7 @@ function finishGraphicDrag(event) {
   if (graphicCanvas.hasPointerCapture(event.pointerId)) graphicCanvas.releasePointerCapture(event.pointerId);
 }
 
-// persist: save in this browser's view settings (not when an observer follows the owner).
-export function setGraphicView(visible, persist = true) {
+export function setGraphicView(visible) {
   closeLayoutMenu();
   store.graphicVisible = visible;
   document.body.dataset.view = visible ? 'graphic' : 'terminals';
@@ -101,8 +99,7 @@ export function setGraphicView(visible, persist = true) {
   graphicToggle.title = label;
   if (visible) renderGraphic();
   else requestAnimationFrame(fitTerminals);
-  if (persist) saveViewSettings();
-  publishOwnerView();
+  viewChanged();
 }
 
 const topologyFile = document.getElementById('topology-file');
@@ -145,7 +142,7 @@ export function initTopology() {
   graphicZoomOut.addEventListener('click', () => { store.graphicZoom = Math.max(0.5, store.graphicZoom - 0.25); applyGraphicZoom(); saveViewSettings(); });
   graphicZoomIn.addEventListener('click', () => { store.graphicZoom = Math.min(2, store.graphicZoom + 0.25); applyGraphicZoom(); saveViewSettings(); });
   applyGraphicZoom();
-  setGraphicView(savedViewSettings.view === 'graphic', false);
+  setGraphicView(savedView?.mode === 'graphic');
   document.getElementById('load-topology').addEventListener('click', () => topologyFile.click());
   topologyCancel.addEventListener('click', () => topologyDialog.close());
   topologyDialog.addEventListener('cancel', event => { if (topologyConfirm.disabled) event.preventDefault(); });

@@ -2,7 +2,7 @@
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {panes, syncConsoleScroll} from './terminal.js';
-import {activeMachine, consoleSessions, exitAllButton, renderTabs, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
+import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedView, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
@@ -289,8 +289,9 @@ export function initNodes() {
     document.getElementById('new-host').disabled = !items.length;
     for (const session of existing) mergeSession(session);
     showPage();
+    restoreSavedView();
     refollow();
-  }).catch(error => { showStatusError(`System list unavailable: ${error.message}`); });
+  }).catch(error => { restoreSavedView(); showStatusError(`System list unavailable: ${error.message}`); });
   // Stops every host and switch of the session and keeps them; the state events refresh the UI.
   stopAllButton.onclick = async () => {
     if (stopAllButton.disabled) return;
