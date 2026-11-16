@@ -9,7 +9,7 @@ const path = require('node:path');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
 
 const root = path.resolve(__dirname, '../..');
-const profiles = process.env.STARTUP_MEDIA_PROFILES ? process.env.STARTUP_MEDIA_PROFILES.split(',') : ['alpine', 'debian13-cloud', 'openwrt'];
+const profiles = process.env.STARTUP_MEDIA_PROFILES ? process.env.STARTUP_MEDIA_PROFILES.split(',') : ['debian13-legacy', 'alpine', 'debian13-cloud', 'openwrt'];
 const engine = process.env.STARTUP_MEDIA_ENGINE || 'qemu';
 const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;
 const ids = profiles.map(() => newHostId());
