@@ -199,7 +199,7 @@ L'admin voit toutes les sessions en cours, peut observer un étudiant en train d
 **Naviguer entre sa session et celles des étudiants**
 
 - Trois vues : « Ma session » (l'interface normale, `/`), « Supervision » (`/admin`, le tableau de toutes les sessions, mis à jour en direct) et l'observation d'un étudiant (`/?observe=<login>`, l'interface normale en lecture seule).
-- Un bandeau de couleur distincte, visible seulement en observation, porte : l'étudiant observé, « lecture seule », les flèches précédent et suivant (qui passent d'une session active à l'autre pour une tournée de la salle), la liste déroulante des sessions, « Prendre la main », « Ma session » et « Supervision ». On passe donc d'un étudiant à l'autre sans retourner au tableau.
+- Un bandeau de couleur distincte, visible seulement en observation, porte : l'étudiant observé, « lecture seule », les flèches précédent et suivant (qui passent d'une session active à l'autre pour une tournée de la salle), la liste déroulante des sessions, « Prendre la main » et « Ma session » (« Supervision » est dans l'en-tête). On passe donc d'un étudiant à l'autre sans retourner au tableau.
 - La cible est portée **par l'onglet** (paramètre d'URL gardé dans `sessionStorage`), et non par un cookie : l'interface ajoute un en-tête `X-Observe` à chaque requête, par le point d'entrée `window.fetch` qu'elle enveloppe déjà, et un paramètre d'authentification aux deux connexions Socket.IO. L'admin peut ainsi garder sa session dans un onglet et en observer une autre dans un second, sans état partagé.
 - Côté serveur, une requête portant `X-Observe` n'est acceptée que d'un admin, ne crée jamais de session, ne peut être qu'un `GET` ou `HEAD` (et un login inconnu donne 404).
 - Hors périmètre : un mur de consoles de plusieurs étudiants affichées en même temps.
@@ -231,7 +231,7 @@ L'admin voit toutes les sessions en cours, peut observer un étudiant en train d
 **Autres actions**
 
 - Arrêter toutes les VM d'une session (sans supprimer ses nodes), ou la supprimer (disques compris). Les navigateurs de l'utilisateur sont rechargés.
-- Ménage groupé : sélection multiple, ou « supprimer les sessions inactives depuis X heures » (action manuelle). La liste concernée est affichée pour confirmation, et la session de l'admin qui la lance est exclue.
+- Ménage groupé : sélection multiple des sessions, avec confirmation qui liste les sessions concernées ; la session de l'admin qui la lance est exclue. La colonne « Dernière activité » permet de repérer les sessions abandonnées (pas de suppression automatique ni de filtre par durée).
 - Gestion des comptes : créer (identifiant, mot de passe, rôle), réinitialiser un mot de passe, désactiver et réactiver. Un compte désactivé (`disabled` dans `users.json`, et `scripts/user.sh disable|enable`) ne peut plus se connecter et ses cookies sont refusés aussitôt ; sa session reste jusqu'à ce qu'un admin la supprime. Un admin ne peut ni se désactiver ni changer son propre rôle depuis la page.
 
 **Sécurité**
