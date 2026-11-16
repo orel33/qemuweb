@@ -96,11 +96,8 @@ flowchart TB
   activity mark. An observer socket (`auth.observe`) joins the observed
   session's rooms and `observers:<id>`; `sockets.js` refuses its `input`,
   `clear-console` and `terminal-resize`, relays what the owner's page shows
-  (`owner-view` {nodeId, mode, layout, panes, switches, page, expanded}: its
-  active node, Terminals or Graphic, console layout (`single`, `columns-2`,
-  `rows-2` or `grid-4`) and the node of each pane as assigned (also by the
-  pane node menu), validated by `ownerViewOf`,
-  published by that page when either changes, never derived from console
+  (`owner-view`, a [view state](#view-state) validated by `normalizeView`,
+  published by that page whenever it changes, never derived from console
   sockets attaching; the last one is also sent to a new observer), sends `observe-unavailable` when the login has no session, and
   lets it type only while its admin controls the session (`take-control`
   from any of that admin's observer sockets, `lib/console-control.js`: one lock
@@ -126,6 +123,44 @@ flowchart TB
   archive actions from one middleware of the session router
   (`routes/index.js`, `userEvent`), written when the response is sent.
   `/admin` reads both logs from their end (`readLogTail`).
+
+## View state
+
+What a page of the workspace shows is one plain JSON object, the view state,
+defined, validated and compared in one module, `public/view-state.js` (a
+classic script shared by the server and the browser: `paneCount`,
+`normalizeView(raw, nodeIds)`, `sameView`):
+
+```text
+{ mode:     'terminals' | 'graphic',
+  layout:   'single' | 'columns-2' | 'rows-2' | 'grid-4',
+  panes:    (nodeId | null)[],   exactly paneCount(layout) entries: the node shown in each
+                                 pane, in pane order; null = empty pane
+  expanded: null | integer,      the pane shown full-size, 0 <= expanded < panes.length
+  switches: boolean,             switch consoles shown
+  active:   nodeId | null }      the selected node (tab or graphic selection)
+```
+
+`normalizeView` returns a valid view state or null: known keys only (others
+dropped), known layouts and modes, `panes` of the right length with strings or
+null, `expanded` in range; node IDs not in the given list become null, and a
+node shown in two panes is kept in the first one. The console page is not part
+of the view: paging only decides which nodes are assigned to the panes, and
+the resulting `panes` is what is published.
+
+In the browser, `captureView()` reads the view and `applyView(view)` shows one
+(layout, switch consoles, expanded pane, the panes' nodes through the same
+assignment as the pane node menu, active node, mode), without saving it and
+attaching only the consoles of panes whose node changes. `viewChanged()`, at
+the end of `setPaneSessions` (so `showPage`), `focusPane` and
+`setGraphicView`, publishes the view (deduplicated with `sameView`) and saves
+it as `{view, graphicZoom}` in the browser; applying a received view does
+neither. The owner's page publishes `owner-view`, except while an admin
+controls its session; the controlling admin's page publishes
+`controller-view`. A page follows a received view by `normalizeView` against
+its own nodes, then `applyView`; a node it does not know yet makes it reload
+its node list first. The saved view is restored the same way once the node
+list is loaded.
 
 ## Module map
 
@@ -187,7 +222,7 @@ The server is split into layers with one-way dependencies:
 holds the styles. The script is split into native ES modules (no framework or
 bundler) loaded from `public/app.js`, which runs their initialization in a fixed
 order. State that several modules reassign lives on the `store` object of
-`state.js`. `monitor-terminal.js`, `session-log.js`, `network-node-icons.js` and
+`state.js`. `monitor-terminal.js`, `session-log.js`, `network-node-icons.js`, `view-state.js` and
 `topology-graphic.js` remain classic scripts, also loaded by unit tests.
 `login.html` and its module `login.js` form the separate login page;
 `admin.html` and `admin.js` the supervision page `/admin`, served to admins only.
@@ -208,7 +243,8 @@ order. State that several modules reassign lives on the `store` object of
 | `general-settings.js` | General Settings dialog. |
 | `topology.js` | Graphic network view and `.topo` load/save. |
 | `archive.js` | Session ZIP save and load dialogs. |
-| `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides. |
+| `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
+| `view-state.js` | Classic script, also required by `sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |
 
 ## Images and the session
 
