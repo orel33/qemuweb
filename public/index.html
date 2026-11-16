@@ -24,13 +24,12 @@
   <div class="observe-banner" id="observe-banner" role="region" aria-label="Observation" hidden>
     <span class="observe-title">Observing <strong id="observe-user"></strong></span>
     <span class="observe-status" id="observe-status" role="status" aria-live="polite">read-only</span>
-    <button id="observe-previous" type="button" title="Previous active session" aria-label="Previous active session" disabled>&lsaquo;</button>
+    <button id="observe-previous" class="observe-button act-blue" type="button" title="Previous active session" aria-label="Previous active session" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button>
     <select id="observe-select" aria-label="Observed session"></select>
-    <button id="observe-next" type="button" title="Next active session" aria-label="Next active session" disabled>&rsaquo;</button>
+    <button id="observe-next" class="observe-button act-blue" type="button" title="Next active session" aria-label="Next active session" disabled><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button>
     <label class="observe-follow" title="Follow the node and the view (Terminals or Graphic) the user selects"><input id="observe-follow" type="checkbox" checked>Follow</label>
-    <button id="observe-control" type="button" title="Take exclusive control of the selected console" disabled>Take control</button>
-    <a href="/" class="observe-link">My session</a>
-    <a href="/admin" class="observe-link">Supervision</a>
+    <button id="observe-control" class="observe-button act-amber" type="button" title="Take exclusive control of the selected console" disabled></button>
+    <a href="/" class="observe-button act-blue" title="Back to your own session"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 21v-8a1 1 0 0 0-1-1h-4a1 1 0 0 0-1 1v8"/><path d="M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>My session</a>
   </div>
   <div class="observe-notice" id="observe-notice" role="alert" hidden>
     <p id="observe-notice-text"></p>

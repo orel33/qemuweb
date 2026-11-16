@@ -50,6 +50,11 @@ const controlBanner = document.getElementById('control-banner');
 
 function nodeName(nodeId) { return machines.get(nodeId)?.hostname || 'a node'; }
 
+// Lucide Hand (take control) and LockOpen (release control), like the other inline icons.
+const SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+const TAKE_ICON = `${SVG}<path d="M18 11V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2"/><path d="M14 10V4a2 2 0 0 0-2-2a2 2 0 0 0-2 2v2"/><path d="M10 10.5V6a2 2 0 0 0-2-2a2 2 0 0 0-2 2v8"/><path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-8 8h-2c-2.8 0-4.5-.86-5.99-2.34l-3.6-3.6a2 2 0 0 1 2.83-2.82L7 15"/></svg>`;
+const RELEASE_ICON = `${SVG}<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 9.9-1"/></svg>`;
+
 function renderControl() {
   if (document.body.dataset.observeUnavailable) return;
   if (observing) {
@@ -58,7 +63,12 @@ function renderControl() {
     if (!button) return;
     const nodeId = held ? held.nodeId : store.activeId;
     const other = nodeId && controls.get(nodeId);
-    button.textContent = held ? 'Release control' : 'Take control';
+    if (button.dataset.held !== String(!!held)) {
+      button.dataset.held = String(!!held);
+      button.innerHTML = `${held ? RELEASE_ICON : TAKE_ICON}${held ? 'Release control' : 'Take control'}`;
+      button.className = `observe-button ${held ? 'act-green' : 'act-amber'}`;
+      button.title = held ? 'Give the keyboard back to the user' : 'Take exclusive control of the selected console';
+    }
     button.disabled = !held && (!nodeId || !!other);
     status.textContent = held ? `You control the console of ${nodeName(held.nodeId)}`
       : other ? `${other} controls the console of ${nodeName(nodeId)}` : 'read-only';

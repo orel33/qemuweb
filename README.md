@@ -114,7 +114,8 @@ can:
 - **Observe** a session: `/?observe=<login>` opens the normal interface on the
   student's session, read-only, with the admin's own layout. A banner of
   distinct colour shows the observed user, previous/next active session, a
-  session list, **Follow**, **Take control**, **My session** and **Supervision**.
+  session list, **Follow**, **Take control** and **My session**; **Supervision**
+  stays in the header.
   The admin sees the consoles live (what the guest echoes, so not a password
   typed without echo), their history and logs, also when the student is
   offline. With **Follow** on (the default), the view follows what the student
