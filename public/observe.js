@@ -32,9 +32,10 @@ let held = null;
 
 export function observeHeaders() { return observing ? {'X-Observe': observedLogin} : {}; }
 
-// Options of every io() call of the UI.
-export function socketOptions() {
-  return {transports: ['websocket', 'polling'], ...(observing ? {auth: {observe: observedLogin}} : {})};
+// Options of every io() call of the UI. The session socket (one per tab) is marked main: the
+// server counts those to show who is online.
+export function socketOptions({main = false} = {}) {
+  return {transports: ['websocket', 'polling'], auth: {...(main ? {main: true} : {}), ...(observing ? {observe: observedLogin} : {})}};
 }
 
 // Whether a pane's keyboard input may be sent to its node.
@@ -122,7 +123,7 @@ async function renderSessionNavigation() {
   select.replaceChildren(...sessions.map(session => {
     const option = document.createElement('option');
     option.value = session.login;
-    option.textContent = `${session.login}${session.active ? '' : ' (idle)'}`;
+    option.textContent = `${session.login}${session.active ? '' : ' (idle)'}${session.browsers > 0 ? '' : ' (offline)'}`;
     option.selected = session.login === observedLogin;
     return option;
   }));

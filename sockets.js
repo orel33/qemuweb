@@ -58,13 +58,16 @@ function bindWorkspace(io, {session, runner}, control) {
 }
 
 // audit: lib/audit.js. currentUser(login) returns the account as it is now ({login, role}),
-// or null once it is disabled or removed (lib/auth). Returns {disconnectUser(login)}.
+// or null once it is disabled or removed (lib/auth). Returns {disconnectUser(login), browsers(login)}.
 function attachSockets(io, manager, {audit, currentUser, control: options = {}}) {
   const control = new ConsoleControl({...options, onRelease: (lock, reason) => {
     io.to(`session:${lock.sessionId}`).emit('console-control', {nodeId: lock.nodeId, admin: lock.admin, active: false});
     audit.record(lock.admin, 'control-end', {login: lock.login, nodeId: lock.nodeId, reason});
   }});
   const observations = createObservationTracker(audit);
+  // Connected browser tabs per login: each tab opens one session socket (auth.main) besides
+  // its console sockets. Observers are not counted.
+  const browsers = new Map();
   for (const workspace of manager.list()) bindWorkspace(io, workspace, control);
   manager.on('created', workspace => bindWorkspace(io, workspace, control));
   // Browsers of a deleted session reload, which opens the user's new session.
@@ -94,6 +97,13 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     if (observer) {
       observations.opened(user.login, workspace.owner);
       socket.on('disconnect', () => observations.closed(user.login, workspace.owner));
+    }
+    if (!observer && socket.handshake.auth?.main === true) {
+      browsers.set(user.login, (browsers.get(user.login) || 0) + 1);
+      socket.on('disconnect', () => {
+        const count = browsers.get(user.login) - 1;
+        if (count > 0) browsers.set(user.login, count); else browsers.delete(user.login);
+      });
     }
     const {session, runner} = workspace;
     socket.data.observer = observer;
@@ -196,6 +206,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   });
 
   return {
+    browsers: login => browsers.get(login) || 0,
     // Closes every socket of a user at once (account disabled or role changed from /admin),
     // so that passive sockets stop receiving console output too.
     disconnectUser(login) {

@@ -121,6 +121,7 @@ async function run() {
   assert.equal(aliceRow.switches, 1);
   assert.equal(aliceRow.runningSwitches, 1);
   assert.equal(aliceRow.active, true);
+  assert.equal(aliceRow.browsers, 0, 'a session is not a connection');
   assert.ok(Date.parse(aliceRow.lastActivity) >= Date.parse(aliceRow.createdAt));
   const bossSettings = await boss.request('/api/general-settings');
   sessions = await boss.request('/api/admin/sessions');
@@ -150,10 +151,15 @@ async function run() {
   await waitFor('refusal of a student observer', () => studentProbe.events.some(item => item.event === 'disconnect'));
   assert.ok(studentProbe.events.some(item => item.event === 'node-error' && /Administrator role required/.test(item.payload)));
 
-  const aliceSession = recorder(alice, 'alice session');
+  // Like a browser tab: one main session socket and console sockets.
+  const aliceSession = recorder(alice, 'alice session', {auth: {main: true}});
   const aliceConsole = recorder(alice, 'alice console');
-  const observer = recorder(boss, 'boss observer', {auth: {observe: 'alice'}});
+  const observer = recorder(boss, 'boss observer', {auth: {main: true, observe: 'alice'}});
   await Promise.all([aliceSession.connected, aliceConsole.connected, observer.connected]);
+  // Connected browser tabs: alice's main socket only (console sockets and observers do not count).
+  assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'alice').browsers, 1);
+  const userBrowsers = Object.fromEntries((await boss.request('/api/admin/users')).map(user => [user.login, user.browsers]));
+  assert.deepEqual([userBrowsers.alice, userBrowsers.bob, userBrowsers.boss], [1, 0, 0]);
   assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
   const snapshot = observer.events.find(item => item.event === 'node-snapshot');
   assert.equal(snapshot.payload.nodeId, aliceSwitch);

@@ -91,7 +91,7 @@ function attachPaneSocket(pane) {
 }
 
 export function initSockets() {
-  socket = io(socketOptions());
+  socket = io(socketOptions({main: true}));
   panes.forEach(attachPaneSocket);
   socket.on('nodes-changed', event => {
     const machine = event && machines.get(event.nodeId);

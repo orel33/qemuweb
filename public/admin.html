@@ -33,7 +33,7 @@
         <table class="admin-table">
           <thead><tr>
             <th><input id="select-all" type="checkbox" aria-label="Select every session"></th>
-            <th>User</th><th>Created</th><th>Nodes</th><th>Running VMs</th><th>Reserved RAM</th><th>CPU</th><th>Last activity</th><th>Actions</th>
+            <th>User</th><th>Created</th><th title="active: at least one running node">State</th><th>Nodes</th><th>Running VMs</th><th>Reserved RAM</th><th>CPU</th><th>Last activity</th><th>Actions</th>
           </tr></thead>
           <tbody id="sessions-body"></tbody>
         </table>
@@ -50,7 +50,7 @@
       <p class="admin-error" id="accounts-error" role="alert" hidden></p>
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th>Login</th><th>Role</th><th>State</th><th>Session</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Login</th><th>Role</th><th>Account</th><th>Actions</th></tr></thead>
           <tbody id="accounts-body"></tbody>
         </table>
       </div>

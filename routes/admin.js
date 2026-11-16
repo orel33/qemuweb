@@ -11,7 +11,8 @@ const express = require('express');
 const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled} = require('../lib/auth/users-store');
 
 // Summary of one session for the supervision table.
-function sessionSummary({owner, session, runner}, adminLogin) {
+// browsers: the owner's connected browser tabs (sockets.js).
+function sessionSummary({owner, session, runner}, adminLogin, browsers = 0) {
   const nodes = [...session.nodes.values()];
   const hosts = nodes.filter(node => node.kind === 'host');
   const runningHosts = hosts.filter(node => node.machine);
@@ -19,7 +20,7 @@ function sessionSummary({owner, session, runner}, adminLogin) {
   const metrics = runner.metricsSnapshot();
   const cpu = runningHosts.map(node => metrics[node.id]?.cpuPercent).filter(Number.isFinite);
   return {
-    login: owner, own: owner === adminLogin, sessionId: session.id, createdAt: session.createdAt,
+    login: owner, own: owner === adminLogin, browsers, sessionId: session.id, createdAt: session.createdAt,
     lastActivity: session.lastActivityAt, nodes: nodes.length, hosts: hosts.length, switches: nodes.length - hosts.length,
     runningHosts: runningHosts.length, runningSwitches: runningSwitches.length,
     reservedRamMb: runningHosts.reduce((sum, node) => sum + (node.launchSettings?.memory || 0), 0),
@@ -61,8 +62,9 @@ function adminPage(root) {
   };
 }
 
-// disconnectUser(login) closes the user's Socket.IO connections (sockets.js).
-function createAdminRouter({manager, auth, audit, disconnectUser}) {
+// disconnectUser(login) closes the user's Socket.IO connections, browsers(login) counts the
+// user's connected browser tabs (sockets.js).
+function createAdminRouter({manager, auth, audit, disconnectUser, browsers}) {
   const router = express.Router();
   const usersFile = auth.usersFile;
   router.use(auth.requireAdmin);
@@ -101,7 +103,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser}) {
   }
 
   router.get('/sessions', (req, res) => {
-    res.json(manager.list().map(workspace => sessionSummary(workspace, req.user.login))
+    res.json(manager.list().map(workspace => sessionSummary(workspace, req.user.login, browsers(workspace.owner)))
       .sort((a, b) => a.login.localeCompare(b.login)));
   });
 
@@ -147,7 +149,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser}) {
 
   router.get('/users', (_req, res) => {
     res.json(readUsers(usersFile).map(user => ({login: user.login, role: user.role, disabled: !!user.disabled,
-      session: !!manager.get(user.login)})));
+      browsers: browsers(user.login)})));
   });
 
   router.post('/users', (req, res) => {

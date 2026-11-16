@@ -195,11 +195,12 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', () =
   ];
   for (const node of nodes) session.nodes.set(node.id, node);
   const runner = {metricsSnapshot: () => ({'h-1': {cpuPercent: 12.5}, 'h-2': {cpuPercent: null}, 'h-3': {cpuPercent: null}})};
-  const summary = sessionSummary({owner: 'toto', session, runner}, 'boss');
-  assert.deepEqual(summary, {login: 'toto', own: false, sessionId: session.id, createdAt: '2026-01-01T00:00:00.000Z',
+  const summary = sessionSummary({owner: 'toto', session, runner}, 'boss', 2);
+  assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, sessionId: session.id, createdAt: '2026-01-01T00:00:00.000Z',
     lastActivity: '2026-01-01T00:00:00.000Z', nodes: 4, hosts: 3, switches: 1, runningHosts: 2, runningSwitches: 1,
     reservedRamMb: 1536, cpuPercent: 12.5, active: true});
   assert.equal(sessionSummary({owner: 'boss', session, runner}, 'boss').own, true);
+  assert.equal(sessionSummary({owner: 'boss', session, runner}, 'boss').browsers, 0);
 });
 
 test('console control is exclusive, renewed by input and released once', t => {
