@@ -68,6 +68,8 @@ function attachSockets(io, manager, {audit, control: options = {}}) {
       socket.disconnect(true);
       return;
     }
+    // Console access is where an observation really starts: audited for every observer socket.
+    if (observer) audit.record(user.login, 'observe', {login: workspace.owner});
     const {session, runner} = workspace;
     socket.data.observer = observer;
     socket.join(sessionRoom(session));

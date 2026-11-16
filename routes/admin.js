@@ -132,14 +132,6 @@ function createAdminRouter({manager, auth, audit, disconnectUser}) {
     });
   });
 
-  router.post('/sessions/:login/observe', (req, res) => {
-    const {login} = req.params;
-    audited(req, res, 'observe', {login}, () => {
-      const {session} = workspaceOf(login);
-      return {login, sessionId: session.id};
-    });
-  });
-
   router.post('/sessions/:login/stop', (req, res) => {
     const {login} = req.params;
     audited(req, res, 'stop-all', {login}, async () => ({stopped: await workspaceOf(login).runner.stopAllNodes()}), () => 409);
