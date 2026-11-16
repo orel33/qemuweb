@@ -130,8 +130,12 @@ function renderSessions(sessions) {
     user.append(presence(session.browsers, session.own));
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
-    if (session.own) actions.append(Object.assign(document.createElement('a'), {href: '/', className: 'admin-button', textContent: 'Open'}));
-    else actions.append(Object.assign(document.createElement('a'), {href: `/?observe=${encodeURIComponent(session.login)}`, className: 'admin-button', textContent: 'Observe', title: 'Read-only view of this session'}));
+    // Same buttons on every row: your own session cannot be observed (the button is disabled).
+    if (session.own) {
+      const observe = button('Observe', () => {}, 'This is your own session');
+      observe.disabled = true;
+      actions.append(observe);
+    } else actions.append(Object.assign(document.createElement('a'), {href: `/?observe=${encodeURIComponent(session.login)}`, className: 'admin-button', textContent: 'Observe', title: 'Read-only view of this session'}));
     actions.append(
       button('Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})), 'Stop every VM and switch; the nodes are kept'),
       button('Delete', async () => {
