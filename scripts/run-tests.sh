@@ -8,17 +8,19 @@ usage() {
 Usage: ./scripts/run-tests.sh <test>
 
 Available tests:
-  unit                      Unit tests: topology, UI helpers, guest media, metrics, auth, admin and sessions
-  two-users-isolation       Two logged-in users: no shared nodes, events or controls (VDE only)
-  session-reconnect         Log out and back in: running nodes, consoles and logs restored
-  admin                     Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
-  two-hosts                 Two Debian Legacy hosts: VDE, ping and Stop/Resume
-  two-hosts-tcg             Same two-hosts scenario using QEMU software emulation
-  two-hosts-startup-media   Two hosts plus per-host startup ISO, resources and Reboot
-  four-hosts-startup        Four Debian Legacy hosts configured by start.sh templates
-  startup-media-profiles    Startup ISO on Alpine, Debian Cloud and OpenWrt
-  guest-network             Two guests per system: login, hostname, LAN ping and tcpdump
-  web                       Start the Web app on PORT=3003 for manual UI testing
+  unit                           Unit tests: topology, UI helpers, guest media, metrics, auth, admin and sessions
+  two-users-isolation            Two logged-in users: no shared nodes, events or controls (VDE only)
+  session-reconnect              Log out and back in: running nodes, consoles and logs restored
+  admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
+  two-hosts                      Two Debian Legacy hosts: VDE, ping and Stop/Resume
+  two-hosts-startup-media        Two hosts plus per-host startup ISO, resources and Reboot
+  four-hosts-startup             Four Debian Legacy hosts configured by start.sh templates
+  startup-media-profiles         Startup ISO on Alpine, Debian Cloud and OpenWrt
+  check-network-debian13-legacy  Two Debian Legacy hosts on one VDE switch: eth0, hostname, ping, tcpdump
+  check-network-debian13-cloud   Two Debian Cloud hosts on one VDE switch: eth0, hostname, ping, tcpdump
+  check-network-alpine           Two Alpine hosts on one VDE switch: eth0, hostname, ping, tcpdump
+  check-network-openwrt          Two OpenWrt hosts on one VDE switch: eth0, hostname, ping, tcpdump
+  web                            Web app on PORT=3003, accounts admin, toto, tutu (demo/lan.zip loaded)
 
 Use --list or --help to show this list. Nothing runs without a test name.
 See test/TESTS.md for the purpose and prerequisites of each test.
@@ -32,6 +34,41 @@ run_test() {
   "$@"
 }
 
+# Manual Web test: a separate, temporary users file (never the repository's users.json) with
+# admin/admin (admin), toto/toto and tutu/tutu (students). Passwords equal to logins are for
+# this local test mode only. toto and tutu start with demo/lan.zip loaded in their session.
+run_web() {
+  local port="${PORT:-3003}"
+  web_server_pid=''
+  web_dir="$(mktemp -d "${TMPDIR:-/tmp}/qemuweb-web-XXXXXX")"
+  trap cleanup_web EXIT
+  trap 'exit 130' INT TERM
+  printf '\n== Web app on port %s with test accounts ==\n' "$port"
+  node test/manual/web-setup.js prepare "$web_dir/users.json"
+  PORT="$port" QEMUWEB_USERS_FILE="$web_dir/users.json" node server.js &
+  web_server_pid=$!
+  node test/manual/web-setup.js load "http://127.0.0.1:$port"
+  cat <<EOF
+
+Manual Web test: http://127.0.0.1:$port
+  admin / admin   (admin)
+  toto  / toto    (student, demo/lan.zip loaded)
+  tutu  / tutu    (student, demo/lan.zip loaded)
+Passwords equal to logins exist only in this test mode's temporary users file.
+Stop with Ctrl+C.
+EOF
+  wait "$web_server_pid"
+}
+
+# Stops the server (it removes its sessions and nodes) and deletes the temporary users file.
+cleanup_web() {
+  if [[ -n "${web_server_pid:-}" ]] && kill -0 "$web_server_pid" 2>/dev/null; then
+    kill -TERM "$web_server_pid" 2>/dev/null || true
+    wait "$web_server_pid" 2>/dev/null || true
+  fi
+  rm -rf -- "${web_dir:-}"
+}
+
 case "${1:-}" in
   ''|--help|-h|--list) usage ;;
   unit) run_test 'Unit tests: topology, UI helpers, guest media, metrics, auth, admin and sessions' npm test ;;
@@ -39,11 +76,13 @@ case "${1:-}" in
   session-reconnect) run_test 'Reconnection: running nodes, consoles and logs restored' npm run test:session-reconnect ;;
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
   two-hosts) run_test 'Two Debian Legacy hosts: VDE, ping and Stop/Resume' npm run test:two-hosts ;;
-  two-hosts-tcg) run_test 'Two Debian Legacy hosts using QEMU/TCG' env TWO_HOSTS_ENGINE=qemu-tcg npm run test:two-hosts ;;
   two-hosts-startup-media) run_test 'Two Debian Legacy hosts with per-host startup ISO and Reboot' npm run test:two-hosts-startup-media ;;
   four-hosts-startup) run_test 'Four Debian Legacy hosts: startup templates and full LAN ping' npm run test:four-hosts-startup ;;
   startup-media-profiles) run_test 'Startup ISO on Alpine, Debian Cloud and OpenWrt' npm run test:startup-media-profiles ;;
-  guest-network) run_test 'Four-system QEMU/KVM guest network diagnostic' npm run test:guest-network ;;
-  web) PORT="${PORT:-3003}" npm start ;;
+  check-network-debian13-legacy) run_test 'Two Debian Legacy hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-debian13-legacy ;;
+  check-network-debian13-cloud) run_test 'Two Debian Cloud hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-debian13-cloud ;;
+  check-network-alpine) run_test 'Two Alpine hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-alpine ;;
+  check-network-openwrt) run_test 'Two OpenWrt hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-openwrt ;;
+  web) run_web ;;
   *) printf 'Unknown test: %s\n' "$1" >&2; usage >&2; exit 2 ;;
 esac

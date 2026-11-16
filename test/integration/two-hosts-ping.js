@@ -10,7 +10,7 @@ const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client'
 
 const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
-const engine = process.env.TWO_HOSTS_ENGINE || 'qemu';
+const engine = 'qemu';
 const timeoutMs = Number(process.env.TWO_HOSTS_TIMEOUT_MS || 120000);
 const addresses = ['192.0.2.101', '192.0.2.102'];
 const verifyGuestMedia = process.env.TWO_HOSTS_STARTUP_MEDIA === '1';
@@ -302,7 +302,6 @@ async function startHost(id) {
 }
 
 async function run() {
-  assert.equal(engine, 'qemu', 'The two-hosts test requires QEMU/KVM.');
   fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
   assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh first.`);
   const port = await freePort();
@@ -318,7 +317,7 @@ async function run() {
     catch (_) { return false; }
   }, 30000);
   console.log('Two hosts: QemuWeb started');
-  console.log(`Two hosts: engine ${engine === 'qemu' ? 'QEMU/KVM' : 'QEMU/TCG'}`);
+  console.log('Two hosts: engine QEMU/KVM');
   await request('/api/general-settings', {method: 'PUT', body: {engine}});
 
   const switchName = `lan2sw${nonce.replace(/[^a-zA-Z0-9]/g, '').slice(-8)}`;

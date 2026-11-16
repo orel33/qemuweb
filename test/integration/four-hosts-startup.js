@@ -11,7 +11,7 @@ const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client'
 
 const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
-const engine = process.env.FOUR_HOSTS_ENGINE || 'qemu';
+const engine = 'qemu';
 const timeoutMs = Number(process.env.FOUR_HOSTS_TIMEOUT_MS || 120000);
 const newId = prefix => `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
 const switchId = newId('s');
@@ -158,7 +158,6 @@ class GuestConsole {
 
 async function run() {
   assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh --system debian13-legacy first.`);
-  assert.equal(engine, 'qemu', `Unsupported FOUR_HOSTS_ENGINE: ${engine}`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'integration'}]);
@@ -173,7 +172,7 @@ async function run() {
     try { return (await request('/api/systems')).some(system => system.id === 'debian13-legacy'); }
     catch (_) { return false; }
   }, 30000);
-  console.log(`Four hosts: QemuWeb started with ${engine === 'qemu' ? 'KVM' : 'TCG'}`);
+  console.log('Four hosts: QemuWeb started with KVM');
   await request('/api/general-settings', 'PUT', {engine});
   const sw = await request('/api/switches', 'POST', {id: switchId, name: 'lan4sw', autostart: true});
   switchCreated = true;

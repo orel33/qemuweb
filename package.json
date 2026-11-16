@@ -10,7 +10,10 @@
     "test:four-hosts-startup": "node test/integration/four-hosts-startup.js",
     "test:two-hosts-startup-media": "TWO_HOSTS_STARTUP_MEDIA=1 node test/integration/two-hosts-ping.js",
     "test:startup-media-profiles": "node test/integration/startup-media-profiles.js",
-    "test:guest-network": "node test/integration/guest-network.js",
+    "test:check-network-debian13-legacy": "GUEST_NETWORK_PROFILES=debian13-legacy node test/integration/check-network.js",
+    "test:check-network-debian13-cloud": "GUEST_NETWORK_PROFILES=debian13-cloud node test/integration/check-network.js",
+    "test:check-network-alpine": "GUEST_NETWORK_PROFILES=alpine node test/integration/check-network.js",
+    "test:check-network-openwrt": "GUEST_NETWORK_PROFILES=openwrt node test/integration/check-network.js",
     "test:two-users-isolation": "node test/integration/two-users-isolation.js",
     "test:session-reconnect": "node test/integration/session-reconnect.js",
     "test:admin": "node test/integration/admin.js"

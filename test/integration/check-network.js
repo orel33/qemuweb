@@ -1,6 +1,7 @@
 'use strict';
 
-// Diagnostic of the four rebuilt guest images on an isolated VDE LAN.
+// Network check of one guest system: two hosts on one VDE switch (eth0, hostname, ping, tcpdump).
+// GUEST_NETWORK_PROFILES names the system; each run-tests.sh entry sets it to one system.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -11,8 +12,8 @@ const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client'
 
 const root = path.resolve(__dirname, '../..');
 const supported = ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt'];
-const profiles = (process.env.GUEST_NETWORK_PROFILES || supported.join(',')).split(',').map(s => s.trim()).filter(Boolean);
-const engine = process.env.GUEST_NETWORK_ENGINE || 'qemu';
+const profiles = (process.env.GUEST_NETWORK_PROFILES || '').split(',').map(s => s.trim()).filter(Boolean);
+const engine = 'qemu';
 const timeout = Number(process.env.GUEST_NETWORK_TIMEOUT_MS || 120000);
 const addresses = ['192.0.2.101', '192.0.2.102'];
 const newId = prefix => `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
@@ -254,8 +255,8 @@ async function runProfile(profile) {
     if (!configured.every(Boolean)) return;
     for (const host of hosts) await host.console.exec('ip -o -4 addr show; ip -4 route show');
 
-    const captureFile = '/tmp/qemuweb-guest-network-tcpdump.log';
-    const capturePid = '/tmp/qemuweb-guest-network-tcpdump.pid';
+    const captureFile = '/tmp/qemuweb-check-network-tcpdump.log';
+    const capturePid = '/tmp/qemuweb-check-network-tcpdump.pid';
     for (const host of hosts) await check(profile, `${host.label} tcpdump started`, () => success(host.console,
       `tcpdump -n -l -i eth0 icmp >${captureFile} 2>&1 </dev/null & echo $! >${capturePid}`));
     await delay(1000);
@@ -280,9 +281,8 @@ async function runProfile(profile) {
 }
 
 async function run() {
-  assert.ok(profiles.length && profiles.every(profile => supported.includes(profile)),
-    `GUEST_NETWORK_PROFILES must contain only: ${supported.join(', ')}.`);
-  assert.equal(engine, 'qemu', 'Use QEMU/KVM for this VDE diagnostic.');
+  assert.ok(profiles.length === 1 && supported.includes(profiles[0]),
+    `Set GUEST_NETWORK_PROFILES to one of: ${supported.join(', ')}.`);
   fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
   for (const profile of profiles) {
     assert.ok(fs.existsSync(path.join(root, 'images', `${profile}.raw`)), `Missing images/${profile}.raw; prepare the image first.`);
@@ -300,14 +300,14 @@ async function run() {
   await request('/api/switches', 'POST', {id: switchId, name: `guestnet-${process.pid}`, autostart: true});
   created.push(switchId);
   for (const profile of profiles) {
-    console.log(`\n=== ${profile} (${engine === 'qemu' ? 'KVM' : 'TCG'}) ===`);
+    console.log(`\n=== ${profile} (KVM) ===`);
     try { await runProfile(profile); }
     catch (error) {
       results.push({profile, label: 'scenario', ok: false, detail: error.message});
       console.error(`[${profile}] FAIL scenario: ${error.stack || error.message}`);
     }
   }
-  console.log('\nGuest network diagnostic:');
+  console.log('\nNetwork check summary:');
   for (const result of results) console.log(`${result.ok ? 'OK  ' : 'FAIL'} ${result.profile}: ${result.label}${result.detail ? ` — ${result.detail}` : ''}`);
   if (results.some(result => !result.ok)) process.exitCode = 1;
 }
