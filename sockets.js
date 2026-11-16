@@ -1,6 +1,8 @@
 'use strict';
 
-// Socket.IO layer: forwards runner events to browsers and relays console input.
+// Socket.IO layer: forwards runner events to browsers and relays console input. A session is
+// reached only through its runner handle (lib/runner-client.js): node existence, kinds and
+// consoles are the runner's business.
 // Event names and payloads are the wire format the browser relies on.
 // Rooms keep sessions apart:
 //   session:<sessionId>           every browser of the session's owner, and of the admins
@@ -51,13 +53,18 @@ function createObservationTracker(audit) {
   };
 }
 
-// Forwards the events of one session's runner to that session's browsers only.
+// Forwards the events of one session's runner to that session's browsers only. Per-node
+// events need a payload naming a node.
 function bindWorkspace(io, {session, runner}) {
   for (const event of ['state', 'log', 'logs-reset', 'serial', 'serial-reset']) {
-    runner.events.on(event, payload => io.to(nodeRoom(session, payload.nodeId)).emit(event, payload));
+    runner.events.on(event, payload => {
+      if (typeof payload?.nodeId === 'string') io.to(nodeRoom(session, payload.nodeId)).emit(event, payload);
+    });
   }
   runner.events.on('state', state => io.to(sessionRoom(session)).emit('nodes-changed', state));
-  runner.events.on('nodes-removed', payload => io.to(sessionRoom(session)).emit('nodes-removed', payload));
+  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed']) {
+    runner.events.on(event, payload => io.to(sessionRoom(session)).emit(event, payload));
+  }
 }
 
 // audit: lib/audit.js. currentUser(login) returns the account as it is now ({login, role}),
@@ -125,8 +132,8 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     socket.data.observer = observer;
     socket.join(sessionRoom(session));
     if (observer) socket.join(observerRoom(session));
-    // Only nodes of this socket's session are ever looked up.
-    const sessionNode = id => (typeof id === 'string' && session.nodes.get(id)) || null;
+    // Only nodes of this socket's session are ever looked up: the handle names the session.
+    const validId = id => typeof id === 'string' && id.length <= 64;
     // The control state of the session, for this socket's page (also after a reconnection).
     const controlLock = control.get(session.id);
     socket.emit('console-control', {admin: controlLock ? controlLock.admin : null, active: !!controlLock});
@@ -143,14 +150,23 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     };
     const guard = handler => (...args) => { if (authorized()) handler(...args); };
     let selectionQueue = Promise.resolve();
+    // The node room is joined before the snapshot is asked for: output produced meanwhile
+    // reaches the page before the snapshot, which replaces it. The previous node's room is
+    // left once the runner confirmed the new node.
     socket.on('select-node', guard((id, token, acknowledge) => {
       selectionQueue = selectionQueue.then(async () => {
-        const node = sessionNode(id);
-        if (!node) throw new Error('Unknown node.');
-        if (socket.data.nodeId && socket.data.nodeId !== node.id) await socket.leave(nodeRoom(session, socket.data.nodeId));
-        await socket.join(nodeRoom(session, node.id));
-        socket.data.nodeId = node.id;
-        const {nodeId, state, logs, serial} = runner.attachConsole(node.id);
+        if (!validId(id)) throw new Error('Unknown node.');
+        const previous = socket.data.nodeId;
+        await socket.join(nodeRoom(session, id));
+        let snapshot;
+        try { snapshot = await runner.request('console.attach', {nodeId: id}); }
+        catch (error) {
+          if (id !== previous) await socket.leave(nodeRoom(session, id));
+          throw error;
+        }
+        if (previous && previous !== id) await socket.leave(nodeRoom(session, previous));
+        socket.data.nodeId = id;
+        const {nodeId, state, logs, serial} = snapshot;
         socket.emit('node-snapshot', {nodeId, token, state, logs, serial});
         if (typeof acknowledge === 'function') acknowledge({ok: true});
       }).catch(error => {
@@ -158,23 +174,35 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
         if (typeof acknowledge === 'function') acknowledge({error: error.message});
       });
     }));
+    // View states are validated against the session's node IDs, asked from the runner; a
+    // queue keeps them in the order they were published.
+    let viewQueue = Promise.resolve();
+    const withNodeIds = task => {
+      viewQueue = viewQueue.then(async () => task(await runner.request('nodes.ids'))).catch(() => {});
+    };
     // What the owner looks at (a view state, public/view-state.js, validated by normalizeView
     // against the session's nodes), published by the owner's page itself whenever it changes. Console sockets attaching in the background (select-node) say nothing about it.
     // Relayed to observers as owner-view.
     socket.on('owner-view', guard(received => {
-      const view = !observer && normalizeView(received, session.nodes);
-      if (!view) return;
-      ownerViews.set(session.id, view);
-      io.to(observerRoom(session)).emit('owner-view', view);
+      if (observer) return;
+      withNodeIds(nodeIds => {
+        const view = normalizeView(received, nodeIds);
+        if (!view) return;
+        ownerViews.set(session.id, view);
+        io.to(observerRoom(session)).emit('owner-view', view);
+      });
     }));
     if (observer && ownerViews.has(session.id)) socket.emit('owner-view', ownerViews.get(session.id));
     // The reverse direction, while this observer's user holds control of a node of the session:
     // the owner's pages show the controller's view (validated like an owner view).
     socket.on('controller-view', guard(received => {
-      const view = observer && control.heldBy(session.id, user.login) && normalizeView(received, session.nodes);
-      if (!view) return;
-      controllerViews.set(session.id, view);
-      io.to(sessionRoom(session)).emit('controller-view', view);
+      if (!observer || !control.heldBy(session.id, user.login)) return;
+      withNodeIds(nodeIds => {
+        const view = control.heldBy(session.id, user.login) && normalizeView(received, nodeIds);
+        if (!view) return;
+        controllerViews.set(session.id, view);
+        io.to(sessionRoom(session)).emit('controller-view', view);
+      });
     }));
     if (!observer && controllerViews.has(session.id)) socket.emit('controller-view', controllerViews.get(session.id));
     socket.on('leave-node', id => {
@@ -183,34 +211,30 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       socket.data.nodeId = null;
     });
     socket.on('input', guard(data => {
-      const node = sessionNode(socket.data.nodeId);
-      if (!node || typeof data !== 'string' || data.length > 4096) return;
+      const nodeId = socket.data.nodeId;
+      if (!nodeId || typeof data !== 'string' || data.length > 4096) return;
       const refusal = inputRefusal({observer, lock: control.get(session.id), admin: user.login});
       // The owner's UI shows the control banner: their refused keys are dropped silently.
       if (refusal) { if (observer) refuse(refusal); return; }
       if (observer) control.touch(session.id, user.login);
       else session.touch();
-      runner.writeConsoleInput(node, data);
+      runner.input(nodeId, data);
     }));
     // Resizing and clearing change what every viewer of the node sees: never for observers.
     socket.on('terminal-resize', guard(request => {
       if (observer) return refuse('Read-only observation: the console cannot be resized.');
-      if (!request || request.id !== socket.data.nodeId) return;
-      const node = sessionNode(request.id);
-      if (!node || node.kind !== 'switch' || !node.switchTerminal) return;
+      if (!request || !request.id || request.id !== socket.data.nodeId) return;
       const cols = Number(request.cols);
       const rows = Number(request.rows);
       if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) return;
-      runner.resizeSwitchTerminal(node, cols, rows);
+      runner.request('console.resize', {nodeId: request.id, cols, rows}).catch(() => {});
     }));
     socket.on('clear-console', guard(request => {
       if (observer) return refuse('Read-only observation: the console cannot be cleared.');
-      if (!request || request.id !== socket.data.nodeId) return;
-      const node = sessionNode(request.id);
-      if (!node) return;
+      if (!request || !request.id || request.id !== socket.data.nodeId) return;
       const line = typeof request.line === 'string' ? request.line.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 1024) : '';
       const column = Number.isInteger(request.column) ? Math.max(0, Math.min(request.column, 1024)) : line.length;
-      runner.clearConsole(node, line, column);
+      runner.request('console.clear', {nodeId: request.id, line, column}).catch(() => {});
     }));
     // Exclusive control of the session's consoles, for observers: from any of the admin's
     // observer sockets on the session, whatever node it shows.
