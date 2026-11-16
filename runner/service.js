@@ -64,7 +64,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
     await runner.shutdown();
     if (session.nodes.size) {
       runner.startResourceSampling();
-      throw statusError('Some nodes could not be deleted; see the runner log.', 409);
+      throw statusError('Some nodes could not be deleted; see the server log.', 409);
     }
     sessions.delete(sessionId);
     runner.events.removeAllListeners();
