@@ -303,6 +303,15 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 - [ ] Le runner local tourne sous le compte `qemuweb-runner`, `runtime/` est en `0700` et les images de base sont en lecture seule.
 - [ ] Une VM qui dépasse sa RAM est tuée par son scope sans affecter les autres sessions.
 
+## Stabilisation (0.9.0)
+
+À la sortie de 0.9.0, les formats de fichiers repartent à zéro : plus aucun numéro de version hérité des bêtas. Pendant les bêtas, aucun `schemaVersion` n'est incrémenté : les formats changent librement. La compatibilité avec un ancien format n'est pas conservée non plus (voir `AGENTS.md`).
+
+- Remettre `schemaVersion` à **1** partout : `session.json` (4 aujourd'hui), `host.json` (3), `switch.json` (2) et `config.json` (4). `meta.json` et `users.json` sont déjà à 1. Cela touche le code (`lib/session.js`, `runner/host-config.js`, `runner/session-runtime.js`, `lib/session-snapshot.js`, `lib/server-instance.js`, `common/system-config.js`), les tests, `config.json` et la documentation.
+- Réécrire les 5 archives de `demo/` avec ces valeurs (elles contiennent `session.json`, `host.json` et `switch.json`).
+- Renommer le fichier téléchargé `qemuweb-session-v4.zip` en `qemuweb-session.zip` (`routes/archives.js`, `public/archive.js`).
+- À partir de 0.9.0, tout changement de format incrémente le numéro et s'accompagne d'une décision explicite sur la compatibilité.
+
 ## Après le jalon 6, et décisions prises
 
 **Pistes suivantes**
@@ -321,4 +330,5 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 | Console admin | Lecture seule, jamais d'écriture |
 | Sessions par utilisateur | Une seule, définitivement |
 | Identifiant de session | Aléatoire, login dans `owner`, lien `runtime/users/<login>` |
+| Numéros `schemaVersion` | Jamais incrémentés pendant les bêtas ; remis à 1 à la sortie de 0.9.0 (section Stabilisation) |
 | Sécurité (mot de passe minimal, quotas, liste blanche HMP, jail du runner) | Jalon 6, après les runners ; jusque-là, utilisateurs de confiance uniquement |
