@@ -16,9 +16,9 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `image-hash.test.js` | Check base image hashing (`.sha256` files written by `prepare.sh`: used when not older than the image, ignored when older or malformed, asynchronous fallback) and shell quoting of logged commands. |
 | `launch-settings.test.js` | Validate launch settings and QEMU options against their field limits. |
 | `node-id.test.js` | Check host and switch ID format and kind. |
-| `pud84-ui.test.js` | Check the position of Exit All in the host/switch toolbar. |
+| `pud84-ui.test.js` | Check the bottom-left toolbar: Exit All position, and Resume all (green, write action) just before Stop all, Remove all and Delete session. |
 | `resource-metrics.test.js` | Parse CPU and memory metrics for Linux processes and VirtualBox. |
-| `runner.test.js` | Drive `runner/` through its facade with an injected in-memory session and a temporary runtime directory: node layout, hostname aliases, state/log events, NIC MAC and port assignment, engine checks, catalog lookups and launch preview commands. No HTTP server is started and no process is spawned. |
+| `runner.test.js` | Drive `runner/` through its facade with an injected in-memory session and a temporary runtime directory: node layout, hostname aliases, state/log events, NIC MAC and port assignment, engine checks, catalog lookups and launch preview commands. No HTTP server is started and no process is spawned. `startAllNodes` skips running and busy nodes and reports a host that cannot start. |
 | `runner-boundaries.test.js` | Check the dependency rules: `runner/` requires only `runner/`, `common/`, Node built-ins and `node-pty`; the rest of the server requires only `runner/index.js`. |
 | `session-manager.test.js` | Check one session per user (random ID, `owner` in `meta.json`, `runtime/users/<login>` alias), independent runners and events, deletion, exit cleanup, pruning of empty sessions, server records, and that the owner stays out of `session.json` and archives. |
 | `session-archive-validation.test.js` | Check archive validation: base image identities in the `host.json` of hosts with a working disk, older `session.json` inventories, refused or discarded stale disks, no identity needed without a disk. |

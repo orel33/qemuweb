@@ -109,7 +109,7 @@ never written; reading the session list or the logs is not logged.
 | `session-created` | `sessionId`. |
 | `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it). |
 | `node-created` | `nodeId`, `kind` (`host` or `switch`). |
-| `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Stop all** and the removal of every node: `all`). |
+| `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Resume all**, **Stop all** and the removal of every node: `all`). |
 | `archive-loaded`, `archive-saved` | `kind`: `session` (ZIP) or `topology`. |
 
 Node and archive events come from the user's own explicit requests, with

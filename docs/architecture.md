@@ -196,7 +196,7 @@ The server is split into layers with one-way dependencies:
 | `routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
 | `routes/index.js` | Builds the router of one session from the route modules; 404 for a node ID outside the session. |
 | `routes/settings.js` | General settings, system catalog and startup CD-ROM capability. |
-| `routes/nodes.js` | Node listing, switches, start, stop, reboot, reset, monitor, rename and deletion. |
+| `routes/nodes.js` | Node listing, switches, start, stop, Resume all, Stop all, reboot, reset, monitor, rename and deletion. |
 | `routes/hosts.js` | Host creation, configuration and startup CD-ROM. |
 | `routes/topology.js` | Topology (`.topo`) preview, creation and export. |
 | `routes/archives.js` | Session ZIP size estimate, export, base image check and import. |
@@ -209,7 +209,7 @@ The server is split into layers with one-way dependencies:
 | `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date), and the last activity (memory only). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
 | `lib/topology.js` | `.topo` parsing and formatting. |
-| `runner/index.js` | Runner facade and event list; `stopAllNodes` stops every host then every switch and keeps the nodes. |
+| `runner/index.js` | Runner facade and event list; `stopAllNodes` stops every host then every switch and keeps the nodes; `startAllNodes` starts every stopped switch then every stopped host (Resume all and the automatic start of a loaded session); both skip nodes with an action in progress. |
 | `runner/context.js` | Per-runner context created by `createRunner`: session, commands, paths, `hostNodes()` of every session, events. |
 | `runner/session-runtime.js` | Node records, runtime directories, hostname aliases, state and log publishing. |
 | `runner/node-lifecycle.js` | Host start, stop, reboot, reset and deletion. |

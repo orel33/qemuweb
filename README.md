@@ -64,6 +64,11 @@ nothing, and several tabs of one user share the session. It disappears only
 when the user deletes it (**Delete session**, the red trash button at the end of the bottom-left toolbar) or when the server
 stops, which stops every machine.
 
+The bottom-left toolbar also has **Resume all** (start every stopped switch,
+then every stopped host, as when a session is loaded), **Stop all** (stop every
+host and switch; the nodes and their disks are kept) and **Remove all hosts and
+switches**. Both skip a node whose start, stop or reboot is in progress.
+
 Accounts live in `users.json` at the repository root (mode 0600, ignored by
 Git; `QEMUWEB_USERS_FILE` selects another file, and
 [`users.example.json`](users.example.json) shows the layout). Passwords are
