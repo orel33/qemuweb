@@ -357,7 +357,12 @@ async function run() {
   const lines = text.trimEnd().split('\n').map(line => JSON.parse(line));
   const actions = lines.map(line => line.action);
   const count = (action, target = () => true) => lines.filter(line => line.action === action && target(line.target)).length;
-  assert.equal(count('observe', target => target.login === 'alice'), 1, 'one observe line for one observer socket, without any POST');
+  // 'observe' is written by the server when an observation period starts (the first open observer
+  // socket of an admin on a login), never by a request. Alice was observed twice: by the first
+  // observer sockets (the late observer joined while they were open), then, after they had all
+  // closed, by the socket that checked controller-view after control. Bob once, while offline.
+  assert.equal(count('observe', target => target.login === 'alice'), 2, 'one observe line per observation period of alice');
+  assert.equal(count('observe', target => target.login === 'bob'), 1, 'one observe line for bob');
   assert.equal(count('control-start', target => target.nodeId === aliceSwitch), 1);
   assert.equal(count('control-end', target => target.nodeId === aliceSwitch && target.reason === 'disconnected'), 1);
   assert.equal(count('stop-all', target => target.login === 'alice'), 1);
