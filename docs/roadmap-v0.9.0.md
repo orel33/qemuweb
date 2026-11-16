@@ -159,12 +159,12 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 
 **Une session par utilisateur, persistante**
 
-- Map `login → Session`, créée à la première connexion et `owner` enregistré dans `session.json`.
+- Map `login → Session`, créée à la première connexion et `owner` enregistré dans `meta.json` (propre à la session vivante, jamais exporté ; `session.json` ne contient que la définition).
 - La session vit indépendamment du navigateur : fermer l'onglet ou se déconnecter ne stoppe aucune VM. Elle ne disparaît que sur suppression explicite (par l'utilisateur ou l'admin), sans expiration automatique. Un redémarrage du serveur arrête toutes les VM et vide `runtime/sessions/`, comme aujourd'hui.
 - À la reconnexion, le mécanisme existant `node-snapshot` (buffer série + logs) restaure les consoles.
 - Plusieurs onglets d'un même utilisateur restent possibles : ils rejoignent la même room.
 
-**Identifiant de session** : il reste aléatoire (16 caractères hexadécimaux), jamais égal au login. Le login est stocké dans `session.json` (`owner`), une Map `login → session` sert aux recherches, et un lien lisible `runtime/users/<login> → ../sessions/<id>` aide l'admin (même mécanisme que `hostnameAliasPath`). Raisons : pas de collision entre une session supprimée et sa recréation, pas de login (e-mail, identifiant OIDC) dans les chemins de sockets limités à 107 octets, ni dans les exports ZIP ou sur les runners distants.
+**Identifiant de session** : il reste aléatoire (16 caractères hexadécimaux), jamais égal au login. Le login est stocké dans `meta.json` (`owner`), une Map `login → session` sert aux recherches, et un lien lisible `runtime/users/<login> → ../sessions/<id>` aide l'admin (même mécanisme que `hostnameAliasPath`). Raisons : pas de collision entre une session supprimée et sa recréation, pas de login (e-mail, identifiant OIDC) dans les chemins de sockets limités à 107 octets, ni dans les exports ZIP ou sur les runners distants.
 
 **Isolation logique**
 
@@ -186,6 +186,7 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 - `runtime/current` est supprimé, remplacé par `runtime/users/<login>`. Le fichier `server-<port>.session` liste désormais plusieurs identifiants de session (l'ancien format reste lu).
 - Les VM VirtualBox portent l'identifiant de session dans leur nom, et l'exclusion KVM / VirtualBox vaut pour toute la machine.
 - Un identifiant de node inconnu donne 404 (au lieu de 400 ou 500), sauf l'aperçu `GET /api/nodes/:id/options`.
+- `session.json` ne contient que la définition de la session (identique dans le ZIP et dans `runtime/`) ; ce qui est propre à la session vivante (`owner`, `createdAt`) est dans `meta.json`.
 - Ajouts : `DELETE /api/session` (suppression de sa propre session, avec le bouton de l'en-tête), `QEMUWEB_AUTH=off` (usage local explicite), `docs/deployment.md`.
 - Reporté au jalon 6 : contrôle `Origin`, déconnexion révocable, politique de mot de passe, ralentissement des échecs, liste blanche HMP, quotas, jail. Un compte retiré garde sa session jusqu'à sa suppression ou au redémarrage (jalon 4 pour l'administration).
 
@@ -197,7 +198,7 @@ L'admin voit toutes les sessions en cours, peut entrer dans n'importe laquelle p
 
 | Colonne | Source |
 | --- | --- |
-| Utilisateur, date de création | `session.json` (`owner`) |
+| Utilisateur, date de création | `meta.json` (`owner`, `createdAt`) |
 | Nodes, VM en marche | `session.nodes` |
 | RAM réservée, CPU | mémoire des hôtes démarrés (`session.nodes`) + `runner/metrics.js` |
 | Dernière activité | nouvel horodatage (entrée console, appel API) |

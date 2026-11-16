@@ -8,7 +8,7 @@ and relays their consoles.
 
 | Term | Meaning |
 | --- | --- |
-| Session | A user's workspace: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `runtime/sessions/<id>/`. Each user owns exactly one session, with a random ID, recorded as `owner` in `session.json`. A session ZIP archive and `session.json` describe it. |
+| Session | A user's workspace: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `runtime/sessions/<id>/`. Each user owns exactly one session, with a random ID, recorded as `owner` in `meta.json` next to `session.json`. A session ZIP archive and `session.json` describe it; `meta.json` (owner, creation date) belongs to the live session only and is never exported. |
 | User | A login from `users.json` (or the implicit `local` user when `QEMUWEB_AUTH=off`). |
 | Node | An element of a session: a host or a switch. API routes and Socket.IO events use `nodeId`. |
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
@@ -117,7 +117,7 @@ The server is split into layers with one-way dependencies:
 | `lib/session-manager.js` | Login → `{session, runner}`; creation at first use, deletion, shutdown, `runtime/users/<login>` links. |
 | `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
 | `lib/auth/` | `index.js` facade (login routes, middleware, Socket.IO handshake), `users-store.js` (`users.json`), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
-| `lib/session.js` | One session: engine, nodes, runtime directory and `session.json` (with `owner`). |
+| `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition) and `meta.json` (owner, creation date). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
 | `lib/topology.js` | `.topo` parsing and formatting. |
 | `runner/index.js` | Runner facade and event list. |

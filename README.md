@@ -194,7 +194,7 @@ Guests log in as `root` without a password on the serial console.
 | [`.env`](.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
 | `users.json` | User accounts (see [Users and sessions](#users-and-sessions)); ignored by Git. |
-| `runtime/sessions/<id>/` | One user's session: `session.json` (with its `owner`), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. The ID is random. |
+| `runtime/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. The ID is random. |
 | `runtime/users/<login>` | Link to the user's session directory, for administrators. |
 | `runtime/auth-secret` | Key that signs login cookies; deleting it logs everybody out. |
 

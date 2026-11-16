@@ -26,8 +26,7 @@ function register({app, session, runner, commands, emit}) {
     session.archiveBusy = true;
     const exportName = `.session-export-${crypto.randomBytes(8).toString('hex')}`;
     const archive = path.join(session.runtimeDir, `${exportName}.zip`);
-    const exportMetadata = path.join(session.runtimeDir, `${exportName}.json`);
-    const exportFiles = [exportMetadata];
+    const exportFiles = [];
     try {
       const includeDisks = req.body?.includeDisks;
       const prepared = archiveSources(includeDisks, includeDisks);
@@ -42,17 +41,14 @@ function register({app, session, runner, commands, emit}) {
         }
       }
       const {sources, hosts} = includeDisks ? archiveSources(includeDisks) : prepared;
-      // The owner stays out of archives, so that any user can load them. The live session.json is left alone.
-      const metadata = session.metadata();
-      delete metadata.owner;
-      writeJsonAtomic(exportMetadata, metadata);
+      // session.json is the definition of the session, as it is: nothing in it is specific to the live session.
+      session.saveMetadata();
       // A host with a working disk records the identity of the base image that disk depends on, in its host.json.
       const format = session.engine === 'vbox' ? 'vdi' : 'raw';
       const exportSources = [];
       for (const item of sources) {
         const host = hosts.find(entry => item.name === `${entry.id}/host.json`);
-        if (item.name === 'session.json') exportSources.push({...item, file: exportMetadata});
-        else if (host?.disk) {
+        if (host?.disk) {
           const file = path.join(session.runtimeDir, `${exportName}.${host.id}.json`);
           exportFiles.push(file);
           const baseImage = {format, ...await fileSha256Async(imagePath(imageById(host.system).images[format]))};

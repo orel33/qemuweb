@@ -1,5 +1,5 @@
 // Control plane unit tests: one session per user (SessionManager), server instance
-// records, and the session owner in session.json versus archives. No server is started
+// records, and the session owner in meta.json (never in session.json or archives). No server is started
 // and no emulator process is spawned.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -42,8 +42,12 @@ test('each user gets one persistent session with a random ID, an owner and an al
     assert.match(session.id, /^[0-9a-f]{16}$/);
     assert.equal(session.runtimeDir, path.join(runtimeRoot, 'sessions', session.id));
   }
+  // session.json is the definition only; what belongs to the live session is in meta.json.
   assert.deepEqual(JSON.parse(fs.readFileSync(toto.session.metadataFile, 'utf8')),
-    {schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], owner: 'toto'});
+    {schemaVersion: 4, engine: 'qemu', hosts: [], switches: []});
+  assert.deepEqual(JSON.parse(fs.readFileSync(toto.session.metaFile, 'utf8')),
+    {schemaVersion: 1, owner: 'toto', createdAt: toto.session.createdAt});
+  assert.equal(new Date(toto.session.createdAt).toISOString(), toto.session.createdAt);
   const alias = path.join(runtimeRoot, 'users', 'toto');
   assert.equal(fs.readlinkSync(alias), path.join('..', 'sessions', toto.session.id));
   assert.equal(fs.realpathSync(alias), fs.realpathSync(toto.session.runtimeDir));
@@ -131,23 +135,55 @@ test('server records list live sessions and accept the former layout', t => {
   assert.equal(fs.existsSync(instance.sessionFile), false);
 });
 
-test('archives never carry the owner: tolerated on import, replaced by the importing owner', t => {
+test('the owner is not part of the session definition: archives never carry it, an import leaves meta.json alone', t => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-owner-'));
   t.after(() => fs.rmSync(runtimeRoot, {recursive: true, force: true}));
   const session = new Session({runtimeRoot, owner: 'titi'});
   fs.mkdirSync(session.runtimeDir, {recursive: true});
   session.saveMetadata();
-  assert.equal(session.metadata().owner, 'titi');
-  assert.equal(new Session({runtimeRoot}).metadata().owner, undefined);
+  session.saveMeta();
+  assert.equal(session.metadata().owner, undefined);
+  assert.equal(JSON.parse(fs.readFileSync(session.metadataFile, 'utf8')).owner, undefined);
+  assert.equal(JSON.parse(fs.readFileSync(session.metaFile, 'utf8')).owner, 'titi');
   const runner = createRunner({session, commands, root, runtimeRoot, configPath: path.join(root, 'config.json')});
   const emitted = [];
   const snapshot = createSessionSnapshot({session, runner, commands, emit: (event, payload) => emitted.push(event)});
   const stage = fs.mkdtempSync(path.join(runtimeRoot, 'stage-'));
+  // An owner in an archive (for instance one made by zipping a runtime directory by hand) is tolerated and ignored.
   fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], baseImages: {}, owner: 'toto'}));
   const files = snapshot.archivedSessionFiles(stage, ['session.json']);
   snapshot.installArchive(files, stage);
-  assert.equal(JSON.parse(fs.readFileSync(session.metadataFile, 'utf8')).owner, 'titi');
+  assert.deepEqual(JSON.parse(fs.readFileSync(session.metadataFile, 'utf8')), {schemaVersion: 4, engine: 'qemu', hosts: [], switches: []});
+  assert.equal(JSON.parse(fs.readFileSync(session.metaFile, 'utf8')).owner, 'titi');
   assert.deepEqual(emitted, ['general-settings-changed', 'nodes-changed']);
   fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], baseImages: {}, intruder: 1}));
   assert.throws(() => snapshot.archivedSessionFiles(stage, ['session.json']), /Invalid session.json/);
+});
+
+test('empty runtime sessions left by a stopped server are pruned, with their meta.json', t => {
+  const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-prune-'));
+  t.after(() => fs.rmSync(runtimeRoot, {recursive: true, force: true}));
+  const sessions = path.join(runtimeRoot, 'sessions');
+  fs.mkdirSync(sessions);
+  const instance = new ServerInstance({runtimeRoot, port: 4003, ephemeral: false});
+  const old = new Date(Date.now() - 60000);
+  const make = (name, files) => {
+    const dir = path.join(sessions, name);
+    fs.mkdirSync(dir);
+    for (const [file, content] of Object.entries(files)) fs.writeFileSync(path.join(dir, file), content);
+    fs.utimesSync(dir, old, old);
+    return dir;
+  };
+  const definition = JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: []});
+  const empty = make('00000000000000a1', {'session.json': definition, 'meta.json': '{}'});
+  const emptyLegacy = make('00000000000000a2', {'session.json': definition});
+  const withNodes = make('00000000000000a3', {'session.json': JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: ['h-0123456789abcdef'], switches: []}), 'meta.json': '{}'});
+  const unexpected = make('00000000000000a4', {'session.json': definition, 'meta.json': '{}', 'keep.txt': 'x'});
+  const log = console.log;
+  console.log = () => {};
+  try { instance.pruneEmptyRuntimeSessions(); } finally { console.log = log; }
+  assert.equal(fs.existsSync(empty), false);
+  assert.equal(fs.existsSync(emptyLegacy), false);
+  assert.equal(fs.existsSync(withNodes), true);
+  assert.equal(fs.existsSync(unexpected), true);
 });
