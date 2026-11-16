@@ -38,8 +38,9 @@ function bindWorkspace(io, {session, runner}, control) {
   });
 }
 
-// audit: lib/audit.js. Returns {disconnectUser(login)}.
-function attachSockets(io, manager, {audit, control: options = {}}) {
+// audit: lib/audit.js. currentUser(login) returns the account as it is now ({login, role}),
+// or null once it is disabled or removed (lib/auth). Returns {disconnectUser(login)}.
+function attachSockets(io, manager, {audit, currentUser, control: options = {}}) {
   const control = new ConsoleControl({...options, onRelease: (lock, reason) => {
     io.to(`session:${lock.sessionId}`).emit('console-control', {nodeId: lock.nodeId, admin: lock.admin, active: false});
     audit.record(lock.admin, 'control-end', {login: lock.login, nodeId: lock.nodeId, reason});
@@ -81,8 +82,19 @@ function attachSockets(io, manager, {audit, control: options = {}}) {
       return lock ? {admin: lock.admin} : null;
     };
     const refuse = message => socket.emit('node-error', message);
+    // A socket outlives the checks of its handshake: every privileged event re-reads the
+    // account, and the socket is closed once it is disabled, removed, or (for an observer)
+    // no longer admin.
+    const authorized = () => {
+      const current = currentUser(user.login);
+      if (current && (!observer || current.role === 'admin')) return true;
+      socket.emit('node-error', 'Your account is no longer allowed to use this session.');
+      socket.disconnect(true);
+      return false;
+    };
+    const guard = handler => (...args) => { if (authorized()) handler(...args); };
     let selectionQueue = Promise.resolve();
-    socket.on('select-node', (id, token, acknowledge) => {
+    socket.on('select-node', guard((id, token, acknowledge) => {
       selectionQueue = selectionQueue.then(async () => {
         const node = sessionNode(id);
         if (!node) throw new Error('Unknown node.');
@@ -101,14 +113,14 @@ function attachSockets(io, manager, {audit, control: options = {}}) {
         socket.emit('node-error', error.message);
         if (typeof acknowledge === 'function') acknowledge({error: error.message});
       });
-    });
+    }));
     socket.on('leave-node', id => {
       if (id !== socket.data.nodeId) return;
       control.release(session.id, id, socket, 'released');
       socket.leave(nodeRoom(session, id));
       socket.data.nodeId = null;
     });
-    socket.on('input', data => {
+    socket.on('input', guard(data => {
       const node = sessionNode(socket.data.nodeId);
       if (!node || typeof data !== 'string' || data.length > 4096) return;
       const refusal = inputRefusal({observer, lock: control.get(session.id, node.id), holder: socket});
@@ -117,9 +129,9 @@ function attachSockets(io, manager, {audit, control: options = {}}) {
       if (observer) control.touch(session.id, node.id, socket);
       else session.touch();
       runner.writeConsoleInput(node, data);
-    });
+    }));
     // Resizing and clearing change what every viewer of the node sees: never for observers.
-    socket.on('terminal-resize', request => {
+    socket.on('terminal-resize', guard(request => {
       if (observer) return refuse('Read-only observation: the console cannot be resized.');
       if (!request || request.id !== socket.data.nodeId) return;
       const node = sessionNode(request.id);
@@ -128,8 +140,8 @@ function attachSockets(io, manager, {audit, control: options = {}}) {
       const rows = Number(request.rows);
       if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) return;
       runner.resizeSwitchTerminal(node, cols, rows);
-    });
-    socket.on('clear-console', request => {
+    }));
+    socket.on('clear-console', guard(request => {
       if (observer) return refuse('Read-only observation: the console cannot be cleared.');
       if (!request || request.id !== socket.data.nodeId) return;
       const node = sessionNode(request.id);
@@ -137,9 +149,9 @@ function attachSockets(io, manager, {audit, control: options = {}}) {
       const line = typeof request.line === 'string' ? request.line.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 1024) : '';
       const column = Number.isInteger(request.column) ? Math.max(0, Math.min(request.column, 1024)) : line.length;
       runner.clearConsole(node, line, column);
-    });
+    }));
     // Exclusive control of the selected node's console, for observers.
-    socket.on('take-control', (id, acknowledge) => {
+    socket.on('take-control', guard((id, acknowledge) => {
       const reply = typeof acknowledge === 'function' ? acknowledge : () => {};
       const node = sessionNode(id);
       if (!observer) return reply({error: 'Only an administrator observing this session can take control.'});
@@ -151,16 +163,17 @@ function attachSockets(io, manager, {audit, control: options = {}}) {
         }
         reply({ok: true});
       } catch (error) { reply({error: error.message}); }
-    });
-    socket.on('release-control', (id, acknowledge) => {
+    }));
+    socket.on('release-control', guard((id, acknowledge) => {
       const released = typeof id === 'string' && control.release(session.id, id, socket, 'released');
       if (typeof acknowledge === 'function') acknowledge({ok: released});
-    });
+    }));
     socket.on('disconnect', () => control.releaseHolder(socket, 'disconnected'));
   });
 
   return {
-    // Closes every socket of a user (account disabled or role changed).
+    // Closes every socket of a user at once (account disabled or role changed from /admin),
+    // so that passive sockets stop receiving console output too.
     disconnectUser(login) {
       for (const socket of io.sockets.sockets.values()) if (socket.data.user?.login === login) socket.disconnect(true);
     }

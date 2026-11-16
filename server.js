@@ -64,7 +64,7 @@ if (process.env.QEMUWEB_TRUST_PROXY) {
 }
 const audit = createAudit({file: auditFilePath(root)});
 io.use(auth.socketMiddleware);
-const sockets = attachSockets(io, manager, {audit});
+const sockets = attachSockets(io, manager, {audit, currentUser: auth.currentUser});
 
 app.use(auth.identify);
 auth.register(app);
