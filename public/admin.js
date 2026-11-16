@@ -210,7 +210,14 @@ function renderAccounts(users) {
     for (const value of ['student', 'admin']) role.append(new Option(value, value, false, value === user.role));
     role.disabled = own;
     role.title = own ? 'You cannot change your own role' : '';
-    role.addEventListener('change', () => runAction('accounts-error', () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'PATCH', body: {role: role.value}})));
+    // A role change is confirmed first; cancelling puts the previous role back, without request.
+    role.addEventListener('change', async () => {
+      const next = role.value;
+      role.value = user.role;
+      if (!await confirmDialog('Change role', `Change the role of ${user.login} from ${user.role} to ${next}?`, [], 'Change')) return;
+      role.value = next;
+      runAction('accounts-error', () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'PATCH', body: {role: next}}));
+    });
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
     actions.append(iconButton('keyRound', 'Reset password', () => resetPassword(user.login)));
