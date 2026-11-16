@@ -158,8 +158,7 @@ async function run() {
   await Promise.all([aliceSession.connected, aliceConsole.connected, observer.connected]);
   // Connected browser tabs: alice's main socket only (console sockets and observers do not count).
   assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'alice').browsers, 1);
-  const userBrowsers = Object.fromEntries((await boss.request('/api/admin/users')).map(user => [user.login, user.browsers]));
-  assert.deepEqual([userBrowsers.alice, userBrowsers.bob, userBrowsers.boss], [1, 0, 0]);
+  assert.deepEqual(Object.keys((await boss.request('/api/admin/users'))[0]).sort(), ['disabled', 'login', 'role']);
   assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
   const snapshot = observer.events.find(item => item.event === 'node-snapshot');
   assert.equal(snapshot.payload.nodeId, aliceSwitch);

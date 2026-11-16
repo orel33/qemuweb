@@ -101,11 +101,12 @@ line of standard input; otherwise the script prompts for it. Logins use letters,
 `admin` is a role of an ordinary account: an admin has their own session and
 works in it normally. The header shows a **Supervision** link to `/admin`
 (admins only), which lists every session, the admin's own marked, refreshed
-every few seconds: user, creation date, state (**active**: at least one running
-node, or **idle**), nodes, running VMs, reserved RAM, CPU and last activity (the
-owner's requests and console input; an admin observing does not count). Next
-to each user, in the sessions and the accounts tables, a dot shows **online
-(n)** (n browser tabs connected) or **offline**. A session lives on the server
+every few seconds: user, state (**active**: at least one running node, or
+**idle**), creation date, nodes, running VMs, reserved RAM, CPU and last
+activity (the owner's requests and console input; an admin observing does not
+count). Next to each user, a green dot shows **online** when a browser of that
+user is connected (**online ×n** for several tabs; the tooltip gives the count),
+or **offline**; the admin's own row is online. A session lives on the server
 whether or not its user is connected: it is created at the user's first
 request and kept after logging out or closing the browser. From there an admin
 can:

@@ -50,15 +50,29 @@ function age(iso) {
 }
 
 const dateTime = iso => new Date(iso).toLocaleString();
+const shortDateTime = iso => new Date(iso).toLocaleString(undefined, {dateStyle: 'short', timeStyle: 'short'});
+const plural = (count, word) => `${count} ${word}${count === 1 ? '' : word.endsWith('h') ? 'es' : 's'}`;
 
-// Coloured dot + "online (n)" (connected browser tabs) or "offline". A session lives on the
-// server whether or not its user is connected.
-function presence(browsers) {
+// A login with the "(you)" mark of the admin's own row, in both tables.
+function loginLabel(login, own) {
+  const element = document.createElement('span');
+  element.textContent = login;
+  if (own) element.append(Object.assign(document.createElement('span'), {className: 'admin-own', textContent: ' (you)'}));
+  return element;
+}
+
+// Sessions table only: a green dot + "online" (×n for several tabs) when the user has a
+// browser connected, plain "offline" otherwise; the tab count is in the tooltip. A session
+// lives on the server whether or not its user is connected. /admin opens no socket, so the
+// admin's own row is online: they are looking at it.
+function presence(browsers, own) {
+  const online = own || browsers > 0;
   const element = document.createElement('span');
   element.className = 'presence';
-  element.dataset.online = String(browsers > 0);
-  element.textContent = browsers > 0 ? `online (${browsers})` : 'offline';
-  element.title = browsers > 0 ? `${browsers} browser tab${browsers === 1 ? '' : 's'} connected` : 'No browser connected; the session keeps running';
+  element.dataset.online = String(online);
+  element.textContent = online ? `online${browsers > 1 ? ` ×${browsers}` : ''}` : 'offline';
+  element.title = own && !browsers ? 'You, on this page'
+    : browsers > 0 ? `${browsers} browser tab${browsers === 1 ? '' : 's'} connected` : 'No browser connected; the session keeps running';
   return element;
 }
 
@@ -112,10 +126,8 @@ function renderSessions(sessions) {
     check.checked = selected.has(session.login);
     check.setAttribute('aria-label', `Select the session of ${session.login}`);
     check.addEventListener('change', () => { if (check.checked) selected.add(session.login); else selected.delete(session.login); updateSelection(); });
-    const user = document.createElement('span');
-    user.textContent = session.login;
-    if (session.own) user.append(Object.assign(document.createElement('span'), {className: 'admin-own', textContent: ' (you)'}));
-    user.append(presence(session.browsers));
+    const user = loginLabel(session.login, session.own);
+    user.append(presence(session.browsers, session.own));
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
     if (session.own) actions.append(Object.assign(document.createElement('a'), {href: '/', className: 'admin-button', textContent: 'Open'}));
@@ -126,12 +138,13 @@ function renderSessions(sessions) {
         if (!await confirmDialog('Delete session', `Delete the session of ${session.login}? Every host and switch stops and is removed, with its disks.`, [], 'Delete')) return;
         runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}`, {method: 'DELETE'}));
       }));
-    row.append(cell(check), cell(user), cell(dateTime(session.createdAt)), cell(sessionState(session.active)),
-      cell(`${session.hosts} hosts, ${session.switches} switches`),
+    row.append(cell(check), cell(user), cell(sessionState(session.active)), cell(shortDateTime(session.createdAt)),
+      cell(`${plural(session.hosts, 'host')}, ${plural(session.switches, 'switch')}`),
       cell(`${session.runningHosts} / ${session.hosts}`),
       cell(session.reservedRamMb ? `${session.reservedRamMb} MB` : '—'),
       cell(Number.isFinite(session.cpuPercent) ? `${session.cpuPercent.toFixed(1)}%` : '—'),
       cell(age(session.lastActivity)), cell(actions));
+    row.cells[3].title = dateTime(session.createdAt);
     row.cells[8].title = dateTime(session.lastActivity);
     return row;
   }));
@@ -180,10 +193,7 @@ function renderAccounts(users) {
     }, 'Remove this account from users.json and delete its session');
     remove.disabled = own;
     actions.append(toggle, remove);
-    const name = document.createElement('span');
-    name.textContent = `${user.login}${own ? ' (you)' : ''}`;
-    name.append(presence(user.browsers));
-    row.append(cell(name), cell(role), cell(user.disabled ? 'disabled' : 'enabled'), cell(actions));
+    row.append(cell(loginLabel(user.login, own)), cell(role), cell(user.disabled ? 'disabled' : 'enabled'), cell(actions));
     if (user.disabled) row.dataset.disabled = 'true';
     return row;
   }));

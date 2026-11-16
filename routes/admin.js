@@ -149,8 +149,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
   });
 
   router.get('/users', (_req, res) => {
-    res.json(readUsers(usersFile).map(user => ({login: user.login, role: user.role, disabled: !!user.disabled,
-      browsers: browsers(user.login)})));
+    res.json(readUsers(usersFile).map(user => ({login: user.login, role: user.role, disabled: !!user.disabled})));
   });
 
   router.post('/users', (req, res) => {
