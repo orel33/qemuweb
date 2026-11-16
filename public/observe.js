@@ -98,7 +98,10 @@ export function observationUnavailable(reason = 'no session') {
 // while Follow is on and the admin does not hold control, never saved in the admin's own view
 // settings. With Follow off the admin navigates freely. Only the latest owner view counts.
 let ownerView = null;
-const following = () => observing && !held && document.getElementById('observe-follow').checked;
+// Following also pauses while a take-control request is pending: re-laying out the panes
+// then could move the pane that is taking control to another node.
+let taking = false;
+const following = () => observing && !held && !taking && document.getElementById('observe-follow').checked;
 
 // mayRefresh: a node unknown here (created meanwhile) triggers one refresh of the node list,
 // which calls refollow() when it is done.
@@ -135,9 +138,11 @@ function toggleControl() {
   }
   const pane = panes[store.activePaneIndex];
   const nodeId = pane?.machineId;
-  if (!nodeId) return;
+  if (!nodeId || taking) return;
+  taking = true;
   pane.socket.emit('take-control', nodeId, result => {
-    if (result?.error) { showStatusError(result.error); return; }
+    taking = false;
+    if (result?.error) { showStatusError(result.error); applyOwnerView(true); return; }
     held = {pane, nodeId};
     controls.set(nodeId, 'you');
     renderControl();

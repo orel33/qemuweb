@@ -214,6 +214,29 @@ async function run() {
   assert.doesNotMatch(observer.output(), /alicemarker/, 'alice typed while the admin had control');
   observer.socket.emit('input', 'adminmarker\r');
   await waitFor('the admin\'s command at alice', () => /adminmarker/.test(aliceConsole.output()));
+  // The admin's page reassigns its panes on its own (layout, node list, follow): the pane
+  // socket holding control showing another node, or none, must not hand the keyboard back.
+  const aliceOther = newId('switch');
+  await alice.request('/api/switches', {method: 'POST', body: {id: aliceOther, name: 'aliceother', autostart: false}});
+  assert.deepEqual(await select(observer.socket, aliceOther), {ok: true});
+  const aliceSecondTab = recorder(alice, 'alice second console');
+  await aliceSecondTab.connected;
+  assert.deepEqual(await select(aliceSecondTab.socket, aliceSwitch), {ok: true});
+  aliceConsole.socket.emit('input', 'alicestill1\r');
+  aliceSecondTab.socket.emit('input', 'alicestill2\r');
+  const refusalsBefore = observer.events.filter(item => item.event === 'node-error').length;
+  observer.socket.emit('input', 'elsewhere\r'); // The holder types only into the node it holds.
+  await waitFor('refusal of input elsewhere', () => observer.events.filter(item => item.event === 'node-error').length > refusalsBefore);
+  observer.socket.emit('leave-node', aliceOther);
+  aliceConsole.socket.emit('input', 'alicestill3\r');
+  await delay(500);
+  assert.doesNotMatch(aliceConsole.output(), /alicestill|elsewhere/, 'alice typed after the admin\'s pane moved to another node');
+  assert.ok(!aliceSession.events.some(item => item.event === 'console-control' && !item.payload.active), 'control released by a pane change');
+  assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
+  observer.socket.emit('input', 'adminagain\r');
+  await waitFor('the admin types again on the held node', () => /adminagain/.test(aliceConsole.output()));
+  aliceSecondTab.socket.close();
+  await alice.request(`/api/nodes/${aliceOther}`, {method: 'DELETE'});
   observer.socket.close();
   await waitFor('control released at alice', () => aliceSession.events.some(item => item.event === 'console-control' && !item.payload.active));
   aliceConsole.socket.emit('input', 'alicefree\r');

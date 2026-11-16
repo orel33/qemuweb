@@ -151,10 +151,10 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       selectionQueue = selectionQueue.then(async () => {
         const node = sessionNode(id);
         if (!node) throw new Error('Unknown node.');
-        if (socket.data.nodeId && socket.data.nodeId !== node.id) {
-          control.release(session.id, socket.data.nodeId, socket, 'released');
-          await socket.leave(nodeRoom(session, socket.data.nodeId));
-        }
+        // A console lock is not released here: the admin's page reassigns its panes on its own
+        // (layout, node list, follow), which must never hand the keyboard back to the owner.
+        // The holder types only into the node it holds (inputRefusal) and releases it explicitly.
+        if (socket.data.nodeId && socket.data.nodeId !== node.id) await socket.leave(nodeRoom(session, socket.data.nodeId));
         await socket.join(nodeRoom(session, node.id));
         socket.data.nodeId = node.id;
         const {nodeId, state, logs, serial} = runner.attachConsole(node.id);
@@ -177,7 +177,6 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     if (observer && ownerViews.has(session.id)) socket.emit('owner-view', ownerViews.get(session.id));
     socket.on('leave-node', id => {
       if (id !== socket.data.nodeId) return;
-      control.release(session.id, id, socket, 'released');
       socket.leave(nodeRoom(session, id));
       socket.data.nodeId = null;
     });
