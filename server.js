@@ -6,11 +6,8 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
-const {duplexPair} = require('stream');
-const {createRunnerService, serveConnection, resolveCommands} = require('./runner');
-const {Connection} = require('./common/runner-protocol');
-const {RunnerClient} = require('./lib/runner-client');
 const {RunnerRegistry} = require('./lib/runner-registry');
+const {createLocalRunner} = require('./lib/local-runner');
 const {ServerInstance} = require('./lib/server-instance');
 const {SessionManager} = require('./lib/session-manager');
 const {attachSockets} = require('./sockets');
@@ -23,9 +20,6 @@ const packageInfo = require('./package.json');
 
 const root = __dirname;
 console.log(`QemuWeb ${packageInfo.version}\n`);
-let commands;
-try { commands = resolveCommands(root); }
-catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
 const port = Number(process.env.PORT || 3002);
 const configPath = path.join(root, 'config.json');
@@ -43,20 +37,13 @@ catch (error) { console.error(`Cannot create the log directory: ${error.message}
 const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
 
-// The local runner, in this process for now: the runner service and its protocol endpoint on
-// one side of an in-memory stream pair, its client on the other.
+// One session per user, each with its own HTTP router, executed by a runner: here the local
+// runner, a child process reached over runtime/runner-<port>.sock (lib/local-runner.js).
 const registry = new RunnerRegistry();
-const localRunner = (() => {
-  const service = createRunnerService({commands, root, runtimeRoot: runtime, configPath});
-  const [controlSide, runnerSide] = duplexPair();
-  const client = new RunnerClient(new Connection(controlSide));
-  registry.add({id: 'local', client});
-  serveConnection(new Connection(runnerSide), service);
-  return client;
-})();
-
-// One session per user, each with its own HTTP router, executed by a runner.
 const manager = new SessionManager({runtimeRoot: runtime, registry});
+const localRunner = createLocalRunner({root, runtimeRoot: runtime, configPath, port, registry,
+  boundSessions: () => manager.list().filter(workspace => workspace.session.runnerId === 'local').map(workspace => workspace.session.id),
+  onFatal: error => { console.error(error.message); localRunner.kill(); process.exit(1); }});
 manager.on('created', workspace => {
   const {session, runner} = workspace;
   workspace.router = createSessionRouter({session, runner, userLog});
@@ -125,16 +112,20 @@ app.use((req, res, next) => {
 server.on('error', error => {
   if (error.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use. Stop the existing server or run PORT=${port + 1} npm start.`);
-    process.exitCode = 1;
+    registry.shutdown().then(() => localRunner.stop()).finally(() => process.exit(1));
     return;
   }
   console.error('Server error:', error);
   process.exitCode = 1;
 });
-// Browsers are served once the local runner said hello.
-localRunner.once('hello', hello => {
+// Browsers are served once the local runner said hello; a runner that cannot start stops the server.
+localRunner.start().then(hello => {
   if (!hello.kvm) console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
   server.listen(port, '127.0.0.1', onListening);
+}, error => {
+  console.error(`Cannot start the local runner: ${error.message}`);
+  localRunner.kill();
+  process.exit(1);
 });
 function onListening() {
   instance.pruneEmptyRuntimeSessions();
@@ -147,6 +138,7 @@ function onListening() {
 }
 
 process.on('exit', () => {
+  localRunner.kill();
   instance.removeRecords();
   manager.pruneUserAliases();
 });
@@ -157,6 +149,7 @@ async function shutdown() {
   shuttingDown = true;
   const forceExit = setTimeout(() => process.exit(1), 10000);
   await registry.shutdown();
+  await localRunner.stop();
   io.close(() => {
     clearTimeout(forceExit);
     process.exit(0);
