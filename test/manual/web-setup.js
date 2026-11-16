@@ -6,7 +6,9 @@
 //     with admin/admin (admin), toto/toto and tutu/tutu (students).
 //   node test/manual/web-setup.js load <base-url>
 //     waits for the server, logs in as toto and tutu and loads demo/lan.zip into their
-//     sessions through the normal session-archive import route (no server backdoor).
+//     sessions with automatic start, exactly like the Load session button
+//     (POST /api/session-archive/import?autoStart=true&discardStaleDisks=false; no backdoor).
+//     Start errors are reported but do not fail the setup.
 // Passwords equal to logins are for this local test mode only; never use them elsewhere.
 const fs = require('node:fs');
 const os = require('node:os');
@@ -64,10 +66,11 @@ async function load(baseUrl) {
     try {
       await client.waitForServer(30000);
       await client.signIn(login, password);
-      const result = await client.request('/api/session-archive/import?autoStart=false&discardStaleDisks=false', {
+      const result = await client.request('/api/session-archive/import?autoStart=true&discardStaleDisks=false', {
         method: 'POST', body: data, headers: {'content-type': 'application/zip'}
       });
-      console.log(`Web test setup: ${login}: ${path.relative(root, archive)} loaded (${result.hosts} hosts, ${result.switches} switches).`);
+      console.log(`Web test setup: ${login}: ${path.relative(root, archive)} loaded and started (${result.hosts} hosts, ${result.switches} switches).`);
+      for (const error of result.startErrors || []) console.log(`  start error: ${error}`);
       for (const warning of result.warnings || []) console.log(`  warning: ${warning}`);
     } catch (error) {
       fail(`cannot load ${path.relative(root, archive)} for ${login}: ${error.message}`);

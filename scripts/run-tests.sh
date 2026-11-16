@@ -24,7 +24,7 @@ Available tests:
   check-network-debian13-cloud   Two Debian Cloud hosts on one VDE switch: eth0, hostname, ping, tcpdump
   check-network-alpine           Two Alpine hosts on one VDE switch: eth0, hostname, ping, tcpdump
   check-network-openwrt          Two OpenWrt hosts on one VDE switch: eth0, hostname, ping, tcpdump
-  web                            Web app on PORT=3003, accounts admin, toto, tutu (demo/lan.zip loaded)
+  web                            Web app on PORT=3003, accounts admin, toto, tutu (demo/lan.zip loaded and started)
 
 Use --list or --help to show this list. Nothing runs without a test name.
 See test/TESTS.md for the purpose and prerequisites of each test.
@@ -40,7 +40,7 @@ run_test() {
 
 # Manual Web test: a separate, temporary users file (never the repository's users.json) with
 # admin/admin (admin), toto/toto and tutu/tutu (students). Passwords equal to logins are for
-# this local test mode only. toto and tutu start with demo/lan.zip loaded in their session.
+# this local test mode only. toto and tutu start with demo/lan.zip loaded and started in their session.
 run_web() {
   local port="${PORT:-3003}"
   web_server_pid=''
@@ -56,8 +56,8 @@ run_web() {
 
 Manual Web test: http://127.0.0.1:$port
   admin / admin   (admin)
-  toto  / toto    (student, demo/lan.zip loaded)
-  tutu  / tutu    (student, demo/lan.zip loaded)
+  toto  / toto    (student, demo/lan.zip loaded and started)
+  tutu  / tutu    (student, demo/lan.zip loaded and started)
 Passwords equal to logins exist only in this test mode's temporary users file.
 Stop with Ctrl+C.
 EOF

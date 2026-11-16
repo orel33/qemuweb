@@ -68,9 +68,9 @@ The four check-network scenarios run `check-network.js` with `GUEST_NETWORK_PROF
 | Login | Password | Role | Session at start |
 |---|---|---|---|
 | `admin` | `admin` | admin | empty |
-| `toto` | `toto` | student | `demo/lan.zip` loaded |
-| `tutu` | `tutu` | student | `demo/lan.zip` loaded |
+| `toto` | `toto` | student | `demo/lan.zip` loaded and started |
+| `tutu` | `tutu` | student | `demo/lan.zip` loaded and started |
 
-Passwords equal to logins exist only in this test mode. After the server is up, `test/manual/web-setup.js` logs in as `toto` and `tutu` and loads `demo/lan.zip` through the normal session load route (nodes not started). The scenario stops with a message before starting the server when the archive or a base image it needs (`images/debian13-legacy.raw`) is missing. Logs go to `logs/` as usual.
+Passwords equal to logins exist only in this test mode. After the server is up, `test/manual/web-setup.js` logs in as `toto` and `tutu` and loads `demo/lan.zip` with automatic start, exactly like the **Load session** button; start errors are printed without stopping the setup. Both sessions start a switch and four hosts at once: about 8 GiB of guest memory, and QEMU/KVM and VDE are needed. The scenario stops with a message before starting the server when the archive or a base image it needs (`images/debian13-legacy.raw`) is missing. Logs go to `logs/` as usual.
 
-Check isolation by logging in as `toto` and `tutu` in two browsers (or a private window). For the admin role, log in as a student in one browser and as `admin` in another: open **Supervision**, **Observe** the student, check that the banner, the follow-node behaviour and **Take control** work on both sides, then try **Stop all**, **Delete** and the account actions, and read the **Logs** panel (`logs/admin.log`, `logs/users.log`).
+Check isolation by logging in as `toto` and `tutu` in two browsers (or a private window). For the admin role, log in as a student in one browser and as `admin` in another: open **Supervision**, **Observe** the student, check that the banner, the follow-node behaviour and **Take control** work on both sides, then try **Stop all** and **Resume all**, **Delete** and the account actions, and read the **Logs** panel (`logs/admin.log`, `logs/users.log`).
