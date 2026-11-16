@@ -99,7 +99,8 @@ test('console output is coalesced per node and flushed before a response and oth
   const events = new EventEmitter();
   const {client} = fakeRunner({
     events,
-    handle: () => {
+    handle: command => {
+      if (command !== 'console.attach') return null;
       events.emit('event', 's', 'serial', {nodeId: 'h-1', data: 'a'});
       events.emit('event', 's', 'serial', {nodeId: 'h-1', data: 'b'});
       return {snapshot: 'ab'};
@@ -140,7 +141,7 @@ test('streams carry binary data in order without exceeding the credit window', a
   sender.close();
 });
 
-test('a receiver that cancels a stream stops its sender', async () => {
+test('a receiver that cancels a stream stops its sender; nothing throws without listeners', async () => {
   const [left, right] = duplexPair();
   const sender = new Connection(left);
   const receiver = new Connection(right);
@@ -152,6 +153,45 @@ test('a receiver that cancels a stream stops its sender', async () => {
   incoming.destroy(new Error('Not wanted.'));
   const [error] = await failed;
   assert.match(error.message, /Not wanted/);
+  // Neither side has an error listener of its own here: no uncaught 'error' event.
+  const second = sender.outgoing();
+  second.stream.write(Buffer.alloc(10));
+  await turn();
+  receiver.incoming(second.id).destroy(new Error('Refused.'));
+  await turn();
+  assert.equal(second.stream.destroyed, true);
+  assert.equal(sender.closed, false);
+  assert.equal(receiver.closed, false);
+  sender.close();
+});
+
+test('late frames for a cancelled stream are ignored; a stream sent before it is claimed is kept', async () => {
+  const [left, right] = duplexPair();
+  const sender = new Connection(left);
+  const receiver = new Connection(right);
+  // A chunk, an end and an error arriving after the receiver cancelled.
+  const {id} = sender.outgoing();
+  receiver.incoming(id).destroy();
+  receiver.receive({streamId: id, data: Buffer.from('late')});
+  receiver.streamControl({type: 'stream', id, op: 'end'});
+  receiver.streamControl({type: 'stream', id, op: 'error', message: 'late'});
+  assert.equal(receiver.closed, false);
+  assert.equal(receiver.incomingStreams.size, 0);
+  // A whole stream, data and end, received before anyone claims it.
+  const small = sender.outgoing();
+  small.stream.end(Buffer.from('tiny archive'));
+  await once(small.stream, 'finish');
+  await turn();
+  const chunks = [];
+  for await (const chunk of receiver.incoming(small.id)) chunks.push(chunk);
+  assert.equal(Buffer.concat(chunks).toString(), 'tiny archive');
+  // A failed stream (the sender's producer broke) ends the receiver's stream with that error.
+  const broken = sender.outgoing();
+  const reading = receiver.incoming(broken.id);
+  const failure = once(reading, 'error');
+  broken.stream.destroy(new Error('Disk read failed.'));
+  const [error] = await failure;
+  assert.match(error.message, /Disk read failed/);
   sender.close();
 });
 
