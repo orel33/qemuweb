@@ -97,8 +97,8 @@ function renderSessions(sessions) {
     if (session.own) user.append(Object.assign(document.createElement('span'), {className: 'admin-own', textContent: ' (you)'}));
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
-    if (session.own) actions.append(Object.assign(document.createElement('a'), {href: '/', textContent: 'Open'}));
-    else actions.append(Object.assign(document.createElement('a'), {href: `/?observe=${encodeURIComponent(session.login)}`, textContent: 'Observe', title: 'Read-only view of this session'}));
+    if (session.own) actions.append(Object.assign(document.createElement('a'), {href: '/', className: 'admin-button', textContent: 'Open'}));
+    else actions.append(Object.assign(document.createElement('a'), {href: `/?observe=${encodeURIComponent(session.login)}`, className: 'admin-button', textContent: 'Observe', title: 'Read-only view of this session'}));
     actions.append(
       button('Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})), 'Stop every VM and switch; the nodes are kept'),
       button('Delete', async () => {
