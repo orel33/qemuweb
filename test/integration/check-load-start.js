@@ -11,7 +11,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
-const {readArchive} = require('../../lib/session-archive');
+const {readArchive} = require('../../runner/archive-zip');
 
 const root = path.resolve(__dirname, '../..');
 const archiveFile = path.join(root, 'demo', 'lan.zip');

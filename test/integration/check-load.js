@@ -12,8 +12,8 @@ const os = require('node:os');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
-const {parseTopology} = require('../../lib/topology');
-const {readArchive} = require('../../lib/session-archive');
+const {parseTopology} = require('../../common/topology');
+const {readArchive} = require('../../runner/archive-zip');
 
 const root = path.resolve(__dirname, '../..');
 const demo = name => path.join(root, 'demo', name);

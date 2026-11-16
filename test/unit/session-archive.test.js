@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const {writeArchive, readArchive, safeName} = require('../../lib/session-archive');
+const {writeArchive, readArchive, safeName} = require('../../runner/archive-zip');
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-archive-test-'));

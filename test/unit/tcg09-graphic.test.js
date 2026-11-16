@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
-const {parseTopology} = require('../../lib/topology');
+const {parseTopology} = require('../../common/topology');
 const {buildGraph, stateOf} = require('../../public/topology-graphic');
 
 function nodesFromFixture(file) {

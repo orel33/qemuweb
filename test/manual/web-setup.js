@@ -15,7 +15,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {hashPassword} = require('../../lib/auth/passwords');
 const {writeUsers} = require('../../lib/auth/users-store');
-const {readArchive} = require('../../lib/session-archive');
+const {readArchive} = require('../../runner/archive-zip');
 const {QemuWebClient} = require('../integration/qemuweb-client');
 
 const root = path.resolve(__dirname, '../..');
