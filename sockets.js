@@ -26,6 +26,25 @@ function inputRefusal({observer, lock, holder}) {
   return lock ? `${lock.admin} controls this console.` : null;
 }
 
+// Audits observations once per (admin, observed login): the 'observe' line is written when
+// the first observer socket of that pair opens; a page load opens several sockets.
+function createObservationTracker(audit) {
+  const open = new Map();
+  const key = (admin, login) => JSON.stringify([admin, login]);
+  return {
+    opened(admin, login) {
+      const count = open.get(key(admin, login)) || 0;
+      open.set(key(admin, login), count + 1);
+      if (!count) audit.record(admin, 'observe', {login});
+    },
+    closed(admin, login) {
+      const count = (open.get(key(admin, login)) || 0) - 1;
+      if (count > 0) open.set(key(admin, login), count);
+      else open.delete(key(admin, login));
+    }
+  };
+}
+
 // Forwards the events of one session's runner to that session's browsers only.
 function bindWorkspace(io, {session, runner}, control) {
   for (const event of ['state', 'log', 'logs-reset', 'serial', 'serial-reset']) {
@@ -45,6 +64,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     io.to(`session:${lock.sessionId}`).emit('console-control', {nodeId: lock.nodeId, admin: lock.admin, active: false});
     audit.record(lock.admin, 'control-end', {login: lock.login, nodeId: lock.nodeId, reason});
   }});
+  const observations = createObservationTracker(audit);
   for (const workspace of manager.list()) bindWorkspace(io, workspace, control);
   manager.on('created', workspace => bindWorkspace(io, workspace, control));
   // Browsers of a deleted session reload, which opens the user's new session.
@@ -69,8 +89,12 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       socket.disconnect(true);
       return;
     }
-    // Console access is where an observation really starts: audited for every observer socket.
-    if (observer) audit.record(user.login, 'observe', {login: workspace.owner});
+    // Console access is where an observation really starts: audited here, once per admin and
+    // observed login while their sockets stay open.
+    if (observer) {
+      observations.opened(user.login, workspace.owner);
+      socket.on('disconnect', () => observations.closed(user.login, workspace.owner));
+    }
     const {session, runner} = workspace;
     socket.data.observer = observer;
     socket.join(sessionRoom(session));
@@ -180,4 +204,4 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   };
 }
 
-module.exports = {attachSockets, sessionRoom, nodeRoom, inputRefusal};
+module.exports = {attachSockets, sessionRoom, nodeRoom, inputRefusal, createObservationTracker};
