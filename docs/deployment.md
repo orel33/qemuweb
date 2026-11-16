@@ -36,7 +36,7 @@ writes it with mode 0600). Do not set `QEMUWEB_AUTH=off` on an exposed server.
 | `QEMUWEB_TRUST_PROXY` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
 | `QEMUWEB_SESSION_HOURS` | `12` (default) | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_USERS_FILE` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
-| `QEMUWEB_LOG_DIR` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Admin log](#admin-log)). |
+| `QEMUWEB_LOG_DIR` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
 
 Example systemd unit (`/etc/systemd/system/qemuweb.service`), assuming the
 repository in `/srv/qemuweb` and a `qemuweb` account in the `kvm` group:
@@ -62,13 +62,19 @@ WantedBy=multi-user.target
 Stopping the service stops every machine of every user and empties
 `runtime/sessions/`; tell users to save a session ZIP first.
 
-## Admin log
+## Server logs
 
-`admin.log` is the audit log of administrator actions. It lives in the log
-directory, `logs/` at the repository root (ignored by Git; `QEMUWEB_LOG_DIR`
-selects another directory), which the server creates at startup with mode 0700
-if it is missing. Every administration action appends one JSON line to it,
-created with mode 0600:
+The server writes two logs, as JSON lines, in the log directory: `logs/` at the
+repository root (ignored by Git; `QEMUWEB_LOG_DIR` selects another directory),
+which the server creates at startup with mode 0700 if it is missing. Both files
+are created with mode 0600. The **Logs** panel of `/admin` shows their last 200
+entries and downloads them. `scripts/cleanall.sh` does not touch them. A write
+failure is reported on the server output and never fails the request.
+
+### Admin log
+
+`admin.log` is the audit log of administrator actions. Every administration
+action appends one line:
 
 ```json
 {"time":"2026-11-16T09:12:03.120Z","admin":"prof","action":"control-start","target":{"login":"alice","nodeId":"s-0123456789abcdef"},"result":"ok"}
@@ -83,10 +89,37 @@ created with mode 0600:
 | `create-account` | `login`, `role`. |
 | `reset-password`, `disable-account`, `enable-account` | `login`. |
 | `set-role` | `login`, `role`. |
+| `remove-account` | `login`, `session` (whether it had a session, deleted with it). |
 
 `result` is `ok` or `error: <message>`. Passwords and typed console text are
-never written; reading the session list is not logged. The file grows without
-limit: rotate it with `logrotate` (`copytruncate`) if needed.
+never written; reading the session list or the logs is not logged.
+
+### Users log
+
+`users.log` records user events, one line each:
+
+```json
+{"time":"2026-11-16T09:15:41.002Z","user":"alice","event":"node-started","target":{"nodeId":"h-0123456789abcdef"},"result":"ok"}
+```
+
+| Event | Target |
+| --- | --- |
+| `login`, `logout` | none. |
+| `login-failed` | none; `user` is the login name that was tried (control characters removed, at most 64 characters), whether or not the account exists. |
+| `session-created` | `sessionId`. |
+| `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it). |
+| `node-created` | `nodeId`, `kind` (`host` or `switch`). |
+| `node-started`, `node-stopped`, `node-deleted` | `nodeId` (`node-deleted` of every node: `all`). |
+| `archive-loaded`, `archive-saved` | `kind`: `session` (ZIP) or `topology`. |
+
+Node and archive events come from the user's own explicit requests, with
+`result` `ok` or `error: HTTP <status>`; nodes started by a topology load or at
+creation are not listed one by one. Never logged: passwords, typed console
+text, file contents, IP addresses, polling and console traffic, and anything an
+admin does while observing (that goes to `admin.log`).
+
+Both files grow without limit: rotate them with `logrotate` (`copytruncate`)
+if needed.
 
 ## 3. nginx
 

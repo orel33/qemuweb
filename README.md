@@ -86,7 +86,7 @@ stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 | `add <login> [--role student\|admin]` | Creates an account. It fails if the login already exists: use `passwd` to change the password. To add an account again after `remove`, simply run `add` again. |
 | `passwd <login>` | Sets a new password for an existing account. |
 | `role <login> student\|admin` | Changes the role of an existing account. |
-| `remove <login>` | Deletes the account: the user can no longer log in and their cookie stops working at once. Their session is **not** deleted: its machines keep running until the user deletes it or the server restarts. If you `add` the same login again while the server is still running, that account finds the old session again. |
+| `remove <login>` | Deletes the account: the user can no longer log in and their cookie stops working at once. The script does not touch a running server: the session is **not** deleted, its machines keep running until it is deleted (from `/admin`) or the server restarts. If you `add` the same login again while the server is still running, that account finds the old session again. **Remove** in `/admin` also deletes the session. |
 | `disable <login>` | Disables the account (`"disabled": true` in `users.json`): the user can no longer log in, their cookie is refused at once, and their open consoles are closed at their next action. Their session stays until an admin deletes it. |
 | `enable <login>` | Allows a disabled account again. |
 | `list` | Prints one `login<TAB>role` line per account, followed by `<TAB>disabled` for a disabled one. |
@@ -131,11 +131,18 @@ can:
 - Delete several sessions at once (selection, or sessions inactive for a
   number of hours, confirmed on the listed sessions). The admin's own session
   is never part of it.
-- Manage accounts: create, reset a password, change the role, disable or
-  enable. An admin cannot disable their own account or change its role there.
+- Manage accounts: **Create account** (login, password, role), reset a
+  password, change the role, disable or enable, and **Remove** an account:
+  it disappears from `users.json`, its pages are logged out at once and its
+  session, if any, is deleted with its machines. An admin cannot disable,
+  remove or change the role of their own account there.
+- Read the last 200 entries of the two server logs in the **Logs** panel at
+  the bottom of the page (**Admin** and **Users** tabs), or **Download** them.
 
 Every administration action is written to `logs/admin.log`, an audit log of
-administrator actions (see [docs/deployment.md](docs/deployment.md#admin-log)). With `QEMUWEB_AUTH=off`,
+administrator actions; user events (logins, sessions, nodes started or
+stopped, archives) go to `logs/users.log` (see
+[docs/deployment.md](docs/deployment.md#server-logs)). With `QEMUWEB_AUTH=off`,
 the implicit local user is admin, so `/admin` is open to anyone reaching the
 server.
 
@@ -150,7 +157,7 @@ browser's cookie; see [docs/deployment.md](docs/deployment.md#known-limits).
 | `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
 | `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
-| `QEMUWEB_LOG_DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions (JSON lines, mode 0600). |
+| `QEMUWEB_LOG_DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions, and `users.log`, the user events (JSON lines, mode 0600). |
 
 With `QEMUWEB_AUTH=off`, the server prints a warning at startup and the
 interface shows **Authentication disabled**. It is never the default.

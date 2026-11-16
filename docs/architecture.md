@@ -27,7 +27,7 @@ flowchart TB
     Manager["Session manager · lib/session-manager.js (login → session + runner)"]
     Routes["HTTP API · one router per session · routes/"]
     Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
-    Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log · lib/audit.js"]
+    Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log and users.log · lib/audit.js"]
     Session["Session · lib/session.js, archives, topology"]
     Runner["Runner instance per session · runner/index.js"]
   end
@@ -106,6 +106,12 @@ flowchart TB
   tab's session socket carries `auth.main`), shown as online/offline in
   `/admin`. Admin actions are appended to `logs/admin.log`, the audit log of
   administrator actions (`lib/audit.js`).
+- **User events:** `logs/users.log` receives logins and logouts from the
+  `/auth` routes, session creation and deletion from the session manager
+  events (`removed` carries who asked), and the owner's explicit node and
+  archive actions from one middleware of the session router
+  (`routes/index.js`, `userEvent`), written when the response is sent.
+  `/admin` reads both logs from their end (`readLogTail`).
 
 ## Module map
 
@@ -143,7 +149,7 @@ The server is split into layers with one-way dependencies:
 | `lib/session-manager.js` | Login → `{session, runner}`; creation at first use, deletion, shutdown, `runtime/users/<login>` links. |
 | `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
 | `lib/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
-| `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`) and `admin.log`, the audit log of administrator actions (JSON lines). |
+| `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `lib/console-control.js` | Exclusive per-node console control lock with its 10-minute idle timer. |
 | `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date), and the last activity (memory only). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
