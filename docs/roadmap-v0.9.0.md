@@ -192,7 +192,7 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 
 ## Jalon 4 — Rôle admin
 
-L'admin voit toutes les sessions en cours, peut entrer dans n'importe laquelle pour observer un étudiant, et fait le ménage en fin de TP en un clic.
+L'admin voit toutes les sessions en cours, peut observer un étudiant en train de travailler, prendre la main sur une console pour l'aider, et fait le ménage en fin de TP en un clic.
 
 **Page `/admin`** : une ligne par session.
 
@@ -201,25 +201,50 @@ L'admin voit toutes les sessions en cours, peut entrer dans n'importe laquelle p
 | Utilisateur, date de création | `meta.json` (`owner`, `createdAt`) |
 | Nodes, VM en marche | `session.nodes` |
 | RAM réservée, CPU | mémoire des hôtes démarrés (`session.nodes`) + `runner/metrics.js` |
-| Dernière activité | nouvel horodatage (entrée console, appel API) |
+| Dernière activité | horodatage en mémoire, mis à jour par les requêtes API et la saisie dans les consoles de l'utilisateur (une session jamais utilisée compte depuis sa création ; l'observation d'un admin ne compte pas) |
 
-**Actions**
+**Observer une session (lecture seule)**
 
-- Ouvrir une session : l'admin rejoint sa room et voit consoles et logs. Lecture seule : l'admin ne tape jamais dans les consoles d'un étudiant.
-- Arrêter toutes les VM d'une session, ou la supprimer (disques compris).
-- Ménage groupé : sélection multiple, ou « supprimer les sessions inactives depuis X heures » (action manuelle).
-- Gestion des comptes : créer, réinitialiser un mot de passe, désactiver.
+- L'admin voit la session de l'étudiant dans l'interface normale, avec **sa propre disposition** : pour ses requêtes en lecture, le serveur lui fait voir la session choisie à la place de la sienne, et refuse tout ce qui n'est pas un `GET`. L'interface se met en mode observation (bandeau, actions désactivées).
+- Il reçoit en direct la sortie des consoles de l'étudiant, c'est-à-dire l'écho de sa saisie et les réponses (l'invité renvoie tout sur le port série), plus l'historique (les 256 Ko les plus récents de chaque console) et les logs. Un mot de passe saisi, sans écho dans l'invité, reste invisible.
+- Saisie, effacement (Clear) et redimensionnement des consoles sont refusés **côté serveur** pour un observateur : ils agiraient sur l'écran de l'étudiant.
+- L'interface de l'étudiant signale le node qu'il sélectionne, et celle de l'admin le suit.
+- Hors périmètre : reproduire à l'identique la disposition (panneaux, onglets, positions du graphe) du navigateur de l'étudiant, qui n'existe que chez lui.
+
+**Prendre la main (dernière étape du jalon)**
+
+- Bouton explicite sur un node observé. Les commandes de l'admin passent par le même port série : l'étudiant les voit, avec leurs réponses, comme s'il les avait tapées. Le flux ne dit pas qui tape ; un bandeau, envoyé par un événement distinct du flux série, l'indique des deux côtés.
+- **Verrou exclusif** : le clavier de l'étudiant est bloqué sur ce node tant que l'admin a la main. Elle est rendue par l'admin, à sa déconnexion, ou après 10 minutes sans saisie.
+- Le journal d'audit note le début et la fin de la prise de contrôle et le node concerné. Le texte tapé n'est pas enregistré.
+- Hors périmètre : une seconde console indépendante dans l'invité (réseau de TP isolé, images à modifier).
+
+**Autres actions**
+
+- Arrêter toutes les VM d'une session (sans supprimer ses nodes), ou la supprimer (disques compris). Les navigateurs de l'utilisateur sont rechargés.
+- Ménage groupé : sélection multiple, ou « supprimer les sessions inactives depuis X heures » (action manuelle). La liste concernée est affichée pour confirmation, et la session de l'admin qui la lance est exclue.
+- Gestion des comptes : créer (identifiant, mot de passe, rôle), réinitialiser un mot de passe, désactiver et réactiver. Un compte désactivé (`disabled` dans `users.json`, et `scripts/user.sh disable|enable`) ne peut plus se connecter et ses cookies sont refusés aussitôt ; sa session reste jusqu'à ce qu'un admin la supprime. Un admin ne peut ni se désactiver ni changer son propre rôle depuis la page.
 
 **Sécurité**
 
-- API `/api/admin/*` réservée au rôle `admin`, vérifié côté serveur.
-- Journal d'audit des actions admin (qui, quoi, quand).
+- API `/api/admin/*` réservée au rôle `admin`, vérifié côté serveur : un seul routeur dont le premier maillon est le contrôle du rôle (même un chemin inconnu répond 403 à un non-admin), monté avant l'ouverture de la session de l'utilisateur.
+- Journal d'audit des actions admin : fichier `audit.log` en JSON lignes à la racine du dépôt, ignoré par git (`QEMUWEB_AUDIT_FILE` le déplace). Chaque ligne note l'heure, l'admin, l'action, la cible et le résultat, y compris l'ouverture d'une observation, la prise de contrôle et les changements de comptes. Jamais de mot de passe.
+- Avec `QEMUWEB_AUTH=off`, l'utilisateur local est admin : `/admin` est ouvert à qui atteint le serveur, avec le même avertissement qu'ailleurs.
+
+**Découpage conseillé**
+
+1. 4a : contrôle du rôle et routeur `/api/admin/*`, champ `disabled`, module d'audit, horodatage d'activité, arrêt de toutes les VM dans la façade du runner.
+2. 4b : API d'administration : liste des sessions, arrêt, suppression, ménage groupé, gestion des comptes, le tout journalisé.
+3. 4c : observation en lecture seule (session substituée pour les requêtes en lecture, sockets en observation, suivi du node de l'étudiant).
+4. 4d : page `/admin` et mode observation de l'interface.
+5. 4e : prise de contrôle avec verrou exclusif, tests, documentation.
 
 **Critères de fin**
 
 - [ ] Un utilisateur non admin reçoit 403 sur toute route `/api/admin/*`.
-- [ ] L'admin observe la console d'un étudiant en direct sans pouvoir y taper (entrées refusées côté serveur).
+- [ ] L'admin observe la console d'un étudiant en direct sans pouvoir y taper, l'effacer ni la redimensionner (refusé côté serveur).
 - [ ] La suppression groupée libère les processus QEMU/VDE et le répertoire `runtime/sessions/<id>/`.
+- [ ] En prise de contrôle, le clavier de l'étudiant est bloqué, il voit les commandes et leurs réponses, et la main est rendue à la déconnexion de l'admin.
+- [ ] Chaque action d'administration laisse une ligne dans le journal d'audit.
 
 ## Jalon 5 — Runners local / distant
 
@@ -327,7 +352,7 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 | Redémarrage du serveur | Tout est effacé : VM arrêtées, `runtime/sessions/` vidé, utilisateurs déconnectés (nouvelle clé de signature des cookies) |
 | Sessions inactives | Pas d'expiration : ménage manuel par l'admin depuis `/admin` |
 | VirtualBox | Conservé aux jalons 3 à 6, sans jail ni quota cgroup ; QEMU prioritaire |
-| Console admin | Lecture seule, jamais d'écriture |
+| Console admin | Lecture seule ; écriture seulement après une prise de contrôle explicite (verrou exclusif, visible par l'étudiant, journalisée) |
 | Sessions par utilisateur | Une seule, définitivement |
 | Identifiant de session | Aléatoire, login dans `owner`, lien `runtime/users/<login>` |
 | Numéros `schemaVersion` | Jamais incrémentés pendant les bêtas ; remis à 1 à la sortie de 0.9.0 (section Stabilisation) |
