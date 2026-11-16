@@ -13,7 +13,7 @@
     <span class="auth-off-warning" id="auth-off-warning" title="QEMUWEB_AUTH=off: anyone reaching this server is administrator" hidden>Authentication disabled</span>
     <a class="admin-link" href="/">My session</a>
     <span class="account-name" id="account-name"></span>
-    <button id="logout" type="button" hidden>Log out</button>
+    <button id="logout" class="icon-button" type="button" title="Log out" aria-label="Log out" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" x2="9" y1="12" y2="12"/></svg></button>
   </header>
   <main class="admin-main">
     <section aria-labelledby="sessions-title">
@@ -91,7 +91,7 @@
       <div class="create-actions"><button id="password-cancel" type="button">Cancel</button><button type="submit">Set password</button></div>
     </form>
   </dialog>
-  <!-- Inline Lucide icons: Trash2, UserPlus here; Eye, Square, Trash2, KeyRound, UserX, UserCheck, UserMinus in admin.js. License: /icons/LICENSE-lucide.txt -->
+  <!-- Inline Lucide icons: LogOut, Trash2, UserPlus here; Eye, Square, Trash2, KeyRound, UserX, UserCheck, UserMinus in admin.js. License: /icons/LICENSE-lucide.txt -->
   <script type="module" src="/admin.js"></script>
 </body>
 </html>
