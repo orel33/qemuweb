@@ -5,9 +5,14 @@ import {renderTabs, showPage, showStatusError, updateControls} from './workspace
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
-import {applyControl, followOwner, observationUnavailable, observing, socketOptions} from './observe.js';
+import {applyControl, followOwner, followOwnerView, observationUnavailable, observing, socketOptions} from './observe.js';
 
 let socket = null;
+
+// The owner's browser tells observers which view it shows (Terminals or Graphic).
+export function publishViewMode() {
+  if (!observing && socket?.connected) socket.emit('view-mode', store.graphicVisible ? 'graphic' : 'terminals');
+}
 
 function socketConnectError(error) {
   if (error?.message === 'Authentication required.') { redirectToLogin(); return; }
@@ -105,7 +110,7 @@ export function initSockets() {
     if (machine.id === store.activeId) updateControls();
     if (store.graphicVisible) scheduleSessionSync();
   });
-  socket.on('connect', syncSessionsFromServer);
+  socket.on('connect', () => { syncSessionsFromServer(); publishViewMode(); });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;
@@ -124,5 +129,6 @@ export function initSockets() {
   socket.on('observe-unavailable', () => observationUnavailable());
   socket.on('console-control', event => applyControl(event.nodeId, event.admin, event.active));
   socket.on('owner-selected-node', event => followOwner(event.nodeId));
+  socket.on('owner-view-mode', event => followOwnerView(event.mode));
   socket.on('connect_error', socketConnectError);
 }

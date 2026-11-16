@@ -9,6 +9,7 @@ import {machines, store} from './state.js';
 import {panes} from './terminal.js';
 import {selectMachine, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
+import {setGraphicView} from './topology.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -93,11 +94,21 @@ export function observationUnavailable(reason = 'no session') {
   document.body.dataset.observeUnavailable = 'true';
 }
 
-// The owner selected a node: observers follow.
+// What the owner last selected and showed; followed while Follow is on and the admin does
+// not hold control. With Follow off the admin navigates freely.
+const ownerView = {nodeId: null, mode: null};
+const following = () => observing && !held && document.getElementById('observe-follow').checked;
+
 export function followOwner(nodeId) {
-  if (!observing || held) return;
+  ownerView.nodeId = nodeId;
+  if (!following()) return;
   if (machines.has(nodeId)) selectMachine(nodeId);
-  else syncSessionsFromServer().then(() => { if (machines.has(nodeId)) selectMachine(nodeId); });
+  else syncSessionsFromServer().then(() => { if (machines.has(nodeId) && following()) selectMachine(nodeId); });
+}
+
+export function followOwnerView(mode) {
+  ownerView.mode = mode;
+  if (following() && (mode === 'graphic') !== store.graphicVisible) setGraphicView(mode === 'graphic', false);
 }
 
 export function controlChanged() { renderControl(); }
@@ -159,6 +170,10 @@ export function initObserve() {
   document.getElementById('observe-user').textContent = observedLogin;
   document.getElementById('observe-select').addEventListener('change', event => goTo(event.target.value));
   document.getElementById('observe-control').addEventListener('click', toggleControl);
+  document.getElementById('observe-follow').addEventListener('change', () => {
+    if (ownerView.mode) followOwnerView(ownerView.mode);
+    if (ownerView.nodeId) followOwner(ownerView.nodeId);
+  });
   renderSessionNavigation();
   setInterval(renderSessionNavigation, 10000);
   renderControl();

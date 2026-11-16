@@ -5,7 +5,8 @@
 // Rooms keep sessions apart:
 //   session:<sessionId>           every browser of the session's owner, and of the admins
 //                                 observing it (per-session events)
-//   observers:<sessionId>         the admins observing the session (owner-selected-node)
+//   observers:<sessionId>         the admins observing the session (owner-selected-node,
+//                                 owner-view-mode)
 //   node:<sessionId>:<nodeId>     browsers that selected that node (per-node events); a socket
 //                                 joins it only for a node of its own or observed session
 // The handshake must already have set socket.data.user (see lib/auth/). An admin observes
@@ -68,10 +69,13 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   // Connected browser tabs per login: each tab opens one session socket (auth.main) besides
   // its console sockets. Observers are not counted.
   const browsers = new Map();
+  // What the owner last showed, per session ID: {nodeId, mode}, sent to a new observer.
+  const ownerViews = new Map();
   for (const workspace of manager.list()) bindWorkspace(io, workspace, control);
   manager.on('created', workspace => bindWorkspace(io, workspace, control));
   // Browsers of a deleted session reload, which opens the user's new session.
   manager.on('removed', ({session}) => {
+    ownerViews.delete(session.id);
     control.releaseSession(session.id, 'session deleted');
     io.to(sessionRoom(session)).emit('session-deleted', {sessionId: session.id});
     io.in(sessionRoom(session)).disconnectSockets(true);
@@ -144,13 +148,27 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
         const {nodeId, state, logs, serial} = runner.attachConsole(node.id);
         socket.emit('node-snapshot', {nodeId, token, state, logs, serial, control: controlInfo(nodeId)});
         // Observers follow the node the owner selects.
-        if (!observer) io.to(observerRoom(session)).emit('owner-selected-node', {nodeId});
+        if (!observer) {
+          ownerViews.set(session.id, {...ownerViews.get(session.id), nodeId});
+          io.to(observerRoom(session)).emit('owner-selected-node', {nodeId});
+        }
         if (typeof acknowledge === 'function') acknowledge({ok: true});
       }).catch(error => {
         socket.emit('node-error', error.message);
         if (typeof acknowledge === 'function') acknowledge({error: error.message});
       });
     }));
+    // The owner's view mode (Terminals or Graphic), followed by observers like the node.
+    socket.on('view-mode', guard(mode => {
+      if (observer || !['terminals', 'graphic'].includes(mode)) return;
+      ownerViews.set(session.id, {...ownerViews.get(session.id), mode});
+      io.to(observerRoom(session)).emit('owner-view-mode', {mode});
+    }));
+    if (observer) {
+      const view = ownerViews.get(session.id);
+      if (view?.mode) socket.emit('owner-view-mode', {mode: view.mode});
+      if (view?.nodeId && session.nodes.has(view.nodeId)) socket.emit('owner-selected-node', {nodeId: view.nodeId});
+    }
     socket.on('leave-node', id => {
       if (id !== socket.data.nodeId) return;
       control.release(session.id, id, socket, 'released');
