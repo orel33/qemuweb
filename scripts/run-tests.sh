@@ -14,7 +14,7 @@ Available tests:
   admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
   check-load                     Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)
   check-load-start               Load demo/lan.zip with automatic start like the Load session button: switch and 4 hosts running
-  two-hosts                      Two Debian Legacy hosts: VDE, ping and Stop/Resume
+  two-hosts-stop-resume          Two Debian Legacy hosts on one VDE switch: serial static IP, ping both ways, Stop/Resume keeping disk, port and MAC, ping again
   four-hosts-startup             Four Debian Legacy hosts configured by start.sh templates
   check-host-debian13-legacy     Debian Legacy host with startup disk: script, resource, Reboot with edited files, Stop/Resume
   check-host-debian13-cloud      Debian Cloud host with startup disk: script, resource, Reboot with edited files, Stop/Resume
@@ -28,7 +28,7 @@ Available tests:
 
 Use --list or --help to show this list. Nothing runs without a test name.
 See test/TESTS.md for the purpose and prerequisites of each test.
-To keep a live log: ./scripts/run-tests.sh two-hosts 2>&1 | tee two-hosts.log
+To keep a live log: ./scripts/run-tests.sh two-hosts-stop-resume 2>&1 | tee two-hosts-stop-resume.log
 EOF
 }
 
@@ -81,7 +81,7 @@ case "${1:-}" in
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
   check-load) run_test 'Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)' npm run test:check-load ;;
   check-load-start) run_test 'Load demo/lan.zip with automatic start like the Load session button: switch and 4 hosts running' npm run test:check-load-start ;;
-  two-hosts) run_test 'Two Debian Legacy hosts: VDE, ping and Stop/Resume' npm run test:two-hosts ;;
+  two-hosts-stop-resume) run_test 'Two Debian Legacy hosts on one VDE switch: serial static IP, ping both ways, Stop/Resume keeping disk, port and MAC, ping again' npm run test:two-hosts-stop-resume ;;
   four-hosts-startup) run_test 'Four Debian Legacy hosts: startup templates and full LAN ping' npm run test:four-hosts-startup ;;
   check-host-debian13-legacy) run_test 'Debian Legacy host with startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-host-debian13-legacy ;;
   check-host-debian13-cloud) run_test 'Debian Cloud host with startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-host-debian13-cloud ;;

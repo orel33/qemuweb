@@ -1,5 +1,8 @@
 'use strict';
 
+// Two Debian Legacy hosts on one VDE switch: static IP through the serial console, ping both ways,
+// Stop then Resume keeping the working disk marker, the VDE port and the MAC, IP set again, ping again.
+
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -352,7 +355,7 @@ async function cleanup() {
 }
 
 run().catch(error => {
-  console.error(`\nTwo-hosts test FAILED: ${error.stack || error.message}`);
+  console.error(`\nTwo-hosts Stop/Resume test FAILED: ${error.stack || error.message}`);
   if (serverOutput.length) console.error(`\n--- QemuWeb output ---\n${serverTail()}`);
   process.exitCode = 1;
 }).finally(cleanup);

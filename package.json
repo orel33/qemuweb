@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "test": "node --test test/unit/*.test.js",
-    "test:two-hosts": "node test/integration/two-hosts-ping.js",
+    "test:two-hosts-stop-resume": "node test/integration/two-hosts-stop-resume.js",
     "test:four-hosts-startup": "node test/integration/four-hosts-startup.js",
     "test:check-host-debian13-legacy": "CHECK_HOST_PROFILE=debian13-legacy node test/integration/check-host.js",
     "test:check-host-debian13-cloud": "CHECK_HOST_PROFILE=debian13-cloud node test/integration/check-host.js",
