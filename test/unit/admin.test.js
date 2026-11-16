@@ -7,7 +7,6 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const {spawnSync} = require('node:child_process');
-const {setTimeout: delay} = require('node:timers/promises');
 const {hashPassword, verifyPassword} = require('../../lib/auth/passwords');
 const {readUsers, writeUsers, parseUsers, createAccount, setPassword, setRole, setDisabled} = require('../../lib/auth/users-store');
 const {COOKIE_NAME, newSecret, signSession} = require('../../lib/auth/cookie');
@@ -199,10 +198,12 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', () =
   assert.equal(sessionSummary({owner: 'boss', session, runner}, 'boss').own, true);
 });
 
-test('console control is exclusive, renewed by input and released once', async () => {
+test('console control is exclusive, renewed by input and released once', t => {
   assert.equal(CONTROL_IDLE_MS, 10 * 60 * 1000);
+  // Mocked setTimeout/clearTimeout: the idle timer is driven by tick(), not by the machine load.
+  t.mock.timers.enable({apis: ['setTimeout']});
   const released = [];
-  const control = new ConsoleControl({idleMs: 60, onRelease: (lock, reason) => released.push([lock.nodeId, lock.admin, reason])});
+  const control = new ConsoleControl({onRelease: (lock, reason) => released.push([lock.nodeId, lock.admin, reason])});
   const first = {}, second = {};
   assert.equal(control.take('s1', 'n1', {admin: 'boss', login: 'toto', holder: first}), true);
   assert.equal(control.take('s1', 'n1', {admin: 'boss', login: 'toto', holder: first}), false, 'renewal');
@@ -210,10 +211,12 @@ test('console control is exclusive, renewed by input and released once', async (
   assert.equal(control.get('s2', 'n1'), null, 'locks are per session');
   assert.equal(control.release('s1', 'n1', second, 'released'), false, 'only the holder releases');
   assert.equal(control.touch('s1', 'n1', second), false);
-  // Input renews the idle timer.
-  for (let i = 0; i < 4; i++) { await delay(30); assert.equal(control.touch('s1', 'n1', first), true); }
+  // Input renews the 10-minute idle timer.
+  for (let i = 0; i < 4; i++) { t.mock.timers.tick(CONTROL_IDLE_MS - 1000); assert.equal(control.touch('s1', 'n1', first), true); }
   assert.deepEqual(released, []);
-  await delay(120);
+  t.mock.timers.tick(CONTROL_IDLE_MS - 1);
+  assert.deepEqual(released, []);
+  t.mock.timers.tick(1);
   assert.deepEqual(released, [['n1', 'boss', 'idle']]);
   assert.equal(control.get('s1', 'n1'), null);
 
