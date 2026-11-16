@@ -142,7 +142,18 @@ OPENWRT_HOOK
     -netdev user,id=prep-wan -device virtio-net-pci,netdev=prep-wan \
     >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
   qemu_pid=$!
-  trap 'kill -TERM "$qemu_pid" 2>/dev/null || true; wait "$qemu_pid" 2>/dev/null || true' EXIT
+  # On any exit before the disk is published, stop the VM and drop the temporary disk (about
+  # 100 MB). After a failure keep the small serial log and guest script, which show where the
+  # preparation stopped, and print their location.
+  cleanup_openwrt_prepare() {
+    local status=$?
+    kill -TERM "$qemu_pid" 2>/dev/null || true
+    wait "$qemu_pid" 2>/dev/null || true
+    rm -f "$disk"
+    if (( status != 0 )); then echo "OpenWrt preparation files preserved in $temp_dir" >&2
+    else rm -rf "$temp_dir"; fi
+  }
+  trap cleanup_openwrt_prepare EXIT
   python3 - "$serial_socket" "$serial_log" "$payload" <<'PY'
 import base64, os, re, shlex, socket, sys, time
 socket_path, log_path, payload = sys.argv[1:]
