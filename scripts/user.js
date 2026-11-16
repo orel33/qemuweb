@@ -5,14 +5,17 @@
 //   passwd <login>                       change a password
 //   role <login> student|admin           change a role
 //   remove <login>                       delete an account (its running session is kept until deleted)
-//   list                                 print logins and roles
+//   disable <login>                      refuse the account's logins and cookies (its session is kept)
+//   enable <login>                       allow a disabled account again
+//   list                                 print logins, roles and disabled accounts
 //   import-csv <file>                    add or update accounts from "login,password[,role]" lines
 // Passwords come from QEMUWEB_PASSWORD, else from standard input when it is not a terminal
 // (first line), else from a prompt without echo.
 const fs = require('fs');
 const path = require('path');
 const {hashPassword} = require('../lib/auth/passwords');
-const {readUsers, writeUsers, usersFilePath, validateLogin, validateRole} = require('../lib/auth/users-store');
+const {readUsers, writeUsers, usersFilePath, validateLogin, validateRole, validatePassword, createAccount, setPassword,
+  setRole, setDisabled, removeAccount} = require('../lib/auth/users-store');
 
 const root = path.join(__dirname, '..');
 const USAGE = `Usage: scripts/user.sh <command>
@@ -20,6 +23,8 @@ const USAGE = `Usage: scripts/user.sh <command>
   passwd <login>
   role <login> student|admin
   remove <login>
+  disable <login>
+  enable <login>
   list
   import-csv <file>          lines: login,password[,role]
 Password: QEMUWEB_PASSWORD, or the first line of standard input, or a prompt.
@@ -76,12 +81,6 @@ async function readPassword(login) {
   return first;
 }
 
-function checkPassword(password) {
-  if (typeof password !== 'string' || !password) fail('The password must not be empty.');
-  if (password.length > 1024) fail('The password is too long (maximum 1024 characters).');
-  return password;
-}
-
 function parseCsv(text) {
   const entries = [];
   for (const [index, raw] of text.split(/\r?\n/).entries()) {
@@ -94,7 +93,7 @@ function parseCsv(text) {
     try {
       validateLogin(login);
       validateRole(role);
-      checkPassword(password);
+      validatePassword(password);
     } catch (error) { fail(`Line ${index + 1}: ${error.message}`); }
     entries.push({login, password, role});
   }
@@ -115,10 +114,8 @@ async function main(args) {
         if (options.length !== 2 || options[0] !== '--role') fail(USAGE, 2);
         role = validateRole(options[1]);
       }
-      const list = users();
-      if (find(list, login)) fail(`User ${login} already exists; use passwd to change the password.`);
-      const hash = await hashPassword(checkPassword(await readPassword(login)));
-      writeUsers(file, [...list, {login, hash, role}]);
+      if (find(users(), login)) fail(`User ${login} already exists; use passwd to change the password.`);
+      await createAccount(file, {login, role, password: await readPassword(login)});
       console.log(`Added ${login} (${role}) to ${file}.`);
       return;
     }
@@ -126,40 +123,37 @@ async function main(args) {
       const [login] = rest;
       if (rest.length !== 1) fail(USAGE, 2);
       validateLogin(login);
-      const list = users();
-      const user = find(list, login);
-      if (!user) fail(`Unknown user ${login}.`);
-      user.hash = await hashPassword(checkPassword(await readPassword(login)));
-      writeUsers(file, list);
+      if (!find(users(), login)) fail(`Unknown user ${login}.`);
+      await setPassword(file, login, await readPassword(login));
       console.log(`Password changed for ${login}.`);
       return;
     }
     case 'role': {
       const [login, role] = rest;
       if (rest.length !== 2) fail(USAGE, 2);
-      validateLogin(login);
-      validateRole(role);
-      const list = users();
-      const user = find(list, login);
-      if (!user) fail(`Unknown user ${login}.`);
-      user.role = role;
-      writeUsers(file, list);
+      setRole(file, login, role);
       console.log(`${login} is now ${role}.`);
+      return;
+    }
+    case 'disable': case 'enable': {
+      const [login] = rest;
+      if (rest.length !== 1) fail(USAGE, 2);
+      setDisabled(file, login, command === 'disable');
+      console.log(command === 'disable'
+        ? `Disabled ${login}: its logins and cookies are refused; its session stays until an admin deletes it.`
+        : `Enabled ${login}.`);
       return;
     }
     case 'remove': {
       const [login] = rest;
       if (rest.length !== 1) fail(USAGE, 2);
-      validateLogin(login);
-      const list = users();
-      if (!find(list, login)) fail(`Unknown user ${login}.`);
-      writeUsers(file, list.filter(user => user.login !== login));
+      removeAccount(file, login);
       console.log(`Removed ${login}. A session it already opened stays on the server until deleted or restarted.`);
       return;
     }
     case 'list': {
       if (rest.length) fail(USAGE, 2);
-      for (const user of users()) console.log(`${user.login}\t${user.role}`);
+      for (const user of users()) console.log(`${user.login}\t${user.role}${user.disabled ? '\tdisabled' : ''}`);
       return;
     }
     case 'import-csv': {

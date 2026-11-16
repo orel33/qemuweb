@@ -1,20 +1,25 @@
-// Account controls in the header: user name, Delete session, Log out, and the warning
+// Account controls in the header: user name, Supervision link (admins), Delete session, Log out, and the warning
 // shown when authentication is disabled (QEMUWEB_AUTH=off). The session survives Log out.
 import {installAuthRedirect, redirectToLogin, requestJson} from './api.js';
 import {confirmAction} from './nodes.js';
 import {showStatusError} from './workspace.js';
+import {observedLogin} from './observe.js';
 
 const account = document.getElementById('account');
 const accountName = document.getElementById('account-name');
 const authOffWarning = document.getElementById('auth-off-warning');
 const logoutButton = document.getElementById('logout');
 const deleteSessionButton = document.getElementById('delete-session');
+const adminLink = document.getElementById('admin-link');
 
 export function initAccount() {
   installAuthRedirect();
   fetch('/auth/me', {cache: 'no-store'}).then(async response => {
     if (!response.ok) return;
     const me = await response.json();
+    // Observing yourself is just your own session.
+    if (observedLogin === me.login) { location.replace('/'); return; }
+    adminLink.hidden = me.role !== 'admin';
     accountName.textContent = me.login;
     accountName.title = `Logged in as ${me.login} (${me.role})`;
     authOffWarning.hidden = me.authMode !== 'off';

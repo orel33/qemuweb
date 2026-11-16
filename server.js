@@ -13,6 +13,8 @@ const {attachSockets, sessionRoom} = require('./sockets');
 const {createSessionRouter} = require('./routes');
 const {readCatalog} = require('./common/system-config');
 const {createAuth} = require('./lib/auth');
+const {ADMIN_LOG, logDirPath, createLogDir, createAudit} = require('./lib/audit');
+const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
 const packageInfo = require('./package.json');
 
 const root = __dirname;
@@ -60,8 +62,12 @@ if (process.env.QEMUWEB_TRUST_PROXY) {
   const value = process.env.QEMUWEB_TRUST_PROXY;
   app.set('trust proxy', value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value);
 }
+let logDir;
+try { logDir = createLogDir(logDirPath(root)); }
+catch (error) { console.error(`Cannot create the log directory: ${error.message}`); process.exit(1); }
+const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 io.use(auth.socketMiddleware);
-attachSockets(io, manager);
+const sockets = attachSockets(io, manager, {audit, currentUser: auth.currentUser});
 
 app.use(auth.identify);
 auth.register(app);
@@ -73,18 +79,28 @@ app.use((req, res, next) => {
   if (['/', '/index.html', '/login.html'].includes(req.path)) res.set('Cache-Control', 'no-store');
   next();
 });
+app.get(['/admin', '/admin.html'], adminPage(root));
 app.use(express.static(path.join(root, 'public')));
+// X-Observe (admins, read-only) and the admin API come before anything that could open or
+// change the caller's own session.
+app.use('/api', observationGate(manager));
+app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser}));
 // Self-service deletion: stops and removes every node, then the session; the next request
 // opens a new, empty session.
 app.delete('/api/session', async (req, res) => {
   try { res.json({deleted: await manager.remove(req.user.login)}); }
   catch (error) { res.status(409).json({error: error.message}); }
 });
-// API requests go to the router of the user's own session (created at first use).
+// API requests go to the router of the user's own session (created at first use), or of the
+// observed session. Only the owner's requests count as activity.
 app.use((req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
-  try { req.workspace = manager.open(req.user.login); }
-  catch (error) { return res.status(503).json({error: error.message}); }
+  if (req.observed) req.workspace = req.observed;
+  else {
+    try { req.workspace = manager.open(req.user.login); }
+    catch (error) { return res.status(503).json({error: error.message}); }
+    req.workspace.session.touch();
+  }
   req.workspace.router(req, res, next);
 });
 

@@ -36,6 +36,7 @@ writes it with mode 0600). Do not set `QEMUWEB_AUTH=off` on an exposed server.
 | `QEMUWEB_TRUST_PROXY` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
 | `QEMUWEB_SESSION_HOURS` | `12` (default) | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_USERS_FILE` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
+| `QEMUWEB_LOG_DIR` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Admin log](#admin-log)). |
 
 Example systemd unit (`/etc/systemd/system/qemuweb.service`), assuming the
 repository in `/srv/qemuweb` and a `qemuweb` account in the `kvm` group:
@@ -60,6 +61,32 @@ WantedBy=multi-user.target
 
 Stopping the service stops every machine of every user and empties
 `runtime/sessions/`; tell users to save a session ZIP first.
+
+## Admin log
+
+`admin.log` is the audit log of administrator actions. It lives in the log
+directory, `logs/` at the repository root (ignored by Git; `QEMUWEB_LOG_DIR`
+selects another directory), which the server creates at startup with mode 0700
+if it is missing. Every administration action appends one JSON line to it,
+created with mode 0600:
+
+```json
+{"time":"2026-11-16T09:12:03.120Z","admin":"prof","action":"control-start","target":{"login":"alice","nodeId":"s-0123456789abcdef"},"result":"ok"}
+```
+
+| Action | Target |
+| --- | --- |
+| `observe` | `login`: written when an admin's first console connection to that session opens (one line per admin and session while it stays open). |
+| `control-start`, `control-end` | `login`, `nodeId`; `control-end` adds `reason` (`released`, `disconnected`, `idle`, `node deleted`, `session deleted`). |
+| `stop-all`, `delete-session` | `login`. |
+| `bulk-delete` | `logins`. |
+| `create-account` | `login`, `role`. |
+| `reset-password`, `disable-account`, `enable-account` | `login`. |
+| `set-role` | `login`, `role`. |
+
+`result` is `ok` or `error: <message>`. Passwords and typed console text are
+never written; reading the session list is not logged. The file grows without
+limit: rotate it with `logrotate` (`copytruncate`) if needed.
 
 ## 3. nginx
 
@@ -132,5 +159,6 @@ Check the result:
   running session stays on the server until it is deleted or the server
   restarts. Adding the same login again while the server is running gives that
   account the old session back.
-- Deleting another user's session from an administration page comes with
-  milestone 4; until then only the user can delete their own session.
+- An account disabled with `scripts/user.sh disable` loses its cookie at once;
+  its already open consoles are closed at their next action. Disabling it from
+  `/admin` closes them immediately.

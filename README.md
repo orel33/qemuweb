@@ -75,7 +75,9 @@ stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 ./scripts/user.sh passwd alice              # change a password
 ./scripts/user.sh role alice admin          # change a role
 ./scripts/user.sh remove alice              # delete the account
-./scripts/user.sh list                      # logins and roles (never the passwords)
+./scripts/user.sh disable alice             # refuse logins and cookies; the session stays
+./scripts/user.sh enable alice              # allow a disabled account again
+./scripts/user.sh list                      # logins, roles and disabled accounts (never the passwords)
 ./scripts/user.sh import-csv class.csv      # lines: login,password[,role]
 ```
 
@@ -85,13 +87,49 @@ stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 | `passwd <login>` | Sets a new password for an existing account. |
 | `role <login> student\|admin` | Changes the role of an existing account. |
 | `remove <login>` | Deletes the account: the user can no longer log in and their cookie stops working at once. Their session is **not** deleted: its machines keep running until the user deletes it or the server restarts. If you `add` the same login again while the server is still running, that account finds the old session again. |
-| `list` | Prints one `login<TAB>role` line per account. |
+| `disable <login>` | Disables the account (`"disabled": true` in `users.json`): the user can no longer log in, their cookie is refused at once, and their open consoles are closed at their next action. Their session stays until an admin deletes it. |
+| `enable <login>` | Allows a disabled account again. |
+| `list` | Prints one `login<TAB>role` line per account, followed by `<TAB>disabled` for a disabled one. |
 | `import-csv <file>` | Reads `login,password[,role]` lines (an optional header line is accepted). New logins are added, existing ones get the new password and role. |
 
 For scripts, the password can come from `QEMUWEB_PASSWORD` or from the first
 line of standard input; otherwise the script prompts for it. Logins use letters, digits, `.`, `_`, `-` and `@` (up to
-64 characters). Changes apply without restarting the server. The `admin` role
-is stored but grants nothing yet.
+64 characters). Changes apply without restarting the server.
+
+### Administration
+
+`admin` is a role of an ordinary account: an admin has their own session and
+works in it normally. The header shows a **Supervision** link to `/admin`
+(admins only), which lists every session, the admin's own marked, refreshed
+every few seconds: user, creation date, nodes, running VMs, reserved RAM, CPU
+and last activity (the owner's requests and console input; an admin observing
+does not count). From there an admin can:
+
+- **Observe** a session: `/?observe=<login>` opens the normal interface on the
+  student's session, read-only, with the admin's own layout. A banner of
+  distinct colour shows the observed user, previous/next active session, a
+  session list, **Take control**, **My session** and **Supervision**. The admin
+  sees the consoles live (what the guest echoes, so not a password typed
+  without echo), their history and logs, and follows the node the student
+  selects. The target belongs to the tab: another tab can stay on the admin's
+  own session. The server refuses every change from an observer, including
+  console input, Clear and resizing.
+- **Take control** of the selected console: an exclusive lock on that node.
+  The student's keyboard is blocked on it and a banner tells them who controls
+  it; they still see the commands and their output. Control ends with **Release
+  control**, when the admin's page closes, or after 10 minutes without input.
+- **Stop all** VMs and switches of a session (nodes kept) or **Delete** it
+  (disks included); the student's browsers reload into a new, empty session.
+- Delete several sessions at once (selection, or sessions inactive for a
+  number of hours, confirmed on the listed sessions). The admin's own session
+  is never part of it.
+- Manage accounts: create, reset a password, change the role, disable or
+  enable. An admin cannot disable their own account or change its role there.
+
+Every administration action is written to `logs/admin.log`, an audit log of
+administrator actions (see [docs/deployment.md](docs/deployment.md#admin-log)). With `QEMUWEB_AUTH=off`,
+the implicit local user is admin, so `/admin` is open to anyone reaching the
+server.
 
 Until per-user quotas, command restrictions and cross-site request checks
 exist (milestone 6), give accounts only to trusted users: any user can run any
@@ -104,6 +142,7 @@ browser's cookie; see [docs/deployment.md](docs/deployment.md#known-limits).
 | `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
 | `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
+| `QEMUWEB_LOG_DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions (JSON lines, mode 0600). |
 
 With `QEMUWEB_AUTH=off`, the server prints a warning at startup and the
 interface shows **Authentication disabled**. It is never the default.

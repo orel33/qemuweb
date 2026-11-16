@@ -1,3 +1,4 @@
+import {observeHeaders, observing} from './observe.js';
 // HTTP helpers for the QemuWeb REST API.
 // URL of a node resource: /api/nodes/<nodeId>[/<action>].
 export function nodeUrl(nodeId, action = '') {
@@ -33,11 +34,16 @@ export function redirectToLogin() {
 }
 
 // Every fetch() of the UI goes through this wrapper: a 401 response means the login
-// session expired or was revoked, so the page returns to the login form.
+// session expired or was revoked, so the page returns to the login form. In an observation
+// tab, it adds the X-Observe header to the session API requests (not to /api/admin).
 export function installAuthRedirect() {
   const nativeFetch = window.fetch.bind(window);
-  window.fetch = async (...args) => {
-    const response = await nativeFetch(...args);
+  window.fetch = async (resource, options = {}) => {
+    const url = new URL(resource instanceof Request ? resource.url : String(resource), location.href);
+    if (observing && url.origin === location.origin && url.pathname.startsWith('/api/') && !url.pathname.startsWith('/api/admin/')) {
+      options = {...options, headers: {...Object.fromEntries(new Headers(options.headers || {})), ...observeHeaders()}};
+    }
+    const response = await nativeFetch(resource, options);
     if (response.status === 401) redirectToLogin();
     return response;
   };

@@ -6,6 +6,7 @@ import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
 import {renderGraphic} from './topology.js';
+import {controlChanged} from './observe.js';
 
 let workspaceError = null;
 const resourceMetrics = new Map();
@@ -299,6 +300,7 @@ export function updateControls() {
   exitAllButton.disabled = store.exitAllBusy || !machines.size || [...machines.values()].some(item => item.busy);
   updatePaneStates();
   updatePaneViewControls();
+  controlChanged();
   if (!machine) {
     cloneButton.disabled = true;
     return;

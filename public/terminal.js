@@ -4,6 +4,7 @@ import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {focusPane, renderPaneSessionOptions, togglePaneExpansion, updateControls, workspace} from './workspace.js';
 import {rebootActiveMachine, removeActiveMachine, resetActiveMachine, startActiveMachine, stopActiveMachine} from './nodes.js';
 import {openHostSettings} from './host-settings.js';
+import {canType, observing, socketOptions} from './observe.js';
 
 export const panes = [];
 
@@ -22,7 +23,7 @@ export function fitTerminal(pane) {
   pane.fit.fit();
   syncConsoleScroll(pane);
   const machine = pane.machineId && machines?.get(pane.machineId);
-  if (machine?.kind === 'switch') pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
+  if (machine?.kind === 'switch' && !observing) pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
 }
 export function fitTerminals() { panes.forEach(fitTerminal); }
 
@@ -206,7 +207,7 @@ export function appendLog(machine, line) {
 }
 
 function clearPaneConsole(pane) {
-  if (!pane.machineId || pane.view !== 'console' || !machines.has(pane.machineId)) return;
+  if (observing || !pane.machineId || pane.view !== 'console' || !machines.has(pane.machineId)) return;
   const buffer = pane.terminal.buffer.active;
   const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) || '';
   pane.socket.emit('clear-console', {id: pane.machineId, line, column: buffer.cursorX});
@@ -219,7 +220,7 @@ export function initTerminals() {
     terminal.loadAddon(fit);
     const pane = {
       index,
-      socket: io({transports: ['websocket', 'polling']}),
+      socket: io(socketOptions()),
       element: document.getElementById(`console-pane-${index}`),
       title: document.getElementById(`console-session-${index}`),
       viewToggle: document.getElementById(`console-view-${index}`),
@@ -384,6 +385,7 @@ export function initTerminals() {
       if (pane.replaying || !pane.machineId) return;
       if (pane.view === 'monitor') handleMonitorInput(pane, data);
       else if (pane.view === 'console') {
+        if (!canType(pane)) return;
         const machine = machines.get(pane.machineId);
         // resize queries device attributes before requesting cursor position.
         // Other cursor replies can be echoed literally by serial getty at boot.

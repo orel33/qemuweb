@@ -297,3 +297,45 @@ main[data-columns="4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 .account { display: inline-flex; flex: none; align-items: center; gap: 8px; }
 .account-name { max-width: 180px; overflow: hidden; color: #b8c7d8; text-overflow: ellipsis; white-space: nowrap; }
 .auth-off-warning { flex: none; padding: 4px 8px; border: 1px solid #b1452f; border-radius: 6px; color: #ffd2c8; background: #4a1f17; font-size: 12px; font-weight: 700; }
+/* Administration: Supervision link, observation banner and console control banner. */
+.admin-link { color: #f2c46d; text-decoration: none; padding: 6px 9px; border: 1px solid #6a5730; border-radius: 6px; white-space: nowrap; }
+.admin-link:hover, .admin-link:focus-visible { background: #3a3220; }
+.admin-link[hidden] { display: none; }
+.observe-banner { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; color: #1d1405; background: #f2b84b; font-weight: 600; }
+.observe-banner[hidden], .control-banner[hidden] { display: none; }
+.observe-banner[data-control="true"] { background: #f08a5d; }
+.observe-banner button, .observe-banner select { padding: 4px 9px; color: #1d1405; background: #ffe3a8; border-color: #8a6420; }
+.observe-status { margin-right: auto; font-weight: 400; }
+.observe-link { color: #1d1405; padding: 4px 8px; border: 1px solid #8a6420; border-radius: 6px; text-decoration: none; background: #ffe3a8; }
+.control-banner { flex: none; padding: 8px 16px; color: #1d1405; background: #f08a5d; font-weight: 600; }
+/* Observation is read-only: the server refuses every change; these controls are hidden. */
+body.observing #delete-session, body.observing #show-general-settings, body.observing #load-topology,
+body.observing #load-session-archive, body.observing #save-session-archive, body.observing #new-host,
+body.observing #new-switch, body.observing #clone-machine, body.observing #exit-all, body.observing .machine-close,
+body.observing .pane-action-menu, body.observing .pane-settings-button, body.observing .pane-clear-button,
+body.observing [data-view="monitor"] { display: none !important; }
+/* Supervision page (/admin). */
+.admin-heading { margin-left: 14px; color: #f2c46d; font-weight: 600; }
+.admin-page header { gap: 12px; }
+.admin-main { flex: 1; overflow: auto; padding: 16px; }
+.admin-main section { margin-bottom: 28px; }
+.admin-section-head { display: flex; align-items: baseline; gap: 14px; }
+.admin-section-head h2 { margin: 0 0 10px; font-size: 17px; }
+.admin-updated { color: #8fa2b8; font-size: 13px; }
+.admin-toolbar, .admin-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
+.admin-inline-form label { display: inline-flex; align-items: center; gap: 6px; }
+.admin-inline-form input { padding: 7px 9px; color: inherit; background: #101720; border: 1px solid #506176; border-radius: 6px; }
+#inactive-hours { width: 80px; }
+.admin-table-wrap { overflow-x: auto; }
+.admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
+.admin-table th, .admin-table td { padding: 7px 9px; text-align: left; white-space: nowrap; border-bottom: 1px solid #2c3743; }
+.admin-table th { color: #9fb3c9; font-weight: 600; }
+.admin-table tr[data-own="true"] { background: #1c2a1f; }
+.admin-table tr[data-disabled="true"] td { color: #8a96a3; }
+.admin-own { color: #9ee6b4; }
+.admin-actions { display: flex; gap: 6px; align-items: center; }
+.admin-actions button, .admin-actions select, .admin-table select { padding: 4px 9px; }
+.admin-actions a { color: #8ec5ff; padding: 4px 6px; }
+.admin-error { color: #ff9a9f; }
+.admin-error[hidden] { display: none; }
+.admin-confirm-list { max-height: 240px; overflow: auto; margin: 0; }

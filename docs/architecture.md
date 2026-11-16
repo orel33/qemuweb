@@ -9,7 +9,8 @@ and relays their consoles.
 | Term | Meaning |
 | --- | --- |
 | Session | A user's workspace: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `runtime/sessions/<id>/`. Each user owns exactly one session, with a random ID, recorded as `owner` in `meta.json` next to `session.json`. A session ZIP archive and `session.json` describe it; `meta.json` (owner, creation date) belongs to the live session only and is never exported. |
-| User | A login from `users.json` (or the implicit `local` user when `QEMUWEB_AUTH=off`). |
+| User | A login from `users.json` (or the implicit `local` user when `QEMUWEB_AUTH=off`), with the role `student` or `admin`. An admin owns a session like anyone else and may also supervise, observe and clean up the others. |
+| Observer | An admin's browser tab or socket reading another user's session (`X-Observe` header, Socket.IO `auth.observe`): read-only, except console input after taking control of a node. |
 | Node | An element of a session: a host or a switch. API routes and Socket.IO events use `nodeId`. |
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
 | Switch | A node that is a VDE switch. |
@@ -25,7 +26,8 @@ flowchart TB
     Auth["Authentication · lib/auth/ (signed cookie)"]
     Manager["Session manager · lib/session-manager.js (login → session + runner)"]
     Routes["HTTP API · one router per session · routes/"]
-    Sockets["Socket.IO · rooms session:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
+    Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
+    Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log · lib/audit.js"]
     Session["Session · lib/session.js, archives, topology"]
     Runner["Runner instance per session · runner/index.js"]
   end
@@ -40,6 +42,8 @@ flowchart TB
   UI -->|"HTTP / JSON + cookie"| Auth
   Terminal <-->|"Socket.IO + cookie"| Auth
   Auth -->|"req.user"| Manager
+  Auth -->|"role admin"| Admin
+  Admin -->|"list, stop, delete"| Manager
   Auth -->|"socket.data.user"| Sockets
   Manager -->|"req.workspace"| Routes
   Manager -->|"creates"| Session
@@ -80,7 +84,24 @@ flowchart TB
   deletes it or the server stops. Each HTTP request goes to the router of the
   user's own session, so a node ID is looked up only there (404 otherwise).
   Per-session events go to the room `session:<id>`, per-node events to
-  `node:<id>:<nodeId>`, which a socket joins only for a node of its own session.
+  `node:<id>:<nodeId>`, which a socket joins only for a node of its own (or
+  observed) session.
+- **Administration:** `server.js` mounts, in this order after authentication,
+  the observation gate (`X-Observe`: admins only, `GET`/`HEAD` only, the
+  observed workspace taken with `manager.get`, never `open`), the
+  `/api/admin` router (first middleware: role `admin`, then 403 on any path
+  for others), `DELETE /api/session`, and the middleware that opens the
+  caller's own session and records its activity. An admin call therefore never
+  opens a session for the admin, and an observed session never gets an
+  activity mark. An observer socket (`auth.observe`) joins the observed
+  session's rooms and `observers:<id>`; `sockets.js` refuses its `input`,
+  `clear-console` and `terminal-resize`, sends it `owner-selected-node` when the
+  owner selects a node, and lets it type only into a node it controls
+  (`take-control`, `lib/console-control.js`; the owner's input on that node is
+  then dropped and both sides get `console-control`). Every privileged socket
+  event re-reads the account, so a disabled or removed account loses its
+  sockets. Admin actions are appended to `logs/admin.log`, the audit log of
+  administrator actions (`lib/audit.js`).
 
 ## Module map
 
@@ -106,7 +127,8 @@ The server is split into layers with one-way dependencies:
 | Module | Role |
 | --- | --- |
 | `server.js` | Startup and wiring: HTTP server, Socket.IO, authentication, session manager and routes. |
-| `sockets.js` | Forwards each runner's events to the rooms of its session and relays console input. |
+| `sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
+| `routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
 | `routes/index.js` | Builds the router of one session from the route modules; 404 for a node ID outside the session. |
 | `routes/settings.js` | General settings, system catalog and startup CD-ROM capability. |
 | `routes/nodes.js` | Node listing, switches, start, stop, reboot, reset, monitor, rename and deletion. |
@@ -116,11 +138,13 @@ The server is split into layers with one-way dependencies:
 | `routes/metrics.js` | Per-host CPU and memory metrics. |
 | `lib/session-manager.js` | Login → `{session, runner}`; creation at first use, deletion, shutdown, `runtime/users/<login>` links. |
 | `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
-| `lib/auth/` | `index.js` facade (login routes, middleware, Socket.IO handshake), `users-store.js` (`users.json`), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
-| `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition) and `meta.json` (owner, creation date). |
+| `lib/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
+| `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`) and `admin.log`, the audit log of administrator actions (JSON lines). |
+| `lib/console-control.js` | Exclusive per-node console control lock with its 10-minute idle timer. |
+| `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date), and the last activity (memory only). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
 | `lib/topology.js` | `.topo` parsing and formatting. |
-| `runner/index.js` | Runner facade and event list. |
+| `runner/index.js` | Runner facade and event list; `stopAllNodes` stops every host then every switch and keeps the nodes. |
 | `runner/context.js` | Per-runner context created by `createRunner`: session, commands, paths, `hostNodes()` of every session, events. |
 | `runner/session-runtime.js` | Node records, runtime directories, hostname aliases, state and log publishing. |
 | `runner/node-lifecycle.js` | Host start, stop, reboot, reset and deletion. |
@@ -141,14 +165,15 @@ bundler) loaded from `public/app.js`, which runs their initialization in a fixed
 order. State that several modules reassign lives on the `store` object of
 `state.js`. `monitor-terminal.js`, `session-log.js`, `network-node-icons.js` and
 `topology-graphic.js` remain classic scripts, also loaded by unit tests.
-`login.html` and its module `login.js` form the separate login page.
+`login.html` and its module `login.js` form the separate login page;
+`admin.html` and `admin.js` the supervision page `/admin`, served to admins only.
 
 | Module | Role |
 | --- | --- |
 | `app.js` | Entry point: initializes the other modules. |
-| `account.js` | User name, Delete session and Log out in the header; authentication-disabled warning. |
+| `account.js` | User name, Supervision link (admins), Delete session and Log out in the header; authentication-disabled warning. |
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
-| `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401. |
+| `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401, `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |
 | `terminal.js` | Console panes, menus, font size and Console/Monitor/Log views. |
 | `workspace.js` | Pane layout, paging, node tabs, state badges and metrics. |
@@ -159,6 +184,7 @@ order. State that several modules reassign lives on the `store` object of
 | `general-settings.js` | General Settings dialog. |
 | `topology.js` | Graphic network view and `.topo` load/save. |
 | `archive.js` | Session ZIP save and load dialogs. |
+| `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides. |
 
 ## Images and the session
 
