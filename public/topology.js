@@ -92,7 +92,9 @@ export function setGraphicView(visible, persist = true) {
   workspace.hidden = visible;
   graphicWorkspace.hidden = !visible;
   // The icon shows the view the button switches to: Lucide Network, or SquareTerminal.
-  graphicToggle.innerHTML = visible ? TERMINALS_ICON : GRAPHIC_ICON;
+  // The button names the view it switches to: Graphic (blue) or Terminals (green).
+  graphicToggle.innerHTML = visible ? `${TERMINALS_ICON}<span>Terminals</span>` : `${GRAPHIC_ICON}<span>Graphic</span>`;
+  graphicToggle.className = `nav-button ${visible ? 'act-green' : 'act-blue'}`;
   const label = visible ? 'Show Terminals view' : 'Show Graphic view';
   graphicToggle.setAttribute('aria-label', label);
   graphicToggle.title = label;

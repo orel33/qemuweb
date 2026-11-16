@@ -99,8 +99,10 @@ line of standard input; otherwise the script prompts for it. Logins use letters,
 ### Administration
 
 `admin` is a role of an ordinary account: an admin has their own session and
-works in it normally. The header shows a **Supervision** link to `/admin`
-(admins only), which lists every session, the admin's own marked, refreshed
+works in it normally. For admins, the header has **Supervision** (`/admin`)
+and **My session** (`/`) next to the view toggle (**Graphic** or
+**Terminals**, the view it switches to; students only have the toggle); the
+page shown is marked as current. `/admin` lists every session, the admin's own marked, refreshed
 every few seconds: user, state (**active**: at least one running node, or
 **idle**), creation date, nodes, running VMs, reserved RAM, CPU and last
 activity (the owner's requests and console input; an admin observing does not
