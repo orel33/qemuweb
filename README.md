@@ -122,8 +122,8 @@ can:
   typed without echo), their history and logs, also when the student is
   offline. With **Follow** on (the default), the view follows what the student
   shows: the selected node, Terminals or Graphic, and the console layout (1
-  terminal, 2 side by side or stacked, or 4; switch consoles, page, a pane
-  shown alone); off, the admin
+  terminal, 2 side by side or stacked, or 4; which node each pane shows, switch
+  consoles, page, a pane shown alone); off, the admin
   navigates freely. An observation tab never saves its layout in the admin's
   view settings. The target belongs to the tab: another tab can stay on the admin's
   own session. A login without a session (not used since the server started,
