@@ -18,7 +18,8 @@
     "test:check-network-openwrt": "GUEST_NETWORK_PROFILES=openwrt node test/integration/check-network.js",
     "test:two-users-isolation": "node test/integration/two-users-isolation.js",
     "test:session-reconnect": "node test/integration/session-reconnect.js",
-    "test:admin": "node test/integration/admin.js"
+    "test:admin": "node test/integration/admin.js",
+    "test:check-load": "node test/integration/check-load.js"
   },
   "engines": {
     "node": "^24.0.0"

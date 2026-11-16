@@ -12,6 +12,7 @@ Available tests:
   two-users-isolation            Two logged-in users: no shared nodes, events or controls (VDE only)
   session-reconnect              Log out and back in: running nodes, consoles and logs restored
   admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
+  check-load                     Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)
   two-hosts                      Two Debian Legacy hosts: VDE, ping and Stop/Resume
   four-hosts-startup             Four Debian Legacy hosts configured by start.sh templates
   check-host-debian13-legacy     Debian Legacy host with startup disk: script, resource, Reboot with edited files, Stop/Resume
@@ -77,6 +78,7 @@ case "${1:-}" in
   two-users-isolation) run_test 'Two logged-in users: isolation of nodes, consoles and events' npm run test:two-users-isolation ;;
   session-reconnect) run_test 'Reconnection: running nodes, consoles and logs restored' npm run test:session-reconnect ;;
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
+  check-load) run_test 'Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)' npm run test:check-load ;;
   two-hosts) run_test 'Two Debian Legacy hosts: VDE, ping and Stop/Resume' npm run test:two-hosts ;;
   four-hosts-startup) run_test 'Four Debian Legacy hosts: startup templates and full LAN ping' npm run test:four-hosts-startup ;;
   check-host-debian13-legacy) run_test 'Debian Legacy host with startup disk: script, resource, Reboot with edited files, Stop/Resume' npm run test:check-host-debian13-legacy ;;
