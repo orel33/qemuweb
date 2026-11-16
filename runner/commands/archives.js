@@ -27,7 +27,7 @@ const commands = {
   },
 
   // Builds the archive in the session directory, then sends it on a new stream once the
-  // response {stream, size, name} is out. The temporary files go when the stream ends.
+  // response {stream, size} is out. The temporary files go when the stream ends.
   'archive.export': async (context, {includeDisks}) => {
     const {session, runner, io} = context;
     const {archiveSources} = snapshotOf(context);
@@ -67,7 +67,7 @@ const commands = {
       const size = fs.statSync(archive).size;
       const {id, stream} = io.outgoing();
       io.afterResponse(() => pipeline(fs.createReadStream(archive), stream).catch(() => {}).finally(cleanup));
-      return {stream: id, size, name: ARCHIVE_NAME};
+      return {stream: id, size};
     } catch (error) {
       cleanup();
       throw new Error(error.code === 'ENOSPC' ? 'Insufficient disk space to save session archive.' : error.message);
