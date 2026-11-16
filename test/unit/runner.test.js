@@ -121,6 +121,32 @@ test('listNodes describes nodes for the web layer', t => {
   }]);
 });
 
+test('startAllNodes skips running and busy nodes and reports a host that cannot start', async t => {
+  const {runner, cleanup} = setup();
+  t.after(cleanup);
+  const states = [];
+  runner.events.on('state', state => states.push(state));
+  t.after(() => runner.events.removeAllListeners());
+  addSwitch(runner, SWITCH_1, 'running-sw').machine = {};
+  addSwitch(runner, SWITCH_2, 'stopping-sw').stopping = true;
+  const running = runner.createNode(HOST_1, 'host');
+  runner.setNodeHostname(running, 'running-host');
+  running.machine = {};
+  const rebooting = runner.createNode(HOST_2, 'host');
+  runner.setNodeHostname(rebooting, 'rebooting-host');
+  rebooting.action = 'reboot';
+  const failing = runner.createNode('h-0000000000000003', 'host');
+  runner.setNodeHostname(failing, 'failing-host');
+  failing.engine = 'vbox';
+  failing.selectedImage = runner.imageById('debian13-legacy');
+
+  const result = await runner.startAllNodes();
+  assert.deepEqual(result.started, []);
+  assert.deepEqual(result.startErrors, ['failing-host: VirtualBox is unavailable on this server.']);
+  assert.deepEqual(states.map(state => [state.nodeId, state.message]), [['h-0000000000000003', 'Start failed: VirtualBox is unavailable on this server.']]);
+  assert.equal(rebooting.machine, null);
+});
+
 test('Ethernet interfaces get unique locally administered MACs and free switch ports', t => {
   const {runner, cleanup} = setup();
   t.after(cleanup);

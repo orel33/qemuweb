@@ -32,6 +32,11 @@ const {createResources} = require('./resources');
 
 const SAMPLING_INTERVAL_MS = 2000;
 
+// A node with an action in progress (start, stop, reboot, reset, deletion).
+function nodeBusy(node) {
+  return !!node.action || !!node.stopping;
+}
+
 // Creates one runner for one session. Each call returns an independent instance with its
 // own context, EventEmitter and resource sampling timer. hostNodes() optionally lists the
 // nodes of every session on this machine (see context.js).
@@ -90,13 +95,14 @@ function createRunner({session, commands, root, runtimeRoot, configPath, hostNod
     destroyNode: lifecycle.destroyNode,
     exitAllNodes: lifecycle.exitAllNodes,
     // Stops every running host, then every running switch, and keeps the nodes and their
-    // disks. Returns the IDs of the stopped nodes; throws once everything was tried if a node
-    // could not be stopped.
+    // disks. A node that is already starting, stopping, rebooting or being deleted is skipped.
+    // Returns the IDs of the stopped nodes; throws once everything was tried if a node could
+    // not be stopped.
     async stopAllNodes() {
       const stopped = [];
       const errors = [];
       for (const kind of ['host', 'switch']) {
-        const running = [...session.nodes.values()].filter(node => node.kind === kind && node.machine);
+        const running = [...session.nodes.values()].filter(node => node.kind === kind && node.machine && !nodeBusy(node));
         await Promise.all(running.map(async node => {
           try {
             if (kind === 'host') await lifecycle.stop(node);
@@ -107,6 +113,27 @@ function createRunner({session, commands, root, runtimeRoot, configPath, hostNod
       }
       if (errors.length) throw new Error(`Some nodes could not be stopped: ${errors.join('; ')}`);
       return stopped;
+    },
+    // Starts every stopped switch, then every stopped host (a host needs its switch's VDE
+    // socket): Resume all and the automatic start of a loaded session. A running or busy node
+    // is skipped. A node that cannot start gets a "Start failed" state and the others are still
+    // started. Returns {started: [IDs], startErrors: ['<name>: <message>']}.
+    async startAllNodes() {
+      const started = [];
+      const startErrors = [];
+      for (const kind of ['switch', 'host']) {
+        for (const node of [...session.nodes.values()].filter(item => item.kind === kind && !item.machine && !nodeBusy(item))) {
+          try {
+            if (kind === 'switch') await vde.startSwitch(node);
+            else lifecycle.start(node.id, node.engine, node.selectedImage.id, {interfaces: node.networkInterfaces.map(nic => nic.switchId)});
+            started.push(node.id);
+          } catch (error) {
+            startErrors.push(`${node.hostname}: ${error.message}`);
+            runtime.publishState(node, `Start failed: ${error.message}`);
+          }
+        }
+      }
+      return {started, startErrors};
     },
     shutdown: async () => {
       stopResourceSampling();

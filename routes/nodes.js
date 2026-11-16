@@ -22,6 +22,15 @@ function register({app, session, runner, emit}) {
     catch (error) { res.status(409).json({error: error.message}); }
   });
 
+  // Starts every stopped switch, then every stopped host (Resume all); running or busy nodes
+  // are skipped. A node that cannot start is reported in startErrors and the others still start.
+  app.post('/api/nodes/resume-all', async (_req, res) => {
+    try {
+      const {started, startErrors} = await runner.startAllNodes();
+      res.json({started, startErrors});
+    } catch (error) { res.status(409).json({error: error.message}); }
+  });
+
   app.post('/api/nodes/:nodeId/start', async (req, res) => {
     try {
       const configured = getNode(req.params.nodeId);

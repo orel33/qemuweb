@@ -2,7 +2,7 @@
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {panes, syncConsoleScroll} from './terminal.js';
-import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedView, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
+import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedView, resumeAllButton, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
@@ -292,6 +292,17 @@ export function initNodes() {
     restoreSavedView();
     refollow();
   }).catch(error => { restoreSavedView(); showStatusError(`System list unavailable: ${error.message}`); });
+  // Starts every stopped switch, then every stopped host (no confirmation); the state events
+  // refresh the UI, and a node that cannot start shows its "Start failed" state.
+  resumeAllButton.onclick = async () => {
+    if (resumeAllButton.disabled) return;
+    store.exitAllBusy = true; updateControls();
+    try {
+      const {startErrors} = await requestJson('/api/nodes/resume-all', {method: 'POST'}, 'Failed to resume all hosts and switches');
+      if (startErrors.length) showStatusError(`Some nodes could not start: ${startErrors.join('; ')}`);
+    } catch (error) { showStatusError(`Cannot resume all hosts and switches: ${error.message}`); }
+    finally { store.exitAllBusy = false; updateControls(); }
+  };
   // Stops every host and switch of the session and keeps them; the state events refresh the UI.
   stopAllButton.onclick = async () => {
     if (stopAllButton.disabled) return;

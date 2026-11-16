@@ -9,7 +9,7 @@ const {writeArchive, readArchive} = require('../lib/session-archive');
 const {createSessionSnapshot} = require('../lib/session-snapshot');
 
 function register({app, session, runner, commands, emit}) {
-  const {imageById, imagePath, fileSha256Async, stop, stopSwitch, startSwitch, start, publishState, appendLog} = runner;
+  const {imageById, imagePath, fileSha256Async, stop, stopSwitch, appendLog} = runner;
   const {archiveSources, validateArchiveSession, installArchive, archivedSessionFiles} = createSessionSnapshot({session, runner, commands, emit});
 
   const MAX_SESSION_ARCHIVE = 0xffffffff;
@@ -110,22 +110,8 @@ function register({app, session, runner, commands, emit}) {
       const snapshot = archivedSessionFiles(stage, files);
       const warnings = await validateArchiveSession(snapshot, stage, {discardStaleDisks});
       installArchive(snapshot, stage);
-      const startErrors = [];
-      if (autoStart) {
-        for (const entry of [...snapshot.switches, ...snapshot.hosts]) {
-          const node = session.nodes.get(entry.id);
-          try {
-            if (node.kind === 'switch') await startSwitch(node);
-            else start(node.id, node.engine, node.selectedImage.id, {
-              interfaces: node.networkInterfaces.map(nic => nic.switchId)
-            });
-          } catch (error) {
-            const message = `Start failed: ${error.message}`;
-            startErrors.push(`${node.hostname}: ${error.message}`);
-            publishState(node, message);
-          }
-        }
-      }
+      // The session was empty: the loaded nodes are all of its nodes (same start as Resume all).
+      const {startErrors} = autoStart ? await runner.startAllNodes() : {startErrors: []};
       // Log after automatic starts, which reset the run log of fresh hosts.
       for (const warning of warnings) {
         for (const id of warning.hosts) { const node = session.nodes.get(id); if (node) appendLog(node, `# Warning: ${warning.message}`); }
