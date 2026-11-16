@@ -27,7 +27,7 @@ flowchart TB
     Manager["Session manager · lib/session-manager.js (login → session + runner)"]
     Routes["HTTP API · one router per session · routes/"]
     Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
-    Admin["Admin API /api/admin/* and /admin · routes/admin.js, audit log · lib/audit.js"]
+    Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log · lib/audit.js"]
     Session["Session · lib/session.js, archives, topology"]
     Runner["Runner instance per session · runner/index.js"]
   end
@@ -100,7 +100,8 @@ flowchart TB
   (`take-control`, `lib/console-control.js`; the owner's input on that node is
   then dropped and both sides get `console-control`). Every privileged socket
   event re-reads the account, so a disabled or removed account loses its
-  sockets. Admin actions are appended to the audit log (`lib/audit.js`).
+  sockets. Admin actions are appended to `logs/admin.log`, the audit log of
+  administrator actions (`lib/audit.js`).
 
 ## Module map
 
@@ -138,7 +139,7 @@ The server is split into layers with one-way dependencies:
 | `lib/session-manager.js` | Login → `{session, runner}`; creation at first use, deletion, shutdown, `runtime/users/<login>` links. |
 | `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
 | `lib/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
-| `lib/audit.js` | Audit log of administration actions (`audit.log`, JSON lines). |
+| `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`) and `admin.log`, the audit log of administrator actions (JSON lines). |
 | `lib/console-control.js` | Exclusive per-node console control lock with its 10-minute idle timer. |
 | `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date), and the last activity (memory only). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |

@@ -1,7 +1,7 @@
 // Supervision page (/admin, administrators only): every session with its metrics, refreshed
 // every few seconds, the actions on sessions (observe, stop all, delete, bulk cleanup) and
 // account management. Every change goes through /api/admin/*, which checks the role and
-// writes the audit log.
+// writes logs/admin.log.
 const POLL_MS = 4000;
 const $ = id => document.getElementById(id);
 const selected = new Set();

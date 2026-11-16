@@ -4,7 +4,7 @@
 // Every route of the API lives in one router whose first middleware checks the role, so that
 // a non-admin gets 403 on any path under /api/admin, even an unknown one. server.js mounts it
 // before the middleware that opens the caller's own session: an admin call never opens one.
-// Every action that changes something is written to the audit log (lib/audit.js); reading the
+// Every action that changes something is written to logs/admin.log (lib/audit.js); reading the
 // session list is not.
 const path = require('path');
 const express = require('express');

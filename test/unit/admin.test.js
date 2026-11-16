@@ -11,7 +11,7 @@ const {hashPassword, verifyPassword} = require('../../lib/auth/passwords');
 const {readUsers, writeUsers, parseUsers, createAccount, setPassword, setRole, setDisabled} = require('../../lib/auth/users-store');
 const {COOKIE_NAME, newSecret, signSession} = require('../../lib/auth/cookie');
 const {createAuth} = require('../../lib/auth');
-const {auditFilePath, createAudit} = require('../../lib/audit');
+const {ADMIN_LOG, logDirPath, createLogDir, createAudit} = require('../../lib/audit');
 const {Session} = require('../../lib/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../lib/console-control');
 const {observationGate, sessionSummary} = require('../../routes/admin');
@@ -129,11 +129,15 @@ test('scripts/user.js disables and enables accounts and lists their state', asyn
   assert.equal(script(['disable']).status, 2);
 });
 
-test('the audit log appends one JSON line per action, mode 0600, at QEMUWEB_AUDIT_FILE', t => {
-  const dir = tempDir(t);
-  assert.equal(auditFilePath('/srv/qemuweb', {}), '/srv/qemuweb/audit.log');
-  assert.equal(auditFilePath('/srv/qemuweb', {QEMUWEB_AUDIT_FILE: '/var/log/qemuweb-audit.log'}), '/var/log/qemuweb-audit.log');
-  const file = path.join(dir, 'audit.log');
+test('admin.log appends one JSON line per action, mode 0600, in logs/ or QEMUWEB_LOG_DIR', t => {
+  assert.equal(logDirPath('/srv/qemuweb', {}), '/srv/qemuweb/logs');
+  assert.equal(logDirPath('/srv/qemuweb', {QEMUWEB_LOG_DIR: '/var/log/qemuweb'}), '/var/log/qemuweb');
+  assert.equal(ADMIN_LOG, 'admin.log');
+  const dir = path.join(tempDir(t), 'nested', 'logs');
+  assert.equal(createLogDir(dir), dir);
+  assert.equal(fs.statSync(dir).mode & 0o777, 0o700);
+  assert.equal(createLogDir(dir), dir, 'an existing directory is kept');
+  const file = path.join(dir, ADMIN_LOG);
   const audit = createAudit({file, now: () => new Date('2026-01-02T03:04:05Z')});
   audit.record('boss', 'delete-session', {login: 'toto'});
   audit.record('boss', 'stop-all', {login: 'titi'}, new Error('Some nodes could not be stopped'));
@@ -143,7 +147,7 @@ test('the audit log appends one JSON line per action, mode 0600, at QEMUWEB_AUDI
     {time: '2026-01-02T03:04:05.000Z', admin: 'boss', action: 'delete-session', target: {login: 'toto'}, result: 'ok'},
     {time: '2026-01-02T03:04:05.000Z', admin: 'boss', action: 'stop-all', target: {login: 'titi'}, result: 'error: Some nodes could not be stopped'}
   ]);
-  const broken = createAudit({file: path.join(dir, 'missing', 'audit.log')});
+  const broken = createAudit({file: path.join(dir, 'missing', ADMIN_LOG)});
   const errors = [];
   t.mock.method(console, 'error', message => errors.push(message));
   assert.doesNotThrow(() => broken.record('boss', 'observe', {login: 'toto'}), 'a write failure never interrupts the action');

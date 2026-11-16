@@ -2,7 +2,7 @@
 
 // Admin role: the /api/admin gate, the session list, read-only observation of a student's
 // switch console, exclusive console control, stop-all, bulk deletion (processes and runtime
-// directories freed), account management with disabled accounts, and the audit log.
+// directories freed), account management with disabled accounts, and the admin log (logs/admin.log).
 // Uses VDE switches only: no system image or KVM is needed. Everything goes through real
 // logins (test/integration/qemuweb-client.js); the server has no test backdoor.
 const assert = require('node:assert/strict');
@@ -86,8 +86,10 @@ async function run() {
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'boss', role: 'admin'}, {login: 'alice'}, {login: 'bob'}, {login: 'carol'}, {login: 'dave'}]);
-  const auditFile = path.join(path.dirname(testUsers.file), 'audit.log');
-  child = spawnServer({port, usersFile: testUsers.file, env: {QEMUWEB_AUDIT_FILE: auditFile}});
+  // A log directory the server must create itself, inside the temporary users directory.
+  const logDir = path.join(path.dirname(testUsers.file), 'logs');
+  const auditFile = path.join(logDir, 'admin.log');
+  child = spawnServer({port, usersFile: testUsers.file, env: {QEMUWEB_LOG_DIR: logDir}});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   const account = Object.fromEntries(testUsers.users.map(user => [user.login, user]));
   const signIn = login => new QemuWebClient(baseUrl).signIn(login, account[login].password);
@@ -245,8 +247,9 @@ async function run() {
   await expectStatus(dave, '/api/nodes', 'GET', 401);
   console.log('Admin: accounts created, reset and disabled; a disabled account loses cookie and sockets');
 
-  // (7) The audit log: one line per action, never a password or typed text.
+  // (7) The admin log: one line per action, never a password or typed text.
   const text = fs.readFileSync(auditFile, 'utf8');
+  assert.equal(fs.statSync(logDir).mode & 0o777, 0o700);
   assert.equal(fs.statSync(auditFile).mode & 0o777, 0o600);
   const lines = text.trimEnd().split('\n').map(line => JSON.parse(line));
   const actions = lines.map(line => line.action);
@@ -263,9 +266,9 @@ async function run() {
   assert.ok(lines.every(line => line.admin === 'boss' && Date.parse(line.time) && line.result), JSON.stringify(lines));
   assert.ok(!actions.includes('list'), 'the session list is not audited');
   for (const secret of [...testUsers.users.map(user => user.password), 'first-password', 'second-password', 'adminmarker', 'observermarker', 'password":']) {
-    assert.ok(!text.includes(secret), `the audit log contains ${secret}`);
+    assert.ok(!text.includes(secret), `admin.log contains ${secret}`);
   }
-  console.log(`Admin: the audit log has ${lines.length} lines, one per action, without passwords or typed text`);
+  console.log(`Admin: admin.log has ${lines.length} lines, one per action, without passwords or typed text`);
 }
 
 async function cleanup() {

@@ -36,7 +36,7 @@ writes it with mode 0600). Do not set `QEMUWEB_AUTH=off` on an exposed server.
 | `QEMUWEB_TRUST_PROXY` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
 | `QEMUWEB_SESSION_HOURS` | `12` (default) | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_USERS_FILE` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
-| `QEMUWEB_AUDIT_FILE` | optional | Audit log outside the repository, e.g. `/var/log/qemuweb/audit.log` (see [Audit log](#audit-log)). |
+| `QEMUWEB_LOG_DIR` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Admin log](#admin-log)). |
 
 Example systemd unit (`/etc/systemd/system/qemuweb.service`), assuming the
 repository in `/srv/qemuweb` and a `qemuweb` account in the `kvm` group:
@@ -62,11 +62,13 @@ WantedBy=multi-user.target
 Stopping the service stops every machine of every user and empties
 `runtime/sessions/`; tell users to save a session ZIP first.
 
-## Audit log
+## Admin log
 
-Every administration action appends one JSON line to `audit.log` at the
-repository root (ignored by Git; `QEMUWEB_AUDIT_FILE` moves it), created with
-mode 0600:
+`admin.log` is the audit log of administrator actions. It lives in the log
+directory, `logs/` at the repository root (ignored by Git; `QEMUWEB_LOG_DIR`
+selects another directory), which the server creates at startup with mode 0700
+if it is missing. Every administration action appends one JSON line to it,
+created with mode 0600:
 
 ```json
 {"time":"2026-11-16T09:12:03.120Z","admin":"prof","action":"control-start","target":{"login":"alice","nodeId":"s-0123456789abcdef"},"result":"ok"}

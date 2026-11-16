@@ -126,8 +126,8 @@ does not count). From there an admin can:
 - Manage accounts: create, reset a password, change the role, disable or
   enable. An admin cannot disable their own account or change its role there.
 
-Every administration action is written to the audit log (see
-[docs/deployment.md](docs/deployment.md#audit-log)). With `QEMUWEB_AUTH=off`,
+Every administration action is written to `logs/admin.log`, an audit log of
+administrator actions (see [docs/deployment.md](docs/deployment.md#admin-log)). With `QEMUWEB_AUTH=off`,
 the implicit local user is admin, so `/admin` is open to anyone reaching the
 server.
 
@@ -142,7 +142,7 @@ browser's cookie; see [docs/deployment.md](docs/deployment.md#known-limits).
 | `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime, renewed while the user is active. |
 | `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
 | `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
-| `QEMUWEB_AUDIT_FILE` | `audit.log` | Audit log of administration actions (JSON lines, mode 0600). |
+| `QEMUWEB_LOG_DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions (JSON lines, mode 0600). |
 
 With `QEMUWEB_AUTH=off`, the server prints a warning at startup and the
 interface shows **Authentication disabled**. It is never the default.

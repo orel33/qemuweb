@@ -13,7 +13,7 @@ const {attachSockets, sessionRoom} = require('./sockets');
 const {createSessionRouter} = require('./routes');
 const {readCatalog} = require('./common/system-config');
 const {createAuth} = require('./lib/auth');
-const {auditFilePath, createAudit} = require('./lib/audit');
+const {ADMIN_LOG, logDirPath, createLogDir, createAudit} = require('./lib/audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
 const packageInfo = require('./package.json');
 
@@ -62,7 +62,10 @@ if (process.env.QEMUWEB_TRUST_PROXY) {
   const value = process.env.QEMUWEB_TRUST_PROXY;
   app.set('trust proxy', value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value);
 }
-const audit = createAudit({file: auditFilePath(root)});
+let logDir;
+try { logDir = createLogDir(logDirPath(root)); }
+catch (error) { console.error(`Cannot create the log directory: ${error.message}`); process.exit(1); }
+const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 io.use(auth.socketMiddleware);
 const sockets = attachSockets(io, manager, {audit, currentUser: auth.currentUser});
 

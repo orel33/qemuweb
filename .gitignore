@@ -12,4 +12,5 @@ runtime/*
 dist/
 preview/
 users.json
-audit.log
+logs/*
+!logs/.gitkeep
