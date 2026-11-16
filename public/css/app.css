@@ -39,7 +39,16 @@ button { cursor: pointer; }
 .nav-button svg { width: 20px; height: 20px; flex: none; }
 .nav-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
 .nav-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
-@media (max-width: 700px) { .nav-button span { display: none; } .nav-button { padding: 0 8px; } }
+/* Fixed widths, so that a button does not change size when its label alternates: the longer
+   label (bold 14px system-ui: "Supervision" ~82px, "Terminals" ~70px) + 20px icon + 7px gap +
+   2 x 12px padding + 2px border, rounded up. */
+#nav-supervision, #nav-session { width: 140px; justify-content: center; }
+#toggle-graphic-view { width: 130px; justify-content: center; }
+/* The view toggle closes the bottom toolbar, at its far right (after the page controls,
+   which are hidden in the Graphic view). */
+.machines #toggle-graphic-view { margin-left: auto; }
+body:not([data-view="graphic"]) .machines #toggle-graphic-view { margin-left: 12px; }
+@media (max-width: 700px) { .nav-button span { display: none; } #nav-supervision, #nav-session, #toggle-graphic-view { width: var(--control); padding: 0; } }
 body[data-view="graphic"] .page-controls, body[data-view="graphic"] #toggle-console-columns, body[data-view="graphic"] #toggle-switch-consoles { display: none; }
 button:disabled { opacity: .45; cursor: default; }
 .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
