@@ -37,7 +37,7 @@ function cell(content) {
 const USER = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>';
 const ICONS = {
   eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
-  square: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
+  power: '<path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/>',
   trash2: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
   keyRound: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
   userX: `${USER}<line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/>`,
@@ -45,7 +45,7 @@ const ICONS = {
   userMinus: `${USER}<line x1="22" x2="16" y1="11" y2="11"/>`
 };
 // One colour per action (CSS .act-*), from the palette of the UI's icon buttons.
-const ICON_COLOURS = {eye: 'act-blue', square: 'act-amber', trash2: 'act-red', keyRound: 'act-blue', userX: 'act-amber', userCheck: 'act-green', userMinus: 'act-red'};
+const ICON_COLOURS = {eye: 'act-blue', power: 'act-amber', trash2: 'act-red', keyRound: 'act-blue', userX: 'act-amber', userCheck: 'act-green', userMinus: 'act-red'};
 const iconSvg = name => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 
 // A square icon button (or link, for Observe: a middle click opens a new tab) of a table row.
@@ -164,7 +164,7 @@ function renderSessions(sessions) {
       actions.append(observe);
     }
     actions.append(
-      iconButton('square', 'Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})),
+      iconButton('power', 'Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})),
         'Stop all: stop every VM and switch; the nodes are kept'),
       iconButton('trash2', 'Delete session', async () => {
         if (!await confirmDialog('Delete session', `Delete the session of ${session.login}? Every host and switch stops and is removed, with its disks.`, [], 'Delete')) return;

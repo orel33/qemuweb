@@ -2,7 +2,7 @@
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {panes, syncConsoleScroll} from './terminal.js';
-import {activeMachine, consoleSessions, exitAllButton, renderTabs, selectMachine, showPage, showStatusError, updateControls} from './workspace.js';
+import {activeMachine, consoleSessions, exitAllButton, renderTabs, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
@@ -291,6 +291,15 @@ export function initNodes() {
     showPage();
     refollow();
   }).catch(error => { showStatusError(`System list unavailable: ${error.message}`); });
+  // Stops every host and switch of the session and keeps them; the state events refresh the UI.
+  stopAllButton.onclick = async () => {
+    if (stopAllButton.disabled) return;
+    if (!await confirmAction('Stop all hosts and switches', 'Stop every running host and switch of this session?\n\nThe hosts are shut down; their disks and the nodes are kept.', 'Stop all')) return;
+    store.exitAllBusy = true; updateControls();
+    try { await requestJson('/api/nodes/stop-all', {method: 'POST'}, 'Failed to stop all hosts and switches'); }
+    catch (error) { showStatusError(`Cannot stop all hosts and switches: ${error.message}`); }
+    finally { store.exitAllBusy = false; updateControls(); }
+  };
   exitAllButton.onclick = async () => {
     if (exitAllButton.disabled) return;
     if (!await confirmAction('Remove all hosts and switches', 'Remove all hosts and switches from this session?\n\nAll working disks will be deleted and their changes lost.', 'Remove all')) return;

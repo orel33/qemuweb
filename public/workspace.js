@@ -16,6 +16,7 @@ let resourceRequestPending = false;
 export const workspace = document.getElementById('console-workspace');
 
 export const exitAllButton = document.getElementById('exit-all');
+export const stopAllButton = document.getElementById('stop-all');
 export const cloneButton = document.getElementById('clone-machine');
 
 const tabs = document.getElementById('machine-tabs');
@@ -313,6 +314,7 @@ export function updateControls() {
   renderGraphic();
   const machine = activeMachine();
   exitAllButton.disabled = store.exitAllBusy || !machines.size || [...machines.values()].some(item => item.busy);
+  stopAllButton.disabled = store.exitAllBusy || ![...machines.values()].some(item => item.running) || [...machines.values()].some(item => item.busy);
   updatePaneStates();
   updatePaneViewControls();
   controlChanged();

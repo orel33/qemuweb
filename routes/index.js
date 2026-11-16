@@ -21,6 +21,7 @@ function userEvent(req) {
     case 'POST /api/switches': return {event: 'node-created', target: {nodeId: nodeId(req.body?.id), kind: 'switch'}};
     case 'POST /api/hosts': return {event: 'node-created', target: {nodeId: nodeId(req.body?.id), kind: 'host'}};
     case 'DELETE /api/nodes': return {event: 'node-deleted', target: {all: true}};
+    case 'POST /api/nodes/stop-all': return {event: 'node-stopped', target: {all: true}};
     case 'POST /api/topology': return {event: 'archive-loaded', target: {kind: 'topology'}};
     case 'GET /api/topology': return {event: 'archive-saved', target: {kind: 'topology'}};
     case 'POST /api/session-archive/import': return {event: 'archive-loaded', target: {kind: 'session'}};

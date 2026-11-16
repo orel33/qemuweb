@@ -302,6 +302,7 @@ test('only explicit node and archive actions of the owner become users.log event
   assert.deepEqual(event('POST', `/api/nodes/${id}/stop`), {event: 'node-stopped', target: {nodeId: id}});
   assert.deepEqual(event('DELETE', `/api/nodes/${id}`), {event: 'node-deleted', target: {nodeId: id}});
   assert.deepEqual(event('DELETE', '/api/nodes'), {event: 'node-deleted', target: {all: true}});
+  assert.deepEqual(event('POST', '/api/nodes/stop-all'), {event: 'node-stopped', target: {all: true}});
   assert.deepEqual(event('POST', '/api/topology'), {event: 'archive-loaded', target: {kind: 'topology'}});
   assert.deepEqual(event('GET', '/api/topology'), {event: 'archive-saved', target: {kind: 'topology'}});
   assert.deepEqual(event('POST', '/api/session-archive/import'), {event: 'archive-loaded', target: {kind: 'session'}});

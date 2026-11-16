@@ -16,6 +16,12 @@ function register({app, session, runner, emit}) {
     catch (error) { res.status(400).json({error: error.message}); }
   });
 
+  // Stops every host, then every switch, and keeps the nodes (the admin's Stop all too).
+  app.post('/api/nodes/stop-all', async (_req, res) => {
+    try { res.json({stopped: await runner.stopAllNodes()}); }
+    catch (error) { res.status(409).json({error: error.message}); }
+  });
+
   app.post('/api/nodes/:nodeId/start', async (req, res) => {
     try {
       const configured = getNode(req.params.nodeId);
