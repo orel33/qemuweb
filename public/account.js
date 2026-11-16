@@ -11,7 +11,6 @@ const authOffWarning = document.getElementById('auth-off-warning');
 const logoutButton = document.getElementById('logout');
 const deleteSessionButton = document.getElementById('delete-session');
 const navSupervision = document.getElementById('nav-supervision');
-const navSession = document.getElementById('nav-session');
 
 export function initAccount() {
   installAuthRedirect();
@@ -20,14 +19,8 @@ export function initAccount() {
     const me = await response.json();
     // Observing yourself is just your own session.
     if (observedLogin === me.login) { location.replace('/'); return; }
-    // Admins navigate between Supervision, their session and observed ones; the page shown is
-    // marked current (not a link). Students only have their own session.
-    navSupervision.hidden = navSession.hidden = me.role !== 'admin';
-    if (!observedLogin) {
-      navSession.removeAttribute('href');
-      navSession.setAttribute('aria-current', 'page');
-      navSession.title = 'Your own session (this page)';
-    }
+    // Admins go to Supervision from their session or an observed one; students never see it.
+    navSupervision.hidden = me.role !== 'admin';
     accountName.textContent = me.login;
     accountName.title = `Logged in as ${me.login} (${me.role})`;
     authOffWarning.hidden = me.authMode !== 'off';

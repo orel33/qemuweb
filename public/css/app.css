@@ -31,14 +31,14 @@ button { cursor: pointer; }
 #toggle-console-columns { color: #9fc5ef; }
 #exit-all { color: #ff777d; }
 #toggle-switch-consoles { color: #9fc5ef; }
-/* Navigation buttons right after the title: Supervision, My session, the view toggle. Same
-   look as the icon buttons, with a bold label; the current page is shown pressed, not a link. */
-.header-nav { display: flex; flex: none; align-items: center; gap: 8px; margin: 0 auto 0 10px; }
-.nav-button { display: inline-flex; flex: none; align-items: center; gap: 7px; height: var(--control); padding: 0 12px; border: 1px solid #405166; border-radius: 6px; background: #202c3a; font-weight: 700; white-space: nowrap; text-decoration: none; transition: background .15s, border-color .15s, transform .15s; }
+/* Navigation buttons at the top right, before the account: the destination (Supervision, or
+   My session on /admin) and the view toggle (the view it switches to). Same look as the icon
+   buttons, with a bold label. */
+.header-nav { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
+.nav-button { display: inline-flex; flex: none; align-items: center; gap: 7px; height: var(--control); padding: 0 12px; border: 1px solid #405166; border-radius: 6px; background: #202c3a; font: 700 14px system-ui, sans-serif; white-space: nowrap; text-decoration: none; transition: background .15s, border-color .15s, transform .15s; }
 .nav-button svg { width: 20px; height: 20px; flex: none; }
-.nav-button:not([aria-current="page"]):not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
+.nav-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
 .nav-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
-.nav-button[aria-current="page"] { border-color: currentColor; background: #2a3a4d; cursor: default; }
 @media (max-width: 700px) { .nav-button span { display: none; } .nav-button { padding: 0 8px; } }
 body[data-view="graphic"] .page-controls, body[data-view="graphic"] #toggle-console-columns, body[data-view="graphic"] #toggle-switch-consoles { display: none; }
 button:disabled { opacity: .45; cursor: default; }
@@ -336,6 +336,7 @@ main[data-columns="4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 body.observing .write-action { display: none !important; }
 /* Supervision page (/admin). */
 .admin-page header { gap: 12px; }
+.admin-heading { margin-left: 14px; color: #f2c46d; font-weight: 600; }
 .admin-main { display: block; flex: 1; overflow: auto; padding: 16px; } /* One column: Sessions above Accounts. */
 .admin-main section { margin-bottom: 28px; }
 .admin-section-head { display: flex; align-items: baseline; gap: 14px; }
