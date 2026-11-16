@@ -202,8 +202,8 @@ start from fresh images. [`demo/`](demo/) also contains DMZ and gateway sessions
   machine to another).
 - **Load topology** reads a `.topo` text file that describes only hosts,
   switches, and their links, without disks or startup scripts. Examples:
-  [`topo/lan.topo`](topo/lan.topo), [`topo/dmz.topo`](topo/dmz.topo),
-  [`topo/gw.topo`](topo/gw.topo).
+  [`demo/lan.topo`](demo/lan.topo), [`demo/dmz.topo`](demo/dmz.topo),
+  [`demo/gw.topo`](demo/gw.topo).
 
 ### Startup scripts
 
@@ -291,6 +291,7 @@ record the owner, so any user can load them.
 | `common/` | Code shared by the runner and the server: IDs, launch settings, `config.json` validation. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |
+| `demo/` | Example sessions (`.zip`) and topologies (`.topo`): LAN, DMZ and gateway. |
 
 See [docs/architecture.md](docs/architecture.md) for the data paths between the
 browser, the server, and QEMU, VirtualBox, and VDE.

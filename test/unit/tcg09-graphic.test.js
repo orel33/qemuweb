@@ -22,8 +22,8 @@ function nodesFromFixture(file) {
 
 test('the LAN and gateway examples produce a node for every host and switch and a distinct curved path for every NIC', () => {
   for (const [file, expectedSwitches, expectedHosts, expectedLinks] of [
-    ['topo/lan.topo', 1, 4, 4],
-    ['topo/gw.topo', 2, 4, 5]
+    ['demo/lan.topo', 1, 4, 4],
+    ['demo/gw.topo', 2, 4, 5]
   ]) {
     const graph = buildGraph(nodesFromFixture(file));
     assert.equal(graph.switches, expectedSwitches);
