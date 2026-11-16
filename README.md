@@ -61,7 +61,7 @@ Each user logs in with a login and a password and always finds the same
 session: its hosts, switches, consoles and logs. The session lives on the
 server, independently of the browser: closing the tab or logging out stops
 nothing, and several tabs of one user share the session. It disappears only
-when the user deletes it (**Delete session** in the header) or when the server
+when the user deletes it (**Delete session**, the red trash button at the end of the bottom-left toolbar) or when the server
 stops, which stops every machine.
 
 Accounts live in `users.json` at the repository root (mode 0600, ignored by
