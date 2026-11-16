@@ -47,7 +47,7 @@ try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
 catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
 
 let auth;
-try { auth = createAuth({root, runtimeRoot: runtime}); }
+try { auth = createAuth({root}); }
 catch (error) { console.error(error.message); process.exit(1); }
 if (auth.mode === 'off') {
   console.warn('WARNING: authentication is disabled (QEMUWEB_AUTH=off). Every visitor uses one shared local session.');

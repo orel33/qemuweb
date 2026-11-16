@@ -113,7 +113,7 @@ test('the auth facade authenticates, identifies the cookie and guards pages and 
   writeUsers(usersFile, [{login: 'toto', hash: await hashPassword('toto', FAST), role: 'student'}]);
   let clock = 1000000;
   const secret = newSecret();
-  const auth = createAuth({root, runtimeRoot: dir, env: {QEMUWEB_USERS_FILE: usersFile}, now: () => clock, secret});
+  const auth = createAuth({root, env: {QEMUWEB_USERS_FILE: usersFile}, now: () => clock, secret});
   assert.equal(auth.mode, 'password');
   assert.deepEqual(await auth.authenticate('toto', 'toto'), {login: 'toto', role: 'student'});
   assert.equal(await auth.authenticate('toto', 'titi'), null);
@@ -163,13 +163,13 @@ test('the auth facade authenticates, identifies the cookie and guards pages and 
 
 test('QEMUWEB_AUTH=off gives one implicit user and only accepts explicit values', t => {
   const dir = tempDir(t);
-  const auth = createAuth({root, runtimeRoot: dir, env: {QEMUWEB_AUTH: 'off', QEMUWEB_USERS_FILE: path.join(dir, 'users.json')}});
+  const auth = createAuth({root, env: {QEMUWEB_AUTH: 'off', QEMUWEB_USERS_FILE: path.join(dir, 'users.json')}});
   assert.equal(auth.mode, 'off');
   const {req, res} = exchange({path: '/api/nodes'});
   run(auth.identify, req, res);
   assert.equal(req.user.login, 'local');
-  assert.throws(() => createAuth({root, runtimeRoot: dir, env: {QEMUWEB_AUTH: 'no'}}), /Invalid QEMUWEB_AUTH/);
-  assert.throws(() => createAuth({root, runtimeRoot: dir, env: {QEMUWEB_SESSION_HOURS: '-1'}}), /QEMUWEB_SESSION_HOURS/);
+  assert.throws(() => createAuth({root, env: {QEMUWEB_AUTH: 'no'}}), /Invalid QEMUWEB_AUTH/);
+  assert.throws(() => createAuth({root, env: {QEMUWEB_SESSION_HOURS: '-1'}}), /QEMUWEB_SESSION_HOURS/);
 });
 
 function userScript(dir, args, {input, password} = {}) {
@@ -216,21 +216,13 @@ test('a server restart logs everybody out: cookies of the previous run are refus
   const clock = 1000000;
   const firstRun = newSecret();
   const cookie = `${COOKIE_NAME}=${signSession(firstRun, {login: 'toto', issued: clock, expires: clock + 3600e3})}`;
-  const same = createAuth({root, runtimeRoot: dir, env, now: () => clock, secret: firstRun});
+  const same = createAuth({root, env, now: () => clock, secret: firstRun});
   let {req, res} = exchange({headers: {cookie}});
   run(same.identify, req, res);
   assert.deepEqual(req.user, {login: 'toto', role: 'student'});
   // Without an injected secret, every createAuth (every server start) draws a new one.
-  const restarted = createAuth({root, runtimeRoot: dir, env, now: () => clock});
+  const restarted = createAuth({root, env, now: () => clock});
   ({req, res} = exchange({headers: {cookie}}));
   run(restarted.identify, req, res);
   assert.equal(req.user, undefined);
-});
-
-test('a secret file left by an earlier version is removed at startup', t => {
-  const dir = tempDir(t);
-  const file = path.join(dir, 'auth-secret');
-  fs.writeFileSync(file, Buffer.alloc(32, 7));
-  createAuth({root, runtimeRoot: dir, env: {QEMUWEB_AUTH: 'off', QEMUWEB_USERS_FILE: path.join(dir, 'users.json')}});
-  assert.equal(fs.existsSync(file), false);
 });

@@ -19,6 +19,15 @@ documentation.
   **switch** (VDE). Code, API routes and Socket.IO events use `node` and
   `nodeId`, never `session`, for a single host or switch.
 
+## Compatibility
+
+This project is in beta. Do not add or keep code only to support obsolete ideas,
+formats, file layouts or earlier versions of the project: no legacy readers,
+fallbacks, migrations, or cleanup of files left by old versions. Change the
+format and remove the old code path. If a leftover file or an old archive needs
+fixing, tell the user, who handles it by hand (delete it, rewrite it). Keep a
+compatibility path only when the user explicitly asks for one.
+
 ## Language
 
 - **Project content is in English**: code, code comments, documentation, GUI
