@@ -196,7 +196,7 @@ Guests log in as `root` without a password on the serial console.
 | `users.json` | User accounts (see [Users and sessions](#users-and-sessions)); ignored by Git. |
 | `runtime/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. The ID is random. |
 | `runtime/users/<login>` | Link to the user's session directory, for administrators. |
-| `runtime/auth-secret` | Key that signs login cookies; deleting it logs everybody out. |
+| `runtime/auth-secret` | Key that signs login cookies; deleting it logs everybody out. Unlike the rest of `runtime/`, it is kept when the server stops, so that logins survive a restart. |
 
 `runtime/` is temporary: a node's files are removed with the node or when
 the server stops. Use **Save session** to keep a portable copy; archives do not
