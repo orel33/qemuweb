@@ -166,12 +166,12 @@ async function run() {
   // Follow: only what the owner's page publishes (owner-view) is relayed; a console socket
   // attaching in the background (select-node) moves nobody.
   assert.deepEqual(await select(aliceConsole.socket, aliceSwitch), {ok: true});
-  const ownerView = view => ({nodeId: aliceSwitch, mode: 'terminals', layout: 2, switches: true, page: 0, expanded: null, ...view});
-  aliceSession.socket.emit('owner-view', {...ownerView({mode: 'graphic', layout: 4}), extra: 'dropped'});
+  const ownerView = view => ({nodeId: aliceSwitch, mode: 'terminals', layout: 'columns-2', switches: true, page: 0, expanded: null, ...view});
+  aliceSession.socket.emit('owner-view', {...ownerView({mode: 'graphic', layout: 'grid-4'}), extra: 'dropped'});
   await waitFor('owner-view event', () => observer.events.some(item => item.event === 'owner-view' && item.payload.nodeId === aliceSwitch && item.payload.mode === 'graphic'));
-  assert.deepEqual(observer.events.find(item => item.event === 'owner-view').payload, ownerView({mode: 'graphic', layout: 4}), 'unknown fields are dropped');
+  assert.deepEqual(observer.events.find(item => item.event === 'owner-view').payload, ownerView({mode: 'graphic', layout: 'grid-4'}), 'unknown fields are dropped');
   observer.socket.emit('owner-view', ownerView({nodeId: null})); // An observer's view is never relayed.
-  for (const invalid of [{mode: 'invalid'}, {layout: 3}, {switches: 'yes'}, {page: -1}, {expanded: 2, layout: 2}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
+  for (const invalid of [{mode: 'invalid'}, {layout: 2}, {layout: 'columns-3'}, {switches: 'yes'}, {page: -1}, {expanded: 2, layout: 'rows-2'}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
   aliceSession.socket.emit('owner-view', ownerView({nodeId: 'h-0000000000000000', page: 1})); // Unknown node: null.
   await waitFor('unknown node relayed as null', () => observer.events.some(item => item.event === 'owner-view' && item.payload.nodeId === null));
   aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', expanded: 1}));
@@ -182,7 +182,7 @@ async function run() {
   lateObserver.socket.close();
   await waitFor('three owner views', () => observer.events.filter(item => item.event === 'owner-view').length >= 3);
   assert.deepEqual(observer.events.filter(item => item.event === 'owner-view').map(item => item.payload),
-    [ownerView({mode: 'graphic', layout: 4}), ownerView({nodeId: null, page: 1}), ownerView({mode: 'graphic', expanded: 1})]);
+    [ownerView({mode: 'graphic', layout: 'grid-4'}), ownerView({nodeId: null, page: 1}), ownerView({mode: 'graphic', expanded: 1})]);
   assert.ok(!observer.events.some(item => ['owner-selected-node', 'owner-view-mode'].includes(item.event)));
   aliceConsole.socket.emit('input', 'showinfo\r');
   await waitFor('alice\'s output at the observer', () => /showinfo/.test(observer.output()));
@@ -249,9 +249,9 @@ async function run() {
   assert.ok(![aliceSession, observer, bossNewPane].some(released), 'control released by a layout change');
   // While the admin holds control, the view goes the other way: controller-view from the
   // admin's page reaches alice's pages; never from alice, nor once control has ended.
-  const controllerView = {nodeId: aliceSwitch, mode: 'terminals', layout: 4, switches: true, page: 0, expanded: 0};
+  const controllerView = {nodeId: aliceSwitch, mode: 'terminals', layout: 'rows-2', switches: true, page: 0, expanded: 0};
   aliceSession.socket.emit('controller-view', controllerView);
-  observer.socket.emit('controller-view', {...controllerView, layout: 3}); // Invalid: dropped.
+  observer.socket.emit('controller-view', {...controllerView, layout: 'grid-3'}); // Invalid: dropped.
   observer.socket.emit('controller-view', controllerView);
   await waitFor('controller-view at alice', () => aliceSession.events.some(item => item.event === 'controller-view'));
   assert.deepEqual(aliceSession.events.filter(item => item.event === 'controller-view').map(item => item.payload), [controllerView]);

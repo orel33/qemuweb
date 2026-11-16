@@ -50,15 +50,18 @@ function createObservationTracker(audit) {
   };
 }
 
+// The console layouts of the UI (public/state.js) and their number of panes.
+const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
+
 // What the owner's page shows, from an owner-view event: its active node (a node of the session,
-// else null), the view (terminals or graphic), the number of console panes (1, 2 or 4), whether
+// else null), the view (terminals or graphic), the console layout (LAYOUT_PANES), whether
 // switch consoles are shown, the console page, and the pane shown alone (or null). Unknown
 // fields are dropped; returns null for an invalid view.
 function ownerViewOf(view, session) {
   if (!view || typeof view !== 'object' || !['terminals', 'graphic'].includes(view.mode)) return null;
-  if (![1, 2, 4].includes(view.layout) || typeof view.switches !== 'boolean') return null;
+  if (typeof view.layout !== 'string' || !Object.hasOwn(LAYOUT_PANES, view.layout) || typeof view.switches !== 'boolean') return null;
   if (!Number.isInteger(view.page) || view.page < 0 || view.page > 999) return null;
-  if (view.expanded !== null && !(Number.isInteger(view.expanded) && view.expanded >= 0 && view.expanded < view.layout)) return null;
+  if (view.expanded !== null && !(Number.isInteger(view.expanded) && view.expanded >= 0 && view.expanded < LAYOUT_PANES[view.layout])) return null;
   const nodeId = typeof view.nodeId === 'string' && session.nodes.has(view.nodeId) ? view.nodeId : null;
   return {nodeId, mode: view.mode, layout: view.layout, switches: view.switches, page: view.page, expanded: view.expanded};
 }

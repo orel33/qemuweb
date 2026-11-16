@@ -2,7 +2,7 @@
 import {generalSettings, graphicLayoutKey, machines, saveViewSettings, savedViewSettings, store} from './state.js';
 import {jsonRequest, requestJson} from './api.js';
 import {fitTerminals} from './terminal.js';
-import {selectMachine, workspace} from './workspace.js';
+import {closeLayoutMenu, selectMachine, workspace} from './workspace.js';
 import {publishOwnerView} from './socket.js';
 
 const graphicWorkspace = document.getElementById('graphic-workspace');
@@ -87,6 +87,7 @@ function finishGraphicDrag(event) {
 
 // persist: save in this browser's view settings (not when an observer follows the owner).
 export function setGraphicView(visible, persist = true) {
+  closeLayoutMenu();
   store.graphicVisible = visible;
   document.body.dataset.view = visible ? 'graphic' : 'terminals';
   workspace.hidden = visible;

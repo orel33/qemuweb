@@ -29,7 +29,7 @@ export function publishOwnerView({force = false} = {}) {
   if (!socket?.connected) return;
   const event = observing ? (holdingControl() ? 'controller-view' : null) : (controlledByAdmin() ? null : 'owner-view');
   if (!event) return;
-  const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layoutSize,
+  const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout,
     switches: store.showSwitchConsoles, page: store.pageIndex, expanded: store.expandedPaneIndex};
   const key = `${event} ${JSON.stringify(view)}`;
   if (!force && key === publishedView) return;

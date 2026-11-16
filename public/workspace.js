@@ -1,5 +1,5 @@
 // Pane layout, paging, node tabs, pane state badges and resource metrics.
-import {machines, saveViewSettings, store} from './state.js';
+import {LAYOUT_PANES, machines, saveViewSettings, store} from './state.js';
 import {jsonRequest, nodeUrl} from './api.js';
 import {fitTerminal, fitTerminals, panes, updatePaneViewControls} from './terminal.js';
 import {closeMachine} from './nodes.js';
@@ -23,7 +23,6 @@ const tabs = document.getElementById('machine-tabs');
 
 const toggleConsoleColumns = document.getElementById('toggle-console-columns');
 const toggleSwitchConsoles = document.getElementById('toggle-switch-consoles');
-const layoutCount = document.getElementById('layout-count');
 const previousPage = document.getElementById('previous-page');
 const nextPage = document.getElementById('next-page');
 const pagePosition = document.getElementById('page-position');
@@ -149,18 +148,18 @@ function updateSwitchConsoleToggle() {
 }
 
 function updateWorkspaceLayout() {
-  workspace.dataset.columns = String(store.expandedPaneIndex === null ? store.layoutSize : 1);
-  const nextSize = store.layoutSize === 1 ? 2 : store.layoutSize === 2 ? 4 : 1;
+  workspace.dataset.layout = store.expandedPaneIndex === null ? store.layout : 'single';
+  const current = LAYOUTS.find(layout => layout.id === store.layout);
+  toggleConsoleColumns.innerHTML = layoutIcon(current);
   toggleConsoleColumns.title = store.expandedPaneIndex === null
-    ? `Layout: ${store.layoutSize} pane${store.layoutSize === 1 ? '' : 's'}; click for ${nextSize}`
-    : `Restore the ${store.layoutSize}-pane layout using the terminal button`;
+    ? `Layout: ${current.label}` : `Restore the layout (${current.label}) using the terminal button`;
   toggleConsoleColumns.setAttribute('aria-label', toggleConsoleColumns.title);
   toggleConsoleColumns.disabled = store.expandedPaneIndex !== null;
-  layoutCount.textContent = String(store.layoutSize);
+  if (toggleConsoleColumns.disabled) closeLayoutMenu();
   for (const pane of panes) {
     pane.element.hidden = pane.index >= store.layoutSize || (store.expandedPaneIndex !== null && pane.index !== store.expandedPaneIndex);
     const expanded = pane.index === store.expandedPaneIndex;
-    const label = expanded ? `Restore ${store.layoutSize}-terminal layout` : 'Show only this terminal';
+    const label = expanded ? `Restore the layout (${current.label})` : 'Show only this terminal';
     pane.expandButton.title = label;
     pane.expandButton.setAttribute('aria-label', label);
     pane.expandButton.setAttribute('aria-pressed', String(expanded));
@@ -179,10 +178,92 @@ function updateWorkspaceLayout() {
   requestAnimationFrame(fitTerminals);
 }
 
+// The Layout menu of the bottom toolbar: a menu button opening upward, in a layer above the
+// toolbar (which scrolls horizontally and would clip it). Keyboard: Enter/Space/arrows open,
+// arrows/Home/End move, Enter/Space choose, Escape/Tab close; a click outside closes.
+const LAYOUT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
+const LAYOUTS = [
+  {id: 'single', label: '1 terminal', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/>'},
+  {id: 'columns-2', label: '2 terminals, side by side', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>'},
+  {id: 'rows-2', label: '2 terminals, stacked', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/>'},
+  {id: 'grid-4', label: '4 terminals', icon: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>'}
+].filter(layout => Object.hasOwn(LAYOUT_PANES, layout.id));
+const layoutIcon = layout => `${LAYOUT_SVG}${layout.icon}</svg>`;
+const layoutMenu = document.createElement('div');
+
+function setLayout(id) {
+  const selected = store.activeId;
+  store.layout = id;
+  saveViewSettings();
+  const index = consoleSessions().findIndex(machine => machine.id === selected);
+  store.pageIndex = index >= 0 ? Math.floor(index / store.layoutSize) : 0;
+  showPage(selected);
+}
+
+function layoutItems() { return [...layoutMenu.querySelectorAll('[role="menuitemradio"]')]; }
+
+function openLayoutMenu(focusLast = false) {
+  if (toggleConsoleColumns.disabled) return;
+  for (const item of layoutItems()) item.setAttribute('aria-checked', String(item.dataset.layout === store.layout));
+  layoutMenu.hidden = false;
+  const rect = toggleConsoleColumns.getBoundingClientRect();
+  layoutMenu.style.left = `${Math.max(8, Math.min(rect.left, window.innerWidth - layoutMenu.offsetWidth - 8))}px`;
+  layoutMenu.style.bottom = `${window.innerHeight - rect.top + 6}px`;
+  toggleConsoleColumns.setAttribute('aria-expanded', 'true');
+  const items = layoutItems();
+  (focusLast ? items.at(-1) : items.find(item => item.dataset.layout === store.layout) || items[0]).focus();
+}
+
+export function closeLayoutMenu(returnFocus = false) {
+  if (layoutMenu.hidden) return;
+  layoutMenu.hidden = true;
+  toggleConsoleColumns.setAttribute('aria-expanded', 'false');
+  if (returnFocus) toggleConsoleColumns.focus();
+}
+
+function initLayoutMenu() {
+  layoutMenu.className = 'layout-menu';
+  layoutMenu.id = 'layout-menu';
+  layoutMenu.setAttribute('role', 'menu');
+  layoutMenu.setAttribute('aria-label', 'Console layout');
+  layoutMenu.hidden = true;
+  for (const layout of LAYOUTS) {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.setAttribute('role', 'menuitemradio');
+    item.dataset.layout = layout.id;
+    item.tabIndex = -1;
+    item.innerHTML = `${layoutIcon(layout)}<span>${layout.label}</span>`;
+    item.addEventListener('click', () => { closeLayoutMenu(true); setLayout(layout.id); });
+    layoutMenu.append(item);
+  }
+  document.body.append(layoutMenu);
+  toggleConsoleColumns.setAttribute('aria-haspopup', 'menu');
+  toggleConsoleColumns.setAttribute('aria-controls', layoutMenu.id);
+  toggleConsoleColumns.setAttribute('aria-expanded', 'false');
+  toggleConsoleColumns.addEventListener('click', () => (layoutMenu.hidden ? openLayoutMenu() : closeLayoutMenu()));
+  toggleConsoleColumns.addEventListener('keydown', event => {
+    if (event.key === 'ArrowUp' || event.key === 'ArrowDown') { event.preventDefault(); openLayoutMenu(event.key === 'ArrowUp'); }
+  });
+  layoutMenu.addEventListener('keydown', event => {
+    const items = layoutItems();
+    const index = items.indexOf(document.activeElement);
+    const move = {ArrowDown: index + 1, ArrowUp: index - 1, Home: 0, End: items.length - 1}[event.key];
+    if (move !== undefined) { event.preventDefault(); items[(move + items.length) % items.length].focus(); }
+    else if (event.key === 'Escape') { event.preventDefault(); closeLayoutMenu(true); }
+    else if (event.key === 'Tab') closeLayoutMenu();
+  });
+  document.addEventListener('pointerdown', event => {
+    if (!layoutMenu.contains(event.target) && !toggleConsoleColumns.contains(event.target)) closeLayoutMenu();
+  });
+  window.addEventListener('resize', () => closeLayoutMenu());
+}
+
 // An observer following the owner: the owner's console layout and active node, not saved in
 // this browser's view settings.
 export function showOwnerLayout({layout, switches, page, expanded, nodeId}) {
-  store.layoutSize = layout;
+  closeLayoutMenu();
+  store.layout = layout;
   store.showSwitchConsoles = switches;
   updateSwitchConsoleToggle();
   store.pageIndex = page;
@@ -361,14 +442,7 @@ export function initWorkspace() {
   setInterval(refreshResourceMetrics, 2000);
   updateSwitchConsoleToggle();
   updateWorkspaceLayout();
-  toggleConsoleColumns.addEventListener('click', () => {
-    const selected = store.activeId;
-    store.layoutSize = store.layoutSize === 1 ? 2 : store.layoutSize === 2 ? 4 : 1;
-    saveViewSettings();
-    const index = consoleSessions().findIndex(machine => machine.id === selected);
-    store.pageIndex = index >= 0 ? Math.floor(index / store.layoutSize) : 0;
-    showPage(selected);
-  });
+  initLayoutMenu();
   previousPage.addEventListener('click', () => { if (store.pageIndex > 0) { store.pageIndex--; showPage(); } });
   nextPage.addEventListener('click', () => { if ((store.pageIndex + 1) * store.layoutSize < consoleSessions().length) { store.pageIndex++; showPage(); } });
   toggleSwitchConsoles.addEventListener('click', () => {
