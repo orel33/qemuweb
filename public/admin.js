@@ -32,11 +32,34 @@ function cell(content) {
   return td;
 }
 
-function button(label, onClick, title = '') {
-  const element = document.createElement('button');
-  element.type = 'button';
-  element.textContent = label;
-  if (title) element.title = title;
+// Lucide icons of the row actions, inline like the other icons of the UI
+// (License: /icons/LICENSE-lucide.txt).
+const USER = '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>';
+const ICONS = {
+  eye: '<path d="M2.062 12.348a1 1 0 0 1 0-.696 10.75 10.75 0 0 1 19.876 0 1 1 0 0 1 0 .696 10.75 10.75 0 0 1-19.876 0"/><circle cx="12" cy="12" r="3"/>',
+  square: '<rect width="18" height="18" x="3" y="3" rx="2"/>',
+  trash2: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/>',
+  keyRound: '<path d="M2.586 17.414A2 2 0 0 0 2 18.828V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.172a2 2 0 0 0 1.414-.586l.814-.814a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".5" fill="currentColor"/>',
+  userX: `${USER}<line x1="17" x2="22" y1="8" y2="13"/><line x1="22" x2="17" y1="8" y2="13"/>`,
+  userCheck: `${USER}<polyline points="16 11 18 13 22 9"/>`,
+  userMinus: `${USER}<line x1="22" x2="16" y1="11" y2="11"/>`
+};
+const iconSvg = name => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
+
+// A square icon button (or link, for Observe: a middle click opens a new tab) of a table row.
+function iconAction(tag, icon, label, title = label) {
+  const element = document.createElement(tag);
+  element.className = 'icon-button admin-icon';
+  element.innerHTML = iconSvg(icon);
+  element.setAttribute('aria-label', label);
+  element.title = title;
+  if (['trash2', 'userMinus'].includes(icon)) element.dataset.tone = 'danger';
+  if (tag === 'button') element.type = 'button';
+  return element;
+}
+
+function iconButton(icon, label, onClick, title = label) {
+  const element = iconAction('button', icon, label, title);
   element.addEventListener('click', onClick);
   return element;
 }
@@ -132,16 +155,21 @@ function renderSessions(sessions) {
     actions.className = 'admin-actions';
     // Same buttons on every row: your own session cannot be observed (the button is disabled).
     if (session.own) {
-      const observe = button('Observe', () => {}, 'This is your own session');
+      const observe = iconButton('eye', 'Observe', () => {}, 'This is your own session');
       observe.disabled = true;
       actions.append(observe);
-    } else actions.append(Object.assign(document.createElement('a'), {href: `/?observe=${encodeURIComponent(session.login)}`, className: 'admin-button', textContent: 'Observe', title: 'Read-only view of this session'}));
+    } else {
+      const observe = iconAction('a', 'eye', 'Observe', 'Observe: read-only view of this session');
+      observe.href = `/?observe=${encodeURIComponent(session.login)}`;
+      actions.append(observe);
+    }
     actions.append(
-      button('Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})), 'Stop every VM and switch; the nodes are kept'),
-      button('Delete', async () => {
+      iconButton('square', 'Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})),
+        'Stop all: stop every VM and switch; the nodes are kept'),
+      iconButton('trash2', 'Delete session', async () => {
         if (!await confirmDialog('Delete session', `Delete the session of ${session.login}? Every host and switch stops and is removed, with its disks.`, [], 'Delete')) return;
         runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}`, {method: 'DELETE'}));
-      }));
+      }, 'Delete session: every host and switch is removed, with its disks'));
     row.append(cell(check), cell(user), cell(sessionState(session.active)), cell(shortDateTime(session.createdAt)),
       cell(`${plural(session.hosts, 'host')}, ${plural(session.switches, 'switch')}`),
       cell(`${session.runningHosts} / ${session.hosts}`),
@@ -185,16 +213,16 @@ function renderAccounts(users) {
     role.addEventListener('change', () => runAction('accounts-error', () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'PATCH', body: {role: role.value}})));
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
-    actions.append(button('Reset password', () => resetPassword(user.login)));
-    const toggle = button(user.disabled ? 'Enable' : 'Disable', () => runAction('accounts-error',
+    actions.append(iconButton('keyRound', 'Reset password', () => resetPassword(user.login)));
+    const toggle = iconButton(user.disabled ? 'userCheck' : 'userX', user.disabled ? 'Enable' : 'Disable', () => runAction('accounts-error',
       () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'PATCH', body: {disabled: !user.disabled}})),
-    user.disabled ? 'Allow this account to log in again' : 'Refuse its logins and cookies at once; its session is kept');
+    user.disabled ? 'Enable: allow this account to log in again' : 'Disable: refuse its logins and cookies at once; its session is kept');
     toggle.disabled = own;
-    const remove = button('Remove', async () => {
+    const remove = iconButton('userMinus', 'Remove account', async () => {
       const message = `Remove the account ${user.login}? It can no longer log in, its open pages are logged out at once, and its session, if any, is deleted with every host, switch and disk.`;
       if (!await confirmDialog('Remove account', message, [], 'Remove')) return;
       runAction('accounts-error', () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'DELETE'}));
-    }, 'Remove this account from users.json and delete its session');
+    }, 'Remove account: remove it from users.json and delete its session');
     remove.disabled = own;
     actions.append(toggle, remove);
     row.append(cell(loginLabel(user.login, own)), cell(role), cell(user.disabled ? 'disabled' : 'enabled'), cell(actions));

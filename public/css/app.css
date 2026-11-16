@@ -344,6 +344,10 @@ body.observing [data-view="monitor"] { display: none !important; }
 .admin-actions button, .admin-actions .admin-button { font: inherit; font-size: 13px; line-height: 1.2; }
 .admin-actions .admin-button { display: inline-block; padding: 4px 9px; color: inherit; text-decoration: none; background: #243244; border: 1px solid #506176; border-radius: 6px; }
 .admin-actions .admin-button:hover, .admin-actions .admin-button:focus-visible { background: #304256; }
+.admin-actions .admin-icon { width: 32px; height: 32px; padding: 6px; }
+.admin-actions .admin-icon svg { width: 18px; height: 18px; }
+.admin-actions a.admin-icon { color: #8ec5ff; }
+.admin-actions .admin-icon[data-tone="danger"] { color: #ff777d; }
 .presence { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; color: #8fa2b8; font-size: 12px; }
 .presence[data-online="true"] { color: #9ee6b4; }
 .presence[data-online="true"]::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #3fcf72; }
