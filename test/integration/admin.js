@@ -177,7 +177,14 @@ async function run() {
   assert.doesNotMatch(aliceConsole.output(), /observermarker/, 'the observer typed into alice\'s console');
   assert.equal(aliceConsole.count('serial-reset'), resetsBefore, 'the observer cleared alice\'s console');
   assert.equal((await alice.request('/api/nodes'))[0].running, true);
-  console.log('Admin: observation is live and read-only (input, clear, resize and writes refused)');
+  // Observing an offline user works: bob has a session but no connected browser.
+  assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'bob').browsers, 0);
+  const offlineObserver = recorder(boss, 'boss observing bob', {auth: {observe: 'bob'}});
+  await offlineObserver.connected;
+  assert.deepEqual(await select(offlineObserver.socket, bobSwitch), {ok: true});
+  assert.ok(offlineObserver.events.some(item => item.event === 'node-snapshot' && item.payload.nodeId === bobSwitch));
+  offlineObserver.socket.close();
+  console.log('Admin: observation is live and read-only (input, clear, resize and writes refused), also for an offline user');
 
   // (4) Take control: alice's keyboard is blocked, she sees the admin's commands, and
   // the control ends when the admin's socket disconnects.
@@ -215,6 +222,12 @@ async function run() {
   await waitFor('session-deleted at bob', () => bobSession.events.some(item => item.event === 'session-deleted'));
   assert.deepEqual((await boss.request('/api/admin/sessions')).map(session => session.login), ['boss']);
   await expectStatus(boss, '/api/admin/sessions/delete', 'POST', 409, {body: {logins: ['boss']}});
+  // Observing a login without a session: a distinct event for the page, then the socket closes.
+  const goneObserver = recorder(boss, 'boss observing a deleted session', {auth: {observe: 'alice'}});
+  await goneObserver.connected;
+  await waitFor('observe-unavailable', () => goneObserver.events.some(item => item.event === 'observe-unavailable' && item.payload.login === 'alice'));
+  await waitFor('socket closed', () => goneObserver.events.some(item => item.event === 'disconnect'));
+  await expectStatus(boss, '/api/nodes', 'GET', 404, {headers: {'x-observe': 'alice'}});
   console.log('Admin: stop-all keeps the nodes; bulk deletion frees vde_switch processes and runtime directories');
 
   // (6) Accounts: create, reset, disable (own account protected); a disabled account loses

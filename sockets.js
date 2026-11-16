@@ -88,6 +88,9 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       workspace = observer ? manager.get(target) : manager.open(user.login);
       if (!workspace) throw new Error(`No session for ${target}.`);
     } catch (error) {
+      // An observer whose target has no session (never used since the server started, or
+      // deleted) gets a distinct event, so that its page can say so instead of breaking.
+      if (observer && user.role === 'admin') socket.emit('observe-unavailable', {login: target, error: error.message});
       socket.emit('node-error', error.message);
       socket.disconnect(true);
       return;

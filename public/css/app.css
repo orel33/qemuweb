@@ -353,3 +353,8 @@ body.observing [data-view="monitor"] { display: none !important; }
 .admin-error { color: #ff9a9f; }
 .admin-error[hidden] { display: none; }
 .admin-confirm-list { max-height: 240px; overflow: auto; margin: 0; }
+/* Observation of a login without a session: a message replaces the workspace. */
+.observe-notice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; flex: 1; padding: 24px 16px; text-align: center; }
+.observe-notice[hidden] { display: none; }
+body[data-observe-unavailable="true"] #console-workspace, body[data-observe-unavailable="true"] #graphic-workspace,
+body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailable="true"] .control-banner { display: none !important; }

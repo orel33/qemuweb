@@ -50,6 +50,7 @@ const controlBanner = document.getElementById('control-banner');
 function nodeName(nodeId) { return machines.get(nodeId)?.hostname || 'a node'; }
 
 function renderControl() {
+  if (document.body.dataset.observeUnavailable) return;
   if (observing) {
     const button = document.getElementById('observe-control');
     const status = document.getElementById('observe-status');
@@ -76,6 +77,20 @@ export function applyControl(nodeId, admin, active) {
     if (held?.nodeId === nodeId) held = null;
   }
   renderControl();
+}
+
+// The observed login has no session: it never used QemuWeb since the server started, or its
+// session was deleted. The page replaces the workspace with a message and a way back.
+export function observationUnavailable(reason = 'no session') {
+  if (!observing) return;
+  const text = reason === 'deleted'
+    ? `The session of ${observedLogin} was deleted.`
+    : `${observedLogin} has no session: the user has not used QemuWeb since the server started, or the session was deleted.`;
+  document.getElementById('observe-notice-text').textContent = text;
+  document.getElementById('observe-notice').hidden = false;
+  document.getElementById('observe-status').textContent = 'no session';
+  document.getElementById('observe-control').disabled = true;
+  document.body.dataset.observeUnavailable = 'true';
 }
 
 // The owner selected a node: observers follow.
@@ -117,9 +132,7 @@ async function renderSessionNavigation() {
     if (!response.ok) return;
     sessions = (await response.json()).filter(session => !session.own);
   } catch (_) { return; }
-  if (!sessions.some(session => session.login === observedLogin)) {
-    document.getElementById('observe-status').textContent = `${observedLogin} has no session.`;
-  }
+  if (!sessions.some(session => session.login === observedLogin)) observationUnavailable();
   select.replaceChildren(...sessions.map(session => {
     const option = document.createElement('option');
     option.value = session.login;

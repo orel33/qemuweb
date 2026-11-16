@@ -5,7 +5,7 @@ import {renderTabs, showPage, showStatusError, updateControls} from './workspace
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
-import {applyControl, followOwner, observing, socketOptions} from './observe.js';
+import {applyControl, followOwner, observationUnavailable, observing, socketOptions} from './observe.js';
 
 let socket = null;
 
@@ -119,8 +119,9 @@ export function initSockets() {
   });
   socket.on('node-error', showStatusError);
   // The session was deleted (here or in another tab): reload into the new, empty one. An
-  // observed session is gone: back to the supervision page.
-  socket.on('session-deleted', () => { if (observing) location.assign('/admin'); else location.reload(); });
+  // observed session is gone: say so, with a link back to the supervision page.
+  socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
+  socket.on('observe-unavailable', () => observationUnavailable());
   socket.on('console-control', event => applyControl(event.nodeId, event.admin, event.active));
   socket.on('owner-selected-node', event => followOwner(event.nodeId));
   socket.on('connect_error', socketConnectError);
