@@ -67,10 +67,18 @@ function archiveSummaryText({session, diskHosts}) {
   const disks = diskHosts.length ? countLabel(diskHosts.length, 'working disk') : 'no working disk';
   return `${countLabel(session.hosts.length, 'host')} and ${countLabel(session.switches.length, 'switch', 'switches')}, ${disks} (qcow2)`;
 }
-// Warns before upload when a base image changed since the archive was saved.
+// Warns before upload when a working disk depends on a base image that changed since the archive was
+// saved. Only hosts with a working disk record that image (host.json "baseImage"; older archives kept
+// one entry per system in session.json "baseImages"); without disks nothing depends on the images.
 async function checkArchiveBaseImages(file, {entries, diskHosts, session}) {
-  const result = await requestJson('/api/session-archive/check', jsonRequest('POST', {engine: session.engine, baseImages: session.baseImages}), 'Cannot check base images.');
+  if (!diskHosts.length) return {messages: [], staleDisks: false, changed: false, noDisks: true};
   const hosts = await Promise.all(diskHosts.map(id => archiveJson(file, entries.get(`${id}/host.json`))));
+  const baseImages = {};
+  for (const host of hosts) {
+    const identity = host.baseImage ?? session.baseImages?.[host.system];
+    if (identity && !baseImages[host.system]) baseImages[host.system] = identity;
+  }
+  const result = await requestJson('/api/session-archive/check', jsonRequest('POST', {engine: session.engine, baseImages}), 'Cannot check base images.');
   const messages = [];
   let staleDisks = false;
   for (const id of result.changed) {
@@ -78,7 +86,6 @@ async function checkArchiveBaseImages(file, {entries, diskHosts, session}) {
     staleDisks ||= stale.length > 0;
     if (stale.length) messages.push(`Base image ${id} changed since this session was saved. The working disks of ${stale.join(', ')} cannot be reused.`);
   }
-  // Hosts without a working disk simply start from the current image: no warning.
   return {messages, staleDisks, changed: result.changed.length > 0};
 }
 // Uploads the ZIP with progress reporting, which fetch() cannot do.
@@ -261,7 +268,7 @@ export function initArchive() {
         check = await checkArchiveBaseImages(file, summary);
         if (selectedArchiveFile !== file) return;
         setLoadStep('check', check.messages.length ? 'warning' : 'done', check.messages.join('\n') ||
-          (check.changed ? 'No working disk depends on the saved base images; hosts start from the current images.' : 'Base images are up to date'));
+          (check.noDisks ? 'No working disk: hosts start from the current base images.' : 'Base images are up to date'));
       }
     } catch (_) {
       if (selectedArchiveFile !== file) return;

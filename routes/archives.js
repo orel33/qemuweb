@@ -27,14 +27,10 @@ function register({app, session, runner, commands, emit}) {
     const exportName = `.session-export-${crypto.randomBytes(8).toString('hex')}`;
     const archive = path.join(session.runtimeDir, `${exportName}.zip`);
     const exportMetadata = path.join(session.runtimeDir, `${exportName}.json`);
+    const exportFiles = [exportMetadata];
     try {
       const includeDisks = req.body?.includeDisks;
       const prepared = archiveSources(includeDisks, includeDisks);
-      const baseImages = {};
-      for (const id of prepared.systems) {
-        const format = session.engine === 'vbox' ? 'vdi' : 'raw';
-        baseImages[id] = {format, ...await fileSha256Async(imagePath(imageById(id).images[format]))};
-      }
       if (includeDisks) {
         for (const host of session.nodes.values()) if (host.kind === 'host' && host.machine) {
           try { await stop(host, {forceOnTimeout: false}); }
@@ -45,25 +41,38 @@ function register({app, session, runner, commands, emit}) {
           catch (error) { throw new Error(`Cannot stop ${sw.hostname}: ${error.message}. Instances already stopped remain stopped.`); }
         }
       }
-      const {sources} = includeDisks ? archiveSources(includeDisks) : prepared;
-      const metadata = {...session.metadata(), baseImages};
-      writeJsonAtomic(session.metadataFile, metadata);
-      // The owner stays out of archives, so that any user can load them.
+      const {sources, hosts} = includeDisks ? archiveSources(includeDisks) : prepared;
+      // The owner stays out of archives, so that any user can load them. The live session.json is left alone.
+      const metadata = session.metadata();
       delete metadata.owner;
       writeJsonAtomic(exportMetadata, metadata);
-      await writeArchive(archive, sources.map(item => item.name === 'session.json' ? {...item, file: exportMetadata} : item));
+      // A host with a working disk records the identity of the base image that disk depends on, in its host.json.
+      const format = session.engine === 'vbox' ? 'vdi' : 'raw';
+      const exportSources = [];
+      for (const item of sources) {
+        const host = hosts.find(entry => item.name === `${entry.id}/host.json`);
+        if (item.name === 'session.json') exportSources.push({...item, file: exportMetadata});
+        else if (host?.disk) {
+          const file = path.join(session.runtimeDir, `${exportName}.${host.id}.json`);
+          exportFiles.push(file);
+          const baseImage = {format, ...await fileSha256Async(imagePath(imageById(host.system).images[format]))};
+          writeJsonAtomic(file, {...JSON.parse(fs.readFileSync(item.file, 'utf8')), baseImage});
+          exportSources.push({...item, file});
+        } else exportSources.push(item);
+      }
+      await writeArchive(archive, exportSources);
       res.set('Cache-Control', 'no-store');
       // The temporary archive is dot-prefixed; sendFile ignores dotfiles by default.
       res.download(archive, 'qemuweb-session-v4.zip', {dotfiles: 'allow'}, error => {
         session.archiveBusy = false;
         fs.rmSync(archive, {force: true});
-        fs.rmSync(exportMetadata, {force: true});
+        for (const file of exportFiles) fs.rmSync(file, {force: true});
         if (error && !res.headersSent) res.status(500).json({error: error.message});
       });
-    } catch (error) { session.archiveBusy = false; fs.rmSync(archive, {force: true}); fs.rmSync(exportMetadata, {force: true}); res.status(400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to save session archive.' : error.message}); }
+    } catch (error) { session.archiveBusy = false; fs.rmSync(archive, {force: true}); for (const file of exportFiles) fs.rmSync(file, {force: true}); res.status(400).json({error: error.code === 'ENOSPC' ? 'Insufficient disk space to save session archive.' : error.message}); }
   });
-  // Lets the load dialog warn before upload: returns the systems whose current base
-  // image differs from the one recorded in an archive's session.json.
+  // Lets the load dialog warn before upload: returns the systems whose current base image
+  // differs from the identity recorded for them (by the hosts that have a working disk).
   app.post('/api/session-archive/check', async (req, res) => {
     try {
       const {engine, baseImages} = req.body || {};

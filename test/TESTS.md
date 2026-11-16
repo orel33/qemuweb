@@ -20,6 +20,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `runner.test.js` | Drive `runner/` through its facade with an injected in-memory session and a temporary runtime directory: node layout, hostname aliases, state/log events, NIC MAC and port assignment, engine checks, catalog lookups and launch preview commands. No HTTP server is started and no process is spawned. |
 | `runner-boundaries.test.js` | Check the dependency rules: `runner/` requires only `runner/`, `common/`, Node built-ins and `node-pty`; the rest of the server requires only `runner/index.js`. |
 | `session-manager.test.js` | Check one session per user (random ID, `owner`, `runtime/users/<login>` alias), independent runners and events, deletion, exit cleanup, server records, and that archives never carry the owner. |
+| `session-archive-validation.test.js` | Check archive validation: base image identities in the `host.json` of hosts with a working disk, older `session.json` inventories, refused or discarded stale disks, no identity needed without a disk. |
 | `session-archive.test.js` | Write and read session ZIP archives; reject modified, unsafe or incomplete ones. |
 | `session-log.test.js` | Check log replay, clearing and history limits. |
 | `tcg09-graphic.test.js` | Build the network graph from example topologies and check links, positions and states. |

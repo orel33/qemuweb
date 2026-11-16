@@ -128,9 +128,11 @@ start from fresh images. [`demo/`](demo/) also contains DMZ and gateway sessions
   ZIP archive; **Load session ZIP** restores it.
 - Before loading, the dialog summarizes the archive and warns when a base image
   changed since the session was saved and the archive contains working disks
-  (qcow2) for it: those disks are discarded, never reused. Hosts without a
-  working disk simply start from the current image, without a warning (image
-  builds are not reproducible, so the hash differs from one machine to another).
+  (qcow2) for it: those disks are discarded, never reused. Each host with a
+  working disk records, in its `host.json`, the base image it depends on (format, size
+  and SHA-256). Hosts without a working disk simply start from the current image,
+  without a warning (image builds are not reproducible, so the hash differs from one
+  machine to another).
 - **Load topology** reads a `.topo` text file that describes only hosts,
   switches, and their links, without disks or startup scripts. Examples:
   [`topo/lan.topo`](topo/lan.topo), [`topo/dmz.topo`](topo/dmz.topo),

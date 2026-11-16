@@ -43,7 +43,7 @@ test('each user gets one persistent session with a random ID, an owner and an al
     assert.equal(session.runtimeDir, path.join(runtimeRoot, 'sessions', session.id));
   }
   assert.deepEqual(JSON.parse(fs.readFileSync(toto.session.metadataFile, 'utf8')),
-    {schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], baseImages: {}, owner: 'toto'});
+    {schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], owner: 'toto'});
   const alias = path.join(runtimeRoot, 'users', 'toto');
   assert.equal(fs.readlinkSync(alias), path.join('..', 'sessions', toto.session.id));
   assert.equal(fs.realpathSync(alias), fs.realpathSync(toto.session.runtimeDir));
