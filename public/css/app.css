@@ -340,7 +340,6 @@ body.observing [data-view="monitor"] { display: none !important; }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .admin-table th, .admin-table td { padding: 7px 9px; text-align: left; white-space: nowrap; border-bottom: 1px solid #2c3743; }
 .admin-table th { color: #9fb3c9; font-weight: 600; }
-.admin-table tr[data-own="true"] { background: #1c2a1f; }
 .admin-table tr[data-disabled="true"] td { color: #8a96a3; }
 .admin-own { color: #9ee6b4; }
 .admin-actions { display: flex; gap: 6px; align-items: center; }

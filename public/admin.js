@@ -143,7 +143,6 @@ function renderSessions(sessions) {
   for (const login of [...selected]) if (!sessions.some(session => session.login === login)) selected.delete(login);
   body.replaceChildren(...sessions.map(session => {
     const row = document.createElement('tr');
-    row.dataset.own = String(session.own);
     const check = document.createElement('input');
     check.type = 'checkbox';
     check.disabled = session.own;
