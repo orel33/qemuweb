@@ -326,7 +326,8 @@ output as UTF-8 (`StringDecoder`), and browsers receive strings.
 
 ```text
 hello     runner -> CP, first message of every connection
-          {type:'hello', protocol:1, pid, engines:['qemu'|'vbox'...],
+          {type:'hello', protocol:1, pid, engines:['qemu'|'vbox'...], kvm,
+           cpus, memoryBytes, images:{<system>:{raw?, vdi?}} (each {size, sha256|null}),
            sessions:[{sessionId, engine, nodes:[<listNodes entry>...]}]}
 request   CP -> runner  {type:'request', id, command, sessionId?, args}
 response  runner -> CP  {type:'response', id, result}
@@ -423,7 +424,8 @@ evaluated by each runner over its own sessions.
 ### Connection lifecycle (local runner, 5b)
 
 1. `server.js` listens on `runtime/runner-<port>.sock`, then spawns
-   `node runner/main.js --connect <socket path> --exit-on-disconnect` in its
+   `node runner/main.js --connect <socket path> --runtime runtime
+   --exit-on-disconnect` in its
    own process group (`detached`, so a terminal Ctrl+C reaches the server
    only).
 2. The runner resolves its executables (`runner/preflight.js`), connects and
@@ -463,6 +465,33 @@ and calls its `lost` handler. For the local runner, `server.js`:
 
 VirtualBox VMs run under VBoxSVC, outside the process group: after a runner
 crash they stay registered, as after a server crash today.
+
+### User-land runners
+
+A runner is an ordinary unprivileged process, never root, possibly on a
+student's lab machine (roadmap, milestone 5, "Mode utilisateur").
+
+- It assumes no root, no capability, no dedicated system account, and writes
+  nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
+  `--connect <socket>` (control connection), `--runtime <dir>` (sessions,
+  default `$XDG_DATA_HOME/qemuweb-runner`, else
+  `~/.local/share/qemuweb-runner`), `--config <file>` (system catalog,
+  default the project's `config.json`). The local runner spawned by
+  `server.js` gets `--runtime runtime/`, so the files on disk do not change.
+  The 5c configuration (`~/.config/qemuweb-runner/config.toml`, systemd
+  `--user` unit) is out of scope here.
+- The control socket is created by the control plane with mode 0600 in
+  `runtime/`, a directory the same user owns.
+- QEMU and VDE run unprivileged; only `/dev/kvm` needs the `kvm` group. The
+  runner announces what it can do in `hello` instead of failing late:
+  `engines`, `kvm` (true when `/dev/kvm` is readable and writable),
+  `cpus`, `memoryBytes`, and `images` (per system of its catalog: the RAW
+  and VDI images present, with size and SHA-256 when known from
+  `<image>.sha256` or the cache, never computed at connection time).
+- Nothing in the protocol relies on a shared user, uid or filesystem: paths
+  never cross the connection as data the other side opens (archives travel as
+  streams, the launch preview shows paths for display only), and a session
+  is named by its ID only.
 
 ### Multiple runners and untrusted runners
 
