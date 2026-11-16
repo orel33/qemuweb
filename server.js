@@ -112,7 +112,7 @@ app.use((req, res, next) => {
 server.on('error', error => {
   if (error.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use. Stop the existing server or run PORT=${port + 1} npm start.`);
-    registry.shutdown().then(() => localRunner.stop()).finally(() => process.exit(1));
+    localRunner.stop().finally(() => process.exit(1));
     return;
   }
   console.error('Server error:', error);
@@ -148,7 +148,6 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const forceExit = setTimeout(() => process.exit(1), 10000);
-  await registry.shutdown();
   await localRunner.stop();
   io.close(() => {
     clearTimeout(forceExit);

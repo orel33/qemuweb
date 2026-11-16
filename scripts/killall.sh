@@ -22,7 +22,13 @@ matching_pids() {
     args=()
     mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || continue
     (( ${#args[@]} )) || continue
-    if [[ "$kind" == server ]]; then
+    if [[ "$kind" == runner ]]; then
+      # The local runner process, started by server.js with the absolute path of runner/main.js.
+      [[ "${exe##*/}" == node ]] || continue
+      for arg in "${args[@]:1}"; do
+        if [[ "$arg" == "$ROOT/runner/main.js" ]]; then printf '%s\n' "$pid"; break; fi
+      done
+    elif [[ "$kind" == server ]]; then
       [[ "${exe##*/}" == node ]] || continue
       cwd="$(readlink -f -- "$proc/cwd" 2>/dev/null || true)"
       matched=0
@@ -64,6 +70,16 @@ if (( ! DRY_RUN )); then
   signal_pids KILL server
 fi
 
+# A runner left without its server destroys its nodes and exits on its own; SIGTERM does the same.
+signal_pids TERM runner
+if (( ! DRY_RUN )); then
+  for _ in {1..12}; do
+    [[ -z "$(matching_pids runner)" ]] && break
+    sleep 1
+  done
+  signal_pids KILL runner
+fi
+
 # Récupère les QEMU de ce projet, y compris ceux orphelins ou en préparation.
 signal_pids TERM qemu
 if (( ! DRY_RUN )); then
@@ -94,7 +110,7 @@ if command -v VBoxManage >/dev/null 2>&1; then
   fi
 fi
 
-if (( ! DRY_RUN )) && { [[ -n "$(matching_pids server)" ]] || [[ -n "$(matching_pids qemu)" ]]; }; then
+if (( ! DRY_RUN )) && { [[ -n "$(matching_pids server)" ]] || [[ -n "$(matching_pids runner)" ]] || [[ -n "$(matching_pids qemu)" ]]; }; then
   echo 'Project processes are still running; cleanup cancelled.' >&2
   exit 1
 fi

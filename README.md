@@ -268,9 +268,12 @@ Guests log in as `root` without a password on the serial console.
 | `users.json` | User accounts (see [Users and sessions](#users-and-sessions)); ignored by Git. |
 | `runtime/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. The ID is random. |
 | `runtime/users/<login>` | Link to the user's session directory, for administrators. |
+| `runtime/runner-<port>.sock` | Socket (mode 0600) between the server and its local runner process, which runs the machines. |
 
 `runtime/` is temporary: a node's files are removed with the node or when
-the server stops. Use **Save session** to keep a portable copy; archives do not
+the server stops. The server starts its runner (`runner/main.js`, a child
+process) and stops it with itself; if the runner dies, the server closes its
+sessions and starts a new one. Use **Save session** to keep a portable copy; archives do not
 record the owner, so any user can load them.
 
 ## Maintenance scripts
@@ -279,21 +282,21 @@ record the owner, so any user can load them.
 | --- | --- |
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
 | `scripts/stop.sh` | Stop the server started on `PORT` (default 3002). |
-| `scripts/killall.sh [--dry-run]` | Stop this project's servers, QEMU processes, and VirtualBox VMs, including orphans. |
+| `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, and VirtualBox VMs, including orphans. |
 | `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads. |
 
 ## Development
 
 | Path | Role |
 | --- | --- |
-| `server.js` | Startup: preflight, authentication, session manager, HTTP routes and Socket.IO wiring. |
-| `routes/` | HTTP API of one session (`routes/index.js` builds one router per session), by area: settings, nodes, hosts, topology, archives, metrics. |
+| `server.js` | Startup: local runner, authentication, session manager, HTTP routes and Socket.IO wiring. |
+| `routes/` | HTTP API of one session (`routes/index.js` builds one router per session), by area: settings, nodes, hosts, topology, archives, metrics. Each route sends one command to the session's runner. |
 | `sockets.js` | Socket.IO consoles; forwards each runner's events to the browsers of its session only. |
-| `runner/` | Node processes behind the facade `runner/index.js`, one runner instance per session: QEMU, VirtualBox, VDE switches, consoles, startup media, metrics. |
-| `lib/` | Session manager (one session per user), session, server instance records, session ZIP archives and snapshots, `.topo` parsing. |
+| `runner/` | The runner, a separate process (`runner/main.js`) serving every session of the machine over the runner protocol: QEMU, VirtualBox, VDE switches, consoles, startup media, archives, metrics. |
+| `lib/` | Control plane: session manager (one session per user), runner client, registry and local runner process, server instance records. |
 | `lib/auth/` | Authentication: users file, password hashes, signed cookie. |
 | `scripts/user.sh`, `scripts/user.js` | User account administration. |
-| `common/` | Code shared by the runner and the server: IDs, launch settings, `config.json` validation. |
+| `common/` | Code shared by the runner and the server: runner protocol framing, IDs, launch settings, `config.json` validation, `.topo` parsing. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |
 | `demo/` | Example sessions (`.zip`) and topologies (`.topo`): LAN, DMZ and gateway. |
