@@ -281,7 +281,7 @@ export function renderTabs() {
     select.title = machine.osHint;
     select.onclick = () => { if (machine.id !== store.activeId) selectMachine(machine.id); };
     select.ondblclick = async () => {
-      if (machine.kind === 'switch' || !machine.hasLaunched) return;
+      if (observing || machine.kind === 'switch' || !machine.hasLaunched) return;
       const name = window.prompt('Display name for this host:', machine.hostname);
       if (name === null || !name.trim()) return;
       try {
@@ -293,7 +293,7 @@ export function renderTabs() {
     select.title = machine.kind === 'switch' ? 'VDE switch management console' : machine.hasLaunched ? `${machine.osHint} · double-click to rename` : `New host · ${machine.osHint}`;
     const close = document.createElement('button');
     close.type = 'button';
-    close.className = 'machine-close';
+    close.className = 'machine-close write-action';
     close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
     close.title = machine.kind === 'switch' ? 'Remove switch' : 'Remove host and delete its working disk';
     close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Remove host'} ${machine.hostname}`);

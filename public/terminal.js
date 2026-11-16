@@ -289,7 +289,7 @@ export function initTerminals() {
     pane.metrics.hidden = true;
     pane.sessionMenu.after(pane.metrics);
     pane.actionMenu = document.createElement('details');
-    pane.actionMenu.className = 'pane-action-menu';
+    pane.actionMenu.className = 'pane-action-menu write-action';
     pane.actionMenu.hidden = true;
     const actionToggle = document.createElement('summary');
     actionToggle.title = 'Session actions';
@@ -340,7 +340,7 @@ export function initTerminals() {
     });
     pane.settingsButton = document.createElement('button');
     pane.settingsButton.type = 'button';
-    pane.settingsButton.className = 'pane-settings-button';
+    pane.settingsButton.className = 'pane-settings-button write-action';
     pane.settingsButton.title = 'Host Settings';
     pane.settingsButton.setAttribute('aria-label', 'Host Settings');
     pane.settingsButton.hidden = true;
@@ -354,7 +354,7 @@ export function initTerminals() {
     pane.actionMenu.after(pane.settingsButton);
     pane.clearButton = document.createElement('button');
     pane.clearButton.type = 'button';
-    pane.clearButton.className = 'pane-clear-button';
+    pane.clearButton.className = 'pane-clear-button write-action';
     pane.clearButton.title = 'Clear console';
     pane.clearButton.setAttribute('aria-label', 'Clear console');
     pane.clearButton.hidden = true;

@@ -323,12 +323,10 @@ main[data-columns="4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 .observe-banner > .observe-status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
 .observe-follow { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; }
 .control-banner { flex: none; height: var(--banner-height); padding: 0 16px; overflow: hidden; line-height: var(--banner-height); white-space: nowrap; text-overflow: ellipsis; color: #1d1405; background: #f08a5d; font-weight: 600; }
-/* Observation is read-only: the server refuses every change; these controls are hidden. */
-body.observing #delete-session, body.observing #show-general-settings, body.observing #load-topology,
-body.observing #load-session-archive, body.observing #save-session-archive, body.observing #new-host,
-body.observing #new-switch, body.observing #clone-machine, body.observing #exit-all, body.observing .machine-close,
-body.observing .pane-action-menu, body.observing .pane-settings-button, body.observing .pane-clear-button,
-body.observing [data-view="monitor"] { display: none !important; }
+/* Observation is read-only: the server refuses every change. Every control that writes, loads
+   or exports something carries the class write-action (index.html, terminal.js, workspace.js)
+   and is hidden in an observation tab. */
+body.observing .write-action { display: none !important; }
 /* Supervision page (/admin). */
 .admin-heading { margin-left: 14px; color: #f2c46d; font-weight: 600; }
 .admin-page header { gap: 12px; }
