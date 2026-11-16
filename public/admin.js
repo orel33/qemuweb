@@ -154,15 +154,15 @@ function renderSessions(sessions) {
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
     // Same buttons on every row: your own session cannot be observed (the button is disabled).
-    if (session.own) {
-      const observe = iconButton('eye', 'Observe', () => {}, 'This is your own session');
-      observe.disabled = true;
-      actions.append(observe);
-    } else {
-      const observe = iconAction('a', 'eye', 'Observe', 'Observe: read-only view of this session');
-      observe.href = `/?observe=${encodeURIComponent(session.login)}`;
-      actions.append(observe);
-    }
+    // Observe has its label, in the header navigation style; a disabled button on your own row
+    // keeps the rows aligned.
+    const observe = session.own ? iconButton('eye', 'Observe', () => {}, 'This is your own session')
+      : iconAction('a', 'eye', 'Observe', 'Observe: read-only view of this session');
+    observe.className = 'nav-button act-blue';
+    observe.insertAdjacentHTML('beforeend', '<span>Observe</span>');
+    if (session.own) observe.disabled = true;
+    else observe.href = `/?observe=${encodeURIComponent(session.login)}`;
+    actions.append(observe);
     actions.append(
       iconButton('power', 'Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})),
         'Stop all: stop every VM and switch; the nodes are kept'),
