@@ -1,6 +1,6 @@
 // Session archive validation: the identity of a base image (format, size, SHA-256) is recorded in the
-// host.json of hosts with a working disk, since only those depend on it. Older archives kept one entry
-// per system in session.json "baseImages". No server and no emulator process is needed.
+// host.json of hosts with a working disk, since only those depend on it. No server and no emulator
+// process is needed.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
@@ -35,19 +35,14 @@ function setup(t) {
   const archive = (hosts, extra = {}) => {
     const files = ['session.json', `${HOST}/host.json`, ...(hosts.some(item => item.disk) ? [`${HOST}/disk.qcow2`] : [])];
     if (hosts.some(item => item.disk)) fs.writeFileSync(path.join(stage, HOST, 'disk.qcow2'), 'disk');
-    return {engine: 'qemu', hosts, switches: [], baseImages: {}, files, ...extra};
+    return {engine: 'qemu', hosts, switches: [], files, ...extra};
   };
   return {dir, stage, snapshot, host, archive, size: fs.statSync(image).size};
 }
 
 test('hosts without a working disk need no base image identity', async t => {
   const {snapshot, host, archive, stage} = setup(t);
-  // Older archives carried a hash that is wrong on any other machine: it is ignored without a disk.
-  assert.deepEqual(await snapshot.validateArchiveSession(archive([host()], {baseImages: {'debian13-legacy': {format: 'raw', size: 1, sha256: ZERO}}}), stage), []);
   assert.deepEqual(await snapshot.validateArchiveSession(archive([host()]), stage), []);
-  const withoutInventory = archive([host()]);
-  delete withoutInventory.baseImages;
-  assert.deepEqual(await snapshot.validateArchiveSession(withoutInventory, stage), []);
 });
 
 test('a working disk whose base image changed is refused, or discarded on request', async t => {
@@ -66,12 +61,6 @@ test('a working disk whose base image changed is refused, or discarded on reques
   assert.equal(fs.existsSync(path.join(stage, HOST, 'disk.qcow2')), false);
 });
 
-test('archives written before host-level identities still work through session.json baseImages', async t => {
-  const {snapshot, host, archive, stage, size} = setup(t);
-  const legacy = {'debian13-legacy': {format: 'raw', size, sha256: ZERO}};
-  await assert.rejects(snapshot.validateArchiveSession(archive([host({disk: true})], {baseImages: legacy}), stage), /cannot be reused/);
-});
-
 test('a working disk needs a well-formed base image identity of the right format', async t => {
   const {snapshot, host, archive, stage, size} = setup(t);
   const check = baseImage => snapshot.validateArchiveSession(archive([host({disk: true, ...(baseImage ? {baseImage} : {})})]), stage);
@@ -82,13 +71,12 @@ test('a working disk needs a well-formed base image identity of the right format
   await assert.rejects(check({format: 'vdi', size, sha256: ZERO}), /Base image format incompatible: debian13-legacy/);
 });
 
-test('host.json may carry a baseImage and session.json may omit baseImages', t => {
+test('host.json may carry a baseImage', t => {
   const {snapshot, stage, host} = setup(t);
   const baseImage = {format: 'raw', size: 1, sha256: ZERO};
   fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [HOST], switches: []}));
   fs.writeFileSync(path.join(stage, HOST, 'host.json'), JSON.stringify({...host(), baseImage}));
   const files = snapshot.archivedSessionFiles(stage, ['session.json', `${HOST}/host.json`]);
-  assert.deepEqual(files.baseImages, {});
   assert.deepEqual(files.hosts[0].baseImage, baseImage);
   assert.equal(files.hosts[0].disk, false);
 });

@@ -114,7 +114,7 @@ test('user aliases encode the login like hostname aliases', () => {
   assert.equal(userAliasName('..'), '%2E%2E');
 });
 
-test('server records list live sessions and accept the former layout', t => {
+test('server records list the live sessions of every running server', t => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-instance-'));
   t.after(() => fs.rmSync(runtimeRoot, {recursive: true, force: true}));
   fs.mkdirSync(path.join(runtimeRoot, 'sessions'));
@@ -122,20 +122,19 @@ test('server records list live sessions and accept the former layout', t => {
   instance.writeRecords(['0123456789abcdef', 'fedcba9876543210']);
   assert.equal(fs.readFileSync(instance.sessionFile, 'utf8'), 'test\n0123456789abcdef\nfedcba9876543210\n');
   fs.writeFileSync(path.join(runtimeRoot, 'server-4002.pid'), `${process.pid}\n`);
-  fs.writeFileSync(path.join(runtimeRoot, 'server-4002.session'), '00000000000000aa\nregular\n');
+  fs.writeFileSync(path.join(runtimeRoot, 'server-4002.session'), 'regular\n00000000000000aa\n');
+  fs.writeFileSync(path.join(runtimeRoot, 'server-4003.pid'), `${process.pid}\n`);
+  fs.writeFileSync(path.join(runtimeRoot, 'server-4003.session'), 'not a kind\n00000000000000bb\n');
   const live = instance.liveServerSessions();
   assert.deepEqual([...live.keys()].sort(), ['00000000000000aa', '0123456789abcdef', 'fedcba9876543210']);
   assert.equal(live.get('0123456789abcdef').ephemeral, true);
   assert.equal(live.get('00000000000000aa').ephemeral, false);
-  fs.symlinkSync(path.join('sessions', 'x'), path.join(runtimeRoot, 'current'));
-  instance.removeLegacyCurrentLink();
-  assert.equal(fs.existsSync(path.join(runtimeRoot, 'current')), false);
   instance.removeRecords();
   assert.equal(fs.existsSync(instance.pidFile), false);
   assert.equal(fs.existsSync(instance.sessionFile), false);
 });
 
-test('the owner is not part of the session definition: archives never carry it, an import leaves meta.json alone', t => {
+test('the owner is not part of the session definition: an archive that carries one is refused, an import leaves meta.json alone', t => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-owner-'));
   t.after(() => fs.rmSync(runtimeRoot, {recursive: true, force: true}));
   const session = new Session({runtimeRoot, owner: 'titi'});
@@ -149,15 +148,16 @@ test('the owner is not part of the session definition: archives never carry it, 
   const emitted = [];
   const snapshot = createSessionSnapshot({session, runner, commands, emit: (event, payload) => emitted.push(event)});
   const stage = fs.mkdtempSync(path.join(runtimeRoot, 'stage-'));
-  // An owner in an archive (for instance one made by zipping a runtime directory by hand) is tolerated and ignored.
-  fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], baseImages: {}, owner: 'toto'}));
+  fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: []}));
   const files = snapshot.archivedSessionFiles(stage, ['session.json']);
   snapshot.installArchive(files, stage);
   assert.deepEqual(JSON.parse(fs.readFileSync(session.metadataFile, 'utf8')), {schemaVersion: 4, engine: 'qemu', hosts: [], switches: []});
   assert.equal(JSON.parse(fs.readFileSync(session.metaFile, 'utf8')).owner, 'titi');
   assert.deepEqual(emitted, ['general-settings-changed', 'nodes-changed']);
-  fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], baseImages: {}, intruder: 1}));
-  assert.throws(() => snapshot.archivedSessionFiles(stage, ['session.json']), /Invalid session.json/);
+  for (const extra of [{owner: 'toto'}, {baseImages: {}}, {intruder: 1}]) {
+    fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], ...extra}));
+    assert.throws(() => snapshot.archivedSessionFiles(stage, ['session.json']), /Invalid session.json/, `refused: ${Object.keys(extra)}`);
+  }
 });
 
 test('empty runtime sessions left by a stopped server are pruned, with their meta.json', t => {

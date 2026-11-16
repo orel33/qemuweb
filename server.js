@@ -99,7 +99,6 @@ server.on('error', error => {
 });
 server.listen(port, '127.0.0.1', () => {
   instance.pruneEmptyRuntimeSessions();
-  instance.removeLegacyCurrentLink();
   manager.pruneUserAliases();
   instance.writeRecords(manager.sessionIds());
   console.log('\nQemuWeb is ready.');

@@ -68,15 +68,14 @@ function archiveSummaryText({session, diskHosts}) {
   return `${countLabel(session.hosts.length, 'host')} and ${countLabel(session.switches.length, 'switch', 'switches')}, ${disks} (qcow2)`;
 }
 // Warns before upload when a working disk depends on a base image that changed since the archive was
-// saved. Only hosts with a working disk record that image (host.json "baseImage"; older archives kept
-// one entry per system in session.json "baseImages"); without disks nothing depends on the images.
+// saved. Only hosts with a working disk record that image (host.json "baseImage"); without disks
+// nothing depends on the images.
 async function checkArchiveBaseImages(file, {entries, diskHosts, session}) {
   if (!diskHosts.length) return {messages: [], staleDisks: false, changed: false, noDisks: true};
   const hosts = await Promise.all(diskHosts.map(id => archiveJson(file, entries.get(`${id}/host.json`))));
   const baseImages = {};
   for (const host of hosts) {
-    const identity = host.baseImage ?? session.baseImages?.[host.system];
-    if (identity && !baseImages[host.system]) baseImages[host.system] = identity;
+    if (host.baseImage && !baseImages[host.system]) baseImages[host.system] = host.baseImage;
   }
   const result = await requestJson('/api/session-archive/check', jsonRequest('POST', {engine: session.engine, baseImages}), 'Cannot check base images.');
   const messages = [];
