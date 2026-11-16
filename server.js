@@ -13,7 +13,7 @@ const {attachSockets, sessionRoom} = require('./sockets');
 const {createSessionRouter} = require('./routes');
 const {readCatalog} = require('./common/system-config');
 const {createAuth} = require('./lib/auth');
-const {ADMIN_LOG, logDirPath, createLogDir, createAudit} = require('./lib/audit');
+const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog} = require('./lib/audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
 const packageInfo = require('./package.json');
 
@@ -32,6 +32,13 @@ const app = express();
 const server = http.createServer(app);
 const io = new SocketIoServer(server);
 
+// logs/ (or QEMUWEB_LOG_DIR): admin.log (administrator actions) and users.log (user events).
+let logDir;
+try { logDir = createLogDir(logDirPath(root)); }
+catch (error) { console.error(`Cannot create the log directory: ${error.message}`); process.exit(1); }
+const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
+const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
+
 // One session and one runner per user, each with its own HTTP router.
 const manager = new SessionManager({
   runtimeRoot: runtime,
@@ -39,17 +46,19 @@ const manager = new SessionManager({
 });
 manager.on('created', workspace => {
   const {session, runner} = workspace;
-  workspace.router = createSessionRouter({session, runner, commands,
+  workspace.router = createSessionRouter({session, runner, commands, userLog,
     emit: (event, payload) => io.to(sessionRoom(session)).emit(event, payload)});
+  userLog.record(workspace.owner, 'session-created', {sessionId: session.id});
   console.log(`Session ${session.id} opened for ${workspace.owner}.`);
 });
+manager.on('removed', (workspace, by) => userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by}));
 for (const event of ['created', 'removed']) manager.on(event, () => { if (server.listening) instance.updateSessions(manager.sessionIds()); });
 readCatalog(configPath);
 try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
 catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
 
 let auth;
-try { auth = createAuth({root}); }
+try { auth = createAuth({root, userLog}); }
 catch (error) { console.error(error.message); process.exit(1); }
 if (auth.mode === 'off') {
   console.warn('WARNING: authentication is disabled (QEMUWEB_AUTH=off). Every visitor uses one shared local session.');
@@ -62,10 +71,6 @@ if (process.env.QEMUWEB_TRUST_PROXY) {
   const value = process.env.QEMUWEB_TRUST_PROXY;
   app.set('trust proxy', value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value);
 }
-let logDir;
-try { logDir = createLogDir(logDirPath(root)); }
-catch (error) { console.error(`Cannot create the log directory: ${error.message}`); process.exit(1); }
-const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 io.use(auth.socketMiddleware);
 const sockets = attachSockets(io, manager, {audit, currentUser: auth.currentUser});
 

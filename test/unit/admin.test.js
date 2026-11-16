@@ -1,4 +1,4 @@
-// Admin role unit tests: disabled accounts, shared account operations, audit log, session
+// Admin role unit tests: disabled accounts, shared account operations, admin.log and users.log, session
 // activity, requireAdmin, the observation gate, the session summary, console control and the
 // observer input rules. No server is started.
 const assert = require('node:assert/strict');
@@ -11,7 +11,8 @@ const {hashPassword, verifyPassword} = require('../../lib/auth/passwords');
 const {readUsers, writeUsers, parseUsers, createAccount, setPassword, setRole, setDisabled} = require('../../lib/auth/users-store');
 const {COOKIE_NAME, newSecret, signSession} = require('../../lib/auth/cookie');
 const {createAuth} = require('../../lib/auth');
-const {ADMIN_LOG, logDirPath, createLogDir, createAudit} = require('../../lib/audit');
+const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog, readLogTail} = require('../../lib/audit');
+const {userEvent} = require('../../routes');
 const {Session} = require('../../lib/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../lib/console-control');
 const {observationGate, sessionSummary} = require('../../routes/admin');
@@ -262,4 +263,69 @@ test('an observation is audited once per admin and observed login while sockets 
   tracker.opened('boss', 'toto');
   assert.deepEqual(lines.at(-1), ['boss', 'observe', 'toto'], 'a new observation after closing every socket');
   assert.equal(lines.length, 4);
+});
+
+test('users.log entries carry the user and the event, never anything else', t => {
+  const file = path.join(tempDir(t), USERS_LOG);
+  const log = createUserLog({file, now: () => new Date('2026-01-02T03:04:05Z')});
+  log.record('toto', 'login');
+  log.record('toto', 'node-started', {nodeId: 's-0123456789abcdef'}, 'ok');
+  log.record('toto', 'node-stopped', {nodeId: 's-0123456789abcdef'}, new Error('busy'));
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  assert.deepEqual(readLogTail(file), [
+    {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'login'},
+    {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'node-started', target: {nodeId: 's-0123456789abcdef'}, result: 'ok'},
+    {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'node-stopped', target: {nodeId: 's-0123456789abcdef'}, result: 'error: busy'}
+  ]);
+});
+
+test('readLogTail returns the last entries from the end of the file only', t => {
+  const dir = tempDir(t);
+  assert.deepEqual(readLogTail(path.join(dir, 'missing.log')), []);
+  const file = path.join(dir, 'admin.log');
+  const lines = Array.from({length: 50}, (_, index) => JSON.stringify({index, padding: 'x'.repeat(40)}));
+  fs.writeFileSync(file, `${lines.join('\n')}\nnot json\n\n`);
+  assert.deepEqual(readLogTail(file, 3).map(entry => entry.index), [47, 48, 49], 'broken and empty lines are skipped');
+  // With a byte limit, the first (cut) line is dropped and only whole lines are returned.
+  const tail = readLogTail(file, 200, 500);
+  assert.ok(tail.length > 0 && tail.length < 10, String(tail.length));
+  assert.equal(tail.at(-1).index, 49);
+  assert.deepEqual(tail.map(entry => entry.index), Array.from({length: tail.length}, (_, index) => 50 - tail.length + index));
+});
+
+test('only explicit node and archive actions of the owner become users.log events', () => {
+  const id = 's-0123456789abcdef';
+  const event = (method, url, body) => userEvent({method, path: url, body});
+  assert.deepEqual(event('POST', '/api/switches', {id, name: 'sw'}), {event: 'node-created', target: {nodeId: id, kind: 'switch'}});
+  assert.deepEqual(event('POST', '/api/hosts', {id: 'not an id; rm -rf /'}), {event: 'node-created', target: {nodeId: null, kind: 'host'}});
+  assert.deepEqual(event('POST', `/api/nodes/${id}/start`), {event: 'node-started', target: {nodeId: id}});
+  assert.deepEqual(event('POST', `/api/nodes/${id}/stop`), {event: 'node-stopped', target: {nodeId: id}});
+  assert.deepEqual(event('DELETE', `/api/nodes/${id}`), {event: 'node-deleted', target: {nodeId: id}});
+  assert.deepEqual(event('DELETE', '/api/nodes'), {event: 'node-deleted', target: {all: true}});
+  assert.deepEqual(event('POST', '/api/topology'), {event: 'archive-loaded', target: {kind: 'topology'}});
+  assert.deepEqual(event('GET', '/api/topology'), {event: 'archive-saved', target: {kind: 'topology'}});
+  assert.deepEqual(event('POST', '/api/session-archive/import'), {event: 'archive-loaded', target: {kind: 'session'}});
+  assert.deepEqual(event('POST', '/api/session-archive/export'), {event: 'archive-saved', target: {kind: 'session'}});
+  for (const [method, url] of [['GET', '/api/nodes'], ['GET', '/api/metrics'], ['POST', `/api/nodes/${id}/monitor`], ['PUT', `/api/nodes/${id}/config`],
+    ['POST', `/api/nodes/${id}/reboot`], ['GET', '/api/session-archive/estimate'], ['PATCH', `/api/nodes/${id}`]]) {
+    assert.equal(event(method, url), null, `${method} ${url}`);
+  }
+});
+
+test('the login routes write login, login-failed and logout to users.log, never a password', async t => {
+  const usersFile = path.join(tempDir(t), 'users.json');
+  writeUsers(usersFile, [{login: 'toto', hash: await hashPassword('secret-pw', FAST), role: 'student'}]);
+  const lines = [];
+  const auth = createAuth({root, env: {QEMUWEB_USERS_FILE: usersFile}, userLog: {record: (...args) => lines.push(args)}});
+  const routes = {};
+  auth.register({post: (route, ...handlers) => { routes[`POST ${route}`] = handlers.at(-1); }, get: (route, ...handlers) => { routes[`GET ${route}`] = handlers.at(-1); }});
+  const call = async (route, req) => { const res = response(); res.set = () => res; await routes[route]({secure: false, ...req}, res); return res; };
+  assert.equal((await call('POST /auth/login', {body: {login: 'toto', password: 'secret-pw'}})).statusCode, 200);
+  assert.equal((await call('POST /auth/login', {body: {login: 'toto', password: 'wrong-pw'}})).statusCode, 401);
+  await call('POST /auth/login', {body: {login: `x\n${'y'.repeat(100)}`, password: 'other-pw'}});
+  await call('POST /auth/login', {body: {login: 42, password: 'pw'}});
+  await call('POST /auth/logout', {user: {login: 'toto', role: 'student'}});
+  await call('POST /auth/logout', {});
+  assert.deepEqual(lines, [['toto', 'login'], ['toto', 'login-failed'], [`x${'y'.repeat(63)}`, 'login-failed'], ['', 'login-failed'], ['toto', 'logout']]);
+  assert.doesNotMatch(JSON.stringify(lines), /pw/);
 });

@@ -317,6 +317,24 @@ async function run() {
     assert.ok(!text.includes(secret), `admin.log contains ${secret}`);
   }
   console.log(`Admin: admin.log has ${lines.length} lines, one per action, without passwords or typed text`);
+
+  // (8) users.log: user events only, never a password or typed text, nothing from observation.
+  const usersFile = path.join(logDir, 'users.log');
+  assert.equal(fs.statSync(usersFile).mode & 0o777, 0o600);
+  const usersText = fs.readFileSync(usersFile, 'utf8');
+  const events = usersText.trimEnd().split('\n').map(line => JSON.parse(line));
+  const has = (user, event, target = () => true) => events.some(line => line.user === user && line.event === event && target(line.target || {}));
+  for (const login of ['boss', 'alice', 'bob', 'carol', 'dave', 'erin']) assert.ok(has(login, 'login'), `no login line for ${login}`);
+  assert.ok(has('erin', 'login-failed') && has('carol', 'login-failed'));
+  assert.ok(has('alice', 'session-created') && has('alice', 'node-created', target => target.nodeId === aliceSwitch && target.kind === 'switch'));
+  assert.ok(has('alice', 'session-deleted', target => target.sessionId === aliceSettings.sessionId && target.by === 'boss'));
+  assert.ok(has('erin', 'session-deleted', target => target.sessionId === erinSettings.sessionId && target.by === 'boss'));
+  assert.ok(!events.some(line => line.user === 'boss' && /^(node|archive)-/.test(line.event)), 'observation or admin actions reached users.log');
+  assert.ok(events.every(line => Object.keys(line).every(key => ['time', 'user', 'event', 'target', 'result'].includes(key))));
+  for (const secret of [...testUsers.users.map(user => user.password), 'first-password', 'second-password', 'adminmarker', 'alicemarker', 'showinfo']) {
+    assert.ok(!usersText.includes(secret), `users.log contains ${secret}`);
+  }
+  console.log(`Admin: users.log has ${events.length} events, without passwords or typed text`);
 }
 
 async function cleanup() {
