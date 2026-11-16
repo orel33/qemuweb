@@ -194,6 +194,16 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 
 L'admin voit toutes les sessions en cours, peut observer un étudiant en train de travailler, prendre la main sur une console pour l'aider, et fait le ménage en fin de TP en un clic.
 
+`admin` est un **rôle**, pas un type de compte à part : un admin est un utilisateur comme les autres, avec sa propre session (une seule), dans laquelle il travaille normalement (créer des hôtes, charger `lan.zip`, démarrer des VM). Le rôle ajoute la supervision, l'observation et les actions d'administration. Sa propre session apparaît dans la liste de supervision, marquée comme la sienne.
+
+**Naviguer entre sa session et celles des étudiants**
+
+- Trois vues : « Ma session » (l'interface normale, `/`), « Supervision » (`/admin`, le tableau de toutes les sessions, mis à jour en direct) et l'observation d'un étudiant (`/?observe=<login>`, l'interface normale en lecture seule).
+- Un bandeau de couleur distincte, visible seulement en observation, porte : l'étudiant observé, « lecture seule », les flèches précédent et suivant (qui passent d'une session active à l'autre pour une tournée de la salle), la liste déroulante des sessions, « Prendre la main », « Ma session » et « Supervision ». On passe donc d'un étudiant à l'autre sans retourner au tableau.
+- La cible est portée **par l'onglet** (paramètre d'URL gardé dans `sessionStorage`), et non par un cookie : l'interface ajoute un en-tête `X-Observe` à chaque requête, par le point d'entrée `window.fetch` qu'elle enveloppe déjà, et un paramètre d'authentification aux deux connexions Socket.IO. L'admin peut ainsi garder sa session dans un onglet et en observer une autre dans un second, sans état partagé.
+- Côté serveur, une requête portant `X-Observe` n'est acceptée que d'un admin, ne crée jamais de session, ne peut être qu'un `GET` ou `HEAD` (et un login inconnu donne 404).
+- Hors périmètre : un mur de consoles de plusieurs étudiants affichées en même temps.
+
 **Page `/admin`** : une ligne par session.
 
 | Colonne | Source |
@@ -234,8 +244,8 @@ L'admin voit toutes les sessions en cours, peut observer un étudiant en train d
 
 1. 4a : contrôle du rôle et routeur `/api/admin/*`, champ `disabled`, module d'audit, horodatage d'activité, arrêt de toutes les VM dans la façade du runner.
 2. 4b : API d'administration : liste des sessions, arrêt, suppression, ménage groupé, gestion des comptes, le tout journalisé.
-3. 4c : observation en lecture seule (session substituée pour les requêtes en lecture, sockets en observation, suivi du node de l'étudiant).
-4. 4d : page `/admin` et mode observation de l'interface.
+3. 4c : observation en lecture seule (en-tête `X-Observe` et session substituée pour les requêtes en lecture, sockets en observation, suivi du node de l'étudiant).
+4. 4d : page `/admin`, mode observation de l'interface et navigation entre les sessions (bandeau, précédent et suivant, liste déroulante).
 5. 4e : prise de contrôle avec verrou exclusif, tests, documentation.
 
 **Critères de fin**
