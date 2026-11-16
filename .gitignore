@@ -12,3 +12,4 @@ runtime/*
 dist/
 preview/
 users.json
+audit.log

@@ -89,6 +89,25 @@ function createRunner({session, commands, root, runtimeRoot, configPath, hostNod
     stopSwitch: vde.stopSwitch,
     destroyNode: lifecycle.destroyNode,
     exitAllNodes: lifecycle.exitAllNodes,
+    // Stops every running host, then every running switch, and keeps the nodes and their
+    // disks. Returns the IDs of the stopped nodes; throws once everything was tried if a node
+    // could not be stopped.
+    async stopAllNodes() {
+      const stopped = [];
+      const errors = [];
+      for (const kind of ['host', 'switch']) {
+        const running = [...session.nodes.values()].filter(node => node.kind === kind && node.machine);
+        await Promise.all(running.map(async node => {
+          try {
+            if (kind === 'host') await lifecycle.stop(node);
+            else await vde.stopSwitch(node);
+            stopped.push(node.id);
+          } catch (error) { errors.push(`${node.hostname || node.id}: ${error.message}`); }
+        }));
+      }
+      if (errors.length) throw new Error(`Some nodes could not be stopped: ${errors.join('; ')}`);
+      return stopped;
+    },
     shutdown: async () => {
       stopResourceSampling();
       for (const kind of ['host', 'switch']) {
