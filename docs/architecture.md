@@ -110,8 +110,14 @@ flowchart TB
   control, the view goes the other way: the admin's page publishes
   `controller-view` (same fields and validation, accepted only from that admin
   while they hold a lock on the session, kept for a page opening meanwhile) and
-  the owner's pages show it, with their layout controls disabled and their own
-  `owner-view` paused, so the two never drive each other at once. Every privileged socket
+  the owner's pages show it, with their own `owner-view` paused, so the two
+  never drive each other at once. One driver at a time also in the browser:
+  when a page's view is driven by the other side (the owner's page under
+  control, or an observer with Follow checked and no control held),
+  `body[data-view-driven]` disables every control that changes the view state
+  (class `view-control`: view toggle, layout menu, switch consoles, paging,
+  pane expand, tab selection, pane node menus), for the mouse (CSS) and the
+  keyboard (`observe.js`); the banners say who drives. Every privileged socket
   event re-reads the account, so a disabled or removed account loses its
   sockets. `sockets.js` also counts each user's connected browser tabs (the
   tab's session socket carries `auth.main`), shown as online/offline in

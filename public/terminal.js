@@ -262,7 +262,7 @@ export function initTerminals() {
       }
     });
     pane.sessionMenu = document.createElement('details');
-    pane.sessionMenu.className = 'pane-session-menu';
+    pane.sessionMenu.className = 'pane-session-menu view-control';
     pane.sessionMenu.hidden = true;
     pane.sessionToggle = document.createElement('summary');
     pane.sessionToggle.className = 'pane-session-title';
@@ -363,7 +363,7 @@ export function initTerminals() {
     pane.settingsButton.after(pane.clearButton);
     pane.expandButton = document.createElement('button');
     pane.expandButton.type = 'button';
-    pane.expandButton.className = 'pane-expand-button';
+    pane.expandButton.className = 'pane-expand-button view-control';
     pane.expandButton.hidden = true;
     pane.expandButton.addEventListener('click', () => togglePaneExpansion(pane));
     pane.clearButton.after(pane.expandButton);

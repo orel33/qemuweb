@@ -93,7 +93,7 @@ export function setGraphicView(visible) {
   // The icon shows the view the button switches to: Lucide Network, or SquareTerminal.
   // The button names the view it switches to: Graphic (blue) or Terminals (green).
   graphicToggle.innerHTML = visible ? `${TERMINALS_ICON}<span>Terminals</span>` : `${GRAPHIC_ICON}<span>Graphic</span>`;
-  graphicToggle.className = `nav-button ${visible ? 'act-green' : 'act-blue'}`;
+  graphicToggle.className = `nav-button view-control ${visible ? 'act-green' : 'act-blue'}`;
   const label = visible ? 'Show Terminals view' : 'Show Graphic view';
   graphicToggle.setAttribute('aria-label', label);
   graphicToggle.title = label;

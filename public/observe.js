@@ -7,7 +7,7 @@
 // the hidden controls below are a convenience, the server refusal is the protection.
 import {machines, store} from './state.js';
 import {panes} from './terminal.js';
-import {applyView, showStatusError} from './workspace.js';
+import {applyView, closeLayoutMenu, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {emitOnSession, publishView} from './socket.js';
 
@@ -71,16 +71,38 @@ function renderControl() {
     }
     button.disabled = taking || (!mine && !!control);
     status.textContent = mine ? `You control the session of ${observedLogin}`
-      : control ? `${control.admin} controls this session` : 'read-only';
+      : control ? `${control.admin} controls this session` : `read-only${following() ? `; the view follows ${observedLogin} (uncheck Follow to change it)` : ''}`;
     banner.dataset.control = String(mine);
+    renderViewDriver();
     return;
   }
   controlBanner.textContent = control
-    ? `${control.admin} controls your session. You see the commands and their output; your keyboard is blocked on every console, and your view follows the administrator's.` : '';
+    ? `${control.admin} controls your session. You see the commands and their output; your keyboard is blocked on every console, and ${control.admin} controls your view.` : '';
   controlBanner.hidden = !control;
-  // While controlled, the owner's page is driven by the controller: its layout controls are
-  // disabled (CSS) and it does not publish its own view.
-  document.body.dataset.controlled = String(!!control);
+  renderViewDriver();
+}
+
+// One driver at a time. The view of this page is driven by the other side, and its view
+// controls (class view-control) are disabled, when it is the owner's page under control, or an
+// observer following the owner (Follow checked, no control held). With Follow unchecked the
+// observer's controls are usable and the view stays as it is.
+export function viewDriver() {
+  if (!observing) return control ? `${control.admin} controls your view` : null;
+  return following() ? `The view follows ${observedLogin}; uncheck Follow to change it` : null;
+}
+
+function renderViewDriver() {
+  const reason = viewDriver();
+  document.body.dataset.viewDriven = String(!!reason);
+  if (reason) closeLayoutMenu();
+}
+
+// Keyboard and programmatic clicks on a disabled view control are ignored too.
+function blockDrivenControls(event) {
+  if (document.body.dataset.viewDriven !== 'true' || !event.target.closest?.('.view-control')) return;
+  if (event.type === 'keydown' && !['Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
 }
 
 // console-control {admin, active}: the session-level state, sent on every change and at each
@@ -203,6 +225,7 @@ async function renderSessionNavigation() {
 
 // Builds the banner. The server audits the observation when the console sockets connect.
 export function initObserve() {
+  for (const type of ['click', 'keydown']) document.addEventListener(type, blockDrivenControls, true);
   if (!observing) return;
   document.title = `QemuWeb · observing ${observedLogin}`;
   banner.hidden = false;
@@ -214,7 +237,7 @@ export function initObserve() {
     renderControl();
     if (heldByMe()) publishView({force: true});
   }).catch(() => {});
-  document.getElementById('observe-follow').addEventListener('change', () => followView('owner', true));
+  document.getElementById('observe-follow').addEventListener('change', () => { renderControl(); followView('owner', true); });
   renderSessionNavigation();
   setInterval(renderSessionNavigation, 10000);
   renderControl();

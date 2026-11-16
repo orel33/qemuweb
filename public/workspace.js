@@ -396,7 +396,7 @@ export function renderTabs() {
     tab.setAttribute('aria-selected', String(machine.id === store.activeId));
     const select = document.createElement('button');
     select.type = 'button';
-    select.className = 'machine-name';
+    select.className = 'machine-name view-control';
     select.textContent = machine.hostname;
     select.title = machine.osHint;
     select.onclick = () => { if (machine.id !== store.activeId) selectMachine(machine.id); };
