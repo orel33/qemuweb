@@ -162,7 +162,7 @@ async function run() {
   assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
   const snapshot = observer.events.find(item => item.event === 'node-snapshot');
   assert.equal(snapshot.payload.nodeId, aliceSwitch);
-  assert.equal(snapshot.payload.control, null);
+  assert.ok(!('control' in snapshot.payload), 'the control state is session-level (console-control), not in snapshots');
   // Follow: only what the owner's page publishes (owner-view) is relayed; a console socket
   // attaching in the background (select-node) moves nobody.
   assert.deepEqual(await select(aliceConsole.socket, aliceSwitch), {ok: true});
@@ -204,37 +204,49 @@ async function run() {
   offlineObserver.socket.close();
   console.log('Admin: observation is live and read-only (input, clear, resize and writes refused), also for an offline user');
 
-  // (4) Take control: alice's keyboard is blocked, she sees the admin's commands, and
-  // the control ends when the admin's socket disconnects.
-  assert.deepEqual(await emitAck(aliceSession.socket, 'take-control', aliceSwitch), {error: 'Only an administrator observing this session can take control.'});
-  assert.deepEqual(await emitAck(observer.socket, 'take-control', aliceSwitch), {ok: true});
-  await waitFor('control event at alice', () => aliceSession.events.some(item => item.event === 'console-control' && item.payload.active && item.payload.admin === 'boss'));
+  // (4) Take control of alice's session: alice's keyboard is blocked on EVERY node, the admin
+  // types into whatever node his panes show, from any of his observer sockets on the session;
+  // pane sockets closing and opening (layout changes) keep control; it ends with the admin's
+  // last socket on the session, or when released.
+  const controlStates = recorded => recorded.events.filter(item => item.event === 'console-control').map(item => item.payload);
+  const released = recorded => controlStates(recorded).some(state => !state.active && state.admin);
+  assert.deepEqual(controlStates(observer), [{admin: null, active: false}], 'the control state is sent at connection');
+  assert.deepEqual(await emitAck(aliceSession.socket, 'take-control'), {error: 'Only an administrator observing this session can take control.'});
+  const aliceOther = newId('switch');
+  await alice.request('/api/switches', {method: 'POST', body: {id: aliceOther, name: 'aliceother', autostart: true}});
+  const aliceOtherConsole = recorder(alice, 'alice other console');
+  await aliceOtherConsole.connected;
+  assert.deepEqual(await select(aliceOtherConsole.socket, aliceOther), {ok: true});
+  // Taken from a second pane socket of the admin that shows no node.
+  const bossPane = recorder(boss, 'boss second pane', {auth: {observe: 'alice'}});
+  await bossPane.connected;
+  assert.deepEqual(await emitAck(bossPane.socket, 'take-control'), {ok: true});
+  await waitFor('control event at alice', () => controlStates(aliceSession).some(state => state.active && state.admin === 'boss'));
+  await waitFor('control event at every admin socket', () => [observer, bossPane].every(recorded => controlStates(recorded).some(state => state.active)));
   aliceConsole.socket.emit('input', 'alicemarker\r');
+  aliceOtherConsole.socket.emit('input', 'alicemarker\r');
   await delay(500);
-  assert.doesNotMatch(observer.output(), /alicemarker/, 'alice typed while the admin had control');
+  assert.doesNotMatch(aliceConsole.output() + aliceOtherConsole.output(), /alicemarker/, 'alice typed while the admin had control');
   observer.socket.emit('input', 'adminmarker\r');
   await waitFor('the admin\'s command at alice', () => /adminmarker/.test(aliceConsole.output()));
-  // The admin's page reassigns its panes on its own (layout, node list, follow): the pane
-  // socket holding control showing another node, or none, must not hand the keyboard back.
-  const aliceOther = newId('switch');
-  await alice.request('/api/switches', {method: 'POST', body: {id: aliceOther, name: 'aliceother', autostart: false}});
-  assert.deepEqual(await select(observer.socket, aliceOther), {ok: true});
+  // Layout change: one pane socket closes, another opens on the other node.
+  bossPane.socket.close();
+  const bossNewPane = recorder(boss, 'boss new pane', {auth: {observe: 'alice'}});
+  await bossNewPane.connected;
+  await waitFor('state at connection', () => controlStates(bossNewPane).length > 0);
+  assert.deepEqual(controlStates(bossNewPane), [{admin: 'boss', active: true}]);
+  assert.deepEqual(await select(bossNewPane.socket, aliceOther), {ok: true});
+  bossNewPane.socket.emit('input', 'adminother\r');
+  await waitFor('the admin types into the other node', () => /adminother/.test(aliceOtherConsole.output()));
   const aliceSecondTab = recorder(alice, 'alice second console');
   await aliceSecondTab.connected;
   assert.deepEqual(await select(aliceSecondTab.socket, aliceSwitch), {ok: true});
   aliceConsole.socket.emit('input', 'alicestill1\r');
-  aliceSecondTab.socket.emit('input', 'alicestill2\r');
-  const refusalsBefore = observer.events.filter(item => item.event === 'node-error').length;
-  observer.socket.emit('input', 'elsewhere\r'); // The holder types only into the node it holds.
-  await waitFor('refusal of input elsewhere', () => observer.events.filter(item => item.event === 'node-error').length > refusalsBefore);
-  observer.socket.emit('leave-node', aliceOther);
-  aliceConsole.socket.emit('input', 'alicestill3\r');
+  aliceOtherConsole.socket.emit('input', 'alicestill2\r');
+  aliceSecondTab.socket.emit('input', 'alicestill3\r');
   await delay(500);
-  assert.doesNotMatch(aliceConsole.output(), /alicestill|elsewhere/, 'alice typed after the admin\'s pane moved to another node');
-  assert.ok(!aliceSession.events.some(item => item.event === 'console-control' && !item.payload.active), 'control released by a pane change');
-  assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
-  observer.socket.emit('input', 'adminagain\r');
-  await waitFor('the admin types again on the held node', () => /adminagain/.test(aliceConsole.output()));
+  assert.doesNotMatch(aliceConsole.output() + aliceOtherConsole.output(), /alicestill/, 'alice typed after a layout change of the admin');
+  assert.ok(![aliceSession, observer, bossNewPane].some(released), 'control released by a layout change');
   // While the admin holds control, the view goes the other way: controller-view from the
   // admin's page reaches alice's pages; never from alice, nor once control has ended.
   const controllerView = {nodeId: aliceSwitch, mode: 'terminals', layout: 4, switches: true, page: 0, expanded: 0};
@@ -247,19 +259,29 @@ async function run() {
   await waitFor('controller-view for a page opened during control', () => aliceLateTab.events.some(item => item.event === 'controller-view'));
   aliceLateTab.socket.close();
   aliceSecondTab.socket.close();
-  await alice.request(`/api/nodes/${aliceOther}`, {method: 'DELETE'});
+  // Closing a pane socket while another remains keeps control; the last one releases it.
+  bossNewPane.socket.close();
+  await delay(300);
+  assert.ok(!released(aliceSession), 'control released while an admin socket remained');
   observer.socket.close();
-  await waitFor('control released at alice', () => aliceSession.events.some(item => item.event === 'console-control' && !item.payload.active));
+  await waitFor('control released at alice', () => released(aliceSession));
   aliceConsole.socket.emit('input', 'alicefree\r');
-  await waitFor('alice types again', () => /alicefree/.test(aliceConsole.output()));
+  aliceOtherConsole.socket.emit('input', 'alicefree2\r');
+  await waitFor('alice types again', () => /alicefree/.test(aliceConsole.output()) && /alicefree2/.test(aliceOtherConsole.output()));
+  // Explicit release; afterwards controller-view is no longer relayed.
   const formerController = recorder(boss, 'boss after control', {auth: {observe: 'alice'}});
   await formerController.connected;
+  assert.deepEqual(await emitAck(formerController.socket, 'take-control'), {ok: true});
+  assert.deepEqual(await emitAck(formerController.socket, 'release-control'), {ok: true});
+  await waitFor('explicit release at the admin socket', () => released(formerController));
   const viewsBefore = aliceSession.events.filter(item => item.event === 'controller-view').length;
   formerController.socket.emit('controller-view', controllerView);
   await delay(300);
   assert.equal(aliceSession.events.filter(item => item.event === 'controller-view').length, viewsBefore, 'controller-view relayed without control');
   formerController.socket.close();
-  console.log('Admin: take control blocks the student, shows the commands and ends with the admin\'s socket');
+  aliceOtherConsole.socket.close();
+  await alice.request(`/api/nodes/${aliceOther}`, {method: 'DELETE'});
+  console.log('Admin: session control blocks the student on every node, survives layout changes and ends with the admin\'s last socket or a release');
 
   // (5) Stop-all keeps the nodes; bulk deletion frees processes and runtime directories.
   const stopped = await boss.request('/api/admin/sessions/alice/stop', {method: 'POST'});
@@ -363,8 +385,9 @@ async function run() {
   // closed, by the socket that checked controller-view after control. Bob once, while offline.
   assert.equal(count('observe', target => target.login === 'alice'), 2, 'one observe line per observation period of alice');
   assert.equal(count('observe', target => target.login === 'bob'), 1, 'one observe line for bob');
-  assert.equal(count('control-start', target => target.nodeId === aliceSwitch), 1);
-  assert.equal(count('control-end', target => target.nodeId === aliceSwitch && target.reason === 'disconnected'), 1);
+  assert.equal(count('control-start', target => target.login === 'alice' && !('nodeId' in target)), 2);
+  assert.equal(count('control-end', target => target.login === 'alice' && target.reason === 'disconnected'), 1);
+  assert.equal(count('control-end', target => target.login === 'alice' && target.reason === 'released'), 1);
   assert.equal(count('stop-all', target => target.login === 'alice'), 1);
   assert.equal(count('bulk-delete'), 2, 'the successful bulk delete and the refused one');
   assert.equal(count('create-account'), 2, 'erin, then the refused duplicate');
@@ -376,7 +399,7 @@ async function run() {
   assert.ok(lines.every(line => line.admin === 'boss' && Date.parse(line.time) && line.result), JSON.stringify(lines));
   assert.ok(!actions.includes('list'), 'the session list is not audited');
   assert.ok(!actions.some(action => /log/.test(action)), 'reading the logs is not audited');
-  for (const secret of [...testUsers.users.map(user => user.password), 'first-password', 'second-password', 'adminmarker', 'observermarker', 'password":']) {
+  for (const secret of [...testUsers.users.map(user => user.password), 'first-password', 'second-password', 'adminmarker', 'adminother', 'observermarker', 'password":']) {
     assert.ok(!text.includes(secret), `admin.log contains ${secret}`);
   }
   console.log(`Admin: admin.log has ${lines.length} lines, one per action, without passwords or typed text`);

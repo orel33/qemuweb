@@ -6,30 +6,32 @@
 //   session:<sessionId>           every browser of the session's owner, and of the admins
 //                                 observing it (per-session events)
 //   observers:<sessionId>         the admins observing the session (owner-view)
-// While an admin controls a console of a session, the view goes the other way: the admin's
-// page publishes controller-view, relayed to the session room and shown by the owner's pages.
 //   node:<sessionId>:<nodeId>     browsers that selected that node (per-node events); a socket
 //                                 joins it only for a node of its own or observed session
 // The handshake must already have set socket.data.user (see lib/auth/). An admin observes
 // another user's session with the handshake option auth: {observe: <login>}: the socket then
 // reads that session (snapshots, console output, logs) but its input, clear-console and
-// terminal-resize are refused, unless it took control of the node (input only), see
-// lib/console-control.js.
+// terminal-resize are refused, unless that admin took control of the session (input only, on
+// every node), see lib/console-control.js. console-control {admin, active} tells every socket
+// of the session (owner and observers) the control state, also at connection. While an admin
+// controls a session, the view goes the other way: the admin's page publishes controller-view,
+// relayed to the session room and shown by the owner's pages.
 const {ConsoleControl} = require('./lib/console-control');
 
 function sessionRoom(session) { return `session:${session.id}`; }
 function observerRoom(session) { return `observers:${session.id}`; }
 function nodeRoom(session, nodeId) { return `node:${session.id}:${nodeId}`; }
 
-// Why a socket may not type into a node's console, or null when it may.
-// lock is the node's control lock (or null), holder the socket.
-function inputRefusal({observer, lock, holder}) {
-  if (observer) return lock?.holder === holder ? null : 'Read-only observation: take control to type into this console.';
-  return lock ? `${lock.admin} controls this console.` : null;
+// Why a socket may not type into a console, or null when it may.
+// lock is the session's control lock (or null), admin the socket's login.
+function inputRefusal({observer, lock, admin}) {
+  if (observer) return lock?.admin === admin ? null : 'Read-only observation: take control to type into this session.';
+  return lock ? `${lock.admin} controls this session.` : null;
 }
 
-// Audits observations once per (admin, observed login): the 'observe' line is written when
-// the first observer socket of that pair opens; a page load opens several sockets.
+// Counts the open observer sockets per (admin, observed login) and audits each observation
+// period: the 'observe' line is written when the first socket of that pair opens (a page load
+// opens several). closed() returns how many remain.
 function createObservationTracker(audit) {
   const open = new Map();
   const key = (admin, login) => JSON.stringify([admin, login]);
@@ -43,6 +45,7 @@ function createObservationTracker(audit) {
       const count = (open.get(key(admin, login)) || 0) - 1;
       if (count > 0) open.set(key(admin, login), count);
       else open.delete(key(admin, login));
+      return Math.max(0, count);
     }
   };
 }
@@ -61,15 +64,12 @@ function ownerViewOf(view, session) {
 }
 
 // Forwards the events of one session's runner to that session's browsers only.
-function bindWorkspace(io, {session, runner}, control) {
+function bindWorkspace(io, {session, runner}) {
   for (const event of ['state', 'log', 'logs-reset', 'serial', 'serial-reset']) {
     runner.events.on(event, payload => io.to(nodeRoom(session, payload.nodeId)).emit(event, payload));
   }
   runner.events.on('state', state => io.to(sessionRoom(session)).emit('nodes-changed', state));
-  runner.events.on('nodes-removed', payload => {
-    io.to(sessionRoom(session)).emit('nodes-removed', payload);
-    for (const nodeId of payload.ids || []) control.release(session.id, nodeId, null, 'node deleted');
-  });
+  runner.events.on('nodes-removed', payload => io.to(sessionRoom(session)).emit('nodes-removed', payload));
 }
 
 // audit: lib/audit.js. currentUser(login) returns the account as it is now ({login, role}),
@@ -78,9 +78,9 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   // The controlling admin's last view, per session ID, kept only while a lock exists there.
   const controllerViews = new Map();
   const control = new ConsoleControl({...options, onRelease: (lock, reason) => {
-    if (!control.hasLock(lock.sessionId)) controllerViews.delete(lock.sessionId);
-    io.to(`session:${lock.sessionId}`).emit('console-control', {nodeId: lock.nodeId, admin: lock.admin, active: false});
-    audit.record(lock.admin, 'control-end', {login: lock.login, nodeId: lock.nodeId, reason});
+    controllerViews.delete(lock.sessionId);
+    io.to(`session:${lock.sessionId}`).emit('console-control', {admin: lock.admin, active: false});
+    audit.record(lock.admin, 'control-end', {login: lock.login, reason});
   }});
   const observations = createObservationTracker(audit);
   // Connected browser tabs per login: each tab opens one session socket (auth.main) besides
@@ -88,13 +88,13 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   const browsers = new Map();
   // What the owner last showed, per session ID: {nodeId, mode}, sent to a new observer.
   const ownerViews = new Map();
-  for (const workspace of manager.list()) bindWorkspace(io, workspace, control);
-  manager.on('created', workspace => bindWorkspace(io, workspace, control));
+  for (const workspace of manager.list()) bindWorkspace(io, workspace);
+  manager.on('created', workspace => bindWorkspace(io, workspace));
   // Browsers of a deleted session reload, which opens the user's new session.
   manager.on('removed', ({session}) => {
     ownerViews.delete(session.id);
     controllerViews.delete(session.id);
-    control.releaseSession(session.id, 'session deleted');
+    control.release(session.id, null, 'session deleted');
     io.to(sessionRoom(session)).emit('session-deleted', {sessionId: session.id});
     io.in(sessionRoom(session)).disconnectSockets(true);
   });
@@ -119,9 +119,12 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     }
     // Console access is where an observation really starts: audited here, once per admin and
     // observed login while their sockets stay open.
+    // Control ends when the controlling admin's last observer socket on the session closes.
     if (observer) {
       observations.opened(user.login, workspace.owner);
-      socket.on('disconnect', () => observations.closed(user.login, workspace.owner));
+      socket.on('disconnect', () => {
+        if (!observations.closed(user.login, workspace.owner)) control.release(workspace.session.id, user.login, 'disconnected');
+      });
     }
     if (!observer && socket.handshake.auth?.main === true) {
       browsers.set(user.login, (browsers.get(user.login) || 0) + 1);
@@ -136,10 +139,9 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     if (observer) socket.join(observerRoom(session));
     // Only nodes of this socket's session are ever looked up.
     const sessionNode = id => (typeof id === 'string' && session.nodes.get(id)) || null;
-    const controlInfo = nodeId => {
-      const lock = control.get(session.id, nodeId);
-      return lock ? {admin: lock.admin} : null;
-    };
+    // The control state of the session, for this socket's page (also after a reconnection).
+    const controlLock = control.get(session.id);
+    socket.emit('console-control', {admin: controlLock ? controlLock.admin : null, active: !!controlLock});
     const refuse = message => socket.emit('node-error', message);
     // A socket outlives the checks of its handshake: every privileged event re-reads the
     // account, and the socket is closed once it is disabled, removed, or (for an observer)
@@ -157,14 +159,11 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       selectionQueue = selectionQueue.then(async () => {
         const node = sessionNode(id);
         if (!node) throw new Error('Unknown node.');
-        // A console lock is not released here: the admin's page reassigns its panes on its own
-        // (layout, node list, follow), which must never hand the keyboard back to the owner.
-        // The holder types only into the node it holds (inputRefusal) and releases it explicitly.
         if (socket.data.nodeId && socket.data.nodeId !== node.id) await socket.leave(nodeRoom(session, socket.data.nodeId));
         await socket.join(nodeRoom(session, node.id));
         socket.data.nodeId = node.id;
         const {nodeId, state, logs, serial} = runner.attachConsole(node.id);
-        socket.emit('node-snapshot', {nodeId, token, state, logs, serial, control: controlInfo(nodeId)});
+        socket.emit('node-snapshot', {nodeId, token, state, logs, serial});
         if (typeof acknowledge === 'function') acknowledge({ok: true});
       }).catch(error => {
         socket.emit('node-error', error.message);
@@ -198,10 +197,10 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     socket.on('input', guard(data => {
       const node = sessionNode(socket.data.nodeId);
       if (!node || typeof data !== 'string' || data.length > 4096) return;
-      const refusal = inputRefusal({observer, lock: control.get(session.id, node.id), holder: socket});
+      const refusal = inputRefusal({observer, lock: control.get(session.id), admin: user.login});
       // The owner's UI shows the control banner: their refused keys are dropped silently.
       if (refusal) { if (observer) refuse(refusal); return; }
-      if (observer) control.touch(session.id, node.id, socket);
+      if (observer) control.touch(session.id, user.login);
       else session.touch();
       runner.writeConsoleInput(node, data);
     }));
@@ -225,25 +224,23 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       const column = Number.isInteger(request.column) ? Math.max(0, Math.min(request.column, 1024)) : line.length;
       runner.clearConsole(node, line, column);
     }));
-    // Exclusive control of the selected node's console, for observers.
-    socket.on('take-control', guard((id, acknowledge) => {
+    // Exclusive control of the session's consoles, for observers: from any of the admin's
+    // observer sockets on the session, whatever node it shows.
+    socket.on('take-control', guard(acknowledge => {
       const reply = typeof acknowledge === 'function' ? acknowledge : () => {};
-      const node = sessionNode(id);
       if (!observer) return reply({error: 'Only an administrator observing this session can take control.'});
-      if (!node || node.id !== socket.data.nodeId) return reply({error: 'Select this node before taking control.'});
       try {
-        if (control.take(session.id, node.id, {admin: user.login, login: workspace.owner, holder: socket})) {
-          audit.record(user.login, 'control-start', {login: workspace.owner, nodeId: node.id});
-          io.to(sessionRoom(session)).emit('console-control', {nodeId: node.id, admin: user.login, active: true});
+        if (control.take(session.id, {admin: user.login, login: workspace.owner})) {
+          audit.record(user.login, 'control-start', {login: workspace.owner});
+          io.to(sessionRoom(session)).emit('console-control', {admin: user.login, active: true});
         }
         reply({ok: true});
       } catch (error) { reply({error: error.message}); }
     }));
-    socket.on('release-control', guard((id, acknowledge) => {
-      const released = typeof id === 'string' && control.release(session.id, id, socket, 'released');
+    socket.on('release-control', guard(acknowledge => {
+      const released = observer && control.release(session.id, user.login, 'released');
       if (typeof acknowledge === 'function') acknowledge({ok: released});
     }));
-    socket.on('disconnect', () => control.releaseHolder(socket, 'disconnected'));
   });
 
   return {

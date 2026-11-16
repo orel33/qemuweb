@@ -10,7 +10,7 @@ import {panes} from './terminal.js';
 import {showOwnerLayout, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {setGraphicView} from './topology.js';
-import {publishOwnerView} from './socket.js';
+import {emitOnSession, publishOwnerView} from './socket.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -27,10 +27,13 @@ export const observedLogin = readTarget();
 export const observing = !!observedLogin;
 if (observing) document.body.classList.add('observing');
 
-// Admin sessions held by someone: nodeId -> admin login.
-const controls = new Map();
-// The node this tab controls, as {pane, nodeId}, or null.
-let held = null;
+// The session's control state, as the server last said (console-control {admin, active}):
+// {admin} while an administrator controls the session, else null. Nothing else is kept, so the
+// banners cannot drift from the server.
+let control = null;
+// This page's login (observation tabs): to know whether the controlling admin is us.
+let myLogin = null;
+const heldByMe = () => observing && !!control && control.admin === myLogin;
 
 export function observeHeaders() { return observing ? {'X-Observe': observedLogin} : {}; }
 
@@ -40,16 +43,14 @@ export function socketOptions({main = false} = {}) {
   return {transports: ['websocket', 'polling'], auth: {...(main ? {main: true} : {}), ...(observing ? {observe: observedLogin} : {})}};
 }
 
-// Whether a pane's keyboard input may be sent to its node.
+// Whether a pane's keyboard input may be sent: the controlling admin types into any node,
+// the owner into none while the session is controlled.
 export function canType(pane) {
-  if (observing) return !!held && held.pane === pane && held.nodeId === pane.machineId;
-  return !controls.has(pane.machineId);
+  return !!pane.machineId && (observing ? heldByMe() : !control);
 }
 
 const banner = document.getElementById('observe-banner');
 const controlBanner = document.getElementById('control-banner');
-
-function nodeName(nodeId) { return machines.get(nodeId)?.hostname || 'a node'; }
 
 // Lucide Hand (take control) and LockOpen (release control), like the other inline icons.
 const SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
@@ -62,45 +63,46 @@ function renderControl() {
     const button = document.getElementById('observe-control');
     const status = document.getElementById('observe-status');
     if (!button) return;
-    const nodeId = held ? held.nodeId : store.activeId;
-    const other = nodeId && controls.get(nodeId);
-    if (button.dataset.held !== String(!!held)) {
-      button.dataset.held = String(!!held);
-      button.innerHTML = `${held ? RELEASE_ICON : TAKE_ICON}${held ? 'Release control' : 'Take control'}`;
-      button.className = `observe-button ${held ? 'act-green' : 'act-amber'}`;
-      button.title = held ? 'Give the keyboard back to the user' : 'Take exclusive control of the selected console';
+    const mine = heldByMe();
+    if (button.dataset.held !== String(mine)) {
+      button.dataset.held = String(mine);
+      button.innerHTML = `${mine ? RELEASE_ICON : TAKE_ICON}${mine ? 'Release control' : 'Take control'}`;
+      button.className = `observe-button ${mine ? 'act-green' : 'act-amber'}`;
+      button.title = mine ? 'Give the keyboard back to the user' : 'Take exclusive control of every console of this session';
     }
-    button.disabled = !held && (!nodeId || !!other);
-    status.textContent = held ? `You control the console of ${nodeName(held.nodeId)}`
-      : other ? `${other} controls the console of ${nodeName(nodeId)}` : 'read-only';
-    banner.dataset.control = String(!!held);
+    button.disabled = taking || (!mine && !!control);
+    status.textContent = mine ? `You control the session of ${observedLogin}`
+      : control ? `${control.admin} controls this session` : 'read-only';
+    banner.dataset.control = String(mine);
     return;
   }
-  const lines = [...controls].map(([nodeId, admin]) => `${admin} controls the console of ${nodeName(nodeId)}`);
-  controlBanner.textContent = lines.length ? `${lines.join(' · ')}. You see the commands and their output; your keyboard is blocked on that console, and your view follows the administrator's.` : '';
-  controlBanner.hidden = !lines.length;
+  controlBanner.textContent = control
+    ? `${control.admin} controls your session. You see the commands and their output; your keyboard is blocked on every console, and your view follows the administrator's.` : '';
+  controlBanner.hidden = !control;
   // While controlled, the owner's page is driven by the controller: its layout controls are
   // disabled (CSS) and it does not publish its own view.
-  document.body.dataset.controlled = String(lines.length > 0);
+  document.body.dataset.controlled = String(!!control);
 }
 
-// console-control {nodeId, admin, active} and the control field of node-snapshot.
-export function applyControl(nodeId, admin, active) {
+// console-control {admin, active}: the session-level state, sent on every change and at each
+// connection.
+export function applyControl({admin, active} = {}) {
   const wasControlled = controlledByAdmin();
-  if (active) controls.set(nodeId, admin);
-  else {
-    controls.delete(nodeId);
-    if (held?.nodeId === nodeId) { held = null; applyOwnerView(true); }
-  }
+  const wasMine = heldByMe();
+  control = active && admin ? {admin} : null;
   renderControl();
-  // Control over: the owner keeps what is displayed and publishes its own view again.
+  // Control over, on the owner's page: keep what is displayed and publish its own view again.
   if (wasControlled && !controlledByAdmin()) { controllerView = null; publishOwnerView({force: true}); }
+  // On the controlling admin's page: from now on the owner's page follows this one; when
+  // control ends, Follow resumes.
+  if (!wasMine && heldByMe()) publishOwnerView({force: true});
+  if (wasMine && !heldByMe()) applyOwnerView(true);
 }
 
-// The admin's page holds control of a node: it publishes its view to the owner (controller-view).
-export const holdingControl = () => observing && !!held;
-// The owner's page while an administrator controls one of its consoles.
-export const controlledByAdmin = () => !observing && controls.size > 0;
+// The admin's page holds control: it publishes its view to the owner (controller-view).
+export const holdingControl = heldByMe;
+// The owner's page while an administrator controls its session.
+export const controlledByAdmin = () => !observing && !!control;
 
 // The observed login has no session: it never used QemuWeb since the server started, or its
 // session was deleted. The page replaces the workspace with a message and a way back.
@@ -123,7 +125,7 @@ let ownerView = null;
 // Following also pauses while a take-control request is pending: re-laying out the panes
 // then could move the pane that is taking control to another node.
 let taking = false;
-const following = () => observing && !held && !taking && document.getElementById('observe-follow').checked;
+const following = () => observing && !heldByMe() && !taking && document.getElementById('observe-follow').checked;
 
 // Shows a published view (owner-view or controller-view) without saving it in this browser's
 // view settings. mayRefresh: a node unknown here (created meanwhile) triggers one refresh of
@@ -170,28 +172,18 @@ export function refollow() {
 
 export function controlChanged() { renderControl(); }
 
+// Take or release control of the whole session, through the page's session socket. The banner
+// changes only when the server's console-control event arrives.
 function toggleControl() {
-  if (held) {
-    const {pane, nodeId} = held;
-    pane.socket.emit('release-control', nodeId, () => {});
-    held = null;
-    renderControl();
-    applyOwnerView(true);
-    return;
-  }
-  const pane = panes[store.activePaneIndex];
-  const nodeId = pane?.machineId;
-  if (!nodeId || taking) return;
+  if (heldByMe()) { emitOnSession('release-control', () => {}); return; }
+  if (taking) return;
   taking = true;
-  pane.socket.emit('take-control', nodeId, result => {
+  renderControl();
+  emitOnSession('take-control', result => {
     taking = false;
-    if (result?.error) { showStatusError(result.error); applyOwnerView(true); return; }
-    held = {pane, nodeId};
-    // From now on the owner's page follows this one.
-    publishOwnerView({force: true});
-    controls.set(nodeId, 'you');
     renderControl();
-    pane.terminal.focus();
+    if (result?.error) { showStatusError(result.error); applyOwnerView(true); return; }
+    panes[store.activePaneIndex]?.terminal.focus();
   });
 }
 
@@ -232,6 +224,11 @@ export function initObserve() {
   document.getElementById('observe-user').textContent = observedLogin;
   document.getElementById('observe-select').addEventListener('change', event => goTo(event.target.value));
   document.getElementById('observe-control').addEventListener('click', toggleControl);
+  fetch('/auth/me', {cache: 'no-store'}).then(response => (response.ok ? response.json() : null)).then(me => {
+    myLogin = me?.login || null;
+    renderControl();
+    if (heldByMe()) publishOwnerView({force: true});
+  }).catch(() => {});
   document.getElementById('observe-follow').addEventListener('change', () => applyOwnerView(true));
   renderSessionNavigation();
   setInterval(renderSessionNavigation, 10000);

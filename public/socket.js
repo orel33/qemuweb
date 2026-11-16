@@ -9,6 +9,12 @@ import {applyControl, controlledByAdmin, followController, followOwnerView, hold
 
 let socket = null;
 
+// Emits on the page's session socket (take-control, release-control).
+export function emitOnSession(event, ...args) {
+  if (socket?.connected) socket.emit(event, ...args);
+  else args.find(arg => typeof arg === 'function')?.({error: 'Not connected to the server.'});
+}
+
 // The page tells the other side what it shows: the active node, the view (Terminals or Graphic)
 // and the console layout (panes, switch consoles, page, pane shown alone). The panes' nodes
 // follow from these and the node list, so they are not sent. One rule decides who drives:
@@ -53,7 +59,6 @@ function attachPaneSocket(pane) {
     machine.hasLaunched = snapshot.state.hasLaunched;
     machine.message = snapshot.state.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
-    applyControl(snapshot.nodeId, snapshot.control?.admin, !!snapshot.control);
     machine.logs = snapshot.logs || [];
     machine.serial = snapshot.serial || '';
     if (pane.view === 'console') renderConsoleView(pane);
@@ -144,7 +149,7 @@ export function initSockets() {
   // observed session is gone: say so, with a link back to the supervision page.
   socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
   socket.on('observe-unavailable', () => observationUnavailable());
-  socket.on('console-control', event => applyControl(event.nodeId, event.admin, event.active));
+  socket.on('console-control', applyControl);
   socket.on('owner-view', followOwnerView);
   socket.on('controller-view', followController);
   socket.on('connect_error', socketConnectError);

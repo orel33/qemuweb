@@ -204,51 +204,47 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', () =
   assert.equal(sessionSummary({owner: 'boss', session, runner}, 'boss').browsers, 0);
 });
 
-test('console control is exclusive, renewed by input and released once', t => {
+test('session control is exclusive per session, renewed by input and released once', t => {
   assert.equal(CONTROL_IDLE_MS, 10 * 60 * 1000);
   // Mocked setTimeout/clearTimeout: the idle timer is driven by tick(), not by the machine load.
   t.mock.timers.enable({apis: ['setTimeout']});
   const released = [];
-  const control = new ConsoleControl({onRelease: (lock, reason) => released.push([lock.nodeId, lock.admin, reason])});
-  const first = {}, second = {};
-  assert.equal(control.take('s1', 'n1', {admin: 'boss', login: 'toto', holder: first}), true);
-  assert.equal(control.take('s1', 'n1', {admin: 'boss', login: 'toto', holder: first}), false, 'renewal');
-  assert.throws(() => control.take('s1', 'n1', {admin: 'chef', login: 'toto', holder: second}), /boss already controls/);
-  assert.equal(control.get('s2', 'n1'), null, 'locks are per session');
-  assert.equal(control.release('s1', 'n1', second, 'released'), false, 'only the holder releases');
-  assert.equal(control.touch('s1', 'n1', second), false);
+  const control = new ConsoleControl({onRelease: (lock, reason) => released.push([lock.sessionId, lock.admin, lock.login, reason])});
+  assert.equal(control.take('s1', {admin: 'boss', login: 'toto'}), true);
+  assert.equal(control.take('s1', {admin: 'boss', login: 'toto'}), false, 'renewal by the same admin');
+  assert.throws(() => control.take('s1', {admin: 'chef', login: 'toto'}), /boss already controls this session/);
+  assert.equal(control.get('s2'), null, 'locks are per session');
+  assert.equal(control.release('s1', 'chef', 'released'), false, 'only the controlling admin releases');
+  assert.equal(control.touch('s1', 'chef'), false);
   // Input renews the 10-minute idle timer.
-  for (let i = 0; i < 4; i++) { t.mock.timers.tick(CONTROL_IDLE_MS - 1000); assert.equal(control.touch('s1', 'n1', first), true); }
+  for (let i = 0; i < 4; i++) { t.mock.timers.tick(CONTROL_IDLE_MS - 1000); assert.equal(control.touch('s1', 'boss'), true); }
   assert.deepEqual(released, []);
   t.mock.timers.tick(CONTROL_IDLE_MS - 1);
   assert.deepEqual(released, []);
   t.mock.timers.tick(1);
-  assert.deepEqual(released, [['n1', 'boss', 'idle']]);
-  assert.equal(control.get('s1', 'n1'), null);
+  assert.deepEqual(released, [['s1', 'boss', 'toto', 'idle']]);
+  assert.equal(control.get('s1'), null);
 
-  control.take('s1', 'n1', {admin: 'boss', login: 'toto', holder: first});
-  control.take('s1', 'n2', {admin: 'boss', login: 'toto', holder: first});
-  control.take('s2', 'n1', {admin: 'chef', login: 'titi', holder: second});
+  control.take('s1', {admin: 'boss', login: 'toto'});
+  control.take('s2', {admin: 'chef', login: 'titi'});
   assert.equal(control.heldBy('s1', 'boss'), true);
   assert.equal(control.heldBy('s1', 'chef'), false);
   assert.equal(control.hasLock('s2'), true);
-  control.releaseHolder(first, 'disconnected');
+  assert.equal(control.release('s1', 'boss', 'released'), true);
   assert.equal(control.hasLock('s1'), false);
-  assert.deepEqual(released.slice(1), [['n1', 'boss', 'disconnected'], ['n2', 'boss', 'disconnected']]);
-  control.releaseSession('s2', 'session deleted');
-  assert.deepEqual(released.slice(3), [['n1', 'chef', 'session deleted']]);
+  assert.equal(control.release('s2', null, 'session deleted'), true, 'anyone\'s lock, for a session deletion');
+  assert.deepEqual(released.slice(1), [['s1', 'boss', 'toto', 'released'], ['s2', 'chef', 'titi', 'session deleted']]);
   assert.equal(control.locks.size, 0);
-  assert.equal(control.release('s2', 'n1', null, 'node deleted'), false, 'released once');
+  assert.equal(control.release('s2', null, 'session deleted'), false, 'released once');
 });
 
-test('observers type only into a console they control; owners not while it is controlled', () => {
-  const admin = {}, other = {};
-  const lock = {admin: 'boss', holder: admin};
-  assert.equal(inputRefusal({observer: false, lock: null, holder: other}), null);
-  assert.match(inputRefusal({observer: false, lock, holder: other}), /boss controls this console/);
-  assert.match(inputRefusal({observer: true, lock: null, holder: admin}), /Read-only observation/);
-  assert.match(inputRefusal({observer: true, lock, holder: other}), /Read-only observation/);
-  assert.equal(inputRefusal({observer: true, lock, holder: admin}), null);
+test('the controlling admin types into any console of the session; the owner into none', () => {
+  const lock = {admin: 'boss'};
+  assert.equal(inputRefusal({observer: false, lock: null, admin: 'toto'}), null);
+  assert.match(inputRefusal({observer: false, lock, admin: 'toto'}), /boss controls this session/);
+  assert.match(inputRefusal({observer: true, lock: null, admin: 'boss'}), /Read-only observation/);
+  assert.match(inputRefusal({observer: true, lock, admin: 'chef'}), /Read-only observation/);
+  assert.equal(inputRefusal({observer: true, lock, admin: 'boss'}), null);
 });
 
 test('an observation is audited once per admin and observed login while sockets stay open', () => {
@@ -259,11 +255,11 @@ test('an observation is audited once per admin and observed login while sockets 
   tracker.opened('boss', 'titi');
   tracker.opened('chef', 'toto');
   assert.equal(lines.length, 3);
-  for (let i = 0; i < 4; i++) tracker.closed('boss', 'toto');
+  for (let i = 0; i < 4; i++) assert.equal(tracker.closed('boss', 'toto'), 4 - i, 'remaining sockets');
   tracker.opened('boss', 'toto');
   assert.equal(lines.length, 3, 'still one socket open');
-  tracker.closed('boss', 'toto');
-  tracker.closed('boss', 'toto');
+  assert.equal(tracker.closed('boss', 'toto'), 1);
+  assert.equal(tracker.closed('boss', 'toto'), 0, 'the last socket closed: control ends here');
   tracker.opened('boss', 'toto');
   assert.deepEqual(lines.at(-1), ['boss', 'observe', 'toto'], 'a new observation after closing every socket');
   assert.equal(lines.length, 4);

@@ -126,13 +126,14 @@ can:
   own session. A login without a session (not used since the server started,
   or deleted) shows a message and a link back to **Supervision**. The server refuses every change from an observer, including
   console input, Clear and resizing.
-- **Take control** of the selected console: an exclusive lock on that node.
-  The student's keyboard is blocked on it and a banner tells them who controls
-  it; they still see the commands and their output. While the admin holds
+- **Take control** of the student's session: an exclusive lock on the whole
+  session. The student's keyboard is blocked on every console and a banner
+  tells them who controls it; they still see the commands and their output.
+  The admin types into whatever console they display. While the admin holds
   control, the student's page follows the admin's view and layout (the reverse
   of **Follow**) and its view and layout buttons are disabled. Control ends
-  with **Release control**, when the admin's page closes, or after 10 minutes
-  without input; the student's page then keeps what it shows and is free
+  with **Release control**, when the admin's last page on that session closes
+  (changing the layout keeps it), or after 10 minutes without input; the student's page then keeps what it shows and is free
   again.
 - **Stop all** VMs and switches of a session (nodes kept) or **Delete** it
   (disks included); the student's browsers reload into a new, empty session.

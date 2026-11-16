@@ -77,13 +77,13 @@ failure is reported on the server output and never fails the request.
 action appends one line:
 
 ```json
-{"time":"2026-11-16T09:12:03.120Z","admin":"prof","action":"control-start","target":{"login":"alice","nodeId":"s-0123456789abcdef"},"result":"ok"}
+{"time":"2026-11-16T09:12:03.120Z","admin":"prof","action":"control-start","target":{"login":"alice"},"result":"ok"}
 ```
 
 | Action | Target |
 | --- | --- |
 | `observe` | `login`: written when an admin's first console connection to that session opens (one line per admin and session while it stays open). |
-| `control-start`, `control-end` | `login`, `nodeId`; `control-end` adds `reason` (`released`, `disconnected`, `idle`, `node deleted`, `session deleted`). |
+| `control-start`, `control-end` | `login` (control covers the whole session); `control-end` adds `reason` (`released`, `disconnected`: the admin's last page on the session closed, `idle`, `session deleted`). |
 | `stop-all`, `delete-session` | `login`. |
 | `bulk-delete` | `logins`. |
 | `create-account` | `login`, `role`. |

@@ -100,9 +100,14 @@ flowchart TB
   node, Terminals or Graphic and console layout, validated by `ownerViewOf`,
   published by that page when either changes, never derived from console
   sockets attaching; the last one is also sent to a new observer), sends `observe-unavailable` when the login has no session, and
-  lets it type only into a node it controls
-  (`take-control`, `lib/console-control.js`; the owner's input on that node is
-  then dropped and both sides get `console-control`). While an admin holds
+  lets it type only while its admin controls the session (`take-control`
+  from any of that admin's observer sockets, `lib/console-control.js`: one lock
+  per session, held by the admin's login, released explicitly, after 10
+  minutes without input, on session deletion, or when that admin's last
+  observer socket on the session closes; the owner's input is then dropped on
+  every node). `console-control` {admin, active} goes to every socket of the
+  session, owner and observers, on each change and at connection, and the
+  pages derive their banners from it only. While an admin holds
   control, the view goes the other way: the admin's page publishes
   `controller-view` (same fields and validation, accepted only from that admin
   while they hold a lock on the session, kept for a page opening meanwhile) and
@@ -157,7 +162,7 @@ The server is split into layers with one-way dependencies:
 | `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
 | `lib/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
 | `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
-| `lib/console-control.js` | Exclusive per-node console control lock with its 10-minute idle timer. |
+| `lib/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
 | `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date), and the last activity (memory only). |
 | `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
 | `lib/topology.js` | `.topo` parsing and formatting. |
