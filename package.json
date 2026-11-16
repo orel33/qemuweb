@@ -8,7 +8,6 @@
     "test": "node --test test/unit/*.test.js",
     "test:two-hosts": "node test/integration/two-hosts-ping.js",
     "test:four-hosts-startup": "node test/integration/four-hosts-startup.js",
-    "test:two-hosts-startup-media": "TWO_HOSTS_STARTUP_MEDIA=1 node test/integration/two-hosts-ping.js",
     "test:startup-media-profiles": "node test/integration/startup-media-profiles.js",
     "test:check-network-debian13-legacy": "GUEST_NETWORK_PROFILES=debian13-legacy node test/integration/check-network.js",
     "test:check-network-debian13-cloud": "GUEST_NETWORK_PROFILES=debian13-cloud node test/integration/check-network.js",

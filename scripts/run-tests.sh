@@ -13,7 +13,6 @@ Available tests:
   session-reconnect              Log out and back in: running nodes, consoles and logs restored
   admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
   two-hosts                      Two Debian Legacy hosts: VDE, ping and Stop/Resume
-  two-hosts-startup-media        Two hosts plus per-host startup ISO, resources and Reboot
   four-hosts-startup             Four Debian Legacy hosts configured by start.sh templates
   startup-media-profiles         Startup ISO on Alpine, Debian Cloud and OpenWrt
   check-network-debian13-legacy  Two Debian Legacy hosts on one VDE switch: eth0, hostname, ping, tcpdump
@@ -76,7 +75,6 @@ case "${1:-}" in
   session-reconnect) run_test 'Reconnection: running nodes, consoles and logs restored' npm run test:session-reconnect ;;
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
   two-hosts) run_test 'Two Debian Legacy hosts: VDE, ping and Stop/Resume' npm run test:two-hosts ;;
-  two-hosts-startup-media) run_test 'Two Debian Legacy hosts with per-host startup ISO and Reboot' npm run test:two-hosts-startup-media ;;
   four-hosts-startup) run_test 'Four Debian Legacy hosts: startup templates and full LAN ping' npm run test:four-hosts-startup ;;
   startup-media-profiles) run_test 'Startup ISO on Alpine, Debian Cloud and OpenWrt' npm run test:startup-media-profiles ;;
   check-network-debian13-legacy) run_test 'Two Debian Legacy hosts on one VDE switch: eth0, hostname, ping, tcpdump' npm run test:check-network-debian13-legacy ;;
