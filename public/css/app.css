@@ -1,4 +1,4 @@
-:root { --console-font-family: "Ubuntu Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; --console-font-size: 17px; }
+:root { --header-height: 63px; --banner-height: 40px; --console-font-family: "Ubuntu Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; --console-font-size: 17px; }
 :root[data-console-font="consolas"] { --console-font-family: Consolas, "Liberation Mono", monospace; }
 :root[data-console-font="menlo"] { --console-font-family: Menlo, Monaco, monospace; }
 :root[data-console-font="liberation"] { --console-font-family: "Liberation Mono", monospace; }
@@ -6,7 +6,8 @@
 * { box-sizing: border-box; }
 html, body { height: 100%; overflow: hidden; }
 body { display: flex; flex-direction: column; height: 100vh; height: 100dvh; margin: 0; background: #141a22; color: #e7edf5; font: 15px system-ui, sans-serif; }
-header { display: flex; align-items: center; gap: 9px; padding: 12px 16px; overflow-x: auto; border-bottom: 1px solid #35404c; }
+/* One header height on every page (index, observation, /admin, login): 38px icon buttons + 2 x 12px padding + 1px border. */
+header { display: flex; flex: none; align-items: center; gap: 9px; height: var(--header-height); padding: 12px 16px; overflow-x: auto; border-bottom: 1px solid #35404c; }
 h1 { display: inline-flex; flex: none; align-items: center; gap: 8px; margin: 0 auto 0 0; font-size: 18px; white-space: nowrap; }
 h1 a { display: inline-flex; align-items: center; gap: 8px; margin: -6px -9px; padding: 6px 9px; border-radius: 8px; color: inherit; text-decoration: none; transition: background .18s ease, box-shadow .18s ease, color .18s ease, transform .18s ease; }
 h1 a img { transition: transform .18s ease; }
@@ -301,13 +302,17 @@ main[data-columns="4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); }
 .admin-link { color: #f2c46d; text-decoration: none; padding: 6px 9px; border: 1px solid #6a5730; border-radius: 6px; white-space: nowrap; }
 .admin-link:hover, .admin-link:focus-visible { background: #3a3220; }
 .admin-link[hidden] { display: none; }
-.observe-banner { display: flex; flex: none; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 16px; color: #1d1405; background: #f2b84b; font-weight: 600; }
+/* The observation and control banners share one fixed height; their text is truncated. */
+.observe-banner { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--banner-height); padding: 0 16px; overflow: hidden; white-space: nowrap; color: #1d1405; background: #f2b84b; font-weight: 600; }
 .observe-banner[hidden], .control-banner[hidden] { display: none; }
 .observe-banner[data-control="true"] { background: #f08a5d; }
-.observe-banner button, .observe-banner select { padding: 4px 9px; color: #1d1405; background: #ffe3a8; border-color: #8a6420; }
-.observe-status { margin-right: auto; font-weight: 400; }
-.observe-link { color: #1d1405; padding: 4px 8px; border: 1px solid #8a6420; border-radius: 6px; text-decoration: none; background: #ffe3a8; }
-.control-banner { flex: none; padding: 8px 16px; color: #1d1405; background: #f08a5d; font-weight: 600; }
+.observe-banner button, .observe-banner select { flex: none; height: 28px; padding: 0 9px; color: #1d1405; background: #ffe3a8; border-color: #8a6420; }
+.observe-banner > * { flex: none; }
+.observe-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.observe-banner > .observe-status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.observe-follow { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; }
+.observe-link { display: inline-flex; align-items: center; height: 28px; padding: 0 8px; color: #1d1405; border: 1px solid #8a6420; border-radius: 6px; text-decoration: none; background: #ffe3a8; }
+.control-banner { flex: none; height: var(--banner-height); padding: 0 16px; overflow: hidden; line-height: var(--banner-height); white-space: nowrap; text-overflow: ellipsis; color: #1d1405; background: #f08a5d; font-weight: 600; }
 /* Observation is read-only: the server refuses every change; these controls are hidden. */
 body.observing #delete-session, body.observing #show-general-settings, body.observing #load-topology,
 body.observing #load-session-archive, body.observing #save-session-archive, body.observing #new-host,
@@ -317,7 +322,7 @@ body.observing [data-view="monitor"] { display: none !important; }
 /* Supervision page (/admin). */
 .admin-heading { margin-left: 14px; color: #f2c46d; font-weight: 600; }
 .admin-page header { gap: 12px; }
-.admin-main { flex: 1; overflow: auto; padding: 16px; }
+.admin-main { display: block; flex: 1; overflow: auto; padding: 16px; } /* One column: Sessions above Accounts. */
 .admin-main section { margin-bottom: 28px; }
 .admin-section-head { display: flex; align-items: baseline; gap: 14px; }
 .admin-section-head h2 { margin: 0 0 10px; font-size: 17px; }
@@ -335,7 +340,21 @@ body.observing [data-view="monitor"] { display: none !important; }
 .admin-own { color: #9ee6b4; }
 .admin-actions { display: flex; gap: 6px; align-items: center; }
 .admin-actions button, .admin-actions select, .admin-table select { padding: 4px 9px; }
-.admin-actions a { color: #8ec5ff; padding: 4px 6px; }
+/* Open and Observe are links (a middle click opens a new observation tab) shaped like the buttons. */
+.admin-actions button, .admin-actions .admin-button { font: inherit; font-size: 13px; line-height: 1.2; }
+.admin-actions .admin-button { display: inline-block; padding: 4px 9px; color: inherit; text-decoration: none; background: #243244; border: 1px solid #506176; border-radius: 6px; }
+.admin-actions .admin-button:hover, .admin-actions .admin-button:focus-visible { background: #304256; }
+.presence { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; color: #8fa2b8; font-size: 12px; }
+.presence::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #6b7785; }
+.presence[data-online="true"] { color: #9ee6b4; }
+.presence[data-online="true"]::before { background: #3fcf72; }
+.session-state[data-state="active"] { color: #9ee6b4; }
+.session-state[data-state="idle"] { color: #8fa2b8; }
 .admin-error { color: #ff9a9f; }
 .admin-error[hidden] { display: none; }
 .admin-confirm-list { max-height: 240px; overflow: auto; margin: 0; }
+/* Observation of a login without a session: a message replaces the workspace. */
+.observe-notice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; flex: 1; padding: 24px 16px; text-align: center; }
+.observe-notice[hidden] { display: none; }
+body[data-observe-unavailable="true"] #console-workspace, body[data-observe-unavailable="true"] #graphic-workspace,
+body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailable="true"] .control-banner { display: none !important; }

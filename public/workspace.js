@@ -6,7 +6,7 @@ import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
 import {renderGraphic} from './topology.js';
-import {controlChanged} from './observe.js';
+import {controlChanged, observedLogin, observing} from './observe.js';
 
 let workspaceError = null;
 const resourceMetrics = new Map();
@@ -86,7 +86,8 @@ async function refreshResourceMetrics() {
 function renderPaneTitles() {
   for (const pane of panes) {
     const machine = pane.machineId && machines.get(pane.machineId);
-    const title = machine ? `${machine.hostname} · ${machine.kind === 'switch' ? 'VDE switch' : machine.osHint}` : machines.size ? 'Unused terminal' : 'Add a host or switch';
+    const title = machine ? `${machine.hostname} · ${machine.kind === 'switch' ? 'VDE switch' : machine.osHint}` : machines.size ? 'Unused terminal'
+      : observing ? `The session of ${observedLogin} has no host or switch yet` : 'Add a host or switch';
     pane.title.textContent = title;
     pane.title.title = title;
     pane.title.dataset.empty = String(!machine);

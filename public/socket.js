@@ -5,9 +5,14 @@ import {renderTabs, showPage, showStatusError, updateControls} from './workspace
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
-import {applyControl, followOwner, observing, socketOptions} from './observe.js';
+import {applyControl, followOwner, followOwnerView, observationUnavailable, observing, socketOptions} from './observe.js';
 
 let socket = null;
+
+// The owner's browser tells observers which view it shows (Terminals or Graphic).
+export function publishViewMode() {
+  if (!observing && socket?.connected) socket.emit('view-mode', store.graphicVisible ? 'graphic' : 'terminals');
+}
 
 function socketConnectError(error) {
   if (error?.message === 'Authentication required.') { redirectToLogin(); return; }
@@ -91,7 +96,7 @@ function attachPaneSocket(pane) {
 }
 
 export function initSockets() {
-  socket = io(socketOptions());
+  socket = io(socketOptions({main: true}));
   panes.forEach(attachPaneSocket);
   socket.on('nodes-changed', event => {
     const machine = event && machines.get(event.nodeId);
@@ -105,7 +110,7 @@ export function initSockets() {
     if (machine.id === store.activeId) updateControls();
     if (store.graphicVisible) scheduleSessionSync();
   });
-  socket.on('connect', syncSessionsFromServer);
+  socket.on('connect', () => { syncSessionsFromServer(); publishViewMode(); });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;
@@ -119,9 +124,11 @@ export function initSockets() {
   });
   socket.on('node-error', showStatusError);
   // The session was deleted (here or in another tab): reload into the new, empty one. An
-  // observed session is gone: back to the supervision page.
-  socket.on('session-deleted', () => { if (observing) location.assign('/admin'); else location.reload(); });
+  // observed session is gone: say so, with a link back to the supervision page.
+  socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
+  socket.on('observe-unavailable', () => observationUnavailable());
   socket.on('console-control', event => applyControl(event.nodeId, event.admin, event.active));
   socket.on('owner-selected-node', event => followOwner(event.nodeId));
+  socket.on('owner-view-mode', event => followOwnerView(event.mode));
   socket.on('connect_error', socketConnectError);
 }

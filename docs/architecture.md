@@ -95,12 +95,16 @@ flowchart TB
   opens a session for the admin, and an observed session never gets an
   activity mark. An observer socket (`auth.observe`) joins the observed
   session's rooms and `observers:<id>`; `sockets.js` refuses its `input`,
-  `clear-console` and `terminal-resize`, sends it `owner-selected-node` when the
-  owner selects a node, and lets it type only into a node it controls
+  `clear-console` and `terminal-resize`, relays the owner's selected node and
+  view mode (`owner-selected-node`, `owner-view-mode`, also sent to a new
+  observer), sends `observe-unavailable` when the login has no session, and
+  lets it type only into a node it controls
   (`take-control`, `lib/console-control.js`; the owner's input on that node is
   then dropped and both sides get `console-control`). Every privileged socket
   event re-reads the account, so a disabled or removed account loses its
-  sockets. Admin actions are appended to `logs/admin.log`, the audit log of
+  sockets. `sockets.js` also counts each user's connected browser tabs (the
+  tab's session socket carries `auth.main`), shown as online/offline in
+  `/admin`. Admin actions are appended to `logs/admin.log`, the audit log of
   administrator actions (`lib/audit.js`).
 
 ## Module map

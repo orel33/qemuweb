@@ -121,6 +121,7 @@ async function run() {
   assert.equal(aliceRow.switches, 1);
   assert.equal(aliceRow.runningSwitches, 1);
   assert.equal(aliceRow.active, true);
+  assert.equal(aliceRow.browsers, 0, 'a session is not a connection');
   assert.ok(Date.parse(aliceRow.lastActivity) >= Date.parse(aliceRow.createdAt));
   const bossSettings = await boss.request('/api/general-settings');
   sessions = await boss.request('/api/admin/sessions');
@@ -150,16 +151,32 @@ async function run() {
   await waitFor('refusal of a student observer', () => studentProbe.events.some(item => item.event === 'disconnect'));
   assert.ok(studentProbe.events.some(item => item.event === 'node-error' && /Administrator role required/.test(item.payload)));
 
-  const aliceSession = recorder(alice, 'alice session');
+  // Like a browser tab: one main session socket and console sockets.
+  const aliceSession = recorder(alice, 'alice session', {auth: {main: true}});
   const aliceConsole = recorder(alice, 'alice console');
-  const observer = recorder(boss, 'boss observer', {auth: {observe: 'alice'}});
+  const observer = recorder(boss, 'boss observer', {auth: {main: true, observe: 'alice'}});
   await Promise.all([aliceSession.connected, aliceConsole.connected, observer.connected]);
+  // Connected browser tabs: alice's main socket only (console sockets and observers do not count).
+  assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'alice').browsers, 1);
+  const userBrowsers = Object.fromEntries((await boss.request('/api/admin/users')).map(user => [user.login, user.browsers]));
+  assert.deepEqual([userBrowsers.alice, userBrowsers.bob, userBrowsers.boss], [1, 0, 0]);
   assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
   const snapshot = observer.events.find(item => item.event === 'node-snapshot');
   assert.equal(snapshot.payload.nodeId, aliceSwitch);
   assert.equal(snapshot.payload.control, null);
   assert.deepEqual(await select(aliceConsole.socket, aliceSwitch), {ok: true});
   await waitFor('follow-node event', () => observer.events.some(item => item.event === 'owner-selected-node' && item.payload.nodeId === aliceSwitch));
+  aliceSession.socket.emit('view-mode', 'graphic');
+  await waitFor('follow-view event', () => observer.events.some(item => item.event === 'owner-view-mode' && item.payload.mode === 'graphic'));
+  observer.socket.emit('view-mode', 'terminals'); // An observer's view is never relayed.
+  aliceSession.socket.emit('view-mode', 'invalid');
+  // A new observer starts from the owner's last node and view.
+  const lateObserver = recorder(boss, 'boss late observer', {auth: {observe: 'alice'}});
+  await lateObserver.connected;
+  await waitFor('initial owner view', () => lateObserver.events.some(item => item.event === 'owner-view-mode' && item.payload.mode === 'graphic')
+    && lateObserver.events.some(item => item.event === 'owner-selected-node' && item.payload.nodeId === aliceSwitch));
+  lateObserver.socket.close();
+  assert.deepEqual(observer.events.filter(item => item.event === 'owner-view-mode').map(item => item.payload.mode), ['graphic']);
   aliceConsole.socket.emit('input', 'showinfo\r');
   await waitFor('alice\'s output at the observer', () => /showinfo/.test(observer.output()));
   const resetsBefore = aliceConsole.count('serial-reset');
@@ -171,7 +188,14 @@ async function run() {
   assert.doesNotMatch(aliceConsole.output(), /observermarker/, 'the observer typed into alice\'s console');
   assert.equal(aliceConsole.count('serial-reset'), resetsBefore, 'the observer cleared alice\'s console');
   assert.equal((await alice.request('/api/nodes'))[0].running, true);
-  console.log('Admin: observation is live and read-only (input, clear, resize and writes refused)');
+  // Observing an offline user works: bob has a session but no connected browser.
+  assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'bob').browsers, 0);
+  const offlineObserver = recorder(boss, 'boss observing bob', {auth: {observe: 'bob'}});
+  await offlineObserver.connected;
+  assert.deepEqual(await select(offlineObserver.socket, bobSwitch), {ok: true});
+  assert.ok(offlineObserver.events.some(item => item.event === 'node-snapshot' && item.payload.nodeId === bobSwitch));
+  offlineObserver.socket.close();
+  console.log('Admin: observation is live and read-only (input, clear, resize and writes refused), also for an offline user');
 
   // (4) Take control: alice's keyboard is blocked, she sees the admin's commands, and
   // the control ends when the admin's socket disconnects.
@@ -209,6 +233,12 @@ async function run() {
   await waitFor('session-deleted at bob', () => bobSession.events.some(item => item.event === 'session-deleted'));
   assert.deepEqual((await boss.request('/api/admin/sessions')).map(session => session.login), ['boss']);
   await expectStatus(boss, '/api/admin/sessions/delete', 'POST', 409, {body: {logins: ['boss']}});
+  // Observing a login without a session: a distinct event for the page, then the socket closes.
+  const goneObserver = recorder(boss, 'boss observing a deleted session', {auth: {observe: 'alice'}});
+  await goneObserver.connected;
+  await waitFor('observe-unavailable', () => goneObserver.events.some(item => item.event === 'observe-unavailable' && item.payload.login === 'alice'));
+  await waitFor('socket closed', () => goneObserver.events.some(item => item.event === 'disconnect'));
+  await expectStatus(boss, '/api/nodes', 'GET', 404, {headers: {'x-observe': 'alice'}});
   console.log('Admin: stop-all keeps the nodes; bulk deletion frees vde_switch processes and runtime directories');
 
   // (6) Accounts: create, reset, disable (own account protected); a disabled account loses

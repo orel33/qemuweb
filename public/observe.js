@@ -9,6 +9,7 @@ import {machines, store} from './state.js';
 import {panes} from './terminal.js';
 import {selectMachine, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
+import {setGraphicView} from './topology.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -32,9 +33,10 @@ let held = null;
 
 export function observeHeaders() { return observing ? {'X-Observe': observedLogin} : {}; }
 
-// Options of every io() call of the UI.
-export function socketOptions() {
-  return {transports: ['websocket', 'polling'], ...(observing ? {auth: {observe: observedLogin}} : {})};
+// Options of every io() call of the UI. The session socket (one per tab) is marked main: the
+// server counts those to show who is online.
+export function socketOptions({main = false} = {}) {
+  return {transports: ['websocket', 'polling'], auth: {...(main ? {main: true} : {}), ...(observing ? {observe: observedLogin} : {})}};
 }
 
 // Whether a pane's keyboard input may be sent to its node.
@@ -49,6 +51,7 @@ const controlBanner = document.getElementById('control-banner');
 function nodeName(nodeId) { return machines.get(nodeId)?.hostname || 'a node'; }
 
 function renderControl() {
+  if (document.body.dataset.observeUnavailable) return;
   if (observing) {
     const button = document.getElementById('observe-control');
     const status = document.getElementById('observe-status');
@@ -77,11 +80,35 @@ export function applyControl(nodeId, admin, active) {
   renderControl();
 }
 
-// The owner selected a node: observers follow.
+// The observed login has no session: it never used QemuWeb since the server started, or its
+// session was deleted. The page replaces the workspace with a message and a way back.
+export function observationUnavailable(reason = 'no session') {
+  if (!observing) return;
+  const text = reason === 'deleted'
+    ? `The session of ${observedLogin} was deleted.`
+    : `${observedLogin} has no session: the user has not used QemuWeb since the server started, or the session was deleted.`;
+  document.getElementById('observe-notice-text').textContent = text;
+  document.getElementById('observe-notice').hidden = false;
+  document.getElementById('observe-status').textContent = 'no session';
+  document.getElementById('observe-control').disabled = true;
+  document.body.dataset.observeUnavailable = 'true';
+}
+
+// What the owner last selected and showed; followed while Follow is on and the admin does
+// not hold control. With Follow off the admin navigates freely.
+const ownerView = {nodeId: null, mode: null};
+const following = () => observing && !held && document.getElementById('observe-follow').checked;
+
 export function followOwner(nodeId) {
-  if (!observing || held) return;
+  ownerView.nodeId = nodeId;
+  if (!following()) return;
   if (machines.has(nodeId)) selectMachine(nodeId);
-  else syncSessionsFromServer().then(() => { if (machines.has(nodeId)) selectMachine(nodeId); });
+  else syncSessionsFromServer().then(() => { if (machines.has(nodeId) && following()) selectMachine(nodeId); });
+}
+
+export function followOwnerView(mode) {
+  ownerView.mode = mode;
+  if (following() && (mode === 'graphic') !== store.graphicVisible) setGraphicView(mode === 'graphic', false);
 }
 
 export function controlChanged() { renderControl(); }
@@ -116,13 +143,11 @@ async function renderSessionNavigation() {
     if (!response.ok) return;
     sessions = (await response.json()).filter(session => !session.own);
   } catch (_) { return; }
-  if (!sessions.some(session => session.login === observedLogin)) {
-    document.getElementById('observe-status').textContent = `${observedLogin} has no session.`;
-  }
+  if (!sessions.some(session => session.login === observedLogin)) observationUnavailable();
   select.replaceChildren(...sessions.map(session => {
     const option = document.createElement('option');
     option.value = session.login;
-    option.textContent = `${session.login}${session.active ? '' : ' (idle)'}`;
+    option.textContent = `${session.login}${session.active ? '' : ' (idle)'}${session.browsers > 0 ? '' : ' (offline)'}`;
     option.selected = session.login === observedLogin;
     return option;
   }));
@@ -145,6 +170,10 @@ export function initObserve() {
   document.getElementById('observe-user').textContent = observedLogin;
   document.getElementById('observe-select').addEventListener('change', event => goTo(event.target.value));
   document.getElementById('observe-control').addEventListener('click', toggleControl);
+  document.getElementById('observe-follow').addEventListener('change', () => {
+    if (ownerView.mode) followOwnerView(ownerView.mode);
+    if (ownerView.nodeId) followOwner(ownerView.nodeId);
+  });
   renderSessionNavigation();
   setInterval(renderSessionNavigation, 10000);
   renderControl();

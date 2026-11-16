@@ -51,6 +51,26 @@ function age(iso) {
 
 const dateTime = iso => new Date(iso).toLocaleString();
 
+// Coloured dot + "online (n)" (connected browser tabs) or "offline". A session lives on the
+// server whether or not its user is connected.
+function presence(browsers) {
+  const element = document.createElement('span');
+  element.className = 'presence';
+  element.dataset.online = String(browsers > 0);
+  element.textContent = browsers > 0 ? `online (${browsers})` : 'offline';
+  element.title = browsers > 0 ? `${browsers} browser tab${browsers === 1 ? '' : 's'} connected` : 'No browser connected; the session keeps running';
+  return element;
+}
+
+// "active": at least one running node; "idle": none (as in the observation drop-down).
+function sessionState(active) {
+  const element = document.createElement('span');
+  element.className = 'session-state';
+  element.dataset.state = active ? 'active' : 'idle';
+  element.textContent = active ? 'active' : 'idle';
+  return element;
+}
+
 // Resolves true when the admin accepts; lists `items` under the message.
 function confirmDialog(title, message, items = [], accept = 'OK') {
   const dialog = $('admin-confirm');
@@ -95,23 +115,24 @@ function renderSessions(sessions) {
     const user = document.createElement('span');
     user.textContent = session.login;
     if (session.own) user.append(Object.assign(document.createElement('span'), {className: 'admin-own', textContent: ' (you)'}));
+    user.append(presence(session.browsers));
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
-    if (session.own) actions.append(Object.assign(document.createElement('a'), {href: '/', textContent: 'Open'}));
-    else actions.append(Object.assign(document.createElement('a'), {href: `/?observe=${encodeURIComponent(session.login)}`, textContent: 'Observe', title: 'Read-only view of this session'}));
+    if (session.own) actions.append(Object.assign(document.createElement('a'), {href: '/', className: 'admin-button', textContent: 'Open'}));
+    else actions.append(Object.assign(document.createElement('a'), {href: `/?observe=${encodeURIComponent(session.login)}`, className: 'admin-button', textContent: 'Observe', title: 'Read-only view of this session'}));
     actions.append(
       button('Stop all', () => runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}/stop`, {method: 'POST'})), 'Stop every VM and switch; the nodes are kept'),
       button('Delete', async () => {
         if (!await confirmDialog('Delete session', `Delete the session of ${session.login}? Every host and switch stops and is removed, with its disks.`, [], 'Delete')) return;
         runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}`, {method: 'DELETE'}));
       }));
-    row.append(cell(check), cell(user), cell(dateTime(session.createdAt)),
+    row.append(cell(check), cell(user), cell(dateTime(session.createdAt)), cell(sessionState(session.active)),
       cell(`${session.hosts} hosts, ${session.switches} switches`),
       cell(`${session.runningHosts} / ${session.hosts}`),
       cell(session.reservedRamMb ? `${session.reservedRamMb} MB` : '—'),
       cell(Number.isFinite(session.cpuPercent) ? `${session.cpuPercent.toFixed(1)}%` : '—'),
       cell(age(session.lastActivity)), cell(actions));
-    row.cells[7].title = dateTime(session.lastActivity);
+    row.cells[8].title = dateTime(session.lastActivity);
     return row;
   }));
   updateSelection();
@@ -153,14 +174,18 @@ function renderAccounts(users) {
     user.disabled ? 'Allow this account to log in again' : 'Refuse its logins and cookies at once; its session is kept');
     toggle.disabled = own;
     actions.append(toggle);
-    row.append(cell(`${user.login}${own ? ' (you)' : ''}`), cell(role), cell(user.disabled ? 'disabled' : 'enabled'),
-      cell(user.session ? 'yes' : '—'), cell(actions));
+    const name = document.createElement('span');
+    name.textContent = `${user.login}${own ? ' (you)' : ''}`;
+    name.append(presence(user.browsers));
+    row.append(cell(name), cell(role), cell(user.disabled ? 'disabled' : 'enabled'), cell(actions));
     if (user.disabled) row.dataset.disabled = 'true';
     return row;
   }));
 }
 
-async function refreshAccounts() {
+// The poll does not redraw the table while the admin is using one of its controls.
+async function refreshAccounts({polling = false} = {}) {
+  if (polling && $('accounts-body').contains(document.activeElement)) return;
   try { renderAccounts(await api('/users')); }
   catch (error) { showError('accounts-error', error); }
 }
@@ -220,7 +245,7 @@ function init() {
     } catch (error) { showError('password-error', error); }
   });
   refreshSessions();
-  setInterval(refreshSessions, POLL_MS);
+  setInterval(() => { refreshSessions(); refreshAccounts({polling: true}); }, POLL_MS);
 }
 
 init();

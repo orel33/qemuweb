@@ -3,6 +3,7 @@ import {generalSettings, graphicLayoutKey, machines, saveViewSettings, savedView
 import {jsonRequest, requestJson} from './api.js';
 import {fitTerminals} from './terminal.js';
 import {selectMachine, workspace} from './workspace.js';
+import {publishViewMode} from './socket.js';
 
 const graphicWorkspace = document.getElementById('graphic-workspace');
 const graphicCanvas = document.getElementById('graphic-canvas');
@@ -84,7 +85,8 @@ function finishGraphicDrag(event) {
   if (graphicCanvas.hasPointerCapture(event.pointerId)) graphicCanvas.releasePointerCapture(event.pointerId);
 }
 
-function setGraphicView(visible, persist = true) {
+// persist: save in this browser's view settings (not when an observer follows the owner).
+export function setGraphicView(visible, persist = true) {
   store.graphicVisible = visible;
   document.body.dataset.view = visible ? 'graphic' : 'terminals';
   workspace.hidden = visible;
@@ -97,6 +99,7 @@ function setGraphicView(visible, persist = true) {
   if (visible) renderGraphic();
   else requestAnimationFrame(fitTerminals);
   if (persist) saveViewSettings();
+  publishViewMode();
 }
 
 const topologyFile = document.getElementById('topology-file');

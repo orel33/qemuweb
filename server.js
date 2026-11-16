@@ -84,7 +84,7 @@ app.use(express.static(path.join(root, 'public')));
 // X-Observe (admins, read-only) and the admin API come before anything that could open or
 // change the caller's own session.
 app.use('/api', observationGate(manager));
-app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser}));
+app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers}));
 // Self-service deletion: stops and removes every node, then the session; the next request
 // opens a new, empty session.
 app.delete('/api/session', async (req, res) => {
