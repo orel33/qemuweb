@@ -265,8 +265,8 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 1. L'admin crée un jeton d'enregistrement dans `/admin/runners` (usage unique, durée limitée).
 2. Sur la machine runner : `qemuweb-runner register --url https://qemuweb.example --token <jeton>`.
-3. Le plan de contrôle renvoie un jeton d'authentification propre au runner, stocké dans `/etc/qemuweb-runner/config.toml` avec ses limites (RAM, vCPU, sessions max).
-4. `qemuweb-runner run` (unité systemd) ouvre une connexion WebSocket TLS **sortante** et la maintient. Aucun port entrant n'est nécessaire côté runner, ce qui marche derrière un NAT ou un pare-feu de salle de TP.
+3. Le plan de contrôle renvoie un jeton d'authentification propre au runner, stocké dans `~/.config/qemuweb-runner/config.toml` (`$XDG_CONFIG_HOME`) avec ses limites (RAM, vCPU, sessions max).
+4. `qemuweb-runner run` (en terminal ou en unité `systemd --user`) ouvre une connexion WebSocket TLS **sortante** et la maintient. Aucun port entrant n'est nécessaire côté runner, ce qui marche derrière un NAT ou un pare-feu de salle de TP.
 5. Le runner annonce sa capacité : RAM, vCPU, moteurs (`qemu`, `vbox`), images disponibles avec leur empreinte.
 
 **Protocole runner** (un seul WebSocket multiplexé)
@@ -281,7 +281,11 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 **Administration des runners** : liste avec état (en ligne, vu pour la dernière fois), capacité et charge ; mettre en pause (drain : plus de nouvelles sessions) ; révoquer le jeton.
 
-**Sécurité** : la jail minimaliste (compte dédié, scopes systemd), la liste blanche HMP et les quotas arrivent au jalon 6. Jusque-là, le runner tourne sous le compte qui le lance : choisir un compte sans privilège, jamais root, et réserver les runners distants à des machines de confiance.
+**Mode utilisateur (user-land)** : un runner est un processus ordinaire, lancé sous un compte sans privilège, jamais root. Il n'écrit ni dans `/etc` ni dans `/var` : sa configuration, son socket et ses sessions sont dans le répertoire de l'utilisateur (`~/.config`, `$XDG_RUNTIME_DIR`, `~/.local/share`) et tout est configurable. QEMU et VDE fonctionnent sans privilège (switch VDE en espace utilisateur) ; seul `/dev/kvm` exige l'appartenance au groupe `kvm`. Cela permet de lancer un runner sur n'importe quelle machine de TP, y compris le poste d'un étudiant.
+
+**Plusieurs runners** : le plan de contrôle tient un registre des runners (identifiant, état, capacité, propriétaire éventuel). Une session est liée à un runner pour toute sa vie, choisi parmi les runners en ligne par une fonction de placement unique. La perte d'un runner ne touche que ses sessions. Piste ultérieure : un runner par étudiant, sur son poste de TP. Le runner d'un étudiant n'est alors **pas de confiance** : le plan de contrôle valide tout ce qu'il reçoit (événements limités à ses sessions, tailles bornées, aucune identité ni autorisation fournie par le runner) et ne lui envoie des commandes que pour ses sessions.
+
+**Sécurité** : la jail minimaliste (compte dédié ; scopes systemd ou espaces de noms utilisateur, selon ce qu'un compte sans privilège peut obtenir), la liste blanche HMP et les quotas arrivent au jalon 6. Jusque-là, le runner tourne sous le compte qui le lance : choisir un compte sans privilège, jamais root, et réserver les runners distants à des machines de confiance.
 
 **Découpage conseillé**
 
@@ -323,7 +327,7 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 **Jail minimaliste**
 
 - Le runner tourne sous un compte système dédié `qemuweb-runner` (groupe `kvm`), distinct du plan de contrôle.
-- Chaque session est lancée dans un scope systemd (`systemd-run --scope -p MemoryMax=… -p CPUQuota=…`), comme garde-fou au-delà des limites QEMU.
+- Chaque session est lancée dans un scope systemd (`systemd-run --user --scope -p MemoryMax=… -p CPUQuota=…`), comme garde-fou au-delà des limites QEMU. Un runner sans privilège ne peut limiter la mémoire et le CPU que si systemd lui délègue ces contrôleurs cgroup : à vérifier sur les machines cibles, avec les limites QEMU comme seule protection sinon.
 - `runtime/` en `0700`, images de base en lecture seule.
 - VirtualBox reste supporté mais hors jail : ses VM sont lancées par le démon VBoxSVC, donc hors du scope systemd. Un runner annonce `qemu`, `vbox` ou les deux ; QEMU reste la priorité.
 - Plus tard si besoin : un uid par session, bubblewrap ou nsjail, namespace réseau.
