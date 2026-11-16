@@ -251,11 +251,11 @@ L'admin voit toutes les sessions en cours, peut observer un étudiant en train d
 
 **Critères de fin**
 
-- [ ] Un utilisateur non admin reçoit 403 sur toute route `/api/admin/*`.
-- [ ] L'admin observe la console d'un étudiant en direct sans pouvoir y taper, l'effacer ni la redimensionner (refusé côté serveur).
-- [ ] La suppression groupée libère les processus QEMU/VDE et le répertoire `runtime/sessions/<id>/`.
-- [ ] En prise de contrôle, le clavier de l'étudiant est bloqué, il voit les commandes et leurs réponses, et la main est rendue à la déconnexion de l'admin.
-- [ ] Chaque action d'administration laisse une ligne dans le journal d'audit.
+- [x] Un utilisateur non admin reçoit 403 sur toute route `/api/admin/*`.
+- [x] L'admin observe la console d'un étudiant en direct sans pouvoir y taper, l'effacer ni la redimensionner (refusé côté serveur).
+- [x] La suppression groupée libère les processus QEMU/VDE et le répertoire `runtime/sessions/<id>/`.
+- [x] En prise de contrôle, le clavier de l'étudiant est bloqué, il voit les commandes et leurs réponses, et la main est rendue à la déconnexion de l'admin.
+- [x] Chaque action d'administration laisse une ligne dans le journal d'audit.
 
 ## Jalon 5 — Runners local / distant
 
