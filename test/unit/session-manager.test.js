@@ -179,6 +179,9 @@ test('empty runtime sessions left by a stopped server are pruned, with their met
   const emptyLegacy = make('00000000000000a2', {'session.json': definition});
   const withNodes = make('00000000000000a3', {'session.json': JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: ['h-0123456789abcdef'], switches: []}), 'meta.json': '{}'});
   const unexpected = make('00000000000000a4', {'session.json': definition, 'meta.json': '{}', 'keep.txt': 'x'});
+  const vacant = make('00000000000000a5', {});
+  const recent = path.join(sessions, '00000000000000a6');
+  fs.mkdirSync(recent);
   const log = console.log;
   console.log = () => {};
   try { instance.pruneEmptyRuntimeSessions(); } finally { console.log = log; }
@@ -186,4 +189,6 @@ test('empty runtime sessions left by a stopped server are pruned, with their met
   assert.equal(fs.existsSync(emptyLegacy), false);
   assert.equal(fs.existsSync(withNodes), true);
   assert.equal(fs.existsSync(unexpected), true);
+  assert.equal(fs.existsSync(vacant), false, 'a directory with nothing in it is pruned');
+  assert.equal(fs.existsSync(recent), true, 'a directory created less than 30 s ago may belong to a starting server');
 });
