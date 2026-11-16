@@ -163,6 +163,7 @@ Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, and OpenWrt 25.12.
 bash scripts/prepare.sh                      # all systems
 bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt
 bash scripts/prepare.sh --list               # show prepared images
+bash scripts/prepare.sh --hash               # record image hashes without building
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 ```
 
@@ -171,6 +172,15 @@ and a VDI base image for VirtualBox in `images/`; VirtualBox is not needed to
 build them. Existing images are reused. `--force` keeps the previous RAW/VDI
 pair in `images/backups/`; stop the system's machines first, because their
 working disks depend on the base image.
+
+Each build also records `images/<system>.raw.sha256` and `.vdi.sha256` (the output of
+`sha256sum`, so `cd images && sha256sum -c alpine.raw.sha256` verifies one). The server
+uses a hash file that is not older than its image to compare the image with a session
+archive without reading several gigabytes; a missing, malformed or older file is ignored
+and the image is hashed instead (asynchronously). `bash scripts/prepare.sh --hash`
+records them for existing images without rebuilding anything. Restore an image from
+`images/backups/` together with its `.sha256` file, since an older image is not detected
+when its newer hash file is left in place.
 
 Guests log in as `root` without a password on the serial console.
 

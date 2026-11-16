@@ -12,7 +12,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `guest-hook-filter.test.js` | Hide startup hook markers from the serial console, including split and prefixed lines. |
 | `guest-media.test.js` | Validate startup files and resource paths; check that separate read-only ISOs contain the right script and resources when `genisoimage` and `isoinfo` are available. |
 | `host-settings-naming.test.js` | Check automatic host names (from `public/nodes.js`) and the shared Add host/Host Settings dialog. |
-| `image-hash.test.js` | Check base image hashing and shell quoting of logged commands. |
+| `image-hash.test.js` | Check base image hashing (`.sha256` files written by `prepare.sh`: used when not older than the image, ignored when older or malformed, asynchronous fallback) and shell quoting of logged commands. |
 | `launch-settings.test.js` | Validate launch settings and QEMU options against their field limits. |
 | `node-id.test.js` | Check host and switch ID format and kind. |
 | `pud84-ui.test.js` | Check the position of Exit All in the host/switch toolbar. |

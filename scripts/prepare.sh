@@ -6,6 +6,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 usage() {
   cat <<'HELP'
 Usage: bash scripts/prepare.sh [--all | --system <sysname>] [--force]
+       bash scripts/prepare.sh --hash [--system <sysname>]
        bash scripts/prepare.sh --list
        bash scripts/prepare.sh --help
 
@@ -20,6 +21,10 @@ The elapsed time of each step and the system total are displayed.
 --force            Rebuild and replace existing images. Save the old pair in
                    images/backups/ for recovery. Running VMs and old working
                    disks may become incompatible with the new base.
+--hash             Only record the SHA-256 of the existing images in images/<sysname>.raw.sha256
+                   and .vdi.sha256 (sha256sum format), without building anything. Every build
+                   records them itself; the server uses a hash file that is not older than its
+                   image to compare the image with a session archive without reading it.
 HELP
 }
 
@@ -34,6 +39,7 @@ selected_system=''
 explicit_all=false
 list_only=false
 force=false
+hash_only=false
 while (( $# )); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -46,10 +52,14 @@ while (( $# )); do
       [[ -n "$2" && "$2" != --* ]] || fail 'Expected one system ID after --system.'
       selected_system="$2"; shift 2 ;;
     --force) force=true; shift ;;
+    --hash) hash_only=true; shift ;;
     *) fail "Unknown option: $1 (see --help)." ;;
   esac
 done
 
+if [[ "$hash_only" == true && ( "$explicit_all" == true || "$force" == true || "$list_only" == true ) ]]; then
+  fail '--hash cannot be combined with --all, --force or --list.'
+fi
 if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true ) ]]; then
   fail '--list cannot be combined with preparation options.'
 fi
@@ -98,6 +108,30 @@ if [[ -n "$selected_system" ]]; then
   for id in "${system_ids[@]}"; do [[ "$id" == "$selected_system" ]] && found=true; done
   [[ "$found" == true ]] || fail "Unknown system: $selected_system (see --list)."
   target_ids=("$selected_system")
+fi
+
+# Records <image>.sha256 (sha256sum format) for the raw and VDI images of a system, so that the
+# server need not read them. A hash file that is not older than its image is kept as it is.
+write_image_hashes() {
+  local system="$1" format image name
+  for format in raw vdi; do
+    image="$ROOT/images/$system.$format"
+    name="$system.$format"
+    if [[ ! -s "$image" ]]; then continue; fi
+    if [[ -e "$image.sha256" && ! "$image.sha256" -ot "$image" ]]; then
+      echo "  $name: hash up to date"
+    elif (cd "$ROOT/images" && sha256sum "$name" > "$name.sha256.tmp" && mv -f "$name.sha256.tmp" "$name.sha256"); then
+      echo "  $name: hash recorded"
+    else
+      rm -f "$image.sha256.tmp"
+      echo "prepare.sh: Could not record the hash of $name; the server will compute it." >&2
+    fi
+  done
+}
+
+if [[ "$hash_only" == true ]]; then
+  for id in "${target_ids[@]}"; do write_image_hashes "$id"; done
+  exit 0
 fi
 
 verify_images() {
@@ -156,6 +190,9 @@ for id in "${target_ids[@]}"; do
           fi
         fi
       done
+      for format in raw vdi; do
+        if [[ -e "$ROOT/images/$id.$format.sha256" ]]; then mv -f "$ROOT/images/$id.$format.sha256" "$system_backup/"; fi
+      done
       echo "  Previous images saved: $system_backup"
     fi
   elif [[ ! -s "$ROOT/images/$id.raw" && -e "$ROOT/images/$id.vdi" ]]; then
@@ -165,14 +202,18 @@ for id in "${target_ids[@]}"; do
   build_force=0
   if [[ "$force" == true ]]; then build_force=1; fi
   if QEMUWEB_PREPARE_FORCE="$build_force" "$script" --images && verify_images "$id"; then
+    write_image_hashes "$id"
     images_elapsed=$((SECONDS - stage_start))
     echo "== $id · ready in $(format_duration "$((SECONDS - system_start))") (sources $(format_duration "$sources_elapsed"), images $(format_duration "$images_elapsed")) =="
   else
-    if [[ "$force" == true ]]; then rm -f "$ROOT/images/$id.raw" "$ROOT/images/$id.vdi"; fi
+    if [[ "$force" == true ]]; then rm -f "$ROOT/images/$id.raw" "$ROOT/images/$id.vdi" "$ROOT/images/$id.raw.sha256" "$ROOT/images/$id.vdi.sha256"; fi
     if [[ -n "$system_backup" ]]; then
       for format in raw vdi; do
         if [[ -e "$system_backup/$id.$format" ]]; then
           mv "$system_backup/$id.$format" "$ROOT/images/"
+        fi
+        if [[ -e "$system_backup/$id.$format.sha256" ]]; then
+          mv "$system_backup/$id.$format.sha256" "$ROOT/images/"
         fi
       done
       echo "  Previous images restored from $system_backup" >&2

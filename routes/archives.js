@@ -9,7 +9,7 @@ const {writeArchive, readArchive} = require('../lib/session-archive');
 const {createSessionSnapshot} = require('../lib/session-snapshot');
 
 function register({app, session, runner, commands, emit}) {
-  const {imageById, imagePath, fileSha256, stop, stopSwitch, startSwitch, start, publishState, appendLog} = runner;
+  const {imageById, imagePath, fileSha256Async, stop, stopSwitch, startSwitch, start, publishState, appendLog} = runner;
   const {archiveSources, validateArchiveSession, installArchive, archivedSessionFiles} = createSessionSnapshot({session, runner, commands, emit});
 
   const MAX_SESSION_ARCHIVE = 0xffffffff;
@@ -33,7 +33,7 @@ function register({app, session, runner, commands, emit}) {
       const baseImages = {};
       for (const id of prepared.systems) {
         const format = session.engine === 'vbox' ? 'vdi' : 'raw';
-        baseImages[id] = {format, ...fileSha256(imagePath(imageById(id).images[format]))};
+        baseImages[id] = {format, ...await fileSha256Async(imagePath(imageById(id).images[format]))};
       }
       if (includeDisks) {
         for (const host of session.nodes.values()) if (host.kind === 'host' && host.machine) {
@@ -64,7 +64,7 @@ function register({app, session, runner, commands, emit}) {
   });
   // Lets the load dialog warn before upload: returns the systems whose current base
   // image differs from the one recorded in an archive's session.json.
-  app.post('/api/session-archive/check', (req, res) => {
+  app.post('/api/session-archive/check', async (req, res) => {
     try {
       const {engine, baseImages} = req.body || {};
       if (!['qemu', 'vbox'].includes(engine) || !baseImages || typeof baseImages !== 'object' || Array.isArray(baseImages)) throw new Error('Invalid archived session.');
@@ -72,7 +72,7 @@ function register({app, session, runner, commands, emit}) {
       for (const [id, expected] of Object.entries(baseImages)) {
         const image = imageById(id);
         if (!image || !expected || expected.format !== format) { changed.push(id); continue; }
-        const actual = fileSha256(imagePath(image.images[format]));
+        const actual = await fileSha256Async(imagePath(image.images[format]));
         if (actual.size !== expected.size || actual.sha256 !== expected.sha256) changed.push(id);
       }
       res.set('Cache-Control', 'no-store');
@@ -103,7 +103,7 @@ function register({app, session, runner, commands, emit}) {
       if (session.nodes.size) throw new Error('Load requires an empty session.');
       const files = await readArchive(upload, stage);
       const snapshot = archivedSessionFiles(stage, files);
-      const warnings = validateArchiveSession(snapshot, stage, {discardStaleDisks});
+      const warnings = await validateArchiveSession(snapshot, stage, {discardStaleDisks});
       installArchive(snapshot, stage);
       const startErrors = [];
       if (autoStart) {

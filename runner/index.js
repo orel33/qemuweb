@@ -14,7 +14,7 @@
 const {createContext} = require('./context');
 const {resolveCommands} = require('./preflight');
 const guestMedia = require('./media/guest-media');
-const {fileSha256} = require('./media/image-hash');
+const {fileSha256, fileSha256Async} = require('./media/image-hash');
 const {createCatalog} = require('./catalog');
 const {createSessionRuntime} = require('./session-runtime');
 const {createDisks} = require('./media/disks');
@@ -123,6 +123,7 @@ function createRunner({session, commands, root, runtimeRoot, configPath, hostNod
     cleanupGuestIsoFiles: guestIso.cleanupGuestIsoFiles,
     media: guestMedia,
     fileSha256,
+    fileSha256Async,
 
     // Resource metrics
     metricsSnapshot,
