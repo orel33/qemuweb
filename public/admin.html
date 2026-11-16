@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>QemuWeb · Supervision</title>
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body class="admin-page">
+  <header>
+    <h1><a href="/" title="My session"><img src="/favicon.svg" width="26" height="26" alt="">QemuWeb</a><span class="beta-badge" aria-label="Beta version">BETA</span><span class="admin-heading">Supervision</span></h1>
+    <span class="auth-off-warning" id="auth-off-warning" title="QEMUWEB_AUTH=off: anyone reaching this server is administrator" hidden>Authentication disabled</span>
+    <a class="admin-link" href="/">My session</a>
+    <span class="account-name" id="account-name"></span>
+    <button id="logout" type="button" hidden>Log out</button>
+  </header>
+  <main class="admin-main">
+    <section aria-labelledby="sessions-title">
+      <div class="admin-section-head">
+        <h2 id="sessions-title">Sessions</h2>
+        <span class="admin-updated" id="sessions-updated" role="status"></span>
+      </div>
+      <div class="admin-toolbar">
+        <button id="delete-selected" type="button" disabled>Delete selected</button>
+        <form id="inactive-form" class="admin-inline-form">
+          <label>Delete sessions inactive for <input id="inactive-hours" type="number" min="0" max="8760" step="0.5" value="4" required> hours</label>
+          <button type="submit">Find…</button>
+        </form>
+      </div>
+      <p class="admin-error" id="sessions-error" role="alert" hidden></p>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr>
+            <th><input id="select-all" type="checkbox" aria-label="Select every session"></th>
+            <th>User</th><th>Created</th><th>Nodes</th><th>Running VMs</th><th>Reserved RAM</th><th>CPU</th><th>Last activity</th><th>Actions</th>
+          </tr></thead>
+          <tbody id="sessions-body"></tbody>
+        </table>
+      </div>
+    </section>
+    <section aria-labelledby="accounts-title">
+      <div class="admin-section-head"><h2 id="accounts-title">Accounts</h2></div>
+      <form id="create-account" class="admin-inline-form">
+        <label>Login <input id="new-login" required maxlength="64" autocomplete="off" spellcheck="false"></label>
+        <label>Password <input id="new-password" type="password" required maxlength="1024" autocomplete="new-password"></label>
+        <label>Role <select id="new-role"><option value="student">student</option><option value="admin">admin</option></select></label>
+        <button type="submit">Create account</button>
+      </form>
+      <p class="admin-error" id="accounts-error" role="alert" hidden></p>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Login</th><th>Role</th><th>State</th><th>Session</th><th>Actions</th></tr></thead>
+          <tbody id="accounts-body"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+  <dialog class="qemu-options create-dialog" id="admin-confirm" aria-labelledby="admin-confirm-title">
+    <form method="dialog">
+      <div class="settings-heading"><h2 id="admin-confirm-title">Confirm</h2></div>
+      <div class="create-fields">
+        <p id="admin-confirm-message"></p>
+        <ul id="admin-confirm-list" class="admin-confirm-list"></ul>
+      </div>
+      <div class="create-actions"><button value="cancel" type="submit">Cancel</button><button id="admin-confirm-accept" value="accept" type="submit">OK</button></div>
+    </form>
+  </dialog>
+  <dialog class="qemu-options create-dialog" id="password-dialog" aria-labelledby="password-title">
+    <form id="password-form">
+      <div class="settings-heading"><h2 id="password-title">Reset password</h2></div>
+      <div class="create-fields">
+        <label class="create-field">New password<input id="reset-password" type="password" required maxlength="1024" autocomplete="new-password"></label>
+      </div>
+      <p class="admin-error" id="password-error" role="alert" hidden></p>
+      <div class="create-actions"><button id="password-cancel" type="button">Cancel</button><button type="submit">Set password</button></div>
+    </form>
+  </dialog>
+  <script type="module" src="/admin.js"></script>
+</body>
+</html>

@@ -11,6 +11,7 @@ import {initGeneralSettings} from './general-settings.js';
 import {initTopology} from './topology.js';
 import {initArchive} from './archive.js';
 import {initSockets} from './socket.js';
+import {initObserve} from './observe.js';
 
 initAccount();
 initTerminals();
@@ -23,3 +24,4 @@ initArchive();
 initNodeDialogs();
 initHostSettings();
 initSockets();
+initObserve();

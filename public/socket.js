@@ -5,6 +5,7 @@ import {renderTabs, showPage, showStatusError, updateControls} from './workspace
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
+import {applyControl, followOwner, observing, socketOptions} from './observe.js';
 
 let socket = null;
 
@@ -30,6 +31,7 @@ function attachPaneSocket(pane) {
     machine.hasLaunched = snapshot.state.hasLaunched;
     machine.message = snapshot.state.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
+    applyControl(snapshot.nodeId, snapshot.control?.admin, !!snapshot.control);
     machine.logs = snapshot.logs || [];
     machine.serial = snapshot.serial || '';
     if (pane.view === 'console') renderConsoleView(pane);
@@ -89,7 +91,7 @@ function attachPaneSocket(pane) {
 }
 
 export function initSockets() {
-  socket = io({transports: ['websocket', 'polling']});
+  socket = io(socketOptions());
   panes.forEach(attachPaneSocket);
   socket.on('nodes-changed', event => {
     const machine = event && machines.get(event.nodeId);
@@ -116,7 +118,10 @@ export function initSockets() {
     showPage();
   });
   socket.on('node-error', showStatusError);
-  // The session was deleted (here or in another tab): reload into the new, empty one.
-  socket.on('session-deleted', () => location.reload());
+  // The session was deleted (here or in another tab): reload into the new, empty one. An
+  // observed session is gone: back to the supervision page.
+  socket.on('session-deleted', () => { if (observing) location.assign('/admin'); else location.reload(); });
+  socket.on('console-control', event => applyControl(event.nodeId, event.admin, event.active));
+  socket.on('owner-selected-node', event => followOwner(event.nodeId));
   socket.on('connect_error', socketConnectError);
 }
