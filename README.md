@@ -101,18 +101,26 @@ line of standard input; otherwise the script prompts for it. Logins use letters,
 `admin` is a role of an ordinary account: an admin has their own session and
 works in it normally. The header shows a **Supervision** link to `/admin`
 (admins only), which lists every session, the admin's own marked, refreshed
-every few seconds: user, creation date, nodes, running VMs, reserved RAM, CPU
-and last activity (the owner's requests and console input; an admin observing
-does not count). From there an admin can:
+every few seconds: user, creation date, state (**active**: at least one running
+node, or **idle**), nodes, running VMs, reserved RAM, CPU and last activity (the
+owner's requests and console input; an admin observing does not count). Next
+to each user, in the sessions and the accounts tables, a dot shows **online
+(n)** (n browser tabs connected) or **offline**. A session lives on the server
+whether or not its user is connected: it is created at the user's first
+request and kept after logging out or closing the browser. From there an admin
+can:
 
 - **Observe** a session: `/?observe=<login>` opens the normal interface on the
   student's session, read-only, with the admin's own layout. A banner of
   distinct colour shows the observed user, previous/next active session, a
-  session list, **Take control**, **My session** and **Supervision**. The admin
-  sees the consoles live (what the guest echoes, so not a password typed
-  without echo), their history and logs, and follows the node the student
-  selects. The target belongs to the tab: another tab can stay on the admin's
-  own session. The server refuses every change from an observer, including
+  session list, **Follow**, **Take control**, **My session** and **Supervision**.
+  The admin sees the consoles live (what the guest echoes, so not a password
+  typed without echo), their history and logs, also when the student is
+  offline. With **Follow** on (the default), the view follows the node and the
+  view (Terminals or Graphic) the student selects; off, the admin navigates
+  freely. The target belongs to the tab: another tab can stay on the admin's
+  own session. A login without a session (not used since the server started,
+  or deleted) shows a message and a link back to **Supervision**. The server refuses every change from an observer, including
   console input, Clear and resizing.
 - **Take control** of the selected console: an exclusive lock on that node.
   The student's keyboard is blocked on it and a banner tells them who controls
