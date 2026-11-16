@@ -95,9 +95,10 @@ flowchart TB
   opens a session for the admin, and an observed session never gets an
   activity mark. An observer socket (`auth.observe`) joins the observed
   session's rooms and `observers:<id>`; `sockets.js` refuses its `input`,
-  `clear-console` and `terminal-resize`, relays the owner's selected node and
-  view mode (`owner-selected-node`, `owner-view-mode`, also sent to a new
-  observer), sends `observe-unavailable` when the login has no session, and
+  `clear-console` and `terminal-resize`, relays what the owner's page shows
+  (`owner-view` {nodeId, mode}: its active node and Terminals or Graphic,
+  published by that page when either changes, never derived from console
+  sockets attaching; the last one is also sent to a new observer), sends `observe-unavailable` when the login has no session, and
   lets it type only into a node it controls
   (`take-control`, `lib/console-control.js`; the owner's input on that node is
   then dropped and both sides get `console-control`). Every privileged socket

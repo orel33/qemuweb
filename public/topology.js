@@ -3,7 +3,7 @@ import {generalSettings, graphicLayoutKey, machines, saveViewSettings, savedView
 import {jsonRequest, requestJson} from './api.js';
 import {fitTerminals} from './terminal.js';
 import {selectMachine, workspace} from './workspace.js';
-import {publishViewMode} from './socket.js';
+import {publishOwnerView} from './socket.js';
 
 const graphicWorkspace = document.getElementById('graphic-workspace');
 const graphicCanvas = document.getElementById('graphic-canvas');
@@ -99,7 +99,7 @@ export function setGraphicView(visible, persist = true) {
   if (visible) renderGraphic();
   else requestAnimationFrame(fitTerminals);
   if (persist) saveViewSettings();
-  publishViewMode();
+  publishOwnerView();
 }
 
 const topologyFile = document.getElementById('topology-file');

@@ -5,8 +5,7 @@
 // Rooms keep sessions apart:
 //   session:<sessionId>           every browser of the session's owner, and of the admins
 //                                 observing it (per-session events)
-//   observers:<sessionId>         the admins observing the session (owner-selected-node,
-//                                 owner-view-mode)
+//   observers:<sessionId>         the admins observing the session (owner-view)
 //   node:<sessionId>:<nodeId>     browsers that selected that node (per-node events); a socket
 //                                 joins it only for a node of its own or observed session
 // The handshake must already have set socket.data.user (see lib/auth/). An admin observes
@@ -147,28 +146,22 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
         socket.data.nodeId = node.id;
         const {nodeId, state, logs, serial} = runner.attachConsole(node.id);
         socket.emit('node-snapshot', {nodeId, token, state, logs, serial, control: controlInfo(nodeId)});
-        // Observers follow the node the owner selects.
-        if (!observer) {
-          ownerViews.set(session.id, {...ownerViews.get(session.id), nodeId});
-          io.to(observerRoom(session)).emit('owner-selected-node', {nodeId});
-        }
         if (typeof acknowledge === 'function') acknowledge({ok: true});
       }).catch(error => {
         socket.emit('node-error', error.message);
         if (typeof acknowledge === 'function') acknowledge({error: error.message});
       });
     }));
-    // The owner's view mode (Terminals or Graphic), followed by observers like the node.
-    socket.on('view-mode', guard(mode => {
-      if (observer || !['terminals', 'graphic'].includes(mode)) return;
-      ownerViews.set(session.id, {...ownerViews.get(session.id), mode});
-      io.to(observerRoom(session)).emit('owner-view-mode', {mode});
+    // What the owner looks at: the active node (or null) and the view (Terminals or Graphic),
+    // published by the owner's page itself whenever either changes. Console sockets attaching
+    // in the background (select-node) say nothing about it. Relayed to observers as owner-view.
+    socket.on('owner-view', guard(view => {
+      if (observer || !view || !['terminals', 'graphic'].includes(view.mode)) return;
+      const nodeId = typeof view.nodeId === 'string' && session.nodes.has(view.nodeId) ? view.nodeId : null;
+      ownerViews.set(session.id, {nodeId, mode: view.mode});
+      io.to(observerRoom(session)).emit('owner-view', {nodeId, mode: view.mode});
     }));
-    if (observer) {
-      const view = ownerViews.get(session.id);
-      if (view?.mode) socket.emit('owner-view-mode', {mode: view.mode});
-      if (view?.nodeId && session.nodes.has(view.nodeId)) socket.emit('owner-selected-node', {nodeId: view.nodeId});
-    }
+    if (observer && ownerViews.has(session.id)) socket.emit('owner-view', ownerViews.get(session.id));
     socket.on('leave-node', id => {
       if (id !== socket.data.nodeId) return;
       control.release(session.id, id, socket, 'released');

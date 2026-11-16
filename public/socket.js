@@ -5,13 +5,21 @@ import {renderTabs, showPage, showStatusError, updateControls} from './workspace
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
-import {applyControl, followOwner, followOwnerView, observationUnavailable, observing, socketOptions} from './observe.js';
+import {applyControl, followOwnerView, observationUnavailable, observing, socketOptions} from './observe.js';
 
 let socket = null;
 
-// The owner's browser tells observers which view it shows (Terminals or Graphic).
-export function publishViewMode() {
-  if (!observing && socket?.connected) socket.emit('view-mode', store.graphicVisible ? 'graphic' : 'terminals');
+// The owner's page tells observers what it shows: the active node and the view (Terminals or
+// Graphic). Called whenever either may have changed; sends only actual changes (and
+// everything again after a reconnection).
+let publishedView = null;
+export function publishOwnerView() {
+  if (observing || !socket?.connected) return;
+  const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals'};
+  const key = `${view.nodeId}|${view.mode}`;
+  if (key === publishedView) return;
+  publishedView = key;
+  socket.emit('owner-view', view);
 }
 
 function socketConnectError(error) {
@@ -110,7 +118,7 @@ export function initSockets() {
     if (machine.id === store.activeId) updateControls();
     if (store.graphicVisible) scheduleSessionSync();
   });
-  socket.on('connect', () => { syncSessionsFromServer(); publishViewMode(); });
+  socket.on('connect', () => { syncSessionsFromServer(); publishedView = null; publishOwnerView(); });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;
@@ -128,7 +136,6 @@ export function initSockets() {
   socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
   socket.on('observe-unavailable', () => observationUnavailable());
   socket.on('console-control', event => applyControl(event.nodeId, event.admin, event.active));
-  socket.on('owner-selected-node', event => followOwner(event.nodeId));
-  socket.on('owner-view-mode', event => followOwnerView(event.mode));
+  socket.on('owner-view', followOwnerView);
   socket.on('connect_error', socketConnectError);
 }

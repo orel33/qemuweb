@@ -7,6 +7,7 @@ import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
 import {loadGraphicPositions, renderGraphic} from './topology.js';
+import {refollow} from './observe.js';
 
 const confirmDialog = document.getElementById('confirm-dialog');
 const restartChoiceDialog = document.getElementById('restart-choice-dialog');
@@ -142,6 +143,7 @@ export async function syncSessionsFromServer() {
     const index = consoleSessions().findIndex(machine => machine.id === store.activeId);
     if (index >= 0) store.pageIndex = Math.floor(index / store.layoutSize);
     showPage(index >= 0 ? store.activeId : null);
+    refollow();
   } catch (error) { showStatusError(error.message); }
 }
 
@@ -287,6 +289,7 @@ export function initNodes() {
     document.getElementById('new-host').disabled = !items.length;
     for (const session of existing) mergeSession(session);
     showPage();
+    refollow();
   }).catch(error => { showStatusError(`System list unavailable: ${error.message}`); });
   exitAllButton.onclick = async () => {
     if (exitAllButton.disabled) return;

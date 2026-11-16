@@ -164,19 +164,25 @@ async function run() {
   const snapshot = observer.events.find(item => item.event === 'node-snapshot');
   assert.equal(snapshot.payload.nodeId, aliceSwitch);
   assert.equal(snapshot.payload.control, null);
+  // Follow: only what the owner's page publishes (owner-view) is relayed; a console socket
+  // attaching in the background (select-node) moves nobody.
   assert.deepEqual(await select(aliceConsole.socket, aliceSwitch), {ok: true});
-  await waitFor('follow-node event', () => observer.events.some(item => item.event === 'owner-selected-node' && item.payload.nodeId === aliceSwitch));
-  aliceSession.socket.emit('view-mode', 'graphic');
-  await waitFor('follow-view event', () => observer.events.some(item => item.event === 'owner-view-mode' && item.payload.mode === 'graphic'));
-  observer.socket.emit('view-mode', 'terminals'); // An observer's view is never relayed.
-  aliceSession.socket.emit('view-mode', 'invalid');
-  // A new observer starts from the owner's last node and view.
+  aliceSession.socket.emit('owner-view', {nodeId: aliceSwitch, mode: 'graphic'});
+  await waitFor('owner-view event', () => observer.events.some(item => item.event === 'owner-view' && item.payload.nodeId === aliceSwitch && item.payload.mode === 'graphic'));
+  observer.socket.emit('owner-view', {nodeId: null, mode: 'terminals'}); // An observer's view is never relayed.
+  aliceSession.socket.emit('owner-view', {nodeId: aliceSwitch, mode: 'invalid'});
+  aliceSession.socket.emit('owner-view', {nodeId: 'h-0000000000000000', mode: 'terminals'}); // Unknown node: null.
+  await waitFor('unknown node relayed as null', () => observer.events.some(item => item.event === 'owner-view' && item.payload.nodeId === null));
+  aliceSession.socket.emit('owner-view', {nodeId: aliceSwitch, mode: 'graphic'});
+  // A new observer starts from the owner's last view.
   const lateObserver = recorder(boss, 'boss late observer', {auth: {observe: 'alice'}});
   await lateObserver.connected;
-  await waitFor('initial owner view', () => lateObserver.events.some(item => item.event === 'owner-view-mode' && item.payload.mode === 'graphic')
-    && lateObserver.events.some(item => item.event === 'owner-selected-node' && item.payload.nodeId === aliceSwitch));
+  await waitFor('initial owner view', () => lateObserver.events.some(item => item.event === 'owner-view' && item.payload.nodeId === aliceSwitch && item.payload.mode === 'graphic'));
   lateObserver.socket.close();
-  assert.deepEqual(observer.events.filter(item => item.event === 'owner-view-mode').map(item => item.payload.mode), ['graphic']);
+  await waitFor('three owner views', () => observer.events.filter(item => item.event === 'owner-view').length >= 3);
+  assert.deepEqual(observer.events.filter(item => item.event === 'owner-view').map(item => [item.payload.nodeId, item.payload.mode]),
+    [[aliceSwitch, 'graphic'], [null, 'terminals'], [aliceSwitch, 'graphic']]);
+  assert.ok(!observer.events.some(item => ['owner-selected-node', 'owner-view-mode'].includes(item.event)));
   aliceConsole.socket.emit('input', 'showinfo\r');
   await waitFor('alice\'s output at the observer', () => /showinfo/.test(observer.output()));
   const resetsBefore = aliceConsole.count('serial-reset');

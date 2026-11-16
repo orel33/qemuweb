@@ -75,7 +75,7 @@ export function applyControl(nodeId, admin, active) {
   if (active) controls.set(nodeId, admin);
   else {
     controls.delete(nodeId);
-    if (held?.nodeId === nodeId) held = null;
+    if (held?.nodeId === nodeId) { held = null; applyOwnerView(true); }
   }
   renderControl();
 }
@@ -94,22 +94,33 @@ export function observationUnavailable(reason = 'no session') {
   document.body.dataset.observeUnavailable = 'true';
 }
 
-// What the owner last selected and showed; followed while Follow is on and the admin does
-// not hold control. With Follow off the admin navigates freely.
+// What the owner shows (owner-view {nodeId, mode}: its active node and Terminals or Graphic),
+// followed while Follow is on and the admin does not hold control. With Follow off the admin
+// navigates freely. Only the latest owner view counts.
 const ownerView = {nodeId: null, mode: null};
 const following = () => observing && !held && document.getElementById('observe-follow').checked;
 
-export function followOwner(nodeId) {
-  ownerView.nodeId = nodeId;
-  if (!following()) return;
+// mayRefresh: a node unknown here (created meanwhile) triggers one refresh of the node list,
+// which calls refollow() when it is done.
+function applyOwnerView(mayRefresh) {
+  if (!following() || !ownerView.mode) return;
+  const graphic = ownerView.mode === 'graphic';
+  if (graphic !== store.graphicVisible) setGraphicView(graphic, false);
+  const {nodeId} = ownerView;
+  if (!nodeId || nodeId === store.activeId) return;
   if (machines.has(nodeId)) selectMachine(nodeId);
-  else syncSessionsFromServer().then(() => { if (machines.has(nodeId) && following()) selectMachine(nodeId); });
+  else if (mayRefresh) syncSessionsFromServer();
 }
 
-export function followOwnerView(mode) {
-  ownerView.mode = mode;
-  if (following() && (mode === 'graphic') !== store.graphicVisible) setGraphicView(mode === 'graphic', false);
+export function followOwnerView(view) {
+  if (!observing || !view) return;
+  ownerView.nodeId = view.nodeId || null;
+  ownerView.mode = view.mode;
+  applyOwnerView(true);
 }
+
+// After the node list was (re)loaded: show the owner's node again.
+export function refollow() { applyOwnerView(false); }
 
 export function controlChanged() { renderControl(); }
 
@@ -119,6 +130,7 @@ function toggleControl() {
     pane.socket.emit('release-control', nodeId, () => {});
     held = null;
     renderControl();
+    applyOwnerView(true);
     return;
   }
   const pane = panes[store.activePaneIndex];
@@ -170,10 +182,7 @@ export function initObserve() {
   document.getElementById('observe-user').textContent = observedLogin;
   document.getElementById('observe-select').addEventListener('change', event => goTo(event.target.value));
   document.getElementById('observe-control').addEventListener('click', toggleControl);
-  document.getElementById('observe-follow').addEventListener('change', () => {
-    if (ownerView.mode) followOwnerView(ownerView.mode);
-    if (ownerView.nodeId) followOwner(ownerView.nodeId);
-  });
+  document.getElementById('observe-follow').addEventListener('change', () => applyOwnerView(true));
   renderSessionNavigation();
   setInterval(renderSessionNavigation, 10000);
   renderControl();

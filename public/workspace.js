@@ -7,6 +7,7 @@ import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
 import {renderGraphic} from './topology.js';
 import {controlChanged, observedLogin, observing} from './observe.js';
+import {publishOwnerView} from './socket.js';
 
 let workspaceError = null;
 const resourceMetrics = new Map();
@@ -202,6 +203,7 @@ function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
   });
   store.activePaneIndex = activeIndex;
   store.activeId = panes[activeIndex].machineId;
+  publishOwnerView();
   if (store.activeId) workspaceError = null;
   updateWorkspaceLayout();
   renderTabs();
@@ -237,6 +239,7 @@ export function focusPane(index) {
   store.activePaneIndex = index;
   const pane = panes[index];
   store.activeId = pane.machineId;
+  publishOwnerView();
   panes.forEach(item => item.element.dataset.active = String(item.index === index));
   updateWorkspaceLayout();
   tabs.querySelectorAll('.machine-tab').forEach(tab => tab.setAttribute('aria-selected', String(tab.dataset.nodeId === store.activeId)));
