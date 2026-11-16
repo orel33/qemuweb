@@ -21,6 +21,7 @@ function createSerial(ctx) {
       };
       const publishSerial = text => emitSerial(filterGuestHookSerial(node, text));
       node.serial = connection;
+      if (ctx.flow.paused) connection.pause();
       publishState(node);
       connection.on('data', data => publishSerial(decoder.write(data)));
       connection.on('close', () => {
@@ -64,7 +65,17 @@ function createSerial(ctx) {
     };
   }
 
-  return {attachConsole, connectSerial, writeConsoleInput, resizeSwitchTerminal, clearConsole};
+  // Pauses or resumes every console source of the session (serial sockets, switch terminals)
+  // while the control connection is congested; nothing is dropped.
+  function setConsoleFlow(paused) {
+    for (const node of ctx.session.nodes.values()) {
+      const source = node.kind === 'switch' ? node.switchTerminal : node.serial;
+      if (!source) continue;
+      try { if (paused) source.pause(); else source.resume(); } catch (_) {}
+    }
+  }
+
+  return {attachConsole, setConsoleFlow, connectSerial, writeConsoleInput, resizeSwitchTerminal, clearConsole};
 }
 
 module.exports = {createSerial};

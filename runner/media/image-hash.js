@@ -89,4 +89,12 @@ async function fileSha256Async(file) {
   return remember(file, stat, knownDigest(file, stat) ?? await computeAsync(file, stat));
 }
 
-module.exports = {fileSha256, fileSha256Async, hashFilePath};
+// {size, sha256} without reading the image: sha256 is null when no digest is known yet;
+// null when the file is missing.
+function knownImageIdentity(file) {
+  let stat;
+  try { stat = imageStat(file); } catch (_) { return null; }
+  return {size: stat.size, sha256: knownDigest(file, stat)};
+}
+
+module.exports = {fileSha256, fileSha256Async, knownImageIdentity, hashFilePath};

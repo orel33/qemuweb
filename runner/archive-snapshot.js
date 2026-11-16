@@ -2,7 +2,8 @@
 
 // Session snapshot logic behind ZIP archive export and import: what to archive,
 // validation of an archive before it is installed, and installation into an empty session.
-// ZIP reading and writing live in lib/session-archive.js. Node operations go through the runner facade.
+// ZIP reading and writing live in runner/archive-zip.js. Node operations go through the session
+// runner (runner/session-runner.js).
 const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
@@ -10,7 +11,7 @@ const {entityKind} = require('../common/node-id');
 const {validateLaunchSettings} = require('../common/launch-settings');
 const {selectedProfile, profileHash, validateOverrides} = require('../common/system-config');
 
-// session: lib/session.js Session; runner: runner/index.js facade; commands: resolved executables;
+// session: runner/session.js Session; runner: runner/session-runner.js; commands: resolved executables;
 // emit(event, payload): send to every browser of this session.
 function createSessionSnapshot({session, runner, commands, emit}) {
   const {createNode, tempFile, startupDirectory, hostConfiguration, setNodeHostname, removeHostnameAlias,
