@@ -13,7 +13,7 @@ const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client'
 const root = path.resolve(__dirname, '../..');
 const supported = ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt'];
 const profiles = [(process.env.CHECK_HOST_PROFILE || '').trim()];
-const engine = process.env.STARTUP_MEDIA_ENGINE || 'qemu';
+const engine = 'qemu';
 const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;
 const ids = profiles.map(() => newHostId());
 let child;
@@ -198,29 +198,27 @@ async function run() {
       await request(`/api/nodes/${id}/start`, 'POST', startOptions);
       await verifyBoot(profile, state, first);
       console.log(`${profile}: initial startup disk script, resource and disk marker verified`);
-      if (engine.startsWith('qemu')) {
-        await request(`/api/nodes/${id}/guest-media`, 'PUT', second.files);
-        const beforeReboot = state.resetCount;
-        await request(`/api/nodes/${id}/reboot`, 'POST');
-        await waitFor(`${profile} reboot serial reset`, () => state.resetCount > beforeReboot);
-        await verifyBoot(profile, state, second);
-        assert.ok(!state.serial.includes(first.resourceMarker), `${profile} reboot retained the old resource.`);
-        console.log(`${profile}: edited startup disk script and resource verified after Reboot`);
+      await request(`/api/nodes/${id}/guest-media`, 'PUT', second.files);
+      const beforeReboot = state.resetCount;
+      await request(`/api/nodes/${id}/reboot`, 'POST');
+      await waitFor(`${profile} reboot serial reset`, () => state.resetCount > beforeReboot);
+      await verifyBoot(profile, state, second);
+      assert.ok(!state.serial.includes(first.resourceMarker), `${profile} reboot retained the old resource.`);
+      console.log(`${profile}: edited startup disk script and resource verified after Reboot`);
 
-        await request(`/api/nodes/${id}/stop`, 'POST');
-        const stopped = (await request('/api/nodes')).find(session => session.id === id);
-        assert.ok(stopped && !stopped.running && stopped.hasDifferentialDisk, `${profile} Stop lost its differential disk.`);
-        const beforeResume = state.resetCount;
-        await request(`/api/nodes/${id}/start`, 'POST', startOptions);
-        await waitFor(`${profile} resume serial reset`, () => state.resetCount > beforeResume);
-        await verifyBoot(profile, state, second);
-        console.log(`${profile}: Stop/Resume kept the disk marker and the edited startup disk`);
-      }
+      await request(`/api/nodes/${id}/stop`, 'POST');
+      const stopped = (await request('/api/nodes')).find(session => session.id === id);
+      assert.ok(stopped && !stopped.running && stopped.hasDifferentialDisk, `${profile} Stop lost its differential disk.`);
+      const beforeResume = state.resetCount;
+      await request(`/api/nodes/${id}/start`, 'POST', startOptions);
+      await waitFor(`${profile} resume serial reset`, () => state.resetCount > beforeResume);
+      await verifyBoot(profile, state, second);
+      console.log(`${profile}: Stop/Resume kept the disk marker and the edited startup disk`);
     } finally { state.socket.disconnect(); }
     await request(`/api/nodes/${id}`, 'DELETE');
   }
-  if (profiles.includes('openwrt') && engine.startsWith('qemu')) await verifyConcurrentIsolation();
-  if (profiles.includes('openwrt') && engine === 'qemu') {
+  if (profiles.includes('openwrt')) await verifyConcurrentIsolation();
+  if (profiles.includes('openwrt')) {
     const missingCases = [
       {suffix: 'script', script: '', attach: true, error: 'QEMUWEB_START_ERROR /mnt/cdrom/start.sh missing'},
       {suffix: 'media', script: '#!/bin/sh\n', attach: false, error: 'QEMUWEB_START_ERROR ISO label QWEBSTART missing'}
