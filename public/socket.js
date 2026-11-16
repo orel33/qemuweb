@@ -15,9 +15,10 @@ export function emitOnSession(event, ...args) {
   else args.find(arg => typeof arg === 'function')?.({error: 'Not connected to the server.'});
 }
 
-// The page tells the other side what it shows: the active node, the view (Terminals or Graphic)
-// and the console layout (panes, switch consoles, page, pane shown alone). The panes' nodes
-// follow from these and the node list, so they are not sent. One rule decides who drives:
+// The page tells the other side what it shows: the active node, the view (Terminals or Graphic),
+// the console layout, the node of each visible pane (as assigned, also by the pane node menu,
+// which the other side's node order cannot reproduce), switch consoles, page and the pane
+// shown alone. One rule decides who drives:
 //   - the owner's page publishes owner-view (followed by observers), except while an
 //     administrator controls one of its consoles;
 //   - an observer's page publishes controller-view (followed by the owner's page) only while it
@@ -30,7 +31,7 @@ export function publishOwnerView({force = false} = {}) {
   const event = observing ? (holdingControl() ? 'controller-view' : null) : (controlledByAdmin() ? null : 'owner-view');
   if (!event) return;
   const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout,
-    switches: store.showSwitchConsoles, page: store.pageIndex, expanded: store.expandedPaneIndex};
+    panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null), switches: store.showSwitchConsoles, page: store.pageIndex, expanded: store.expandedPaneIndex};
   const key = `${event} ${JSON.stringify(view)}`;
   if (!force && key === publishedView) return;
   publishedView = key;

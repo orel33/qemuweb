@@ -259,16 +259,18 @@ function initLayoutMenu() {
   window.addEventListener('resize', () => closeLayoutMenu());
 }
 
-// An observer following the owner: the owner's console layout and active node, not saved in
-// this browser's view settings.
-export function showOwnerLayout({layout, switches, page, expanded, nodeId}) {
+// A page following the other side (observer, or owner under control): its console layout,
+// the node of each pane as assigned there and its active node, not saved in this browser's
+// view settings. Only the panes whose node changes attach their console.
+export function showOwnerLayout({layout, panes: ids, switches, page, expanded, nodeId}) {
   closeLayoutMenu();
   store.layout = layout;
   store.showSwitchConsoles = switches;
   updateSwitchConsoleToggle();
   store.pageIndex = page;
   store.expandedPaneIndex = expanded;
-  showPage(nodeId, true);
+  const assigned = ids.map(id => (id && machines.has(id) ? id : null));
+  setPaneSessions(assigned, Math.max(0, assigned.indexOf(nodeId)), true);
 }
 
 export function togglePaneExpansion(pane) {

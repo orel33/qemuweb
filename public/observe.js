@@ -128,13 +128,14 @@ let taking = false;
 const following = () => observing && !heldByMe() && !taking && document.getElementById('observe-follow').checked;
 
 // Shows a published view (owner-view or controller-view) without saving it in this browser's
-// view settings. mayRefresh: a node unknown here (created meanwhile) triggers one refresh of
-// the node list, which calls refollow() when it is done.
+// view settings.
 function showView(view, mayRefresh) {
   const graphic = view.mode === 'graphic';
   if (graphic !== store.graphicVisible) setGraphicView(graphic, false);
-  if (view.nodeId && !machines.has(view.nodeId)) {
-    if (mayRefresh) syncSessionsFromServer();
+  // A node not known here yet (created meanwhile): refresh the node list first, which applies
+  // the view again (refollow); a node still unknown after that leaves its pane empty.
+  if (mayRefresh && [view.nodeId, ...view.panes].some(id => id && !machines.has(id))) {
+    syncSessionsFromServer();
     return;
   }
   showOwnerLayout(view);

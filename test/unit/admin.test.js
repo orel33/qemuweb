@@ -332,15 +332,21 @@ test('the login routes write login, login-failed and logout to users.log, never 
 });
 
 test('an owner view is validated: known fields and ranges only, unknown nodes become null', () => {
-  const session = {nodes: new Map([['s-0123456789abcdef', {}]])};
-  const view = {nodeId: 's-0123456789abcdef', mode: 'graphic', layout: 'grid-4', switches: false, page: 2, expanded: 3};
+  const sw = 's-0123456789abcdef', host = 'h-0123456789abcdef';
+  const session = {nodes: new Map([[sw, {}], [host, {}]])};
+  const view = {nodeId: sw, mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], switches: false, page: 2, expanded: 3};
   assert.deepEqual(ownerViewOf({...view, extra: 1}, session), view);
+  assert.deepEqual(ownerViewOf({...view, panes: ['h-0000000000000000', sw, sw, host]}, session).panes, [null, sw, null, host],
+    'unknown pane nodes become null, a node is kept once');
   assert.equal(ownerViewOf({...view, nodeId: 'h-0000000000000000'}, session).nodeId, null);
   assert.equal(ownerViewOf({...view, expanded: null}, session).expanded, null);
-  for (const layout of ['single', 'columns-2', 'rows-2']) assert.equal(ownerViewOf({...view, layout, expanded: 0}, session).layout, layout);
+  for (const [layout, panes] of [['single', [sw]], ['columns-2', [sw, host]], ['rows-2', [null, null]]]) {
+    assert.equal(ownerViewOf({...view, layout, panes, expanded: 0}, session).layout, layout);
+  }
   for (const invalid of [null, 'x', {...view, mode: 'list'}, {...view, layout: 4}, {...view, layout: 'grid-9'}, {...view, layout: 'toString'},
     {...view, switches: 1}, {...view, page: 1.5}, {...view, page: 1000}, {...view, expanded: 4}, {...view, layout: 'rows-2', expanded: 2},
-    {...view, layout: 'single', expanded: 1}, {...view, expanded: undefined}]) {
+    {...view, layout: 'single', expanded: 1}, {...view, expanded: undefined}, {...view, panes: undefined}, {...view, panes: [sw]},
+    {...view, layout: 'columns-2', expanded: 0}, {...view, panes: [sw, null, null, 7]}, {...view, panes: 'sw'}]) {
     assert.equal(ownerViewOf(invalid, session), null, JSON.stringify(invalid));
   }
 });

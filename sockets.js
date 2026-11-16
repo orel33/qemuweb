@@ -54,16 +54,21 @@ function createObservationTracker(audit) {
 const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
 
 // What the owner's page shows, from an owner-view event: its active node (a node of the session,
-// else null), the view (terminals or graphic), the console layout (LAYOUT_PANES), whether
-// switch consoles are shown, the console page, and the pane shown alone (or null). Unknown
-// fields are dropped; returns null for an invalid view.
+// else null), the view (terminals or graphic), the console layout (LAYOUT_PANES), the node of
+// each pane of that layout (`panes`: a node of the session, else null; a node appears once),
+// whether switch consoles are shown, the console page (its page indicator and paging), and the
+// pane shown alone (or null). Unknown fields are dropped; returns null for an invalid view.
 function ownerViewOf(view, session) {
   if (!view || typeof view !== 'object' || !['terminals', 'graphic'].includes(view.mode)) return null;
   if (typeof view.layout !== 'string' || !Object.hasOwn(LAYOUT_PANES, view.layout) || typeof view.switches !== 'boolean') return null;
   if (!Number.isInteger(view.page) || view.page < 0 || view.page > 999) return null;
   if (view.expanded !== null && !(Number.isInteger(view.expanded) && view.expanded >= 0 && view.expanded < LAYOUT_PANES[view.layout])) return null;
-  const nodeId = typeof view.nodeId === 'string' && session.nodes.has(view.nodeId) ? view.nodeId : null;
-  return {nodeId, mode: view.mode, layout: view.layout, switches: view.switches, page: view.page, expanded: view.expanded};
+  if (!Array.isArray(view.panes) || view.panes.length !== LAYOUT_PANES[view.layout]) return null;
+  if (view.panes.some(id => id !== null && typeof id !== 'string')) return null;
+  const known = id => (typeof id === 'string' && session.nodes.has(id) ? id : null);
+  const panes = view.panes.map(known).map((id, index, ids) => (id && ids.indexOf(id) === index ? id : null));
+  return {nodeId: known(view.nodeId), mode: view.mode, layout: view.layout, panes, switches: view.switches, page: view.page,
+    expanded: view.expanded};
 }
 
 // Forwards the events of one session's runner to that session's browsers only.
