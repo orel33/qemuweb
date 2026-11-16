@@ -6,7 +6,7 @@ const publicDir = path.join(__dirname, '..', '..', 'public');
 
 // ES modules of the Web UI, in the order app.js initializes them.
 const modules = ['app', 'account', 'state', 'api', 'terminal', 'startup-media', 'general-settings', 'topology', 'workspace',
-  'nodes', 'archive', 'node-dialogs', 'host-settings', 'socket'];
+  'nodes', 'archive', 'node-dialogs', 'host-settings', 'socket', 'observe'];
 
 function read(file) {
   return fs.readFileSync(path.join(publicDir, file), 'utf8');
