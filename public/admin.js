@@ -1,6 +1,6 @@
 // Supervision page (/admin, administrators only): every session with its metrics, refreshed
-// every few seconds, the actions on sessions (observe, stop all, delete, bulk cleanup) and
-// account management. Every change goes through /api/admin/*, which checks the role and
+// every few seconds, the actions on sessions (observe, stop all, delete, bulk cleanup),
+// account management, and the last entries of admin.log and users.log. Every change goes through /api/admin/*, which checks the role and
 // writes logs/admin.log.
 const POLL_MS = 4000;
 const $ = id => document.getElementById(id);
@@ -196,6 +196,40 @@ async function refreshAccounts({polling = false} = {}) {
   catch (error) { showError('accounts-error', error); }
 }
 
+// One line per log entry: time, who, what, target, result.
+function formatLogEntry(entry) {
+  const target = entry.target && typeof entry.target === 'object'
+    ? Object.entries(entry.target).map(([key, value]) => `${key}=${Array.isArray(value) ? value.join(',') : value}`).join(' ') : '';
+  const time = Number.isFinite(Date.parse(entry.time)) ? new Date(entry.time).toLocaleString() : String(entry.time);
+  return [time, entry.admin ?? entry.user ?? '', entry.action ?? entry.event ?? '', target, entry.result ?? ''].join('  ').trimEnd();
+}
+
+let logName = 'admin';
+// The poll leaves the panel alone while the admin selects text in it or scrolls up.
+async function refreshLog({polling = false} = {}) {
+  const view = $('log-view');
+  const selection = document.getSelection();
+  const reading = view.scrollTop + view.clientHeight < view.scrollHeight - 4
+    || (selection && !selection.isCollapsed && view.contains(selection.anchorNode));
+  if (polling && reading) return;
+  const name = logName;
+  try {
+    const {entries} = await api(`/logs/${name}?lines=200`);
+    if (name !== logName) return;
+    view.textContent = entries.length ? entries.map(formatLogEntry).join('\n') : `${name === 'admin' ? 'admin.log' : 'users.log'} is empty.`;
+    view.scrollTop = view.scrollHeight;
+    $('log-status').textContent = `Last ${entries.length} entries`;
+  } catch (error) { $('log-status').textContent = `Not updated: ${error.message}`; }
+}
+
+function selectLog(name) {
+  logName = name;
+  for (const tab of document.querySelectorAll('.admin-log-tabs [data-log]')) tab.setAttribute('aria-selected', String(tab.dataset.log === name));
+  $('log-download').href = `/api/admin/logs/${name}/download`;
+  $('log-view').textContent = '';
+  refreshLog();
+}
+
 let passwordLogin = null;
 function resetPassword(login) {
   passwordLogin = login;
@@ -258,8 +292,10 @@ function init() {
       $('password-dialog').close();
     } catch (error) { showError('password-error', error); }
   });
+  for (const tab of document.querySelectorAll('.admin-log-tabs [data-log]')) tab.addEventListener('click', () => selectLog(tab.dataset.log));
   refreshSessions();
-  setInterval(() => { refreshSessions(); refreshAccounts({polling: true}); }, POLL_MS);
+  refreshLog();
+  setInterval(() => { refreshSessions(); refreshAccounts({polling: true}); refreshLog({polling: true}); }, POLL_MS);
 }
 
 init();

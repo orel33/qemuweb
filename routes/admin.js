@@ -8,6 +8,7 @@
 // session list is not.
 const path = require('path');
 const express = require('express');
+const {LOG_NAMES, readLogTail} = require('../lib/audit');
 const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled, removeAccount} = require('../lib/auth/users-store');
 
 // Summary of one session for the supervision table.
@@ -63,8 +64,8 @@ function adminPage(root) {
 }
 
 // disconnectUser(login) closes the user's Socket.IO connections, browsers(login) counts the
-// user's connected browser tabs (sockets.js).
-function createAdminRouter({manager, auth, audit, disconnectUser, browsers}) {
+// user's connected browser tabs (sockets.js); logDir holds admin.log and users.log.
+function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir}) {
   const router = express.Router();
   const usersFile = auth.usersFile;
   router.use(auth.requireAdmin);
@@ -190,6 +191,25 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers}) {
       const sessionDeleted = await manager.remove(login, req.user.login);
       return {login, removed: true, sessionDeleted};
     }, accountErrorStatus);
+  });
+
+  // The last entries of admin.log or users.log (read from the end of the file), and the raw
+  // file. Reading the logs is not audited: the /admin page polls them.
+  const logFile = name => (Object.hasOwn(LOG_NAMES, name) ? path.join(logDir, LOG_NAMES[name]) : null);
+  router.get('/logs/:name', (req, res) => {
+    const file = logFile(req.params.name);
+    if (!file) return res.status(404).json({error: 'Unknown log.'});
+    const lines = req.query.lines === undefined ? 200 : Number(req.query.lines);
+    if (!Number.isInteger(lines) || lines < 1 || lines > 1000) return res.status(400).json({error: 'lines must be between 1 and 1000.'});
+    try { res.json({name: req.params.name, entries: readLogTail(file, lines)}); }
+    catch (error) { res.status(500).json({error: `Cannot read the log: ${error.message}`}); }
+  });
+  router.get('/logs/:name/download', (req, res) => {
+    const file = logFile(req.params.name);
+    if (!file) return res.status(404).json({error: 'Unknown log.'});
+    res.download(file, LOG_NAMES[req.params.name], error => {
+      if (error && !res.headersSent) res.status(error.code === 'ENOENT' ? 404 : 500).json({error: error.code === 'ENOENT' ? 'The log is empty.' : error.message});
+    });
   });
 
   router.use((_req, res) => res.status(404).json({error: 'Unknown administration route.'}));

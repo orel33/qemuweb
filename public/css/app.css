@@ -358,3 +358,8 @@ body.observing [data-view="monitor"] { display: none !important; }
 .observe-notice[hidden] { display: none; }
 body[data-observe-unavailable="true"] #console-workspace, body[data-observe-unavailable="true"] #graphic-workspace,
 body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailable="true"] .control-banner { display: none !important; }
+/* Log panel of /admin: last entries of admin.log or users.log, newest at the bottom. */
+.admin-log-tabs { display: inline-flex; gap: 4px; }
+.admin-log-tabs button { padding: 4px 10px; font-size: 13px; }
+.admin-log-tabs button[aria-selected="true"] { background: #355177; border-color: #70a8ff; }
+.admin-log-view { height: 260px; margin: 0; padding: 8px 10px; overflow: auto; color: #cfd9e4; background: #0b0f14; border: 1px solid #2c3743; border-radius: 6px; font: 12px/1.45 var(--console-font-family); white-space: pre; }

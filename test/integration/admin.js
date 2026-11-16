@@ -102,7 +102,7 @@ async function run() {
   // (1) Every route under /api/admin answers 403 to a student, even an invented one.
   const adminRoutes = [['GET', '/sessions'], ['GET', '/sessions/inactive?hours=1'], ['POST', '/sessions/delete', {logins: ['bob']}],
     ['POST', '/sessions/bob/stop'], ['DELETE', '/sessions/bob'], ['GET', '/users'], ['POST', '/users', {login: 'x', password: 'x'}],
-    ['POST', '/users/bob/password', {password: 'x'}], ['PATCH', '/users/bob', {disabled: true}], ['GET', '/invented/path'],
+    ['POST', '/users/bob/password', {password: 'x'}], ['PATCH', '/users/bob', {disabled: true}], ['GET', '/invented/path'], ['GET', '/logs/admin'], ['GET', '/logs/users/download'], ['DELETE', '/users/bob'],
     ['DELETE', '/invented']];
   for (const [method, route, body] of adminRoutes) await expectStatus(alice, `/api/admin${route}`, method, 403, {body});
   await expectStatus(alice, '/admin', 'GET', 403);
@@ -293,6 +293,17 @@ async function run() {
   await expectStatus(dave, '/api/nodes', 'GET', 401);
   console.log('Admin: accounts created, reset, disabled and removed; such an account loses cookie and sockets');
 
+  // The log panel API: tail of admin.log and users.log, raw download; reading is not audited.
+  const adminTail = await boss.request('/api/admin/logs/admin?lines=3');
+  assert.equal(adminTail.entries.length, 3);
+  assert.ok(adminTail.entries.every(entry => entry.admin === 'boss' && entry.action));
+  assert.ok((await boss.request('/api/admin/logs/users')).entries.some(entry => entry.event === 'login'));
+  await expectStatus(boss, '/api/admin/logs/other', 'GET', 404);
+  await expectStatus(boss, '/api/admin/logs/admin?lines=0', 'GET', 400);
+  const download = await expectStatus(boss, '/api/admin/logs/admin/download', 'GET', 200);
+  assert.match(download.headers.get('content-disposition') || '', /attachment; filename="admin\.log"/);
+  assert.ok((await download.text()).includes('"action":"remove-account"'));
+
   // (7) The admin log: one line per action, never a password or typed text.
   const text = fs.readFileSync(auditFile, 'utf8');
   assert.equal(fs.statSync(logDir).mode & 0o777, 0o700);
@@ -313,6 +324,7 @@ async function run() {
   assert.equal(count('remove-account'), 2, 'erin, then the unknown login');
   assert.ok(lines.every(line => line.admin === 'boss' && Date.parse(line.time) && line.result), JSON.stringify(lines));
   assert.ok(!actions.includes('list'), 'the session list is not audited');
+  assert.ok(!actions.some(action => /log/.test(action)), 'reading the logs is not audited');
   for (const secret of [...testUsers.users.map(user => user.password), 'first-password', 'second-password', 'adminmarker', 'observermarker', 'password":']) {
     assert.ok(!text.includes(secret), `admin.log contains ${secret}`);
   }
