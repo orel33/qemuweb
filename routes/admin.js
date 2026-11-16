@@ -8,7 +8,7 @@
 // session list is not.
 const path = require('path');
 const express = require('express');
-const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled} = require('../lib/auth/users-store');
+const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled, removeAccount} = require('../lib/auth/users-store');
 
 // Summary of one session for the supervision table.
 // browsers: the owner's connected browser tabs (sockets.js).
@@ -95,7 +95,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers}) {
     for (const login of logins) {
       if (login === adminLogin) { failed.push({login, error: 'Your own session is excluded.'}); continue; }
       try {
-        if (await manager.remove(login)) deleted.push(login);
+        if (await manager.remove(login, adminLogin)) deleted.push(login);
         else failed.push({login, error: 'No session.'});
       } catch (error) { failed.push({login, error: error.message}); }
     }
@@ -143,7 +143,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers}) {
     const {login} = req.params;
     audited(req, res, 'delete-session', {login}, async () => {
       workspaceOf(login);
-      return {deleted: await manager.remove(login)};
+      return {deleted: await manager.remove(login, req.user.login)};
     }, () => 409);
   });
 
@@ -175,6 +175,20 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers}) {
       // Open sockets were authorized with the previous state: close them.
       disconnectUser(login);
       return user;
+    }, accountErrorStatus);
+  });
+
+  // Removes the account from users.json (its cookies are refused from the next request on),
+  // closes its sockets, then deletes its session if it has one. Not for your own account.
+  router.delete('/users/:login', (req, res) => {
+    const {login} = req.params;
+    if (login === req.user.login) return res.status(403).json({error: 'You cannot remove your own account.'});
+    const target = {login, session: !!manager.get(login)};
+    audited(req, res, 'remove-account', target, async () => {
+      removeAccount(usersFile, login);
+      disconnectUser(login);
+      const sessionDeleted = await manager.remove(login, req.user.login);
+      return {login, removed: true, sessionDeleted};
     }, accountErrorStatus);
   });
 

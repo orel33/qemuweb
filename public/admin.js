@@ -173,7 +173,13 @@ function renderAccounts(users) {
       () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'PATCH', body: {disabled: !user.disabled}})),
     user.disabled ? 'Allow this account to log in again' : 'Refuse its logins and cookies at once; its session is kept');
     toggle.disabled = own;
-    actions.append(toggle);
+    const remove = button('Remove', async () => {
+      const message = `Remove the account ${user.login}? It can no longer log in, its open pages are logged out at once, and its session, if any, is deleted with every host, switch and disk.`;
+      if (!await confirmDialog('Remove account', message, [], 'Remove')) return;
+      runAction('accounts-error', () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'DELETE'}));
+    }, 'Remove this account from users.json and delete its session');
+    remove.disabled = own;
+    actions.append(toggle, remove);
     const name = document.createElement('span');
     name.textContent = `${user.login}${own ? ' (you)' : ''}`;
     name.append(presence(user.browsers));
@@ -227,13 +233,21 @@ function init() {
       await deleteSessions(logins);
     } catch (error) { showError('sessions-error', error); }
   });
-  $('create-account').addEventListener('submit', event => {
+  $('show-create-account').addEventListener('click', () => {
+    $('create-account').reset();
+    showError('create-account-error', null);
+    $('create-account-dialog').showModal();
+  });
+  $('create-account-cancel').addEventListener('click', () => $('create-account-dialog').close());
+  $('create-account').addEventListener('submit', async event => {
     event.preventDefault();
     const login = $('new-login').value.trim();
-    runAction('accounts-error', async () => {
+    try {
       await api('/users', {method: 'POST', body: {login, password: $('new-password').value, role: $('new-role').value}});
       $('create-account').reset();
-    });
+      $('create-account-dialog').close();
+      await refreshAccounts();
+    } catch (error) { showError('create-account-error', error); }
   });
   $('password-cancel').addEventListener('click', () => $('password-dialog').close());
   $('password-form').addEventListener('submit', async event => {

@@ -4,7 +4,8 @@
 //   add <login> [--role student|admin]   create an account
 //   passwd <login>                       change a password
 //   role <login> student|admin           change a role
-//   remove <login>                       delete an account (its running session is kept until deleted)
+//   remove <login>                       delete an account; a live server keeps its session (and its
+//                                        machines) until deleted from /admin or the server restarts
 //   disable <login>                      refuse the account's logins and cookies (its session is kept)
 //   enable <login>                       allow a disabled account again
 //   list                                 print logins, roles and disabled accounts
@@ -22,7 +23,7 @@ const USAGE = `Usage: scripts/user.sh <command>
   add <login> [--role student|admin]
   passwd <login>
   role <login> student|admin
-  remove <login>
+  remove <login>             a live server keeps its session; delete it from /admin
   disable <login>
   enable <login>
   list

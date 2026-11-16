@@ -41,12 +41,7 @@
     </section>
     <section aria-labelledby="accounts-title">
       <div class="admin-section-head"><h2 id="accounts-title">Accounts</h2></div>
-      <form id="create-account" class="admin-inline-form">
-        <label>Login <input id="new-login" required maxlength="64" autocomplete="off" spellcheck="false"></label>
-        <label>Password <input id="new-password" type="password" required maxlength="1024" autocomplete="new-password"></label>
-        <label>Role <select id="new-role"><option value="student">student</option><option value="admin">admin</option></select></label>
-        <button type="submit">Create account</button>
-      </form>
+      <div class="admin-toolbar"><button id="show-create-account" type="button">Create account</button></div>
       <p class="admin-error" id="accounts-error" role="alert" hidden></p>
       <div class="admin-table-wrap">
         <table class="admin-table">
@@ -64,6 +59,18 @@
         <ul id="admin-confirm-list" class="admin-confirm-list"></ul>
       </div>
       <div class="create-actions"><button value="cancel" type="submit">Cancel</button><button id="admin-confirm-accept" value="accept" type="submit">OK</button></div>
+    </form>
+  </dialog>
+  <dialog class="qemu-options create-dialog" id="create-account-dialog" aria-labelledby="create-account-title">
+    <form id="create-account">
+      <div class="settings-heading"><h2 id="create-account-title">Create account</h2></div>
+      <div class="create-fields">
+        <label class="create-field">Login<input id="new-login" required maxlength="64" autocomplete="off" spellcheck="false"></label>
+        <label class="create-field">Password<input id="new-password" type="password" required maxlength="1024" autocomplete="new-password"></label>
+        <label class="create-field">Role<select id="new-role"><option value="student">student</option><option value="admin">admin</option></select></label>
+      </div>
+      <p class="admin-error" id="create-account-error" role="alert" hidden></p>
+      <div class="create-actions"><button id="create-account-cancel" type="button">Cancel</button><button type="submit">Create</button></div>
     </form>
   </dialog>
   <dialog class="qemu-options create-dialog" id="password-dialog" aria-labelledby="password-title">

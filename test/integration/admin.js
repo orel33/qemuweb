@@ -248,7 +248,23 @@ async function run() {
   await new QemuWebClient(baseUrl).signIn('erin', 'first-password');
   await boss.request('/api/admin/users/erin/password', {method: 'POST', body: {password: 'second-password'}});
   await expectStatus(new QemuWebClient(baseUrl), '/auth/login', 'POST', 401, {body: {login: 'erin', password: 'first-password'}});
-  await new QemuWebClient(baseUrl).signIn('erin', 'second-password');
+  const erin = await new QemuWebClient(baseUrl).signIn('erin', 'second-password');
+  const erinSettings = await erin.request('/api/general-settings');
+  const erinSwitch = newId('switch');
+  await erin.request('/api/switches', {method: 'POST', body: {id: erinSwitch, name: 'erinsw', autostart: true}});
+  const erinSocket = recorder(erin, 'erin', {auth: {main: true}});
+  await erinSocket.connected;
+  // Removing an account: gone from users.json, cookie and sockets refused at once, session deleted.
+  await expectStatus(boss, '/api/admin/users/boss', 'DELETE', 403);
+  await expectStatus(boss, '/api/admin/users/nobody', 'DELETE', 404);
+  assert.deepEqual(await boss.request('/api/admin/users/erin', {method: 'DELETE'}), {login: 'erin', removed: true, sessionDeleted: true});
+  await waitFor('erin\'s socket closed', () => erinSocket.events.some(item => item.event === 'disconnect'));
+  await expectStatus(erin, '/api/nodes', 'GET', 401);
+  await expectStatus(new QemuWebClient(baseUrl), '/auth/login', 'POST', 401, {body: {login: 'erin', password: 'second-password'}});
+  assert.ok(!(await boss.request('/api/admin/users')).some(user => user.login === 'erin'));
+  assert.ok(!(await boss.request('/api/admin/sessions')).some(session => session.login === 'erin'));
+  assert.equal(fs.existsSync(path.join(root, 'runtime', 'sessions', erinSettings.sessionId)), false);
+  await waitFor('erin\'s processes to exit', () => sessionProcesses(erinSettings.sessionId).length === 0, 5000);
   await expectStatus(boss, '/api/admin/users/boss', 'PATCH', 403, {body: {disabled: true}});
   await expectStatus(boss, '/api/admin/users/boss', 'PATCH', 403, {body: {role: 'student'}});
 
@@ -275,7 +291,7 @@ async function run() {
   assert.ok(daveSocket.events.some(item => item.event === 'node-error' && /no longer allowed/.test(item.payload)));
   assert.ok(!daveSocket.events.some(item => item.event === 'node-snapshot'), 'a disabled account read a console');
   await expectStatus(dave, '/api/nodes', 'GET', 401);
-  console.log('Admin: accounts created, reset and disabled; a disabled account loses cookie and sockets');
+  console.log('Admin: accounts created, reset, disabled and removed; such an account loses cookie and sockets');
 
   // (7) The admin log: one line per action, never a password or typed text.
   const text = fs.readFileSync(auditFile, 'utf8');
@@ -293,6 +309,8 @@ async function run() {
   assert.equal(count('reset-password'), 1);
   assert.equal(count('disable-account'), 1);
   assert.equal(count('enable-account'), 1);
+  assert.equal(count('remove-account', target => target.login === 'erin' && target.session === true), 1);
+  assert.equal(count('remove-account'), 2, 'erin, then the unknown login');
   assert.ok(lines.every(line => line.admin === 'boss' && Date.parse(line.time) && line.result), JSON.stringify(lines));
   assert.ok(!actions.includes('list'), 'the session list is not audited');
   for (const secret of [...testUsers.users.map(user => user.password), 'first-password', 'second-password', 'adminmarker', 'observermarker', 'password":']) {
