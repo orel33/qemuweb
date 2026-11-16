@@ -339,15 +339,19 @@ body.observing [data-view="monitor"] { display: none !important; }
 .admin-table tr[data-disabled="true"] td { color: #8a96a3; }
 .admin-own { color: #9ee6b4; }
 .admin-actions { display: flex; gap: 6px; align-items: center; }
-.admin-actions button, .admin-actions select, .admin-table select { padding: 4px 9px; }
+.admin-actions select, .admin-table select { padding: 4px 9px; }
 /* Open and Observe are links (a middle click opens a new observation tab) shaped like the buttons. */
-.admin-actions button, .admin-actions .admin-button { font: inherit; font-size: 13px; line-height: 1.2; }
+.admin-actions .admin-button { font: inherit; font-size: 13px; line-height: 1.2; }
 .admin-actions .admin-button { display: inline-block; padding: 4px 9px; color: inherit; text-decoration: none; background: #243244; border: 1px solid #506176; border-radius: 6px; }
 .admin-actions .admin-button:hover, .admin-actions .admin-button:focus-visible { background: #304256; }
-.admin-actions .admin-icon { width: 32px; height: 32px; padding: 6px; }
-.admin-actions .admin-icon svg { width: 18px; height: 18px; }
-.admin-actions a.admin-icon { color: #8ec5ff; }
-.admin-actions .admin-icon[data-tone="danger"] { color: #ff777d; }
+/* /admin action colours, from the palette of the header icon buttons; the .icon-button look
+   (40x38, 22px icon, border in currentColor on hover) is unchanged. */
+.act-blue { color: #8ec5ff; } .act-green { color: #9ee6b4; } .act-amber { color: #f2c46d; } .act-red { color: #ff777d; }
+/* Toolbar buttons with an icon and a text, in the same style as the icon buttons. */
+.admin-tool { display: inline-flex; align-items: center; gap: 7px; height: 38px; padding: 7px 12px; border-color: #405166; background: #202c3a; transition: background .15s, border-color .15s, transform .15s; }
+.admin-tool svg { width: 20px; height: 20px; flex: none; }
+.admin-tool:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
+.admin-tool:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .presence { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; color: #8fa2b8; font-size: 12px; }
 .presence[data-online="true"] { color: #9ee6b4; }
 .presence[data-online="true"]::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #3fcf72; }

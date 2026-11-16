@@ -44,16 +44,17 @@ const ICONS = {
   userCheck: `${USER}<polyline points="16 11 18 13 22 9"/>`,
   userMinus: `${USER}<line x1="22" x2="16" y1="11" y2="11"/>`
 };
+// One colour per action (CSS .act-*), from the palette of the UI's icon buttons.
+const ICON_COLOURS = {eye: 'act-blue', square: 'act-amber', trash2: 'act-red', keyRound: 'act-blue', userX: 'act-amber', userCheck: 'act-green', userMinus: 'act-red'};
 const iconSvg = name => `<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${ICONS[name]}</svg>`;
 
 // A square icon button (or link, for Observe: a middle click opens a new tab) of a table row.
 function iconAction(tag, icon, label, title = label) {
   const element = document.createElement(tag);
-  element.className = 'icon-button admin-icon';
+  element.className = `icon-button ${ICON_COLOURS[icon]}`;
   element.innerHTML = iconSvg(icon);
   element.setAttribute('aria-label', label);
   element.title = title;
-  if (['trash2', 'userMinus'].includes(icon)) element.dataset.tone = 'danger';
   if (tag === 'button') element.type = 'button';
   return element;
 }
@@ -185,7 +186,7 @@ function renderSessions(sessions) {
 
 function updateSelection() {
   $('delete-selected').disabled = !selected.size;
-  $('delete-selected').textContent = selected.size ? `Delete selected (${selected.size})` : 'Delete selected';
+  $('delete-selected-label').textContent = selected.size ? `Delete selected (${selected.size})` : 'Delete selected';
   const boxes = [...$('sessions-body').querySelectorAll('input[type=checkbox]:not(:disabled)')];
   $('select-all').checked = boxes.length > 0 && boxes.every(box => box.checked);
 }
