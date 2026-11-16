@@ -332,10 +332,7 @@ body.observing [data-view="monitor"] { display: none !important; }
 .admin-section-head { display: flex; align-items: baseline; gap: 14px; }
 .admin-section-head h2 { margin: 0 0 10px; font-size: 17px; }
 .admin-updated { color: #8fa2b8; font-size: 13px; }
-.admin-toolbar, .admin-inline-form { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
-.admin-inline-form label { display: inline-flex; align-items: center; gap: 6px; }
-.admin-inline-form input { padding: 7px 9px; color: inherit; background: #101720; border: 1px solid #506176; border-radius: 6px; }
-#inactive-hours { width: 80px; }
+.admin-toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 10px; }
 .admin-table-wrap { overflow-x: auto; }
 .admin-table { width: 100%; border-collapse: collapse; font-size: 14px; }
 .admin-table th, .admin-table td { padding: 7px 9px; text-align: left; white-space: nowrap; border-bottom: 1px solid #2c3743; }

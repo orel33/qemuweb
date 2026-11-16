@@ -100,7 +100,7 @@ async function run() {
   const bob = await signIn('bob');
 
   // (1) Every route under /api/admin answers 403 to a student, even an invented one.
-  const adminRoutes = [['GET', '/sessions'], ['GET', '/sessions/inactive?hours=1'], ['POST', '/sessions/delete', {logins: ['bob']}],
+  const adminRoutes = [['GET', '/sessions'], ['POST', '/sessions/delete', {logins: ['bob']}],
     ['POST', '/sessions/bob/stop'], ['DELETE', '/sessions/bob'], ['GET', '/users'], ['POST', '/users', {login: 'x', password: 'x'}],
     ['POST', '/users/bob/password', {password: 'x'}], ['PATCH', '/users/bob', {disabled: true}], ['GET', '/invented/path'], ['GET', '/logs/admin'], ['GET', '/logs/users/download'], ['DELETE', '/users/bob'],
     ['DELETE', '/invented']];
@@ -249,12 +249,10 @@ async function run() {
   const aliceNodes = await alice.request('/api/nodes');
   assert.equal(aliceNodes.length, 1);
   assert.equal(aliceNodes[0].running, false);
-  const preview = await boss.request('/api/admin/sessions/inactive?hours=0');
-  assert.deepEqual(preview.logins, ['alice', 'bob'], 'the admin\'s own session must be excluded');
   assert.ok(sessionProcesses(bobSettings.sessionId).length > 0, 'bob\'s vde_switch is not running');
   const bobSession = recorder(bob, 'bob session');
   await bobSession.connected;
-  const deleted = await boss.request('/api/admin/sessions/delete', {method: 'POST', body: {logins: preview.logins}});
+  const deleted = await boss.request('/api/admin/sessions/delete', {method: 'POST', body: {logins: ['alice', 'bob']}});
   assert.deepEqual(deleted, {deleted: ['alice', 'bob'], failed: []});
   for (const {sessionId} of [aliceSettings, bobSettings]) {
     assert.equal(fs.existsSync(path.join(root, 'runtime', 'sessions', sessionId)), false, `runtime/sessions/${sessionId} remains`);

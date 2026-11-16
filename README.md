@@ -131,9 +131,9 @@ can:
   control**, when the admin's page closes, or after 10 minutes without input.
 - **Stop all** VMs and switches of a session (nodes kept) or **Delete** it
   (disks included); the student's browsers reload into a new, empty session.
-- Delete several sessions at once (selection, or sessions inactive for a
-  number of hours, confirmed on the listed sessions). The admin's own session
-  is never part of it.
+- Delete several sessions at once (select them, then **Delete selected**,
+  confirmed on the listed sessions). The admin's own session cannot be
+  selected.
 - Manage accounts: **Create account** (login, password, role), reset a
   password, change the role, disable or enable, and **Remove** an account:
   it disappears from `users.json`, its pages are logged out at once and its

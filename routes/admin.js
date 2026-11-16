@@ -108,16 +108,6 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
       .sort((a, b) => a.login.localeCompare(b.login)));
   });
 
-  // Preview of a cleanup: sessions without activity for `hours`, the caller's own excluded.
-  router.get('/sessions/inactive', (req, res) => {
-    const hours = Number(req.query.hours);
-    if (!Number.isFinite(hours) || hours < 0 || hours > 24 * 365) return res.status(400).json({error: 'Give a number of hours between 0 and 8760.'});
-    const limit = Date.now() - hours * 3600 * 1000;
-    const logins = manager.list().filter(({owner, session}) => owner !== req.user.login && Date.parse(session.lastActivityAt) <= limit)
-      .map(workspace => workspace.owner).sort();
-    res.json({hours, logins});
-  });
-
   router.post('/sessions/delete', (req, res) => {
     const logins = req.body?.logins;
     if (!Array.isArray(logins) || !logins.length || logins.length > 1000 || logins.some(login => typeof login !== 'string')) {

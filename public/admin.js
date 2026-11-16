@@ -300,15 +300,6 @@ function init() {
     }
   });
   $('delete-selected').addEventListener('click', () => deleteSessions([...selected].sort()));
-  $('inactive-form').addEventListener('submit', async event => {
-    event.preventDefault();
-    showError('sessions-error', null);
-    try {
-      const {hours, logins} = await api(`/sessions/inactive?hours=${encodeURIComponent($('inactive-hours').value)}`);
-      if (!logins.length) { showError('sessions-error', `No session is inactive for ${hours} hours (your own is never included).`); return; }
-      await deleteSessions(logins);
-    } catch (error) { showError('sessions-error', error); }
-  });
   $('show-create-account').addEventListener('click', () => {
     $('create-account').reset();
     showError('create-account-error', null);
