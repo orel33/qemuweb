@@ -125,8 +125,9 @@ Check the result:
 - Cross-site request checks (`Origin`/CSRF) and a revocable logout come with
   milestone 6; until then, keep QemuWeb on its own domain name (see above).
 - Log out only clears the cookie in the browser: a copied cookie stays valid
-  until it expires (`QEMUWEB_SESSION_HOURS`). Removing the account or deleting
-  `runtime/auth-secret` (which logs everybody out) revokes it.
+  until it expires (`QEMUWEB_SESSION_HOURS`). Removing the account, or restarting
+  the server (every start draws a new cookie signing key, which logs everybody out),
+  revokes it.
 - A user removed with `scripts/user.sh remove` can no longer log in, but their
   running session stays on the server until it is deleted or the server
   restarts. Adding the same login again while the server is running gives that

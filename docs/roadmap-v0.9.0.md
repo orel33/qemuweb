@@ -315,7 +315,7 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 
 | Question | Décision |
 | --- | --- |
-| Redémarrage du serveur | Tout est effacé : VM arrêtées, `runtime/sessions/` vidé |
+| Redémarrage du serveur | Tout est effacé : VM arrêtées, `runtime/sessions/` vidé, utilisateurs déconnectés (nouvelle clé de signature des cookies) |
 | Sessions inactives | Pas d'expiration : ménage manuel par l'admin depuis `/admin` |
 | VirtualBox | Conservé aux jalons 3 à 6, sans jail ni quota cgroup ; QEMU prioritaire |
 | Console admin | Lecture seule, jamais d'écriture |
