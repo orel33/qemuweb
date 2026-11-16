@@ -7,7 +7,7 @@
 // the hidden controls below are a convenience, the server refusal is the protection.
 import {machines, store} from './state.js';
 import {panes} from './terminal.js';
-import {selectMachine, showStatusError} from './workspace.js';
+import {showOwnerLayout, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {setGraphicView} from './topology.js';
 
@@ -94,28 +94,28 @@ export function observationUnavailable(reason = 'no session') {
   document.body.dataset.observeUnavailable = 'true';
 }
 
-// What the owner shows (owner-view {nodeId, mode}: its active node and Terminals or Graphic),
-// followed while Follow is on and the admin does not hold control. With Follow off the admin
-// navigates freely. Only the latest owner view counts.
-const ownerView = {nodeId: null, mode: null};
+// What the owner shows (owner-view: active node, Terminals or Graphic, console layout), followed
+// while Follow is on and the admin does not hold control, never saved in the admin's own view
+// settings. With Follow off the admin navigates freely. Only the latest owner view counts.
+let ownerView = null;
 const following = () => observing && !held && document.getElementById('observe-follow').checked;
 
 // mayRefresh: a node unknown here (created meanwhile) triggers one refresh of the node list,
 // which calls refollow() when it is done.
 function applyOwnerView(mayRefresh) {
-  if (!following() || !ownerView.mode) return;
+  if (!following() || !ownerView) return;
   const graphic = ownerView.mode === 'graphic';
   if (graphic !== store.graphicVisible) setGraphicView(graphic, false);
-  const {nodeId} = ownerView;
-  if (!nodeId || nodeId === store.activeId) return;
-  if (machines.has(nodeId)) selectMachine(nodeId);
-  else if (mayRefresh) syncSessionsFromServer();
+  if (ownerView.nodeId && !machines.has(ownerView.nodeId)) {
+    if (mayRefresh) syncSessionsFromServer();
+    return;
+  }
+  showOwnerLayout(ownerView);
 }
 
 export function followOwnerView(view) {
   if (!observing || !view) return;
-  ownerView.nodeId = view.nodeId || null;
-  ownerView.mode = view.mode;
+  ownerView = view;
   applyOwnerView(true);
 }
 

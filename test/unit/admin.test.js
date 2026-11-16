@@ -16,7 +16,7 @@ const {userEvent} = require('../../routes');
 const {Session} = require('../../lib/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../lib/console-control');
 const {observationGate, sessionSummary} = require('../../routes/admin');
-const {inputRefusal, createObservationTracker} = require('../../sockets');
+const {inputRefusal, createObservationTracker, ownerViewOf} = require('../../sockets');
 
 const root = path.join(__dirname, '..', '..');
 const FAST = {N: 1024};
@@ -328,4 +328,16 @@ test('the login routes write login, login-failed and logout to users.log, never 
   await call('POST /auth/logout', {});
   assert.deepEqual(lines, [['toto', 'login'], ['toto', 'login-failed'], [`x${'y'.repeat(63)}`, 'login-failed'], ['', 'login-failed'], ['toto', 'logout']]);
   assert.doesNotMatch(JSON.stringify(lines), /pw/);
+});
+
+test('an owner view is validated: known fields and ranges only, unknown nodes become null', () => {
+  const session = {nodes: new Map([['s-0123456789abcdef', {}]])};
+  const view = {nodeId: 's-0123456789abcdef', mode: 'graphic', layout: 4, switches: false, page: 2, expanded: 3};
+  assert.deepEqual(ownerViewOf({...view, extra: 1}, session), view);
+  assert.equal(ownerViewOf({...view, nodeId: 'h-0000000000000000'}, session).nodeId, null);
+  assert.equal(ownerViewOf({...view, expanded: null}, session).expanded, null);
+  for (const invalid of [null, 'x', {...view, mode: 'list'}, {...view, layout: 3}, {...view, switches: 1}, {...view, page: 1.5},
+    {...view, page: 1000}, {...view, expanded: 4}, {...view, layout: 2, expanded: 2}, {...view, expanded: undefined}]) {
+    assert.equal(ownerViewOf(invalid, session), null, JSON.stringify(invalid));
+  }
 });

@@ -1,5 +1,6 @@
 // Shared client state. Values that several modules reassign live on `store`,
 // because ES module bindings are read-only for importers.
+import {observing} from './observe.js';
 export const machines = new Map();
 
 const viewSettingsKey = 'qemuweb.view-settings';
@@ -37,7 +38,10 @@ export const store = {
   isoPreviewSupported: false
 };
 
+// An observation tab never saves its view: the admin's own layout belongs to their own session's
+// tabs, and following the owner changes the view many times.
 export function saveViewSettings() {
+  if (observing) return;
   try {
     localStorage.setItem(viewSettingsKey, JSON.stringify({view: store.graphicVisible ? 'graphic' : 'terminals', layoutSize: store.layoutSize, showSwitchConsoles: store.showSwitchConsoles, graphicZoom: store.graphicZoom}));
   } catch (_) {}

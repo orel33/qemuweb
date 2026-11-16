@@ -9,14 +9,16 @@ import {applyControl, followOwnerView, observationUnavailable, observing, socket
 
 let socket = null;
 
-// The owner's page tells observers what it shows: the active node and the view (Terminals or
-// Graphic). Called whenever either may have changed; sends only actual changes (and
-// everything again after a reconnection).
+// The owner's page tells observers what it shows: the active node, the view (Terminals or
+// Graphic) and the console layout (panes, switch consoles, page, pane shown alone). The panes'
+// nodes follow from these and the node list, so they are not sent. Called whenever any of it
+// may have changed; sends only actual changes (and everything again after a reconnection).
 let publishedView = null;
 export function publishOwnerView() {
   if (observing || !socket?.connected) return;
-  const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals'};
-  const key = `${view.nodeId}|${view.mode}`;
+  const view = {nodeId: store.activeId || null, mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layoutSize,
+    switches: store.showSwitchConsoles, page: store.pageIndex, expanded: store.expandedPaneIndex};
+  const key = JSON.stringify(view);
   if (key === publishedView) return;
   publishedView = key;
   socket.emit('owner-view', view);

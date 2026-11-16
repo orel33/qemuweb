@@ -96,7 +96,8 @@ flowchart TB
   activity mark. An observer socket (`auth.observe`) joins the observed
   session's rooms and `observers:<id>`; `sockets.js` refuses its `input`,
   `clear-console` and `terminal-resize`, relays what the owner's page shows
-  (`owner-view` {nodeId, mode}: its active node and Terminals or Graphic,
+  (`owner-view` {nodeId, mode, layout, switches, page, expanded}: its active
+  node, Terminals or Graphic and console layout, validated by `ownerViewOf`,
   published by that page when either changes, never derived from console
   sockets attaching; the last one is also sent to a new observer), sends `observe-unavailable` when the login has no session, and
   lets it type only into a node it controls

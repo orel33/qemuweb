@@ -117,9 +117,11 @@ can:
   session list, **Follow**, **Take control**, **My session** and **Supervision**.
   The admin sees the consoles live (what the guest echoes, so not a password
   typed without echo), their history and logs, also when the student is
-  offline. With **Follow** on (the default), the view follows the node and the
-  view (Terminals or Graphic) the student selects; off, the admin navigates
-  freely. The target belongs to the tab: another tab can stay on the admin's
+  offline. With **Follow** on (the default), the view follows what the student
+  shows: the selected node, Terminals or Graphic, and the console layout (1, 2
+  or 4 panes, switch consoles, page, a pane shown alone); off, the admin
+  navigates freely. An observation tab never saves its layout in the admin's
+  view settings. The target belongs to the tab: another tab can stay on the admin's
   own session. A login without a session (not used since the server started,
   or deleted) shows a message and a link back to **Supervision**. The server refuses every change from an observer, including
   console input, Clear and resizing.

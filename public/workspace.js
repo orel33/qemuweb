@@ -178,6 +178,17 @@ function updateWorkspaceLayout() {
   requestAnimationFrame(fitTerminals);
 }
 
+// An observer following the owner: the owner's console layout and active node, not saved in
+// this browser's view settings.
+export function showOwnerLayout({layout, switches, page, expanded, nodeId}) {
+  store.layoutSize = layout;
+  store.showSwitchConsoles = switches;
+  updateSwitchConsoleToggle();
+  store.pageIndex = page;
+  store.expandedPaneIndex = expanded;
+  showPage(nodeId, true);
+}
+
 export function togglePaneExpansion(pane) {
   if (!pane.machineId || (store.layoutSize === 1 && store.expandedPaneIndex === null)) return;
   store.expandedPaneIndex = store.expandedPaneIndex === pane.index ? null : pane.index;

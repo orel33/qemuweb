@@ -45,6 +45,19 @@ function createObservationTracker(audit) {
   };
 }
 
+// What the owner's page shows, from an owner-view event: its active node (a node of the session,
+// else null), the view (terminals or graphic), the number of console panes (1, 2 or 4), whether
+// switch consoles are shown, the console page, and the pane shown alone (or null). Unknown
+// fields are dropped; returns null for an invalid view.
+function ownerViewOf(view, session) {
+  if (!view || typeof view !== 'object' || !['terminals', 'graphic'].includes(view.mode)) return null;
+  if (![1, 2, 4].includes(view.layout) || typeof view.switches !== 'boolean') return null;
+  if (!Number.isInteger(view.page) || view.page < 0 || view.page > 999) return null;
+  if (view.expanded !== null && !(Number.isInteger(view.expanded) && view.expanded >= 0 && view.expanded < view.layout)) return null;
+  const nodeId = typeof view.nodeId === 'string' && session.nodes.has(view.nodeId) ? view.nodeId : null;
+  return {nodeId, mode: view.mode, layout: view.layout, switches: view.switches, page: view.page, expanded: view.expanded};
+}
+
 // Forwards the events of one session's runner to that session's browsers only.
 function bindWorkspace(io, {session, runner}, control) {
   for (const event of ['state', 'log', 'logs-reset', 'serial', 'serial-reset']) {
@@ -152,14 +165,14 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
         if (typeof acknowledge === 'function') acknowledge({error: error.message});
       });
     }));
-    // What the owner looks at: the active node (or null) and the view (Terminals or Graphic),
-    // published by the owner's page itself whenever either changes. Console sockets attaching
-    // in the background (select-node) say nothing about it. Relayed to observers as owner-view.
-    socket.on('owner-view', guard(view => {
-      if (observer || !view || !['terminals', 'graphic'].includes(view.mode)) return;
-      const nodeId = typeof view.nodeId === 'string' && session.nodes.has(view.nodeId) ? view.nodeId : null;
-      ownerViews.set(session.id, {nodeId, mode: view.mode});
-      io.to(observerRoom(session)).emit('owner-view', {nodeId, mode: view.mode});
+    // What the owner looks at (ownerViewOf), published by the owner's page itself whenever it
+    // changes. Console sockets attaching in the background (select-node) say nothing about it.
+    // Relayed to observers as owner-view.
+    socket.on('owner-view', guard(received => {
+      const view = !observer && ownerViewOf(received, session);
+      if (!view) return;
+      ownerViews.set(session.id, view);
+      io.to(observerRoom(session)).emit('owner-view', view);
     }));
     if (observer && ownerViews.has(session.id)) socket.emit('owner-view', ownerViews.get(session.id));
     socket.on('leave-node', id => {
@@ -229,4 +242,4 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   };
 }
 
-module.exports = {attachSockets, sessionRoom, nodeRoom, inputRefusal, createObservationTracker};
+module.exports = {attachSockets, sessionRoom, nodeRoom, inputRefusal, createObservationTracker, ownerViewOf};
