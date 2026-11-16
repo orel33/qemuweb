@@ -1,6 +1,8 @@
 'use strict';
 
-// Boot prepared OS bases with isolated guest media.
+// Startup disk (cd-rom) check of one guest system: script, resource, disk marker, Reboot with
+// edited files, Stop/Resume; on OpenWrt also concurrent hosts and missing script/media reports.
+// CHECK_STARTUP_PROFILE names the system; each run-tests.sh entry sets it to one system.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -9,7 +11,8 @@ const path = require('node:path');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
 
 const root = path.resolve(__dirname, '../..');
-const profiles = process.env.STARTUP_MEDIA_PROFILES ? process.env.STARTUP_MEDIA_PROFILES.split(',') : ['debian13-legacy', 'alpine', 'debian13-cloud', 'openwrt'];
+const supported = ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt'];
+const profiles = [(process.env.CHECK_STARTUP_PROFILE || '').trim()];
 const engine = process.env.STARTUP_MEDIA_ENGINE || 'qemu';
 const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;
 const ids = profiles.map(() => newHostId());
@@ -136,7 +139,7 @@ async function verifyConcurrentIsolation() {
   }));
   for (const host of hosts) {
     ids.push(host.id);
-    await request('/api/hosts', 'POST', {id: host.id, name: `Startup media isolated ${host.id}`, imageId: 'openwrt', engine, interfaces: [], guestMedia: host.media.files});
+    await request('/api/hosts', 'POST', {id: host.id, name: `Startup disk isolated ${host.id}`, imageId: 'openwrt', engine, interfaces: [], guestMedia: host.media.files});
     await request(`/api/nodes/${host.id}/guest-cdrom`, 'POST', host.media.files);
     await request(`/api/nodes/${host.id}/guest-cdrom`, 'PATCH', {attached: true});
     host.state = watchSession(host.id);
@@ -162,7 +165,7 @@ async function verifyConcurrentIsolation() {
       return attached.slice('# Guest setup ISO attached: '.length).replace(/ \(read-only\)$/, '');
     });
     assert.notEqual(paths[0], paths[1], 'The concurrent hosts used the same ISO path.');
-    console.log('openwrt: two concurrent hosts used distinct ISOs, scripts, resources and disks');
+    console.log('openwrt: two concurrent hosts used distinct startup disks, scripts, resources and disks');
   } finally {
     for (const host of hosts) host.state.socket.disconnect();
     for (const host of hosts) await request(`/api/nodes/${host.id}`, 'DELETE');
@@ -170,6 +173,7 @@ async function verifyConcurrentIsolation() {
 }
 
 async function run() {
+  assert.ok(supported.includes(profiles[0]), `Set CHECK_STARTUP_PROFILE to one of: ${supported.join(', ')}.`);
   for (const profile of profiles) assert.ok(fs.existsSync(path.join(root, 'images', `${profile}.raw`)), `Missing prepared ${profile} RAW base`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
@@ -185,7 +189,7 @@ async function run() {
     const first = mediaFor(profile, 1);
     const second = mediaFor(profile, 2);
     const startOptions = {engine, imageId: profile, interfaces: [], settings: {memory: profile === 'openwrt' ? 256 : 1024, cpus: 1, clock: 'utc'}};
-    await request('/api/hosts', 'POST', {id, name: `Startup media ${profile}`, imageId: profile, engine, interfaces: [], guestMedia: first.files});
+    await request('/api/hosts', 'POST', {id, name: `Startup disk ${profile}`, imageId: profile, engine, interfaces: [], guestMedia: first.files});
     await request(`/api/nodes/${id}/guest-cdrom`, 'POST', first.files);
     await request(`/api/nodes/${id}/guest-cdrom`, 'PATCH', {attached: true});
     const state = watchSession(id);
@@ -193,7 +197,7 @@ async function run() {
       await waitFor(`${profile} socket`, () => state.socket.connected);
       await request(`/api/nodes/${id}/start`, 'POST', startOptions);
       await verifyBoot(profile, state, first);
-      console.log(`${profile}: initial ISO script, resource and disk marker verified`);
+      console.log(`${profile}: initial startup disk script, resource and disk marker verified`);
       if (engine.startsWith('qemu')) {
         await request(`/api/nodes/${id}/guest-media`, 'PUT', second.files);
         const beforeReboot = state.resetCount;
@@ -201,7 +205,7 @@ async function run() {
         await waitFor(`${profile} reboot serial reset`, () => state.resetCount > beforeReboot);
         await verifyBoot(profile, state, second);
         assert.ok(!state.serial.includes(first.resourceMarker), `${profile} reboot retained the old resource.`);
-        console.log(`${profile}: edited script and companion resource verified after Reboot`);
+        console.log(`${profile}: edited startup disk script and resource verified after Reboot`);
 
         await request(`/api/nodes/${id}/stop`, 'POST');
         const stopped = (await request('/api/nodes')).find(session => session.id === id);
@@ -210,7 +214,7 @@ async function run() {
         await request(`/api/nodes/${id}/start`, 'POST', startOptions);
         await waitFor(`${profile} resume serial reset`, () => state.resetCount > beforeResume);
         await verifyBoot(profile, state, second);
-        console.log(`${profile}: Stop/Resume retained the disk marker and edited startup media`);
+        console.log(`${profile}: Stop/Resume kept the disk marker and the edited startup disk`);
       }
     } finally { state.socket.disconnect(); }
     await request(`/api/nodes/${id}`, 'DELETE');
@@ -224,7 +228,7 @@ async function run() {
     for (const scenario of missingCases) {
       const id = newHostId();
       ids.push(id);
-      await request('/api/hosts', 'POST', {id, name: `Startup media missing ${scenario.suffix}`, imageId: 'openwrt', engine: 'qemu', interfaces: [], guestMedia: {script: scenario.script, resources: []}});
+      await request('/api/hosts', 'POST', {id, name: `Startup disk missing ${scenario.suffix}`, imageId: 'openwrt', engine: 'qemu', interfaces: [], guestMedia: {script: scenario.script, resources: []}});
       if (scenario.attach) {
         await request(`/api/nodes/${id}/guest-cdrom`, 'POST', {script: scenario.script, resources: []});
         await request(`/api/nodes/${id}/guest-cdrom`, 'PATCH', {attached: true});
@@ -242,7 +246,7 @@ async function run() {
         await waitFor(`${scenario.suffix} report`, () => serial.includes(scenario.error), 90000);
         assert.ok(serial.includes('Please press Enter to activate this console.'), 'OpenWrt boot did not reach its console.');
         assert.ok(!logs.some(line => line.startsWith('[guest]')), 'Host Log contains guest serial output.');
-        console.log(`openwrt: missing ${scenario.suffix} reported promptly in console; boot reached console`);
+        console.log(`openwrt: missing startup disk ${scenario.suffix} reported promptly in console; boot reached console`);
       } finally { socket.disconnect(); }
       await request(`/api/nodes/${id}`, 'DELETE');
     }
