@@ -6,10 +6,14 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
-const {createRunner, resolveCommands} = require('./runner');
+const {duplexPair} = require('stream');
+const {createRunnerService, serveConnection, resolveCommands} = require('./runner');
+const {Connection} = require('./common/runner-protocol');
+const {RunnerClient} = require('./lib/runner-client');
+const {RunnerRegistry} = require('./lib/runner-registry');
 const {ServerInstance} = require('./lib/server-instance');
 const {SessionManager} = require('./lib/session-manager');
-const {attachSockets, sessionRoom} = require('./sockets');
+const {attachSockets} = require('./sockets');
 const {createSessionRouter} = require('./routes');
 const {readCatalog} = require('./common/system-config');
 const {createAuth} = require('./lib/auth');
@@ -39,23 +43,32 @@ catch (error) { console.error(`Cannot create the log directory: ${error.message}
 const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
 
-// One session and one runner per user, each with its own HTTP router.
-const manager = new SessionManager({
-  runtimeRoot: runtime,
-  createRunner: (session, hostNodes) => createRunner({session, commands, root, runtimeRoot: runtime, configPath, hostNodes})
-});
+// The local runner, in this process for now: the runner service and its protocol endpoint on
+// one side of an in-memory stream pair, its client on the other.
+const registry = new RunnerRegistry();
+const localRunner = (() => {
+  const service = createRunnerService({commands, root, runtimeRoot: runtime, configPath});
+  const [controlSide, runnerSide] = duplexPair();
+  const client = new RunnerClient(new Connection(controlSide));
+  registry.add({id: 'local', client});
+  serveConnection(new Connection(runnerSide), service);
+  return client;
+})();
+
+// One session per user, each with its own HTTP router, executed by a runner.
+const manager = new SessionManager({runtimeRoot: runtime, registry});
 manager.on('created', workspace => {
   const {session, runner} = workspace;
-  workspace.router = createSessionRouter({session, runner, commands, userLog,
-    emit: (event, payload) => io.to(sessionRoom(session)).emit(event, payload)});
+  workspace.router = createSessionRouter({session, runner, userLog});
   userLog.record(workspace.owner, 'session-created', {sessionId: session.id});
   console.log(`Session ${session.id} opened for ${workspace.owner}.`);
 });
-manager.on('removed', (workspace, by) => userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by}));
+manager.on('removed', (workspace, by, reason) => {
+  userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by, ...(reason ? {reason} : {})});
+  if (reason) console.log(`Session ${workspace.session.id} of ${workspace.owner} dropped: ${reason}.`);
+});
 for (const event of ['created', 'removed']) manager.on(event, () => { if (server.listening) instance.updateSessions(manager.sessionIds()); });
 readCatalog(configPath);
-try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
 
 let auth;
 try { auth = createAuth({root, userLog}); }
@@ -118,7 +131,12 @@ server.on('error', error => {
   console.error('Server error:', error);
   process.exitCode = 1;
 });
-server.listen(port, '127.0.0.1', () => {
+// Browsers are served once the local runner said hello.
+localRunner.once('hello', hello => {
+  if (!hello.kvm) console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
+  server.listen(port, '127.0.0.1', onListening);
+});
+function onListening() {
   instance.pruneEmptyRuntimeSessions();
   manager.pruneUserAliases();
   instance.writeRecords(manager.sessionIds());
@@ -126,11 +144,11 @@ server.listen(port, '127.0.0.1', () => {
   console.log(`  Web interface      http://127.0.0.1:${port}`);
   console.log(`  Sessions           ${path.join(runtime, 'sessions')} (runtime/users/<login> links)`);
   console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
-});
+}
 
 process.on('exit', () => {
   instance.removeRecords();
-  manager.removeEmptyRuntimeSessions();
+  manager.pruneUserAliases();
 });
 
 let shuttingDown = false;
@@ -138,7 +156,7 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const forceExit = setTimeout(() => process.exit(1), 10000);
-  await manager.shutdown();
+  await registry.shutdown();
   io.close(() => {
     clearTimeout(forceExit);
     process.exit(0);
