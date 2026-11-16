@@ -12,7 +12,8 @@
     "test:startup-media-profiles": "node test/integration/startup-media-profiles.js",
     "test:guest-network": "node test/integration/guest-network.js",
     "test:two-users-isolation": "node test/integration/two-users-isolation.js",
-    "test:session-reconnect": "node test/integration/session-reconnect.js"
+    "test:session-reconnect": "node test/integration/session-reconnect.js",
+    "test:admin": "node test/integration/admin.js"
   },
   "engines": {
     "node": "^24.0.0"
