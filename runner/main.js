@@ -9,11 +9,10 @@
 //                         else ~/.local/share/qemuweb-runner)
 //   --config              system catalog (default config.json of this project)
 //   --exit-on-disconnect  the loss of the control connection ends the runner: every node is
-//                         destroyed and the process exits (the local runner, a child of the
-//                         server). Without it, the runner keeps its sessions and reconnects.
-// Started by hand (scripts/runner.sh) it prints its own checks: dependencies, configuration
-// warnings and the state of the connection. With `node server.js --local`, lib/local-runner.js
-// starts it as a child and these lines appear on the server's console.
+//                         destroyed and the process exits (scripts/start.sh, which ends with
+//                         its server). Without it, the runner keeps its sessions and reconnects.
+// Started by scripts/runner.sh (also through scripts/start.sh, with a [runner] prefix) it prints
+// its own checks: dependencies, configuration warnings and the state of the connection.
 const net = require('net');
 const os = require('os');
 const path = require('path');

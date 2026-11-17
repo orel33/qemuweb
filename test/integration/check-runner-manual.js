@@ -73,7 +73,7 @@ function switchesOf(pid) {
 
 function startServer(port, logDir) {
   serverOutput = '';
-  const child = spawnServer({port, usersFile: testUsers.file, local: false, env: {QEMUWEB_LOG_DIR: logDir}});
+  const child = spawnServer({port, usersFile: testUsers.file, standalone: true, env: {QEMUWEB_LOG_DIR: logDir}});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   return child;
 }

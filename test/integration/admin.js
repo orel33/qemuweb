@@ -94,7 +94,7 @@ async function run() {
   const account = Object.fromEntries(testUsers.users.map(user => [user.login, user]));
   const signIn = login => new QemuWebClient(baseUrl).signIn(login, account[login].password);
 
-  await new QemuWebClient(baseUrl).waitForServer(30000, () => child.exitCode === null);
+  await new QemuWebClient(baseUrl).waitForServer(30000, child);
   const boss = await signIn('boss');
   const alice = await signIn('alice');
   const bob = await signIn('bob');

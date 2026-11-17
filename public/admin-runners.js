@@ -26,10 +26,10 @@ function renderRunners({runners, connectHint}, {body, hint, cell}) {
     state.dataset.state = runner.state === 'online' ? 'active' : 'idle';
     const engines = runner.engines.map(engine => (engine === 'vbox' ? 'VirtualBox' : 'QEMU')).join(', ') || 'none';
     const kvm = runner.engines.includes('qemu') ? (runner.kvm ? ', KVM' : ', no KVM') : '';
-    row.append(cell(runner.id), cell(runner.mode), cell(state), cell(`${engines}${kvm}`),
+    row.append(cell(runner.id), cell(state), cell(`${engines}${kvm}`),
       cell(`${runner.cpus ?? '—'} CPU, ${gigabytes(runner.memoryBytes)}`), cell(runner.systems.join(', ') || '—'),
       cell(String(runner.sessions)), cell(runner.warnings.length ? warningList(runner.warnings) : '—'));
-    row.cells[7].className = 'runner-warning-cell';
+    row.cells[6].className = 'runner-warning-cell';
     return row;
   }));
   hint.hidden = runners.length > 0;

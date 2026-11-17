@@ -77,8 +77,8 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
     return {deleted: true};
   }
 
-  // Every session: stops every node and removes the empty session directories (server stop,
-  // or the loss of the control connection of a local runner).
+  // Every session: stops every node and removes the empty session directories (SIGTERM, or the
+  // loss of the control connection of a runner started with --exit-on-disconnect).
   async function shutdown() {
     await Promise.all([...sessions.values()].map(async ({session, runner}) => {
       try { await runner.shutdown(); }

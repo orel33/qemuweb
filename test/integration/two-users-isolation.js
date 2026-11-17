@@ -76,7 +76,7 @@ async function run() {
 
   // Authentication gate.
   const anonymous = new QemuWebClient(baseUrl);
-  await anonymous.waitForServer(30000, () => child.exitCode === null);
+  await anonymous.waitForServer(30000, child);
   await expectStatus(anonymous, '/api/nodes', 'GET', 401);
   const page = await anonymous.fetch('/');
   assert.equal(page.status, 302);

@@ -95,7 +95,7 @@ async function run() {
   child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   const anonymous = new QemuWebClient(baseUrl);
-  await anonymous.waitForServer(30000, () => child.exitCode === null);
+  await anonymous.waitForServer(30000, child);
 
   // The runner process: a child of the server, leader of its own process group, on a 0600 socket.
   const runner = runnerOf(child.pid);

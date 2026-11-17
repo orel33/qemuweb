@@ -1,9 +1,8 @@
 'use strict';
 
 // Startup and wiring only: HTTP server, Socket.IO, sessions, runners and routes.
-//   node server.js           the server only: it waits for a runner started by hand
-//                            (./scripts/runner.sh), which keeps its VMs if the server restarts
-//   node server.js --local   also starts and supervises a local runner (npm start)
+//   node server.js   the server only: it waits for a runner (./scripts/runner.sh), which keeps
+//                    its VMs if the server restarts. ./scripts/start.sh (npm start) runs both.
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
@@ -11,7 +10,6 @@ const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
 const {RunnerRegistry} = require('./lib/runner-registry');
 const {createRunnerGateway} = require('./lib/runner-gateway');
-const {createLocalRunner} = require('./lib/local-runner');
 const {ServerInstance} = require('./lib/server-instance');
 const {SessionManager} = require('./lib/session-manager');
 const {attachSockets} = require('./sockets');
@@ -26,10 +24,8 @@ const RUNNER_HINT = './scripts/runner.sh';
 
 const root = __dirname;
 const args = process.argv.slice(2);
-const local = args.includes('--local');
-const unknownArgs = args.filter(arg => arg !== '--local');
-if (unknownArgs.length) {
-  console.error(`Unknown argument: ${unknownArgs[0]}. Usage: node server.js [--local]`);
+if (args.length) {
+  console.error(`Unknown argument: ${args[0]}. Usage: node server.js`);
   process.exit(2);
 }
 console.log(`QemuWeb ${packageInfo.version}\n`);
@@ -51,19 +47,18 @@ const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
 
 // One session per user, each with its own HTTP router, executed by a runner that dials
-// runtime/runner-<port>.sock (lib/runner-gateway.js): started by hand, or by the server with
-// --local (lib/local-runner.js, which also supervises it).
+// runtime/runner-<port>.sock (lib/runner-gateway.js), started by ./scripts/runner.sh.
 const registry = new RunnerRegistry();
 const manager = new SessionManager({runtimeRoot: runtime, registry});
 const gateway = createRunnerGateway({root, runtimeRoot: runtime, port, registry});
-const localRunner = local ? createLocalRunner({root, runtimeRoot: runtime, configPath, gateway,
-  boundSessions: () => manager.list().filter(workspace => workspace.session.runnerId === 'local').map(workspace => workspace.session.id),
-  onFatal: error => { console.error(error.message); localRunner.kill(); process.exit(1); }}) : null;
-registry.on('online', (_entry, hello) => {
+registry.on('online', (entry, hello) => {
   const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
   console.log(`Runner connected (engines: ${engines || 'none'}).`);
+  // The server cleans the empty sessions that earlier servers left only in a runtime/ it shares
+  // with the runner (same runtimeRoot in the hello); the sessions the runner reports stay.
+  if (entry.runtimeRoot === path.resolve(runtime)) instance.pruneEmptyRuntimeSessions({keep: (hello.sessions || []).map(item => item?.sessionId)});
 });
-registry.on('lost', () => console.log(local ? 'Runner disconnected.' : `Runner disconnected. Start one with ${RUNNER_HINT}.`));
+registry.on('lost', () => console.log(`Runner disconnected. Start one with ${RUNNER_HINT}.`));
 manager.on('created', (workspace, {adopted}) => {
   const {session, runner} = workspace;
   workspace.router = createSessionRouter({session, runner, userLog});
@@ -111,7 +106,7 @@ app.use(express.static(path.join(root, 'public')));
 // X-Observe (admins, read-only) and the admin API come before anything that could open or
 // change the caller's own session.
 app.use('/api', observationGate(manager));
-app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, logDir, local, port}));
+app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, logDir, port}));
 // Self-service deletion: stops and removes every node, then the session; the next request
 // opens a new, empty session.
 app.delete('/api/session', async (req, res) => {
@@ -134,50 +129,35 @@ app.use((req, res, next) => {
 server.on('error', error => {
   if (error.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use. Stop the existing server or run PORT=${port + 1} npm start.`);
-    stopRunner().finally(() => process.exit(1));
+    gateway.close();
+    process.exit(1);
     return;
   }
   console.error('Server error:', error);
   process.exitCode = 1;
 });
-// With --local, browsers are served once the local runner said hello and a runner that cannot
-// start stops the server. Without it HTTP opens at once and a runner may connect at any time.
+// HTTP opens at once; a runner may connect at any time (session routes answer 503 until then).
 async function startup() {
   try { await gateway.start(); }
   catch (error) {
     console.error(error.message);
     process.exit(1);
   }
-  if (!local) { server.listen(port, '127.0.0.1', onListening); return; }
-  try { await localRunner.start(); }
-  catch (error) {
-    console.error(`Cannot start the local runner: ${error.message}`);
-    localRunner.kill();
-    gateway.close();
-    process.exit(1);
-  }
   server.listen(port, '127.0.0.1', onListening);
 }
 startup();
-async function stopRunner() {
-  if (localRunner) await localRunner.stop();
-  gateway.close();
-}
 
 function onListening() {
-  // The server touches the runner's files only when it started the runner itself (--local).
-  if (local) instance.pruneEmptyRuntimeSessions();
   manager.pruneUserAliases();
   instance.writeRecords(manager.sessionIds());
   console.log('\nQemuWeb is ready.');
   console.log(`  Web interface      http://127.0.0.1:${port}`);
   console.log(`  Sessions           ${path.join(runtime, 'sessions')} (runtime/users/<login> links)`);
   console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
-  if (!local) console.log(`No runner connected. Start one with ${RUNNER_HINT} (or restart the server with --local).\n`);
+  console.log(`No runner connected. Start one with ${RUNNER_HINT}, or run ./scripts/start.sh for the server and a runner.\n`);
 }
 
 process.on('exit', () => {
-  if (localRunner) localRunner.kill();
   instance.removeRecords();
   manager.pruneUserAliases();
 });
@@ -187,7 +167,7 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const forceExit = setTimeout(() => process.exit(1), 10000);
-  await stopRunner();
+  gateway.close();
   io.close(() => {
     clearTimeout(forceExit);
     process.exit(0);
