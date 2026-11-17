@@ -102,7 +102,7 @@ const descendants = entry => entry.children.flatMap(child => [child, ...descenda
 // Colours and cell formatting.
 function styles(enabled) {
   const wrap = code => text => (enabled ? `\x1b[${code}m${text}\x1b[0m` : text);
-  return {bold: wrap('1'), dim: wrap('2'), server: wrap('1;36'), runner: wrap('1;32'), user: wrap('1;33'),
+  return {bold: wrap('1'), dim: wrap('2'), server: wrap('1;36'), runner: wrap('1;32'), user: wrap('1;33'), userText: wrap('33'),
     vm: wrap('0'), net: wrap('35'), warn: wrap('31')};
 }
 const duration = seconds => {
@@ -112,6 +112,44 @@ const duration = seconds => {
 };
 const megabytes = kb => `${Math.round(kb / 1024)} MB`;
 const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+
+// CPU use in percent of one core, measured between two samples of /proc/<pid>/stat. A one-shot
+// run takes two samples one second apart; --watch compares each frame with the previous one.
+let clockTicks = 100;
+try { clockTicks = Number(execFileSync('getconf', ['CLK_TCK'], {encoding: 'utf8'})) || 100; } catch (_) { /* Linux default. */ }
+let previousSample = null;
+
+function sampleTicks(pids) {
+  const ticks = new Map();
+  for (const pid of pids) {
+    try {
+      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
+      const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
+      ticks.set(pid, Number(fields[11]) + Number(fields[12])); // utime + stime
+    } catch (_) { /* The process is gone. */ }
+  }
+  return {time: Date.now(), ticks};
+}
+
+function measureCpu(table, servers) {
+  const pids = new Set();
+  for (const {entry} of servers) for (const item of [entry, ...descendants(entry)]) pids.add(item.pid);
+  let now = sampleTicks(pids);
+  if (!previousSample) {
+    previousSample = now;
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 1000);
+    now = sampleTicks(pids);
+  }
+  const seconds = (now.time - previousSample.time) / 1000;
+  for (const pid of pids) {
+    const before = previousSample.ticks.get(pid), after = now.ticks.get(pid);
+    if (seconds > 0 && before !== undefined && after !== undefined) table.get(pid).cpu = (after - before) / clockTicks / seconds * 100;
+    else delete table.get(pid).cpu;
+  }
+  previousSample = now;
+}
+
+const percent = cpu => (cpu === undefined ? null : `${cpu < 10 ? cpu.toFixed(1) : Math.round(cpu)}% CPU`);
 
 // "N QEMU, M switches" for a list of processes.
 const machineCount = items => `${items.filter(item => /qemu-system/.test(item.args)).length} QEMU, ` +
@@ -171,7 +209,8 @@ function describe(entry, style) {
   // A QEMU process shows the memory in use over the memory given to its machine (-m).
   const detail = kind === 'qemu' && memory ? `${megabytes(entry.rssKb)} / ${memory[1]} MB` : megabytes(entry.rssKb);
   const paint = kind === 'qemu' ? style.vm : style.net;
-  return {where, text: `${paint(kind.padEnd(10))} ${label}  ${style.dim(`pid ${entry.pid}`)}  ${style.dim(detail)}`};
+  const rest = [`pid ${entry.pid}`, detail, kind === 'qemu' ? percent(entry.cpu) : null].filter(Boolean).join(' · ');
+  return {where, text: `${paint(kind.padEnd(10))} ${label ? `${label} · ` : ''}${style.dim(rest)}`};
 }
 
 // Lines of a tree: items are {text, children}.
@@ -185,15 +224,17 @@ function render(items, prefix = '') {
   return lines;
 }
 
-// "Session 88686978 (toto) · 4 QEMU, 1 switch · 1456 MB / 4096 MB · age 00:36:27".
+// "Session 88686978 (toto) · 4 QEMU, 1 switch · 1456 MB / 4096 MB · 12% CPU · up 00:36:27".
 function sessionLine(id, login, items, sessionsDir, style) {
   const age = sessionAge(sessionsDir, id);
-  const parts = [machineCount(items), memoryTotals(items), age === null ? null : `age ${duration(age)}`].filter(Boolean);
-  return `${style.user(`Session ${id.slice(0, 8)} (${login || '?'})`)} · ${style.dim(parts.join(' · '))}`;
+  const cpu = items.some(item => item.cpu !== undefined) ? items.reduce((sum, item) => sum + (item.cpu || 0), 0) : undefined;
+  const parts = [machineCount(items), memoryTotals(items), percent(cpu), age === null ? null : `up ${duration(age)}`].filter(Boolean);
+  return `${style.user(`Session ${id.slice(0, 8)} (${login || '?'})`)}${style.userText(` · ${parts.join(' · ')}`)}`;
 }
 
 function serverReport({entry, root, port}, table, style) {
-  const lines = [`${style.server('Server')} ${style.bold(`pid ${entry.pid}`)}${port ? ` · port ${port}` : ''} · up ${duration(entry.seconds)} · ${style.dim(root)}`];
+  const serverParts = [port ? `port ${port}` : null, `up ${duration(entry.seconds)}`, percent(entry.cpu)].filter(Boolean);
+  const lines = [`${style.server('Server')} ${style.bold(`pid ${entry.pid}`)} · ${serverParts.join(' · ')} · ${style.dim(root)}`];
   const below = descendants(entry);
   const runner = below.find(isRunner);
   const machines = (runner ? descendants(runner) : below).filter(item => !isRunner(item));
@@ -212,8 +253,8 @@ function serverReport({entry, root, port}, table, style) {
     children: list.sort((a, b) => a.rank - b.rank || a.item.pid - b.item.pid).map(({text}) => ({text}))
   }));
   if (runner) {
-    const runnerText = `${style.runner('Runner')} ${style.bold(`pid ${runner.pid}`)} · pgid ${runner.pgid} · up ${duration(runner.seconds)} · ${megabytes(runner.rssKb)}` +
-      ` · ${machineCount(machines)}`;
+    const runnerParts = [`pgid ${runner.pgid}`, `up ${duration(runner.seconds)}`, megabytes(runner.rssKb), percent(runner.cpu), machineCount(machines)].filter(Boolean);
+    const runnerText = `${style.runner('Runner')} ${style.bold(`pid ${runner.pid}`)} · ${runnerParts.join(' · ')}`;
     lines.push(...render([{text: runnerText, children: sessions}]));
   } else {
     lines.push(...render(sessions));
@@ -226,6 +267,7 @@ function report(options) {
   const table = processTable();
   const style = styles(options.color);
   const servers = findServers(table, options);
+  measureCpu(table, servers);
   const lines = [`${style.bold('QemuWeb processes')} of ${process.env.USER || process.getuid()} at ${new Date().toTimeString().slice(0, 8)}`];
   for (const server of servers) lines.push('', ...serverReport(server, table, style));
   // A runner whose server is gone keeps nothing running by itself, but its machines may.
