@@ -49,7 +49,7 @@ function machineDialogName(machine) {
 
 function defaultSettings(machine) {
   const profile = store.images.find(item => item.id === machine.imageId);
-  return profile ? {memory: profile.memory, cpus: profile.cpus, clock: profile.clock, serialConsoles: profile.serialConsoles ?? 1} : {};
+  return profile ? {memory: profile.memory, cpus: profile.cpus, clock: profile.clock, serialPorts: profile.serialPorts} : {};
 }
 function getMachineSettings(machine) {
   if (!machine.settingsLoaded) {
@@ -185,7 +185,7 @@ export async function renderQemuOptions() {
       renderStartupTemplateValues(machine);
     };
     for (const [key, field] of Object.entries(body.fields || {})) {
-      if (key === 'serialConsoles') continue;
+      if (key === 'serialPorts') continue;
       const row = document.createElement('div');
       row.className = 'setting-row';
       const label = document.createElement('label');
@@ -247,9 +247,9 @@ export async function renderQemuOptions() {
     addSettingRow(settingsStartupProfile, 'CD-ROM interface', body.fixed?.cdromInterface);
     settingsExtraOptions.textContent = body.fixed?.extraOptions?.length ? body.fixed.extraOptions.join(' ') : 'None';
     renderStorageSettings(body.storage, body.fixed?.diskInterface);
-    renderConsoleSettings(settingsConsoleEditable, settingsConsole, {body, count: settings.serialConsoles ?? 1, limit: image?.serialConsoles ?? 1, locked,
-      onChange: count => {
-        saveMachineSettings(machine, {...getMachineSettings(machine), serialConsoles: count});
+    renderConsoleSettings(settingsConsoleEditable, settingsConsole, {body, ports: settings.serialPorts ?? ['ttyS0'], limit: image?.serialPorts ?? ['ttyS0'], locked,
+      onChange: ports => {
+        saveMachineSettings(machine, {...getMachineSettings(machine), serialPorts: ports});
         refreshLaunchPreview(machine);
       }});
     optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');

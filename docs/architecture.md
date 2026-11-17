@@ -156,14 +156,21 @@ pane shows one console at a time; the browser's `console2` pane view selects
 the runner (`serial`/`serialBuffer`, `serial1`/`serialBuffer1`); the startup
 hook marker filter applies to channel 0 only.
 
-The number of consoles is the `serialConsoles` key (1 or 2) of a system
-profile in `config.json` (2 for `debian13-legacy` and `debian13-cloud` on QEMU,
-absent = 1 elsewhere), overridable per host in `host.json` `config` up to the
-profile's value, and part of the launch settings. It is left out of
-`profileHash`, so archives saved before the key existed still load. A system
-without a getty on `ttyS1` (an older image) shows an empty second console.
-`state` events, `nodes-changed` and `GET /api/nodes` carry `serialConsoles`
-(the running VM's count while it runs), and changing it is a pending restart.
+The serial ports of a host are the `serialPorts` key of a system profile in
+`config.json`, a list of port names (`["ttyS0", "ttyS1"]` for `debian13-legacy`
+and `debian13-cloud` on QEMU via `serialPorts:qemu`; absent = `["ttyS0"]`
+elsewhere, VirtualBox included). `common/console-id.js` holds the allowed names
+(`PORTS`) and `validatePorts`: a list must start with `ttyS0` and be a
+contiguous prefix of `PORTS` (QEMU numbers `-serial` devices in order, and
+`ttyS0` is the kernel console), and a host's list must also be a prefix of its
+system's list. The channel index of a port is its position in the list. A host
+overrides the list in `host.json` `config` (sparse, stored only when it differs
+from the profile) and in its launch settings. A system without a getty on
+`ttyS1` (an older image) shows an empty second console. `state` events,
+`nodes-changed` and `GET /api/nodes` carry `serialPorts` (the running VM's
+list while it runs), and changing it is a pending restart. The browser labels a
+host's console views `Console (ttyS0)` and `Console (ttyS1)`; a switch keeps
+`Console`.
 
 ## View state
 
@@ -285,7 +292,7 @@ order. State that several modules reassign lives on the `store` object of
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
 | `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401, `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |
-| `terminal.js` | Console panes, menus, font size and Console/Console 2/Monitor/Log views. |
+| `terminal.js` | Console panes, menus, font size and Console (ttyS0)/Console (ttyS1)/Monitor/Log views. |
 | `host-console-settings.js` | Console tab of Host Settings: number of serial consoles and the read-only console sockets. |
 | `workspace.js` | Pane layout, paging, node tabs, state badges and metrics. |
 | `nodes.js` | Node model, server synchronization and lifecycle actions. |

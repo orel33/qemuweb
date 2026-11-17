@@ -13,7 +13,13 @@ export const panes = [];
 export const isConsoleView = view => view === 'console' || view === 'console2';
 export const viewChannel = view => (view === 'console2' ? 1 : 0);
 export const paneConsoleId = pane => ConsoleId.consoleId(pane.machineId, viewChannel(pane.view));
-export const hasSecondConsole = machine => !!machine && machine.kind === 'host' && machine.serialConsoles >= 2;
+export const hasSecondConsole = machine => !!machine && machine.kind === 'host' && !!machine.serialPorts?.includes(ConsoleId.portName(1));
+// The label of a console view button: a host's consoles are named by their serial port, a
+// switch has a single VDE terminal.
+const consoleViewLabel = (view, machine) => {
+  if (view === 'console2') return `Console (${ConsoleId.portName(1)})`;
+  return machine?.kind === 'host' ? `Console (${ConsoleId.portName(0)})` : 'Console';
+};
 // The replay buffer of a machine's console channel.
 export const consoleBuffer = (machine, channel) => (channel === 1 ? machine.serial2 : machine.serial) || '';
 
@@ -165,11 +171,12 @@ function setPaneView(pane, view) {
   requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
 }
 function updatePaneViewMenuIcon(pane) {
-  if (pane.viewMenuToggle.dataset.view === pane.view) return;
   const selected = pane.viewButtons.find(button => button.dataset.view === pane.view);
+  const label = selected.getAttribute('aria-label');
+  if (pane.viewMenuToggle.dataset.view === pane.view && pane.viewMenuToggle.dataset.label === label) return;
   pane.viewMenuToggle.replaceChildren(selected.querySelector('svg').cloneNode(true));
   pane.viewMenuToggle.dataset.view = pane.view;
-  const label = selected.getAttribute('aria-label');
+  pane.viewMenuToggle.dataset.label = label;
   pane.viewMenuToggle.title = `${label} · choose terminal view`;
   pane.viewMenuToggle.setAttribute('aria-label', pane.viewMenuToggle.title);
 }
@@ -184,6 +191,13 @@ export function updatePaneViewControls() {
     pane.viewButtons.forEach(button => {
       if (button.dataset.view === 'monitor') button.hidden = !monitorSupported;
       if (button.dataset.view === 'console2') button.hidden = !hasSecondConsole(machine);
+      if (isConsoleView(button.dataset.view)) {
+        const label = consoleViewLabel(button.dataset.view, machine);
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        const text = button.querySelector('span');
+        if (text) text.textContent = label;
+      }
     });
     if ((pane.view === 'monitor' && !monitorSupported) || (pane.view === 'console2' && !hasSecondConsole(machine))) {
       pane.view = 'console';

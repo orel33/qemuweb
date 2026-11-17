@@ -113,7 +113,7 @@ function attachPaneSocket(pane) {
     machine.running = event.running;
     if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
     if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
-    if (event.serialConsoles !== undefined) machine.serialConsoles = event.serialConsoles;
+    if (event.serialPorts !== undefined) machine.serialPorts = event.serialPorts;
     machine.message = event.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
     renderTabs();
@@ -133,7 +133,7 @@ export function initSockets() {
     machine.running = event.running;
     if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
     if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
-    if (event.serialConsoles !== undefined) machine.serialConsoles = event.serialConsoles;
+    if (event.serialPorts !== undefined) machine.serialPorts = event.serialPorts;
     machine.message = event.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
     renderTabs();

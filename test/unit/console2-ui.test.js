@@ -31,7 +31,7 @@ test('serial events go to the console room, other node events to the node room',
   assert.equal(consoleRoom(session, HOST), `console:sess:${HOST}`);
 });
 
-test('every pane has a Console 2 view button, hidden until the host has a second console', () => {
+test('every pane has a Console (ttyS1) view button, hidden until the host has a second console', () => {
   const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
   assert.equal(html.match(/data-view="console2"[^>]*hidden/g).length, 4);
   assert.match(html, /<script src="\/console-id\.js"><\/script>/);
@@ -50,4 +50,9 @@ test('the browser selects consoles by console ID and keeps one buffer per channe
   assert.match(socket, /ConsoleId\.baseNodeId\(event\.nodeId\)/);
   assert.match(socket, /machine\.serial2/);
   assert.match(moduleSource('host-settings'), /renderConsoleSettings/);
+  assert.match(terminal, /Console \(\$\{ConsoleId\.portName\(1\)\}\)/);
+  assert.match(moduleSource('host-console-settings'), /main console, always on/);
+  const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+  assert.equal(html.match(/aria-label="Console \(ttyS1\)" title="Console \(ttyS1\)"/g).length, 4);
+  assert.doesNotMatch(html, /Console 2/);
 });

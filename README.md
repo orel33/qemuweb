@@ -262,13 +262,14 @@ when its newer hash file is left in place.
 
 Guests log in as `root` without a password on the serial console.
 
-Debian hosts have two serial consoles (`ttyS0` and `ttyS1`) so that two
+Debian hosts have two serial ports (`ttyS0` and `ttyS1`) so that two
 commands can run at once, for example `ping` on the first and `tcpdump` on the
-second. Choose what a pane shows with its view selector: **Console** (`ttyS0`),
-**Console 2** (`ttyS1`, only for hosts that have it), **Monitor** or **Log**;
-the program running on the other console keeps running. The number of consoles
-(1 or 2) is set in **Host Settings → Console**, which also lists the console
-and monitor sockets, and applies after a restart. Alpine, OpenWrt and
+second. Choose what a pane shows with its view selector: **Console (ttyS0)**,
+**Console (ttyS1)** (only for hosts that have it), **Monitor** or **Log**;
+the program running on the other console keeps running. The serial ports
+(`ttyS0` is always on, `ttyS1` is a checkbox) are set in **Host Settings →
+Console**, which also lists the console and monitor sockets, and applies after
+a restart. Alpine, OpenWrt and
 VirtualBox hosts have a single console. Debian images prepared before this
 feature have no login on `ttyS1`: run `scripts/prepare.sh` again.
 

@@ -1,18 +1,37 @@
-// Console tab of the Host Settings dialog: the number of serial consoles (ttyS0, ttyS1) and the
-// read-only console and monitor sockets of the launch preview.
-import {addSettingRow, addSettingSelectRow, addSettingTextRow} from './host-settings.js';
+// Console tab of the Host Settings dialog: the serial ports of the host (ttyS0 always on, ttyS1
+// optional) and the read-only console and monitor sockets of the launch preview.
+import {addSettingRow, addSettingTextRow} from './host-settings.js';
 
-// editable and readOnly are the tab's two containers; limit is how many consoles the system
-// exposes (store.images[].serialConsoles); onChange(count) saves the new value.
-export function renderConsoleSettings(editable, readOnly, {body, count, limit, locked, onChange}) {
-  addSettingSelectRow(editable, 'Serial consoles', [[1, '1 · ttyS0'], [2, '2 · ttyS0 and ttyS1']].slice(0, Math.max(1, limit)),
-    Math.min(count, limit), locked || limit < 2, value => onChange(Number(value)));
-  if (limit < 2) addSettingTextRow(editable, '', 'This system exposes only ttyS0.');
-  addSettingRow(readOnly, 'VM serial port', body.console?.guest || 'ttyS0 · 115200 baud');
+// A checkbox row for one serial port.
+function addPortRow(container, port, description, checked, disabled, onChange) {
+  const row = document.createElement('div');
+  row.className = 'setting-row';
+  const title = document.createElement('span');
+  title.className = 'setting-label';
+  title.textContent = port;
+  const content = document.createElement('label');
+  content.className = 'create-autostart setting-value';
+  const input = document.createElement('input');
+  input.type = 'checkbox';
+  input.checked = checked;
+  input.disabled = disabled;
+  input.addEventListener('change', () => onChange(input.checked));
+  content.append(input, description);
+  row.append(title, content);
+  container.append(row);
+}
+
+// editable and readOnly are the tab's two containers; ports is the host's list, limit the list
+// its system exposes (store.images[].serialPorts); onChange(ports) saves the new list.
+export function renderConsoleSettings(editable, readOnly, {body, ports, limit, locked, onChange}) {
+  const [main, second] = ConsoleId.PORTS;
+  addPortRow(editable, main, 'main console, always on', true, true, () => {});
+  const exposed = limit.includes(second);
+  addPortRow(editable, second, exposed ? 'second console' : 'not exposed by this system', exposed && ports.includes(second), locked || !exposed,
+    checked => onChange(checked ? [main, second] : [main]));
+  if (!exposed) addSettingTextRow(editable, '', `This system exposes only ${limit.join(', ')}.`);
+  addSettingRow(readOnly, 'Serial ports', ports.join(', '));
   addSettingRow(readOnly, 'Console socket', body.console?.socket || '');
-  if (body.console2) {
-    addSettingRow(readOnly, 'Second serial port', body.console2.guest);
-    addSettingRow(readOnly, 'Second console socket', body.console2.socket);
-  }
+  if (body.console2) addSettingRow(readOnly, 'Second console socket', body.console2.socket);
   if (body.monitor) addSettingRow(readOnly, 'Monitor socket', body.monitor);
 }
