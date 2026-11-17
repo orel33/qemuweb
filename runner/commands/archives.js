@@ -100,8 +100,8 @@ const commands = {
     try {
       const autoStart = query.autoStart === 'true';
       if (query.autoStart !== undefined && !['true', 'false'].includes(query.autoStart)) throw new Error('Invalid automatic start option.');
-      const discardStaleDisks = query.discardStaleDisks === 'true';
-      if (query.discardStaleDisks !== undefined && !['true', 'false'].includes(query.discardStaleDisks)) throw new Error('Invalid working disk option.');
+      const discardDisks = query.discardDisks === 'true';
+      if (query.discardDisks !== undefined && !['true', 'false'].includes(query.discardDisks)) throw new Error('Invalid working disk option.');
       stage = fs.mkdtempSync(path.join(session.runtimeDir, '.session-import-'));
       if (session.nodes.size) throw statusError('Load requires an empty session.', 409);
       if (contentType !== 'application/zip') throw new Error('Choose a QemuWeb ZIP archive.');
@@ -118,7 +118,7 @@ const commands = {
       const {archivedSessionFiles, validateArchiveSession, installArchive} = snapshotOf(context);
       const files = await readArchive(upload, stage);
       const snapshot = archivedSessionFiles(stage, files);
-      const warnings = await validateArchiveSession(snapshot, stage, {discardStaleDisks});
+      const warnings = await validateArchiveSession(snapshot, stage, {discardDisks});
       installArchive(snapshot, stage);
       // The session was empty: the loaded nodes are all of its nodes (same start as Resume all).
       const {startErrors} = autoStart ? await runner.startAllNodes() : {startErrors: []};

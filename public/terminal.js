@@ -37,6 +37,8 @@ function applyPaneFontSize(pane) {
     button.title = `${index === 0 ? 'Decrease' : 'Increase'} terminal font size (${size} px)`;
     button.setAttribute('aria-label', button.title);
   }
+  pane.fontSizeLabel.textContent = String(size);
+  pane.fontSizeLabel.title = `Terminal font size: ${size} px`;
 }
 function changePaneFontSize(pane, change) {
   const current = pane.fontSizeOverride ?? generalSettings.consoleFontSize;
@@ -210,7 +212,14 @@ function clearPaneConsole(pane) {
   if (observing || !pane.machineId || pane.view !== 'console' || !machines.has(pane.machineId)) return;
   const buffer = pane.terminal.buffer.active;
   const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) || '';
-  pane.socket.emit('clear-console', {id: pane.machineId, line, column: buffer.cursorX});
+  const clear = () => pane.socket.emit('clear-console', {id: pane.machineId, line, column: buffer.cursorX});
+  clear();
+  if (machines.get(pane.machineId).kind !== 'host' || !canType(pane)) return;
+  fitTerminal(pane);
+  pane.socket.emit('input', `stty rows ${pane.terminal.rows} cols ${pane.terminal.cols}\r`);
+  setTimeout(() => {
+    if (pane.view === 'console' && pane.machineId) clear();
+  }, 300);
 }
 
 export function initTerminals() {
@@ -239,7 +248,6 @@ export function initTerminals() {
       replayGeneration: 0,
       replaying: false,
       replayPending: '',
-      cursorReportDeadline: 0,
       fontSizeOverride: null
     };
     pane.viewMenu = document.createElement('details');
@@ -355,8 +363,8 @@ export function initTerminals() {
     pane.clearButton = document.createElement('button');
     pane.clearButton.type = 'button';
     pane.clearButton.className = 'pane-clear-button write-action';
-    pane.clearButton.title = 'Clear console';
-    pane.clearButton.setAttribute('aria-label', 'Clear console');
+    pane.clearButton.title = 'Clear console and resize the guest terminal';
+    pane.clearButton.setAttribute('aria-label', 'Clear console and resize the guest terminal');
     pane.clearButton.hidden = true;
     pane.clearButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-clear-icon"></use></svg>';
     pane.clearButton.addEventListener('click', () => clearPaneConsole(pane));
@@ -379,6 +387,10 @@ export function initTerminals() {
       button.addEventListener('click', () => changePaneFontSize(pane, change));
       return button;
     });
+    pane.fontSizeLabel = document.createElement('span');
+    pane.fontSizeLabel.className = 'pane-font-size';
+    pane.fontSizeLabel.hidden = true;
+    pane.fontButtons[0].after(pane.fontSizeLabel);
     pane.expandButton.after(...pane.fontButtons);
     terminal.onScroll(() => syncConsoleScroll(pane));
     terminal.onData(data => {
@@ -387,14 +399,8 @@ export function initTerminals() {
       else if (pane.view === 'console') {
         if (!canType(pane)) return;
         const machine = machines.get(pane.machineId);
-        // resize queries device attributes before requesting cursor position.
-        // Other cursor replies can be echoed literally by serial getty at boot.
-        if (machine?.kind === 'host' && /\x1b\[\?[\d;]+c/.test(data)) pane.cursorReportDeadline = Date.now() + 10000;
-        const input = machine?.kind === 'host' ? data.replace(/\x1b\[\d+;\d+R/g, reply => {
-          if (Date.now() > pane.cursorReportDeadline) return '';
-          pane.cursorReportDeadline = 0;
-          return reply;
-        }) : data;
+        // Cursor position replies are dropped for hosts: a serial getty can echo them literally at boot.
+        const input = machine?.kind === 'host' ? data.replace(/\x1b\[\d+;\d+R/g, '') : data;
         if (input) pane.socket.emit('input', input);
       }
     });

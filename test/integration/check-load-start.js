@@ -2,7 +2,7 @@
 
 // Loads demo/lan.zip the way the Web interface's Load session button does (public/archive.js:
 // archive summary, base image check only when the archive has working disks, then
-// POST /api/session-archive/import?autoStart=true&discardStaleDisks=false) and checks that the
+// POST /api/session-archive/import?autoStart=true&discardDisks=false) and checks that the
 // server's own start path brings up the switch and the four hosts. No ping, no guest login.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -140,7 +140,7 @@ async function run() {
   console.log(`Load start: demo/lan.zip summary: ${counts('host')} hosts and ${counts('switch')} switches, no working disk, so no base image check (as in the Web interface)`);
 
   // (2) The import request of the button.
-  const result = await client.request('/api/session-archive/import?autoStart=true&discardStaleDisks=false', {
+  const result = await client.request('/api/session-archive/import?autoStart=true&discardDisks=false', {
     method: 'POST', body: fs.readFileSync(archiveFile), headers: {'content-type': 'application/zip'}
   });
   assert.equal(result.ok, true);

@@ -2,6 +2,7 @@
 // host.json of hosts with a working disk, since only those depend on it. No server and no emulator
 // process is needed.
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -52,7 +53,7 @@ test('a working disk whose base image changed is refused, or discarded on reques
     /Base image debian13-legacy changed since this session was saved; working disks of h1 cannot be reused\. Enable "Discard working disks/);
 
   const discarded = archive([host({disk: true, baseImage: changed})]);
-  const warnings = await snapshot.validateArchiveSession(discarded, stage, {discardStaleDisks: true});
+  const warnings = await snapshot.validateArchiveSession(discarded, stage, {discardDisks: true});
   assert.equal(warnings.length, 1);
   assert.equal(warnings[0].system, 'debian13-legacy');
   assert.deepEqual(warnings[0].hosts, [HOST]);
@@ -79,4 +80,30 @@ test('host.json may carry a baseImage', t => {
   const files = snapshot.archivedSessionFiles(stage, ['session.json', `${HOST}/host.json`]);
   assert.deepEqual(files.hosts[0].baseImage, baseImage);
   assert.equal(files.hosts[0].disk, false);
+});
+
+test('discardDisks ignores every working disk, even when the base image is unchanged', async t => {
+  const {snapshot, host, archive, stage, size, dir} = setup(t);
+  const sha256 = crypto.createHash('sha256').update(fs.readFileSync(path.join(dir, 'base.raw'))).digest('hex');
+  const current = {format: 'raw', size, sha256};
+  // The stand-in disk is no QCOW2 overlay: kept, it fails the overlay checks that follow the identity check.
+  await assert.rejects(snapshot.validateArchiveSession(archive([host({disk: true, baseImage: current})]), stage),
+    error => !/changed since this session was saved/.test(error.message));
+  assert.equal(fs.existsSync(path.join(stage, HOST, 'disk.qcow2')), true);
+
+  const discarded = archive([host({disk: true, baseImage: current})]);
+  const warnings = await snapshot.validateArchiveSession(discarded, stage, {discardDisks: true});
+  assert.equal(warnings.length, 1);
+  assert.deepEqual(warnings[0].hosts, [HOST]);
+  assert.match(warnings[0].message, /Working disks of h1 were discarded/);
+  assert.equal(discarded.hosts[0].disk, false);
+  assert.equal(fs.existsSync(path.join(stage, HOST, 'disk.qcow2')), false);
+});
+
+test('discardDisks does not need a valid base image identity and ignores archives without disks', async t => {
+  const {snapshot, host, archive, stage} = setup(t);
+  const broken = archive([host({disk: true, baseImage: {format: 'raw'}})]);
+  await assert.rejects(snapshot.validateArchiveSession(broken, stage), /Invalid base image identity for h1/);
+  assert.equal((await snapshot.validateArchiveSession(broken, stage, {discardDisks: true})).length, 1);
+  assert.deepEqual(await snapshot.validateArchiveSession(archive([host()]), stage, {discardDisks: true}), []);
 });

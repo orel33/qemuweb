@@ -54,6 +54,7 @@ function updatePaneStates() {
     pane.clearButton.disabled = !machine || pane.view !== 'console';
     pane.expandButton.hidden = !machine || (store.layoutSize === 1 && store.expandedPaneIndex === null);
     for (const button of pane.fontButtons) button.hidden = !machine;
+    pane.fontSizeLabel.hidden = !machine;
     const state = machine
       ? machine.error ? 'error' : machine.busy ? (machine.operation || 'starting') : machine.running ? 'running' : 'stopped'
       : workspaceError && pane.index === store.activePaneIndex ? 'error' : 'empty';
@@ -184,7 +185,7 @@ function updateWorkspaceLayout() {
 // arrows/Home/End move, Enter/Space choose, Escape/Tab close; a click outside closes.
 const LAYOUT_SVG = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">';
 const LAYOUTS = [
-  {id: 'single', label: '1 terminal', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/>'},
+  {id: 'single', label: '1 terminal', icon: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="M10 4v4"/><path d="M2 8h20"/><path d="M6 4v4"/>'},
   {id: 'columns-2', label: '2 terminals, side by side', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M12 3v18"/>'},
   {id: 'rows-2', label: '2 terminals, stacked', icon: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M3 12h18"/>'},
   {id: 'grid-4', label: '4 terminals', icon: '<rect width="7" height="7" x="3" y="3" rx="1"/><rect width="7" height="7" x="14" y="3" rx="1"/><rect width="7" height="7" x="14" y="14" rx="1"/><rect width="7" height="7" x="3" y="14" rx="1"/>'}
@@ -330,7 +331,6 @@ function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
     pane.replayGeneration++;
     pane.replayPending = '';
     pane.replaying = !!pane.machineId;
-    pane.cursorReportDeadline = 0;
     pane.terminal.reset();
   });
   store.activePaneIndex = activeIndex;

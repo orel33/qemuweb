@@ -63,7 +63,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
     return {sources, hosts, switches, logicalBytes, allocatedBytes, estimatedBytes, runningHosts: runningHosts.length};
   }
 
-  async function validateArchiveSession(snapshot, stage, {discardStaleDisks = false} = {}) {
+  async function validateArchiveSession(snapshot, stage, {discardDisks = false} = {}) {
     const warnings = [];
     if (!['qemu', 'vbox'].includes(snapshot.engine) ||
         !Array.isArray(snapshot.hosts) || !Array.isArray(snapshot.switches)) {
@@ -116,6 +116,18 @@ function createSessionSnapshot({session, runner, commands, emit}) {
       if (host.config.startupDiskEnabled ?? profile.startupDiskEnabled) validateStartupTemplate(media.script, host.network.interfaces, true);
       if (host.disk) expectedFiles.add(`${host.id}/disk.qcow2`);
     }
+    // discardDisks ignores every working disk of the archive: the hosts start from the current base images.
+    if (discardDisks) {
+      const withDisk = snapshot.hosts.filter(host => host.disk);
+      for (const host of withDisk) {
+        host.disk = false;
+        fs.rmSync(path.join(stage, host.id, 'disk.qcow2'), {force: true});
+      }
+      if (withDisk.length) {
+        warnings.push({hosts: withDisk.map(host => host.id),
+          message: `Working disks of ${withDisk.map(host => host.name).join(', ')} were discarded and these hosts will start from the current base images.`});
+      }
+    }
     // A working disk only stores differences from the base image it was created on, so only hosts
     // with a disk carry that image's identity (their host.json "baseImage"). Hosts without a
     // working disk start from the current image, whatever the image the session was saved with:
@@ -141,8 +153,8 @@ function createSessionSnapshot({session, runner, commands, emit}) {
         return expected && (expected.size !== actual.size || expected.sha256 !== actual.sha256);
       });
       if (!stale.length) continue;
-      if (!discardStaleDisks) {
-        throw new Error(`Base image ${id} changed since this session was saved; working disks of ${stale.map(host => host.name).join(', ')} cannot be reused. Enable "Discard working disks whose base image changed" to load the session without them.`);
+      if (!discardDisks) {
+        throw new Error(`Base image ${id} changed since this session was saved; working disks of ${stale.map(host => host.name).join(', ')} cannot be reused. Enable "Discard working disks" to load the session without them.`);
       }
       for (const host of stale) {
         host.disk = false;
