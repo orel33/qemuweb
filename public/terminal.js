@@ -278,7 +278,9 @@ function clearPaneConsole(pane) {
   if (machine.kind !== 'host' || !canType(pane)) return;
   // The size is typed into the guest only where a command can be typed: not at a login or password
   // prompt, not while a command runs, and not after text already typed on the line.
-  const atShellPrompt = /[#$%>]$/.test(line) && buffer.cursorX >= line.length;
+  // The prompt ends with the written space after # or $ (xterm keeps it): it is ignored for the test.
+  const prompt = line.trimEnd();
+  const atShellPrompt = /[#$%>]$/.test(prompt) && buffer.cursorX >= prompt.length;
   if (!atShellPrompt) {
     logClearNote(machine, `Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt (line: "${line}", cursor at ${buffer.cursorX}, line length ${line.length}).`);
     return;
