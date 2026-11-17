@@ -259,12 +259,8 @@ export function appendLog(machine, line) {
   }
 }
 
-// A short note under the machine's controls (cleared after 5 s).
-function notePaneError(machine, note) {
-  machine.error = note;
-  updateControls();
-  setTimeout(() => { if (machine.error === note) { machine.error = ''; updateControls(); } }, 5000);
-}
+// What Clear did not do is written in the machine's Log view (it is not a failure of the machine).
+function logClearNote(machine, note) { appendLog(machine, `Clear: ${note}`); }
 
 function clearPaneConsole(pane) {
   if (observing || !pane.machineId || !isConsoleView(pane.view) || !machines.has(pane.machineId)) return;
@@ -273,7 +269,7 @@ function clearPaneConsole(pane) {
   // A full-screen program (nano, vi, less) draws on the alternate screen: clearing would only blank
   // it, so nothing is cleared until the program exits.
   if (buffer.type !== 'normal') {
-    notePaneError(machine, 'Console not cleared: a full-screen program is running.');
+    logClearNote(machine, 'Console not cleared: a full-screen program is running.');
     return;
   }
   const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) || '';
@@ -284,7 +280,7 @@ function clearPaneConsole(pane) {
   // prompt, not while a command runs, and not after text already typed on the line.
   const atShellPrompt = /[#$%>]$/.test(line) && buffer.cursorX >= line.length;
   if (!atShellPrompt) {
-    notePaneError(machine, `Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt (line: "${line}", cursor at ${buffer.cursorX}, line length ${line.length}).`);
+    logClearNote(machine, `Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt (line: "${line}", cursor at ${buffer.cursorX}, line length ${line.length}).`);
     return;
   }
   fitTerminal(pane);
