@@ -5,7 +5,6 @@
 //   {mode: 'terminals' | 'graphic',
 //    layout: 'single' | 'columns-2' | 'rows-2' | 'grid-4',
 //    panes: (nodeId | null)[],   exactly paneCount(layout) entries, in pane order; null = empty
-//    expanded: null | integer,   the pane shown full-size, 0 <= expanded < panes.length
 //    switches: boolean,          switch consoles shown
 //    active: nodeId | null}      the selected node
 // The console page is not part of it: paging only decides which nodes are assigned to the
@@ -17,7 +16,7 @@
 })(typeof globalThis === 'object' ? globalThis : this, function () {
   const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
   const MODES = ['terminals', 'graphic'];
-  const KEYS = ['mode', 'layout', 'panes', 'expanded', 'switches', 'active'];
+  const KEYS = ['mode', 'layout', 'panes', 'switches', 'active'];
 
   // Number of panes of a layout, 0 for an unknown one.
   function paneCount(layout) {
@@ -29,11 +28,10 @@
   // With nodeIds null, any string is accepted as a node ID (shape check only).
   function normalizeView(raw, nodeIds = null) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-    const {mode, layout, panes, expanded, switches, active} = raw;
+    const {mode, layout, panes, switches, active} = raw;
     const count = paneCount(layout);
     if (!MODES.includes(mode) || !count || typeof switches !== 'boolean') return null;
     if (!Array.isArray(panes) || panes.length !== count || panes.some(id => id !== null && typeof id !== 'string')) return null;
-    if (expanded !== null && !(Number.isInteger(expanded) && expanded >= 0 && expanded < count)) return null;
     if (active !== null && typeof active !== 'string') return null;
     const known = id => {
       if (typeof id !== 'string' || !id) return null;
@@ -41,7 +39,7 @@
       return (Array.isArray(nodeIds) ? nodeIds.includes(id) : nodeIds.has(id)) ? id : null;
     };
     const ids = panes.map(known).map((id, index, list) => (id && list.indexOf(id) === index ? id : null));
-    return {mode, layout, panes: ids, expanded, switches, active: known(active)};
+    return {mode, layout, panes: ids, switches, active: known(active)};
   }
 
   // Whether two view states are equal (both valid).

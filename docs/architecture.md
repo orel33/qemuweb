@@ -188,20 +188,20 @@ classic script shared by the server and the browser: `paneCount`,
   layout:   'single' | 'columns-2' | 'rows-2' | 'grid-4',
   panes:    (nodeId | null)[],   exactly paneCount(layout) entries: the node shown in each
                                  pane, in pane order; null = empty pane
-  expanded: null | integer,      the pane shown full-size, 0 <= expanded < panes.length
   switches: boolean,             switch consoles shown
   active:   nodeId | null }      the selected node (tab or graphic selection)
 ```
 
 `normalizeView` returns a valid view state or null: known keys only (others
 dropped), known layouts and modes, `panes` of the right length with strings or
-null, `expanded` in range; node IDs not in the given list become null, and a
-node shown in two panes is kept in the first one. The console page is not part
+null; node IDs not in the given list become null, and a node shown in two panes is kept in the first one. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
-the resulting `panes` is what is published.
+the resulting `panes` is what is published. A pane's "Show only this terminal"
+button is just the `single` layout showing that pane's node, in the pane's
+view; the Layout menu brings the other layouts back.
 
 In the browser, `captureView()` reads the view and `applyView(view)` shows one
-(layout, switch consoles, expanded pane, the panes' nodes through the same
+(layout, switch consoles, the panes' nodes through the same
 assignment as the pane node menu, active node, mode), without saving it and
 attaching only the consoles of panes whose node changes. `viewChanged()`, at
 the end of `setPaneSessions` (so `showPage`), `focusPane` and

@@ -253,10 +253,10 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .pane-clear-button:not(:disabled):hover { border-color: #c49aff; background: #304256; }
 .pane-clear-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .pane-clear-button svg { width: 18px; height: 18px; }
-.pane-expand-button { display: grid; place-items: center; flex: none; width: var(--control-small); height: var(--control-small); padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #9fc5ef; }
-.pane-expand-button:hover { border-color: #9fc5ef; background: #304256; }
-.pane-expand-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
-.pane-expand-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.pane-solo-button { display: grid; place-items: center; flex: none; width: var(--control-small); height: var(--control-small); padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #9fc5ef; }
+.pane-solo-button:hover { border-color: #9fc5ef; background: #304256; }
+.pane-solo-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+.pane-solo-button svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .pane-session-title { display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 240px; box-sizing: border-box; height: var(--control-small); padding: 0 9px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 700 13px/28px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pane-session-title[hidden], .pane-session-menu[hidden] { display: none; }
 .pane-session-title[data-empty="true"] { padding-left: 0; border-color: transparent; background: transparent; color: #9daec0; }
