@@ -346,7 +346,8 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
   assert.deepEqual(normalizeView({...view, page: 2, expanded: 1, extra: 1}, nodes), view, 'extra keys (page, a former expanded) are dropped');
   assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
-    {...view, panes: [null, sw, null, host], active: null}, 'unknown nodes become null, a node is kept in its first pane');
+    {...view, panes: [null, sw, null, host], views: ['console', 'console', 'console', 'console'], active: null},
+    'unknown nodes become null (their pane shows the console), a node is kept in its first pane');
   assert.deepEqual(normalizeView({...view, panes: ['x', null, null, null]}, null).panes, ['x', null, null, null], 'shape check only');
   for (const [layout, panes] of [['single', [sw]], ['columns-2', [sw, host]], ['rows-2', [null, null]]]) {
     assert.deepEqual(normalizeView({...view, layout, panes}, nodes).panes, panes);
