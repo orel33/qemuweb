@@ -52,14 +52,16 @@ function processTable() {
 
 const readLink = target => { try { return fs.readlinkSync(target); } catch (_) { return ''; } };
 const isNode = entry => /(^|\/)node$/.test(entry.args.split(' ')[0]);
-const isServer = entry => isNode(entry) && /(^| )(\S*\/)?server\.js( |$)/.test(entry.args);
-// ./scripts/runner.sh runs `node runner/main.js` from the project directory (relative path).
+// The server and the runner are recognised the same way: `node server/main.js` and
+// `node runner/main.js`, by an absolute path or a relative one (./scripts/runner.sh, start.sh).
+const isServer = entry => isNode(entry) && /(^| )(\S*\/)?server\/main\.js( |$)/.test(entry.args);
 const isRunner = entry => isNode(entry) && /(^| )(\S*\/)?runner\/main\.js( |$)/.test(entry.args);
 
-// The root directory of a server: its working directory, or the folder of an absolute server.js.
-function serverRoot(entry) {
-  const script = entry.args.split(' ').find(word => /(^|\/)server\.js$/.test(word));
-  if (script && script.startsWith('/')) return path.dirname(script);
+// The project directory of a server or a runner: the parent of the folder of its absolute
+// server/main.js or runner/main.js, or its working directory when the path is relative.
+function projectRoot(entry) {
+  const script = entry.args.split(' ').find(word => /(^|\/)(server|runner)\/main\.js$/.test(word));
+  if (script && script.startsWith('/')) return path.dirname(path.dirname(script));
   return readLink(`/proc/${entry.pid}/cwd`);
 }
 
@@ -79,14 +81,14 @@ function findServers(table, options) {
   const scanAll = () => {
     for (const entry of table.values()) {
       if (entry.uid !== process.getuid() || !isServer(entry)) continue;
-      const root = serverRoot(entry);
-      if (root && fs.existsSync(path.join(root, 'lib', 'session-manager.js'))) add(entry, root, recordedPort(root, entry.pid));
+      const root = projectRoot(entry);
+      if (root && fs.existsSync(path.join(root, 'server', 'session-manager.js'))) add(entry, root, recordedPort(root, entry.pid));
     }
   };
   if (options.pid) {
     const entry = table.get(options.pid);
     if (!entry || !isServer(entry)) { console.error(`PID ${options.pid} is not a QemuWeb server.`); process.exit(1); }
-    const root = serverRoot(entry);
+    const root = projectRoot(entry);
     add(entry, root, recordedPort(root, entry.pid));
   } else if (options.all) {
     scanAll();
@@ -299,11 +301,19 @@ function runnerPort(entry) {
   return match ? Number(match[1]) : null;
 }
 
+// The project directory of the server a runner dials: the one holding the --connect socket
+// (runtime/runner-<port>.sock), else the runner's own project (--port).
+function runnerServerRoot(entry) {
+  const socket = /(\S*runner-\d+\.sock)/.exec(entry.args)?.[1];
+  return socket ? path.dirname(path.dirname(socket)) : projectRoot(entry);
+}
+
 // A runner is a process of its own, never a child of the server. It keeps its sessions while the
 // server is away, so it is not an orphan: it waits for a server.
 function standaloneRunnerReport(entry, servers, style, details) {
   const port = runnerPort(entry);
-  const connected = port !== null && servers.some(server => server.port === port);
+  const dialled = runnerServerRoot(entry);
+  const connected = port !== null && servers.some(server => server.port === port && server.root === dialled);
   const machines = descendants(entry);
   const label = connected ? 'Runner' : 'Runner (waiting for a server)';
   return [`${runnerLine(entry, machines, style, label)}${port ? style.dim(` · port ${port}`) : ''}`,
@@ -317,9 +327,17 @@ function report(options) {
   measureCpu(table, servers);
   const lines = [`${style.bold('QemuWeb processes')} of ${process.env.USER || process.getuid()} at ${new Date().toTimeString().slice(0, 8)}`];
   if (options.fellBack) lines.push('', style.dim(`No server is recorded in ${path.join(ROOT, 'runtime')}: showing the QemuWeb servers of this user started elsewhere.`));
-  for (const server of servers) lines.push('', ...serverReport(server, style));
-  for (const entry of table.values()) {
-    if (entry.uid !== process.getuid() || !isRunner(entry)) continue;
+  const runners = [...table.values()].filter(entry => entry.uid === process.getuid() && isRunner(entry));
+  for (const server of servers) {
+    lines.push('', ...serverReport(server, style));
+    if (server.port && !runners.some(entry => runnerPort(entry) === server.port && runnerServerRoot(entry) === server.root)) {
+      lines.push(style.dim('   no runner connected: start one with ./scripts/runner.sh'));
+    }
+  }
+  for (const entry of runners) {
+    // Without --all, only the runners of this project and of the servers shown.
+    const dialled = runnerServerRoot(entry);
+    if (!options.all && dialled !== ROOT && !servers.some(server => server.root === dialled)) continue;
     lines.push('', ...standaloneRunnerReport(entry, servers, style, options.details));
   }
   if (!servers.length && !lines.some(line => line.includes('Runner ('))) {

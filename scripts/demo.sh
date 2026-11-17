@@ -16,7 +16,7 @@ fi
 demo_server_pid=''
 demo_dir="$(mktemp -d "${TMPDIR:-/tmp}/qemuweb-demo-XXXXXX")"
 
-# Stops the server (it removes its sessions and nodes, and stops its runner) and deletes the temporary users file.
+# Stops start.sh (it stops the runner, which stops the nodes, then the server) and deletes the temporary users file.
 cleanup() {
   trap - EXIT
   if [[ -n "$demo_server_pid" ]] && kill -0 "$demo_server_pid" 2>/dev/null; then
