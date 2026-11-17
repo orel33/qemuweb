@@ -287,6 +287,10 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .pane-view-menu .console-view-toggle button:hover, .pane-view-menu .console-view-toggle button[aria-pressed="true"] { background: #304256; color: #fff; }
 .pane-view-menu .console-view-toggle button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: -2px; }
 .console-view-toggle svg, .pane-view-menu summary svg { flex: none; width: 18px; height: 18px; }
+/* Port number of a host's serial console (0 for ttyS0, 1 for ttyS1) on the shared terminal icon. */
+.console-view-toggle button[data-port], .pane-view-menu summary[data-port] { position: relative; }
+.console-view-toggle button[data-port]::after, .pane-view-menu summary[data-port]::after { content: attr(data-port); position: absolute; top: 2px; left: 17px; font-size: 9px; font-weight: 700; line-height: 1; color: #9cc8ff; pointer-events: none; }
+.pane-view-menu summary[data-port]::after { top: 1px; left: auto; right: 1px; }
 .console-pane-state { display: inline-flex; flex: none; align-items: center; height: 32px; padding: 0 7px; border: 1px solid #405166; border-radius: 5px; background: #101820; color: #bdc8d6; font-size: 11px; white-space: nowrap; }
 .console-pane-state[data-state="running"] { color: #7ae4a3; }
 .console-pane-state[data-state="stopped"] { color: #ffd17c; }

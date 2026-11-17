@@ -44,8 +44,9 @@ test('each console pane owns an in-place Console/Monitor/Log switch and one xter
   assert.match(html, /aria-label="Console" title="Console"/);
   assert.match(html, /aria-label="Monitor" title="Monitor"/);
   assert.match(html, /aria-label="Log" title="Log"/);
-  for (const icon of ['SquareTerminal', 'MonitorCog', 'FileText']) {
-    assert.equal((html.match(new RegExp(`data-icon="${icon}"`, 'g')) || []).length, 4);
+  // Both consoles of a host (ttyS0, ttyS1) share the SquareTerminal icon.
+  for (const [icon, perPane] of [['SquareTerminal', 2], ['MonitorCog', 1], ['FileText', 1]]) {
+    assert.equal((html.match(new RegExp(`data-icon="${icon}"`, 'g')) || []).length, 4 * perPane);
   }
 });
 

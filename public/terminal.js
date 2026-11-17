@@ -173,10 +173,12 @@ function setPaneView(pane, view) {
 function updatePaneViewMenuIcon(pane) {
   const selected = pane.viewButtons.find(button => button.dataset.view === pane.view);
   const label = selected.getAttribute('aria-label');
-  if (pane.viewMenuToggle.dataset.view === pane.view && pane.viewMenuToggle.dataset.label === label) return;
+  const port = selected.dataset.port || '';
+  if (pane.viewMenuToggle.dataset.view === pane.view && pane.viewMenuToggle.dataset.label === label && (pane.viewMenuToggle.dataset.port || '') === port) return;
   pane.viewMenuToggle.replaceChildren(selected.querySelector('svg').cloneNode(true));
   pane.viewMenuToggle.dataset.view = pane.view;
   pane.viewMenuToggle.dataset.label = label;
+  if (port) pane.viewMenuToggle.dataset.port = port; else delete pane.viewMenuToggle.dataset.port;
   pane.viewMenuToggle.title = `${label} · choose terminal view`;
   pane.viewMenuToggle.setAttribute('aria-label', pane.viewMenuToggle.title);
 }
@@ -197,6 +199,9 @@ export function updatePaneViewControls() {
         button.setAttribute('aria-label', label);
         const text = button.querySelector('span');
         if (text) text.textContent = label;
+        // Both consoles of a host share one icon; a small 0 or 1 tells them apart.
+        if (hasSecondConsole(machine)) button.dataset.port = button.dataset.view === 'console2' ? '1' : '0';
+        else delete button.dataset.port;
       }
     });
     if ((pane.view === 'monitor' && !monitorSupported) || (pane.view === 'console2' && !hasSecondConsole(machine))) {
