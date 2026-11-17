@@ -69,8 +69,6 @@ button:disabled { opacity: .45; cursor: default; }
 .layout-menu button:hover, .layout-menu button:focus-visible { background: #304256; color: #fff; outline: none; }
 .layout-menu button[aria-checked="true"] { background: #355177; color: #fff; }
 .layout-menu button[aria-checked="true"]::after { content: "✓"; margin-left: auto; color: #9ee6b4; font-weight: 700; }
-#toggle-console-columns { position: relative; }
-.has-menu::after { content: ""; position: absolute; right: 3px; bottom: 3px; width: 10px; height: 10px; background: currentColor; opacity: .75; pointer-events: none; -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat; mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='3.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E") center / contain no-repeat; }
 [hidden] { display: none !important; }
 .network-controls { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; padding: 14px; border: 1px solid #35404c; border-radius: 7px; background: #141c26; color: #bdc8d6; font-size: 13px; }
 .network-controls[hidden] { display: none; }

@@ -214,7 +214,19 @@ function clearPaneConsole(pane) {
   const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) || '';
   const clear = () => pane.socket.emit('clear-console', {id: pane.machineId, line, column: buffer.cursorX});
   clear();
-  if (machines.get(pane.machineId).kind !== 'host' || !canType(pane)) return;
+  const machine = machines.get(pane.machineId);
+  if (machine.kind !== 'host' || !canType(pane)) return;
+  // The size is typed into the guest only where a command can be typed: not in a full-screen
+  // program (nano, vi, less use the alternate screen), not at a login or password prompt, not
+  // while a command runs, and not after text already typed on the line.
+  const atShellPrompt = buffer.type === 'normal' && /[#$%>]$/.test(line) && buffer.cursorX >= line.length;
+  if (!atShellPrompt) {
+    const note = 'Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt.';
+    machine.error = note;
+    updateControls();
+    setTimeout(() => { if (machine.error === note) { machine.error = ''; updateControls(); } }, 5000);
+    return;
+  }
   fitTerminal(pane);
   pane.socket.emit('input', `stty rows ${pane.terminal.rows} cols ${pane.terminal.cols}\r`);
   setTimeout(() => {
@@ -390,8 +402,7 @@ export function initTerminals() {
     pane.fontSizeLabel = document.createElement('span');
     pane.fontSizeLabel.className = 'pane-font-size';
     pane.fontSizeLabel.hidden = true;
-    pane.fontButtons[0].after(pane.fontSizeLabel);
-    pane.expandButton.after(...pane.fontButtons);
+    pane.expandButton.after(pane.fontButtons[0], pane.fontSizeLabel, pane.fontButtons[1]);
     terminal.onScroll(() => syncConsoleScroll(pane));
     terminal.onData(data => {
       if (pane.replaying || !pane.machineId) return;
