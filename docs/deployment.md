@@ -55,8 +55,8 @@ other machines, with tokens and TLS, come with a later milestone.
 There is one way to start it, in every environment:
 
 - **`./scripts/start.sh`** (what `npm start`, `scripts/demo.sh` and the integration tests
-  use) starts `./scripts/server.sh --listen N --runtime DIR` and, once the socket exists, `./scripts/runner.sh
-  --port N --runtime DIR --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
+  use) starts `./scripts/server.sh --listen PORT --runtime DIR` and, once the socket exists, `./scripts/runner.sh
+  --port PORT --runtime DIR --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
   and `[runner]`. Ctrl+C or SIGTERM stops the runner first (it stops every machine), kills what
   is left of its group (QEMU, `vde_switch`), then stops the server, and exits 0. When the runner
   ends for any reason (even SIGKILL), what is left of its group is killed at once and the
@@ -65,15 +65,19 @@ There is one way to start it, in every environment:
 - **`./scripts/server.sh` and `./scripts/runner.sh` by themselves** (two terminals, or the two
   services below): the server opens HTTP at once and prints "No runner connected. Start one
   with ./scripts/runner.sh, or run ./scripts/start.sh for the server and a runner". Until a
-  runner connects, session routes answer 503 ("No runner is connected."). `--listen <n>` selects
-  the server's port (default 3002; the runner then needs `--port <n>`). Without `--exit-on-disconnect` the runner keeps its
+  runner connects, session routes answer 503 ("No runner is connected."). `--listen PORT` selects
+  the server's port (default 3002; the runner then needs `--port PORT`). Without `--exit-on-disconnect` the runner keeps its
   machines if the server restarts and reconnects within 2 seconds of the server being back.
 
 The runner runs under a normal account, never root (`scripts/runner.sh` refuses
-root); it needs the `kvm` group for `/dev/kvm`. It prints its own checks on its
-console: "Checking dependencies…", "Checking configuration…" and the state of
-the connection (waiting for the server, connected, refused, lost). Under
-`scripts/start.sh` they carry the `[runner]` prefix.
+root); it needs the `kvm` group for `/dev/kvm`. Both programs print, in this order, a
+banner (`QemuWeb <version> server|runner`), their `Options` (value and source of every
+option), "Checking dependencies…" (the server runs no external program: one `-` line) and
+"Checking configuration…"; the runner then prints the state of the connection (waiting for the
+server, connected, refused, lost). A refused option ends either program with status 2 and a
+`<program>: <message>` line; a failed check ends it with status 1 ("Startup aborted"). Under
+`scripts/start.sh` the lines carry the `[server]` and `[runner]` prefixes. See
+[the command line](../README.md#server-and-runner-command-line).
 
 - **Engines:** a runner needs VDE, `genisoimage`, Node.js and Python, and at
   least one engine. QEMU (with its disk tool) and VirtualBox are checked

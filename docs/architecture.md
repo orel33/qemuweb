@@ -244,13 +244,14 @@ The server is split into layers with one-way dependencies:
   and `runner-gateway.js` (the runners and their connections), `server-instance.js`
   (server records used by the scripts) and `auth/` (authentication).
 - **`server/routes/`** and **`server/sockets.js`** form the web layer: HTTP routes by area and
-  Socket.IO wiring. `server/main.js` only starts and wires everything.
+  Socket.IO wiring. `server/main.js` only starts (arguments and checks) and `server/serve.js` wires everything.
 - **`common/`** holds code shared by the runner and the server, including the
   protocol framing.
 
 | Module | Role |
 | --- | --- |
-| `server/main.js` | Startup and wiring: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
+| `server/main.js` | Entry point: command line (`common/cli.js`, table in `server/options.js`), banner, `Options`, `Checking dependencies…`, then `server/startup-checks.js` (`Checking configuration…`: `config.json`, users file, log and runtime directories); the web stack is loaded only after these pass, so `--help` and a refused option answer at once. |
+| `server/serve.js` | Wiring of the web stack: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
 | `server/options.js` | The server's command line: `--listen <port>` (default 3002) and `--runtime <dir>` (default `runtime/`), anything else refused with exit status 2. |
 | `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
@@ -271,7 +272,7 @@ The server is split into layers with one-way dependencies:
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
 | `server/audit.js` | Log directory (`logs/` or `--logs`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
-| `runner/main.js` | Runner process entry point: options (`--port` or `--connect`, `--runtime`, `--config`, `--exit-on-disconnect`), preflight, its own configuration checks, connection and its state lines. |
+| `runner/main.js` | Runner process entry point, same startup sequence as the server: command line (`common/cli.js`, table in `runner/options.js`: `--port` or `--connect`, `--runtime`, `--config`, `--exit-on-disconnect`), banner, `Options`, preflight, its own configuration checks, connection and its state lines. |
 | `runner/index.js` | Runner facade: `createRunnerService`, `serveConnection`, `resolveCommands`. |
 | `runner/service.js` | Every session of the runner: `session.create`/`session.delete`, command dispatch (404 for an unknown session or node), console input, `hello` with the capabilities, `runtimeRoot` and the sessions (ID, owner, creation date), shutdown. |
 | `runner/endpoint.js` | The runner side of a connection: requests in arrival order, events, console output coalescing and backpressure. |
@@ -502,7 +503,7 @@ evaluated by each runner over its own sessions.
 
 A runner always dials the server; the server never connects out, and never
 starts or supervises a runner. A runner is a process of its own, started by
-`./scripts/runner.sh` (`runner/main.js --port <n>`): by `./scripts/start.sh`,
+`./scripts/runner.sh` (`runner/main.js --port PORT`): by `./scripts/start.sh`,
 which runs the server and a runner as two commands (development, tests, demo),
 by hand, or as a systemd service. The server only listens; a runner dials in at
 any time, and the server serves browsers without waiting for it. Session
@@ -588,7 +589,7 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
   `--connect <socket>` (control connection), `--runtime <dir>` (sessions,
   default the project's `runtime/`, shared with the server), `--config <file>` (system catalog,
-  default the project's `config.json`). `--port <n>` is `--connect <this
+  default the project's `config.json`). `--port PORT` is `--connect <this
   project>/runtime/runner-<n>.sock`. `scripts/runner.sh` gets `--runtime runtime/`, so the files on disk do not change.
   The 5c configuration (`~/.config/qemuweb-runner/config.toml`, systemd
   `--user` unit) is out of scope here.

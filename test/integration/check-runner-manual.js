@@ -119,7 +119,7 @@ async function run() {
   assert.equal((await carol.fetch('/api/nodes')).status, 503, 'a session route answers 503 without a runner');
   const before = await adminRunners(boss);
   assert.deepEqual(before.runners, []);
-  assert.match(before.connectHint, /scripts\/runner\.sh$/);
+  assert.match(before.connectHint, /scripts\/runner\.sh --port \d+$/);
   assert.match(serverOutput, /No runner connected/);
   assert.equal(fs.statSync(path.join(runtime, `runner-${port}.sock`)).mode & 0o777, 0o600);
   console.log('Manual: no runner, session routes answer 503, /api/admin/runners is empty with its hint');

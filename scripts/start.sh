@@ -3,8 +3,10 @@
 # runner (the process that runs the machines), each as its own command. This is the only way to
 # start QemuWeb here, in development and in the tests. Output lines are prefixed [server] and
 # [runner].
-#   ./scripts/start.sh [server options]   (--listen N, --runtime DIR, --users FILE, --logs DIR, --session-hours N,
+#   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --users FILE, --logs DIR, --session-hours N,
 #                                          --trust-proxy VALUE, --no-auth, --ephemeral: see node server/main.js --help)
+# The server gets all of them; the runner gets --port PORT (the server's --listen), --runtime DIR and
+# --exit-on-disconnect. A refused option is reported by the server (exit status 2, nothing started).
 # Each process leads its own process group (setsid): a terminal Ctrl+C reaches this script only.
 # Ctrl+C or SIGTERM stops the runner first (it stops every machine, within a bounded delay), kills
 # what is left of its group (QEMU, vde_switch), then stops the server, and exits 0. When the
@@ -20,7 +22,7 @@ script_path="$(readlink -f -- "${BASH_SOURCE[0]}")"
 root="$(cd -- "$(dirname -- "$script_path")/.." && pwd -P)"
 cd -- "$root"
 usage() {
-  echo "Usage: $0 [server options]   (node server/main.js --help lists them; --listen and --runtime also go to the runner)"
+  echo "Usage: $0 [server options]   (node server/main.js --help lists them; --listen PORT and --runtime DIR also go to the runner)"
 }
 # The options are the server's: it validates them and refuses what it does not know (this script
 # then ends with its status). Only --listen and --runtime are read here, for the runner and its socket.
