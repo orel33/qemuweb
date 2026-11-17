@@ -79,6 +79,12 @@ it starts; it needs the `kvm` group for `/dev/kvm`.
 - **Startup failure:** a missing executable or a runner that does not connect
   within 10 seconds stops the server with the runner's message on its output.
   Another server already using the socket of the same port is refused.
+- **Configuration warnings:** once the runner has announced itself, the server
+  prints "Checking configuration…" with one line per warning about `config.json`
+  on this machine, marked with a warning icon (a system whose base image is
+  missing, with the `prepare.sh` command to run; default memory or processors
+  larger than the machine). The server still starts. Without warnings it prints
+  a check mark and the number of systems.
 - **Runner crash:** the server keeps running. It kills the runner's process
   group, closes the sessions that ran on it (their machines are gone; users'
   pages reload into a new, empty session, recorded as `session-deleted` with

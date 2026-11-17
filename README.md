@@ -277,7 +277,7 @@ feature have no login on `ttyS1`: run `scripts/prepare.sh` again.
 
 | File | Purpose |
 | --- | --- |
-| [`config.json`](config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. |
+| [`config.json`](config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. `serialPorts` lists the serial ports of a system (`ttyS0`, `ttyS1`): QemuWeb turns each into a QEMU `-serial` option, in order. |
 | [`.env`](.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
 | `users.json` | User accounts (see [Users and sessions](#users-and-sessions)); ignored by Git. |

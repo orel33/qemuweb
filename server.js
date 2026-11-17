@@ -123,6 +123,11 @@ server.on('error', error => {
 // Browsers are served once the local runner said hello; a runner that cannot start stops the server.
 localRunner.start().then(hello => {
   if (!hello.kvm) console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
+  // The runner checks config.json against its machine and announces what is worth a warning.
+  console.log('Checking configuration…');
+  const warnings = Array.isArray(hello.warnings) ? hello.warnings : [];
+  if (!warnings.length) console.log(`  \x1b[32m✓\x1b[0m config.json  ${Object.keys(hello.images || {}).length} systems`);
+  for (const warning of warnings) console.warn(`  \x1b[33m⚠\x1b[0m ${warning}`);
   server.listen(port, '127.0.0.1', onListening);
 }, error => {
   console.error(`Cannot start the local runner: ${error.message}`);

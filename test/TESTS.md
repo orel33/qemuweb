@@ -26,6 +26,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `runner-boundaries.test.js` | Check the dependency rules: `runner/` requires only `runner/`, `common/`, Node built-ins and `node-pty`; the rest of the server requires only `runner/index.js`. |
 | `session-manager.test.js` | Check one session per user (random ID, `owner` in `meta.json`, `runtime/users/<login>` alias), independent runners and events, deletion, exit cleanup, pruning of empty sessions, server records, and that the owner stays out of `session.json` and archives. |
 | `session-archive-validation.test.js` | Check archive validation: base image identities in the `host.json` of hosts with a working disk, older `session.json` inventories, refused or discarded stale disks, `discardDisks` dropping every working disk, no identity needed without a disk, a `profileHash` key refused as an unknown keyword, an override equal to the profile default accepted. |
+| `config-warnings.test.js` | Check the config.json warnings a runner announces at startup: a missing base image names the system and the `prepare.sh` command, no warning when the images exist, default memory or processors above the machine, and a bounded list. |
 | `session-archive.test.js` | Write and read session ZIP archives; reject modified, unsafe or incomplete ones. |
 | `session-log.test.js` | Check log replay, clearing and history limits. |
 | `tcg09-graphic.test.js` | Build the network graph from example topologies and check links, positions and states. |

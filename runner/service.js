@@ -18,6 +18,7 @@ const {PROTOCOL_VERSION} = require('../common/runner-protocol');
 const {Session, SESSION_ID} = require('./session');
 const {createSessionRunner} = require('./session-runner');
 const {knownImageIdentity} = require('./media/image-hash');
+const {configWarnings} = require('./config-warnings');
 const {statusError} = require('./commands/errors');
 
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
@@ -120,8 +121,10 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
     let kvm = true;
     try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); } catch (_) { kvm = false; }
     const images = {};
+    let warnings = [];
     try {
       const catalog = readCatalog(configPath);
+      warnings = configWarnings({catalog, root, engines: availableEngines, cpus: os.cpus().length, memoryBytes: os.totalmem()});
       for (const [system, profiles] of Object.entries(catalog.systems)) {
         if (system === 'default') continue;
         const entry = {};
@@ -133,7 +136,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
         images[system] = entry;
       }
     } catch (error) { console.error(`Cannot read the system catalog: ${error.message}`); }
-    return {engines: availableEngines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem(), images};
+    return {engines: availableEngines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem(), images, warnings};
   }
 
   function hello() {

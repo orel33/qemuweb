@@ -157,9 +157,13 @@ the runner (`serial`/`serialBuffer`, `serial1`/`serialBuffer1`); the startup
 hook marker filter applies to channel 0 only.
 
 The serial ports of a host are the `serialPorts` key of a system profile in
-`config.json`, a list of port names (`["ttyS0", "ttyS1"]` for `debian13-legacy`
-and `debian13-cloud` on QEMU via `serialPorts:qemu`; absent = `["ttyS0"]`
-elsewhere, VirtualBox included). `common/console-id.js` holds the allowed names
+`config.json`, a list of port names: `systems.default` declares `["ttyS0"]`, and
+`debian13-legacy` and `debian13-cloud` replace it on QEMU with `["ttyS0",
+"ttyS1"]` through `serialPorts:qemu` (VirtualBox keeps `["ttyS0"]`; a profile
+without a valid list is refused). The list drives the QEMU command line: the
+runner adds one `-serial unix:<node dir>/serial.sock,server=on,wait=off` for
+`ttyS0` and one `serial1.sock` for `ttyS1`, in list order, so a port that is not
+listed gets no `-serial` option. `common/console-id.js` holds the allowed names
 (`PORTS`) and `validatePorts`: a list must start with `ttyS0` and be a
 contiguous prefix of `PORTS` (QEMU numbers `-serial` devices in order, and
 `ttyS0` is the kernel console), and a host's list must also be a prefix of its
@@ -378,6 +382,7 @@ output as UTF-8 (`StringDecoder`), and browsers receive strings.
 hello     runner -> CP, first message of every connection
           {type:'hello', protocol:1, pid, engines:['qemu'|'vbox'...], kvm,
            cpus, memoryBytes, images:{<system>:{raw?, vdi?}} (each {size, sha256|null}),
+           warnings:[<sentence>...] (config.json against this machine, max 20),
            sessions:[{sessionId, engine, nodes:[<listNodes entry>...]}]}
 request   CP -> runner  {type:'request', id, command, sessionId?, args}
 response  runner -> CP  {type:'response', id, result}
@@ -545,7 +550,12 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
   `engines`, `kvm` (true when `/dev/kvm` is readable and writable),
   `cpus`, `memoryBytes`, and `images` (per system of its catalog: the RAW
   and VDI images present, with size and SHA-256 when known from
-  `<image>.sha256` or the cache, never computed at connection time).
+  `<image>.sha256` or the cache, never computed at connection time), and
+  `warnings`: sentences from `runner/config-warnings.js` about `config.json`
+  on this machine (a system whose base image is missing, default memory or
+  processors above what the machine has). The local runner's warnings are
+  printed by the server at startup, under "Checking configuration…", with a
+  warning icon; the registry keeps them in the runner's capabilities.
 - Nothing in the protocol relies on a shared user, uid or filesystem: paths
   never cross the connection as data the other side opens (archives travel as
   streams, the launch preview shows paths for display only), and a session
