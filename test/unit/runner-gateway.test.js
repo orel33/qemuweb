@@ -38,7 +38,7 @@ test('the socket is private (0600)', async t => {
   assert.equal(fs.statSync(gateway.socketPath).mode & 0o777, 0o600);
 });
 
-test('manual mode accepts one runner, trusted, and refuses a second while it lives', async t => {
+test('the gateway accepts one runner, trusted, and refuses a second while it lives', async t => {
   const {registry, dial} = await setup(t);
   const first = await dial();
   await new Promise(resolve => setTimeout(resolve, 50));
