@@ -51,7 +51,7 @@ User=qemuweb
 WorkingDirectory=/srv/qemuweb
 Environment=PORT=3002
 Environment=QEMUWEB_TRUST_PROXY=loopback
-ExecStart=/usr/bin/node server.js
+ExecStart=/usr/bin/node server.js --local
 KillSignal=SIGTERM
 KillMode=mixed
 TimeoutStopSec=30
@@ -60,21 +60,47 @@ TimeoutStopSec=30
 WantedBy=multi-user.target
 ```
 
-Stopping the service stops every machine of every user and empties
-`runtime/sessions/`; tell users to save a session ZIP first.
+`--local` makes the server start and supervise its own runner (see below), as
+`npm start` does. Stopping the service then stops every machine of every user
+and empties `runtime/sessions/`; tell users to save a session ZIP first.
 
 `KillMode=mixed` sends SIGTERM to the server only: the server then stops its
 runner, which stops the machines in order. SIGKILL goes to every remaining
 process of the unit only after `TimeoutStopSec`.
 
+To keep the machines running while the server restarts (an upgrade, a crash),
+run the runner on its own: see "Server and runner as two services" below.
+
 ## The runner process
 
-The server does not run the machines itself. At startup it creates the socket
-`runtime/runner-<port>.sock` (mode 0600), starts `node runner/main.js`
-(the local runner) as its child, and serves browsers only once the runner has
-connected and announced itself. The runner runs under the same account as the
-server, never root, in its own process group with every QEMU and `vde_switch`
-it starts; it needs the `kvm` group for `/dev/kvm`.
+The server does not run the machines itself: a **runner** (`runner/main.js`)
+does. A runner always dials the server, on the Unix socket
+`runtime/runner-<port>.sock` (mode 0600, so only the server's own account can
+connect). The server never reaches out to a runner, and the web interface only
+*displays* runners (the **Runners** section of `/admin`): it registers none.
+One runner is accepted for now; a second connection is refused. Runners on
+other machines, with tokens and TLS, come with a later milestone.
+
+There are two ways to run it:
+
+- **`node server.js --local`** (what `npm start` and `scripts/demo.sh` do): the
+  server starts a runner as its child, in its own process group with every
+  QEMU and `vde_switch` it starts, supervises it, and serves browsers only once
+  it has announced itself. The runner ends with the server.
+- **`node server.js`** (manual mode, the default): the server starts nothing,
+  opens HTTP at once and prints "No runner connected. Start one with
+  ./scripts/runner.sh". Until a runner connects, session routes answer 503
+  ("No runner is connected."). Start the runner from another terminal with
+  `./scripts/runner.sh` (`PORT=<n>` selects the server's port, default 3002;
+  `--exit-on-disconnect` makes it end with the server). It keeps its machines
+  if the server restarts and reconnects within 2 seconds of the server being
+  back.
+
+The runner runs under a normal account, never root (`scripts/runner.sh` refuses
+root); it needs the `kvm` group for `/dev/kvm`. It prints its own checks on its
+console: "Checking dependencies…", "Checking configuration…" and the state of
+the connection (waiting for the server, connected, refused, lost). With
+`--local` these lines appear on the server's console.
 
 - **Engines:** a runner needs VDE, `genisoimage`, Node.js and Python, and at
   least one engine. QEMU (with its disk tool) and VirtualBox are checked
@@ -83,29 +109,81 @@ it starts; it needs the `kvm` group for `/dev/kvm`.
   runners that do not all have both. A new session uses the first engine the
   runner has. QEMU also needs `/dev/kvm`: when it is not accessible the runner
   warns at startup and QEMU hosts cannot start.
-- **Startup failure:** a missing common tool, no engine at all, or a runner that
-  does not connect within 10 seconds stops the server with the runner's message
-  on its output.
-  Another server already using the socket of the same port is refused.
-- **Configuration warnings:** once the runner has announced itself, the server
-  prints "Checking configuration…" with one line per warning about `config.json`
-  on this machine, marked with a warning icon (a system whose base image is
-  missing, with the `prepare.sh` command to run; default memory or processors
-  larger than the machine). The server still starts. Without warnings it prints
-  a check mark and the number of systems.
-- **Runner crash:** the server keeps running. It kills the runner's process
-  group, closes the sessions that ran on it (their machines are gone; users'
-  pages reload into a new, empty session, recorded as `session-deleted` with
-  the reason `runner lost` in `users.log`) and starts a new runner after 1, 2,
-  then 4 seconds. After three failed restarts in a row it exits with status 1,
-  and systemd's `Restart=` policy, if any, takes over.
-- **Server crash:** the runner notices the closed connection, stops every
-  machine, removes the session directories and exits.
-- **What to check:** `ps -o pid,pgid,args -C node` shows the server and its
-  runner (`runner/main.js --connect .../runner-3002.sock ...`); the machines
-  share the runner's process group. `scripts/killall.sh` also stops runner
-  processes. VirtualBox VMs run under VBoxSVC, outside that group: after a
-  runner crash, `scripts/killall.sh` cleans them up.
+- **Startup failure:** a missing common tool or no engine at all stops the
+  runner with its message. With `--local`, a runner that does not connect within
+  10 seconds also stops the server. Another server already using the socket of
+  the same port is refused.
+- **Configuration warnings:** the runner prints one line per warning about
+  `config.json` on this machine, marked with a warning icon (a system whose base
+  image is missing, with the `prepare.sh` command to run; default memory or
+  processors larger than the machine); without warnings, a check mark and the
+  number of systems. They are also announced to the server and shown in the
+  **Runners** section of `/admin`.
+- **Start-time memory warning:** when a host starts and the hosts running on
+  that runner (every session) would reserve more than 90 % of the machine's
+  RAM, a `# Warning:` line is added to the host's Log. The host still starts.
+- **Server restart with a manual runner:** the runner keeps its machines. When
+  it reconnects, the server **adopts** each of its sessions for its owner (the
+  login recorded in the session's `meta.json`): the user logs in again (cookies
+  do not survive a restart) and finds the same session, machines and consoles,
+  recorded as `session-adopted` in `users.log`. Only the trusted local runner is
+  adopted. A session whose owner is invalid, or already has a session, is
+  deleted on the runner. Sessions the server no longer knows are never kept.
+- **Files shared with the runner:** the server touches the runner's files only
+  when it shares `runtime/` with it: it prunes empty `runtime/sessions/<id>`
+  directories only with `--local`, and creates the `runtime/users/<login>`
+  aliases only when the runner's `runtimeRoot` (announced in `hello`) is the
+  server's own `runtime/` (`scripts/runner.sh` uses it). A runner started with
+  another `--runtime` is not touched.
+- **Runner crash:** the server keeps running; the sessions that ran on the
+  runner are closed (their machines are gone; users' pages reload into a new,
+  empty session, recorded as `session-deleted` with the reason `runner lost` in
+  `users.log`). With `--local` the server kills the runner's process group and
+  starts a new runner after 1, 2, then 4 seconds; after three failed restarts it
+  exits with status 1, and systemd's `Restart=` policy, if any, takes over. In
+  manual mode nothing is restarted: start the runner again. Machines of a dead
+  manual runner may be left running (QEMU belongs to its process group):
+  `scripts/killall.sh` stops them.
+- **Server crash:** with `--local` the runner notices the closed connection,
+  stops every machine, removes the session directories and exits. A manual
+  runner keeps everything and reconnects.
+- **What to check:** `./scripts/tree.sh` shows each server, its runner and the
+  machines below it. A runner started by hand appears on its own, as "Runner
+  (started by hand)" while a server is connected, or "Runner (waiting for a
+  server)". `ps -o pid,pgid,args -C node` shows `runner/main.js --port 3002 ...`
+  (or `--connect .../runner-3002.sock ...` with `--local`).
+  `scripts/stop.sh` stops the server only. `scripts/killall.sh` also stops
+  runner processes. VirtualBox VMs run under VBoxSVC, outside the runner's
+  group: after a runner crash, `scripts/killall.sh` cleans them up.
+
+### Server and runner as two services
+
+The server and the runner can be two systemd services of the same machine, so
+that restarting the server (an upgrade) leaves the machines running. The
+server unit is the one above without `--local`; the runner is a user service
+(never root), here for an account `qemuweb` that also runs the server:
+
+```ini
+# /etc/systemd/system/qemuweb.service
+[Service]
+User=qemuweb
+WorkingDirectory=/srv/qemuweb
+Environment=PORT=3002
+ExecStart=/usr/bin/node server.js
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+# ~qemuweb/.config/systemd/user/qemuweb-runner.service (systemd --user, loginctl enable-linger qemuweb)
+[Service]
+WorkingDirectory=/srv/qemuweb
+Environment=PORT=3002
+ExecStart=/srv/qemuweb/scripts/runner.sh
+KillMode=mixed
+Restart=on-failure
+```
+
+Both must share `/srv/qemuweb/runtime` (the runner socket is in it). Stopping
+the runner service stops its machines.
 
 ## Server logs
 
@@ -152,6 +230,7 @@ never written; reading the session list or the logs is not logged.
 | `login`, `logout` | none. |
 | `login-failed` | none; `user` is the login name that was tried (control characters removed, at most 64 characters), whether or not the account exists. |
 | `session-created` | `sessionId`. |
+| `session-adopted` | `sessionId`. The server restarted and a runner that kept its machines reconnected: its session was taken over for its owner. |
 | `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it; `null` when the session was dropped), and `reason` when it was dropped: `runner lost` (its runner died) or `creation failed`. |
 | `node-created` | `nodeId`, `kind` (`host` or `switch`). |
 | `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Resume all**, **Stop all** and the removal of every node: `all`). |
