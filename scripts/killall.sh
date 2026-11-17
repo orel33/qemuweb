@@ -23,10 +23,12 @@ matching_pids() {
     mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || continue
     (( ${#args[@]} )) || continue
     if [[ "$kind" == runner ]]; then
-      # The local runner process, started by server.js with the absolute path of runner/main.js.
+      # A runner of this project: started by server.js --local (absolute path of runner/main.js)
+      # or by hand with ./scripts/runner.sh (runner/main.js from the project directory).
       [[ "${exe##*/}" == node ]] || continue
+      cwd="$(readlink -f -- "$proc/cwd" 2>/dev/null || true)"
       for arg in "${args[@]:1}"; do
-        if [[ "$arg" == "$ROOT/runner/main.js" ]]; then printf '%s\n' "$pid"; break; fi
+        if [[ "$arg" == "$ROOT/runner/main.js" || ( "$arg" == runner/main.js && "$cwd" == "$ROOT" ) ]]; then printf '%s\n' "$pid"; break; fi
       done
     elif [[ "$kind" == server ]]; then
       [[ "${exe##*/}" == node ]] || continue
@@ -78,7 +80,7 @@ if (( ! DRY_RUN )); then
   signal_pids KILL server
 fi
 
-# A runner left without its server destroys its nodes and exits on its own; SIGTERM does the same.
+# A runner started by server.js --local ends on its own without its server; a runner started by hand keeps its nodes, SIGTERM stops them.
 signal_pids TERM runner
 if (( ! DRY_RUN )); then
   for _ in {1..12}; do

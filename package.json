@@ -20,6 +20,7 @@
     "test:session-reconnect": "node test/integration/session-reconnect.js",
     "test:admin": "node test/integration/admin.js",
     "test:check-runner": "node test/integration/check-runner.js",
+    "test:check-runner-manual": "node test/integration/check-runner-manual.js",
     "test:check-load": "node test/integration/check-load.js",
     "test:check-load-start": "node test/integration/check-load-start.js",
     "test:check-console": "node test/integration/check-console.js"
