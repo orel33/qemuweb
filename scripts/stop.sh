@@ -20,6 +20,7 @@ read -r pid < "$pid_file"
 if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
   rm -f -- "$pid_file"
   rm -f -- "$session_file"
+  rm -f -- "$root/runtime/runner-$port.sock"
   echo "No QemuWeb server running on port $port (stale PID removed)."
   exit 0
 fi

@@ -11,7 +11,7 @@ elif (( $# != 0 )); then
   exit 2
 fi
 
-# Seuls les serveurs dont le répertoire de travail est ce projet sont concernés.
+# Only the processes that belong to this project are matched (by path or working directory).
 matching_pids() {
   local kind="$1" proc pid exe cwd arg matched
   local -a args
@@ -38,6 +38,14 @@ matching_pids() {
         fi
       done
       (( matched )) && printf '%s\n' "$pid"
+    elif [[ "$kind" == vde ]]; then
+      # VDE switches and terminals of this project, left behind when server and runner are killed with KILL.
+      [[ "${exe##*/}" == vde_switch || "${exe##*/}" == vdeterm ]] || continue
+      cwd="$(readlink -f -- "$proc/cwd" 2>/dev/null || true)"
+      if [[ "$cwd" == "$RUNTIME" || "$cwd" == "$RUNTIME/"* ]]; then printf '%s\n' "$pid"; continue; fi
+      for arg in "${args[@]:1}"; do
+        if [[ "$arg" == *"$RUNTIME/"* ]]; then printf '%s\n' "$pid"; break; fi
+      done
     else
       [[ "${exe##*/}" == qemu-system-x86_64 ]] || continue
       for arg in "${args[@]:1}"; do
@@ -80,7 +88,7 @@ if (( ! DRY_RUN )); then
   signal_pids KILL runner
 fi
 
-# Récupère les QEMU de ce projet, y compris ceux orphelins ou en préparation.
+# Collects the QEMU processes of this project, including orphaned ones and those used for preparation.
 signal_pids TERM qemu
 if (( ! DRY_RUN )); then
   for _ in {1..3}; do
@@ -90,7 +98,17 @@ if (( ! DRY_RUN )); then
   signal_pids KILL qemu
 fi
 
-# Une VM VirtualBox peut survivre au serveur qui l'a créée.
+# VDE switches and terminals of this project that survived their server and runner.
+signal_pids TERM vde
+if (( ! DRY_RUN )); then
+  for _ in {1..3}; do
+    [[ -z "$(matching_pids vde)" ]] && break
+    sleep 1
+  done
+  signal_pids KILL vde
+fi
+
+# A VirtualBox VM can survive the server that created it.
 if command -v VBoxManage >/dev/null 2>&1; then
   while IFS= read -r entry; do
     [[ "$entry" =~ ^\"(qemuweb-[0-9]+-[A-Za-z0-9_-]+)\"[[:space:]] ]] || continue
@@ -110,7 +128,7 @@ if command -v VBoxManage >/dev/null 2>&1; then
   fi
 fi
 
-if (( ! DRY_RUN )) && { [[ -n "$(matching_pids server)" ]] || [[ -n "$(matching_pids runner)" ]] || [[ -n "$(matching_pids qemu)" ]]; }; then
+if (( ! DRY_RUN )) && { [[ -n "$(matching_pids server)" ]] || [[ -n "$(matching_pids runner)" ]] || [[ -n "$(matching_pids qemu)" ]] || [[ -n "$(matching_pids vde)" ]]; }; then
   echo 'Project processes are still running; cleanup cancelled.' >&2
   exit 1
 fi
