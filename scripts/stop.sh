@@ -2,9 +2,9 @@
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-# Stops the QemuWeb server of this project: ./scripts/stop.sh [--listen N] [--runtime DIR]
+# Stops the QemuWeb server of this project: ./scripts/stop.sh [--listen PORT] [--runtime DIR]
 usage() {
-  echo "Usage: $0 [--listen N] [--runtime DIR]"
+  echo "Usage: $0 [--listen PORT] [--runtime DIR]"
 }
 parse_options() {
   port=3002
@@ -65,7 +65,7 @@ for _ in {1..60}; do
     while IFS= read -r runner; do
       [[ "$(readlink -f -- "/proc/$runner/cwd" 2>/dev/null || true)" == "$root" ]] || continue
       cmdline=" $(tr '\0' ' ' < "/proc/$runner/cmdline" 2>/dev/null || true)"
-      # The runner of this server: --port N, or no --port at all when the port is the default 3002.
+      # The runner of this server: --port PORT, or no --port at all when the port is the default 3002.
       if [[ "$cmdline" == *" --port $port "* ]] || { [[ "$cmdline" != *" --port "* ]] && (( port == 3002 )); }; then
         if [[ "$cmdline" == *--exit-on-disconnect* ]]; then
           echo "The runner of start.sh (PID $runner) stops its machines and exits by itself."

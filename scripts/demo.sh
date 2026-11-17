@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Demo of the Web interface on port 3003 or --listen N: a separate, temporary users file (never the
+# Demo of the Web interface on port 3003 or --listen PORT: a separate, temporary users file (never the
 # repository's users.json) with admin/admin (admin), toto/toto and tutu/tutu (students), and
 # demo/lan.zip loaded and started in the sessions of toto and tutu. Passwords equal to logins
 # exist only in this mode.
-#   ./scripts/demo.sh [--listen N]
+#   ./scripts/demo.sh [--listen PORT]
 # Stop with Ctrl+C; scripts/stop.sh and scripts/status.sh also find the server.
 set -euo pipefail
 
@@ -12,9 +12,9 @@ cd -- "$ROOT"
 port=3003
 case "${1:-}" in
   '') ;;
-  -h|--help) echo "Usage: $0 [--listen N]"; exit 0 ;;
-  --listen) [[ $# -eq 2 ]] || { echo "Usage: $0 [--listen N]" >&2; exit 2; }; port="$2" ;;
-  *) echo "Usage: $0 [--listen N]" >&2; exit 2 ;;
+  -h|--help) echo "Usage: $0 [--listen PORT]"; exit 0 ;;
+  --listen) [[ $# -eq 2 ]] || { echo "Usage: $0 [--listen PORT]" >&2; exit 2; }; port="$2" ;;
+  *) echo "Usage: $0 [--listen PORT]" >&2; exit 2 ;;
 esac
 if [[ ! "$port" =~ ^[0-9]+$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
   echo "Invalid port: $port (1 to 65535)" >&2

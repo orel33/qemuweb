@@ -300,7 +300,7 @@ function serverReport({entry, root, port}, style) {
   return lines;
 }
 
-// The server port a runner dials: --port N, or runner-N.sock in --connect.
+// The server port a runner dials: --port PORT, or runner-N.sock in --connect.
 function runnerPort(entry) {
   const match = / --port (\d+)( |$)/.exec(entry.args) || /runner-(\d+)\.sock/.exec(entry.args);
   return match ? Number(match[1]) : null;

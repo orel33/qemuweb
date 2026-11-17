@@ -26,7 +26,8 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `runner-boundaries.test.js` | Check the dependency rules: `runner/` requires only `runner/`, `common/`, Node built-ins and `node-pty`; the rest of the server requires only `runner/index.js`. |
 | `session-manager.test.js` | Check one session per user (random ID, `owner` in `meta.json`, `runtime/users/<login>` alias), independent runners and events, deletion, exit cleanup, pruning of empty sessions, server records, and that the owner stays out of `session.json` and archives. |
 | `session-adoption.test.js` | Check the adoption of a runner's sessions at its `hello`: a trusted runner's unknown session with a valid owner is adopted (date, handle, alias), an owner that already has a session, an invalid owner or session ID, or an untrusted runner gets the session deleted, a session the runner no longer reports is dropped, no alias when the runner does not share `runtime/`, and the checks of `reportedSessions`. |
-| `server-startup-report.test.js` | Check the settings the server prints at startup (`server/startup-report.js`): every variable with its value and its source (default, environment, derived), an empty value counting as unset. |
+| `server-startup-report.test.js` | Check the option tables of the server and the runner (`server/options.js`, `runner/options.js`), the `Options` block they print at startup (every option with its value and its source: default, option, derived), the shared `--help` layout, and that the README tables repeat the options, defaults and descriptions word for word. |
+| `cli.test.js` | Check `common/cli.js`: the parser table (unknown flag, missing or invalid value, exclusive options, `--help` anywhere, defaults and `given`), the help formatter, the `Options` block and the banner. |
 | `runner-gateway.test.js` | Check who may connect to `runtime/runner-<port>.sock` (real socket, no server): mode 0600, one runner is accepted and a second refused, the place is free after a loss, and the registry keeps only checked `hello` fields. |
 | `admin-runners.test.js` | Check `GET /api/admin/runners`: summaries (state, engines, systems, warnings, number of sessions), the command hint when no runner is online, and a lost runner not listed. |
 | `session-archive-validation.test.js` | Check archive validation: base image identities in the `host.json` of hosts with a working disk, older `session.json` inventories, refused or discarded stale disks, `discardDisks` dropping every working disk, no identity needed without a disk, a `profileHash` key refused as an unknown keyword, an override equal to the profile default accepted. |
@@ -76,7 +77,7 @@ The four check-network scenarios run `check-network.js` with `GUEST_NETWORK_PROF
 
 ## Manual tests of the Web interface
 
-`./scripts/demo.sh` starts the application on port 3003 (`--listen N` changes it) for manual tests in a browser. It never reads or changes the repository's `users.json`: it writes a separate, temporary users file (`--users`) with three accounts, and deletes it when the application stops (Ctrl+C or TERM). The server runs from the project root, so `./scripts/stop.sh` (with the same `--listen`) and `./scripts/status.sh` find it:
+`./scripts/demo.sh` starts the application on port 3003 (`--listen PORT` changes it) for manual tests in a browser. It never reads or changes the repository's `users.json`: it writes a separate, temporary users file (`--users`) with three accounts, and deletes it when the application stops (Ctrl+C or TERM). The server runs from the project root, so `./scripts/stop.sh` (with the same `--listen`) and `./scripts/status.sh` find it:
 
 | Login | Password | Role | Session at start |
 |---|---|---|---|
