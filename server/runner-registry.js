@@ -1,6 +1,6 @@
 'use strict';
 
-// Every runner the control plane knows, each with its own client (lib/runner-client.js).
+// Every runner the control plane knows, each with its own client (server/runner-client.js).
 // An entry: {id, state, capabilities, runtimeRoot, ownerLogin, trusted, client}
 //   state         'starting' until its hello, 'online', then 'lost' once its connection closed
 //   capabilities  from hello: engines, kvm, cpus, memoryBytes, images, warnings
@@ -8,11 +8,11 @@
 //                 server touches the runner's files only when it equals its own runtime/
 //   ownerLogin    null for a shared runner; reserved for a runner owned by one user (unused)
 //   trusted       true only for the local runner (the one started or reached on the server's
-//                 own Unix socket, mode 0600): its hello may be adopted (lib/session-manager.js).
+//                 own Unix socket, mode 0600): its hello may be adopted (server/session-manager.js).
 //                 A hello is untrusted input: later runners (5c) are never trusted by default.
 // Events: 'online' (entry, hello) on each hello, 'lost' (entry) once the connection closed.
 // There is one entry, "local": the runner of this machine, which dials the server's Unix
-// socket (lib/runner-gateway.js). pickRunner() is the single place
+// socket (server/runner-gateway.js). pickRunner() is the single place
 // where a runner is chosen for a new session.
 const path = require('path');
 const {EventEmitter} = require('events');

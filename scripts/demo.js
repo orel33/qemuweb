@@ -13,8 +13,8 @@
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const {hashPassword} = require('../lib/auth/passwords');
-const {writeUsers} = require('../lib/auth/users-store');
+const {hashPassword} = require('../server/auth/passwords');
+const {writeUsers} = require('../server/auth/users-store');
 const {readArchive} = require('../runner/archive-zip');
 const {QemuWebClient} = require('../test/integration/qemuweb-client');
 

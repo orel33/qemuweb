@@ -2,19 +2,19 @@
 
 // Administration: the /admin page, the /api/admin/* API and the observation gate.
 // Every route of the API lives in one router whose first middleware checks the role, so that
-// a non-admin gets 403 on any path under /api/admin, even an unknown one. server.js mounts it
+// a non-admin gets 403 on any path under /api/admin, even an unknown one. server/main.js mounts it
 // before the middleware that opens the caller's own session: an admin call never opens one.
-// Every action that changes something is written to logs/admin.log (lib/audit.js); reading the
+// Every action that changes something is written to logs/admin.log (server/audit.js); reading the
 // session list is not.
 const path = require('path');
 const express = require('express');
-const {LOG_NAMES, readLogTail} = require('../lib/audit');
+const {LOG_NAMES, readLogTail} = require('../audit');
 const {runnersHandler} = require('./admin-runners');
-const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled, removeAccount} = require('../lib/auth/users-store');
+const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled, removeAccount} = require('../auth/users-store');
 
 // Summary of one session for the supervision table: the control plane's own fields, and the
 // counts the session's runner reports (runner/commands/consoles.js session.summary).
-// browsers: the owner's connected browser tabs (sockets.js).
+// browsers: the owner's connected browser tabs (server/sockets.js).
 async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0) {
   const counts = await runner.request('session.summary');
   return {
@@ -59,7 +59,7 @@ function adminPage(root) {
 }
 
 // disconnectUser(login) closes the user's Socket.IO connections, browsers(login) counts the
-// user's connected browser tabs (sockets.js); logDir holds admin.log and users.log; `port` is the
+// user's connected browser tabs (server/sockets.js); logDir holds admin.log and users.log; `port` is the
 // server's port (the Runners panel, routes/admin-runners.js).
 function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir, port}) {
   const router = express.Router();

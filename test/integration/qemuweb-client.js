@@ -9,8 +9,8 @@ const os = require('node:os');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const io = require('socket.io-client');
-const {hashPassword} = require('../../lib/auth/passwords');
-const {writeUsers} = require('../../lib/auth/users-store');
+const {hashPassword} = require('../../server/auth/passwords');
+const {writeUsers} = require('../../server/auth/users-store');
 
 const root = path.join(__dirname, '..', '..');
 const COOKIE_NAME = 'qemuweb_session';

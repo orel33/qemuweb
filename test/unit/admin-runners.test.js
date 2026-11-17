@@ -1,9 +1,9 @@
-// GET /api/admin/runners (routes/admin-runners.js): the summaries and the connect hint.
+// GET /api/admin/runners (server/routes/admin-runners.js): the summaries and the connect hint.
 const assert = require('node:assert/strict');
 const test = require('node:test');
 const {EventEmitter} = require('node:events');
-const {RunnerRegistry} = require('../../lib/runner-registry');
-const {runnersHandler, runnerSummaries, connectHint} = require('../../routes/admin-runners');
+const {RunnerRegistry} = require('../../server/runner-registry');
+const {runnersHandler, runnerSummaries, connectHint} = require('../../server/routes/admin-runners');
 
 function fakeClient() {
   return Object.assign(new EventEmitter(), {close() { this.emit('close', null); }});

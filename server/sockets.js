@@ -1,7 +1,7 @@
 'use strict';
 
 // Socket.IO layer: forwards runner events to browsers and relays console input. A session is
-// reached only through its runner handle (lib/runner-client.js): node existence, kinds and
+// reached only through its runner handle (server/runner-client.js): node existence, kinds and
 // consoles are the runner's business.
 // Event names and payloads are the wire format the browser relies on.
 // Rooms keep sessions apart:
@@ -14,17 +14,17 @@
 //                                 a console ID is the node ID, or '<nodeId>:1' for a host's
 //                                 second serial port (common/console-id.js)
 // select-node, input and clear-console take a console ID.
-// The handshake must already have set socket.data.user (see lib/auth/). An admin observes
+// The handshake must already have set socket.data.user (see server/auth/). An admin observes
 // another user's session with the handshake option auth: {observe: <login>}: the socket then
 // reads that session (snapshots, console output, logs) but its input, clear-console and
 // terminal-resize are refused, unless that admin took control of the session (input only, on
-// every node), see lib/console-control.js. console-control {admin, active} tells every socket
+// every node), see server/console-control.js. console-control {admin, active} tells every socket
 // of the session (owner and observers) the control state, also at connection. While an admin
 // controls a session, the view goes the other way: the admin's page publishes controller-view,
 // relayed to the session room and shown by the owner's pages.
-const {ConsoleControl} = require('./lib/console-control');
-const {normalizeView} = require('./public/view-state');
-const {baseNodeId} = require('./common/console-id');
+const {ConsoleControl} = require('./console-control');
+const {normalizeView} = require('../public/view-state');
+const {baseNodeId} = require('../common/console-id');
 
 function sessionRoom(session) { return `session:${session.id}`; }
 function observerRoom(session) { return `observers:${session.id}`; }
@@ -79,8 +79,8 @@ function bindWorkspace(io, {session, runner}) {
   }
 }
 
-// audit: lib/audit.js. currentUser(login) returns the account as it is now ({login, role}),
-// or null once it is disabled or removed (lib/auth). Returns {disconnectUser(login), browsers(login)}.
+// audit: server/audit.js. currentUser(login) returns the account as it is now ({login, role}),
+// or null once it is disabled or removed (server/auth). Returns {disconnectUser(login), browsers(login)}.
 function attachSockets(io, manager, {audit, currentUser, control: options = {}}) {
   // The controlling admin's last view, per session ID, kept only while a lock exists there.
   const controllerViews = new Map();

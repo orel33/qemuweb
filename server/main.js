@@ -1,31 +1,31 @@
 'use strict';
 
 // Startup and wiring only: HTTP server, Socket.IO, sessions, runners and routes.
-//   node server.js   the server only: it waits for a runner (./scripts/runner.sh), which keeps
+//   node server/main.js   the server only: it waits for a runner (./scripts/runner.sh), which keeps
 //                    its VMs if the server restarts. ./scripts/start.sh (npm start) runs both.
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
-const {RunnerRegistry} = require('./lib/runner-registry');
-const {createRunnerGateway} = require('./lib/runner-gateway');
-const {ServerInstance} = require('./lib/server-instance');
-const {SessionManager} = require('./lib/session-manager');
+const {RunnerRegistry} = require('./runner-registry');
+const {createRunnerGateway} = require('./runner-gateway');
+const {ServerInstance} = require('./server-instance');
+const {SessionManager} = require('./session-manager');
 const {attachSockets} = require('./sockets');
 const {createSessionRouter} = require('./routes');
-const {readCatalog} = require('./common/system-config');
-const {createAuth} = require('./lib/auth');
-const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog} = require('./lib/audit');
+const {readCatalog} = require('../common/system-config');
+const {createAuth} = require('./auth');
+const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
-const packageInfo = require('./package.json');
+const packageInfo = require('../package.json');
 
 const RUNNER_HINT = './scripts/runner.sh';
 
-const root = __dirname;
+const root = path.join(__dirname, '..');
 const args = process.argv.slice(2);
 if (args.length) {
-  console.error(`Unknown argument: ${args[0]}. Usage: node server.js`);
+  console.error(`Unknown argument: ${args[0]}. Usage: node server/main.js`);
   process.exit(2);
 }
 console.log(`QemuWeb ${packageInfo.version}\n`);
@@ -47,7 +47,7 @@ const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
 
 // One session per user, each with its own HTTP router, executed by a runner that dials
-// runtime/runner-<port>.sock (lib/runner-gateway.js), started by ./scripts/runner.sh.
+// runtime/runner-<port>.sock (server/runner-gateway.js), started by ./scripts/runner.sh.
 const registry = new RunnerRegistry();
 const manager = new SessionManager({runtimeRoot: runtime, registry});
 const gateway = createRunnerGateway({root, runtimeRoot: runtime, port, registry});

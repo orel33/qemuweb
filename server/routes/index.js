@@ -2,7 +2,7 @@
 
 // HTTP API of one session. Each session gets its own router, built when the session is
 // created, whose handlers close over that session and its runner handle only
-// (lib/runner-client.js session()): a request reaches the router of its user's session
+// (server/runner-client.js session()): a request reaches the router of its user's session
 // (req.workspace) and can never name a node of another one. Node routes send one runner
 // command each; the runner answers 404 for a node ID that is not in the session.
 const express = require('express');
@@ -33,7 +33,7 @@ function userEvent(req) {
   }
 }
 
-// runner: the session's runner handle. userLog (lib/audit.js createUserLog) receives the
+// runner: the session's runner handle. userLog (server/audit.js createUserLog) receives the
 // owner's node and archive actions, written once the response is sent, with "ok" or the HTTP
 // error status.
 function createSessionRouter({session, runner, userLog = {record() {}}}) {

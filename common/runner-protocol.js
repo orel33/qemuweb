@@ -1,6 +1,6 @@
 'use strict';
 
-// Runner protocol framing, shared by the control plane (lib/runner-client.js) and the runner
+// Runner protocol framing, shared by the control plane (server/runner-client.js) and the runner
 // (runner/endpoint.js). See "Runner interface" in docs/architecture.md.
 //
 // A frame is a uint32 BE length (of what follows), a type byte, then the payload:

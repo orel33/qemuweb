@@ -1,6 +1,6 @@
 'use strict';
 
-// User accounts in users.json (see lib/auth/users-store.js); run through scripts/user.sh.
+// User accounts in users.json (see server/auth/users-store.js); run through scripts/user.sh.
 //   add <login> [--role student|admin]   create an account
 //   passwd <login>                       change a password
 //   role <login> student|admin           change a role
@@ -14,9 +14,9 @@
 // (first line), else from a prompt without echo.
 const fs = require('fs');
 const path = require('path');
-const {hashPassword} = require('../lib/auth/passwords');
+const {hashPassword} = require('../server/auth/passwords');
 const {readUsers, writeUsers, usersFilePath, validateLogin, validateRole, validatePassword, createAccount, setPassword,
-  setRole, setDisabled, removeAccount} = require('../lib/auth/users-store');
+  setRole, setDisabled, removeAccount} = require('../server/auth/users-store');
 
 const root = path.join(__dirname, '..');
 const USAGE = `Usage: scripts/user.sh <command>

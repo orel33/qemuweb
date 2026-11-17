@@ -6,10 +6,10 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const {spawnSync} = require('node:child_process');
-const {hashPassword, verifyPassword, isPasswordHash} = require('../../lib/auth/passwords');
-const {validateLogin, readUsers, writeUsers, parseUsers, usersFilePath, createUsersStore} = require('../../lib/auth/users-store');
-const {COOKIE_NAME, newSecret, signSession, verifySession, parseCookies, sessionCookie} = require('../../lib/auth/cookie');
-const {createAuth} = require('../../lib/auth');
+const {hashPassword, verifyPassword, isPasswordHash} = require('../../server/auth/passwords');
+const {validateLogin, readUsers, writeUsers, parseUsers, usersFilePath, createUsersStore} = require('../../server/auth/users-store');
+const {COOKIE_NAME, newSecret, signSession, verifySession, parseCookies, sessionCookie} = require('../../server/auth/cookie');
+const {createAuth} = require('../../server/auth');
 
 const root = path.join(__dirname, '..', '..');
 const FAST = {N: 1024};

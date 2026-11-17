@@ -10,8 +10,8 @@ const test = require('node:test');
 const {once} = require('node:events');
 const {createSessionRunner} = require('../../runner/session-runner');
 const {Session} = require('../../runner/session');
-const {SessionManager, userAliasName} = require('../../lib/session-manager');
-const {ServerInstance} = require('../../lib/server-instance');
+const {SessionManager, userAliasName} = require('../../server/session-manager');
+const {ServerInstance} = require('../../server/server-instance');
 const {createSessionSnapshot} = require('../../runner/archive-snapshot');
 const {runnerPair, root, commands} = require('./runner-pair');
 

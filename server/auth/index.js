@@ -48,7 +48,7 @@ function attemptedLogin(login) {
 }
 
 // `secret` signs the login cookies: a new one per server start (injected only by tests).
-// userLog (lib/audit.js createUserLog) receives login, login-failed and logout events.
+// userLog (server/audit.js createUserLog) receives login, login-failed and logout events.
 function createAuth({root, env = process.env, now = Date.now, secret = newSecret(), userLog = {record() {}}}) {
   const mode = authMode(env);
   const lifetimeMs = sessionLifetimeMs(env);
@@ -72,7 +72,7 @@ function createAuth({root, env = process.env, now = Date.now, secret = newSecret
     return user && !user.disabled ? {user: {login: user.login, role: user.role}, payload} : null;
   }
 
-  // Same lookup as the cookie check, for connections opened earlier (sockets.js).
+  // Same lookup as the cookie check, for connections opened earlier (server/sockets.js).
   function currentUser(login) {
     if (mode === 'off') return login === LOCAL_USER.login ? LOCAL_USER : null;
     const user = store.get(login);

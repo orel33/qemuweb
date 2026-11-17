@@ -7,8 +7,8 @@ const {duplexPair} = require('node:stream');
 const {once} = require('node:events');
 const {createRunnerService, serveConnection} = require('../../runner');
 const {Connection} = require('../../common/runner-protocol');
-const {RunnerClient} = require('../../lib/runner-client');
-const {RunnerRegistry} = require('../../lib/runner-registry');
+const {RunnerClient} = require('../../server/runner-client');
+const {RunnerRegistry} = require('../../server/runner-registry');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage'};

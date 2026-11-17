@@ -1,7 +1,7 @@
 'use strict';
 
 // One workspace as the control plane sees it. Each user owns one session, created and tracked
-// by lib/session-manager.js. The control plane chooses the session ID (random) and the runner
+// by server/session-manager.js. The control plane chooses the session ID (random) and the runner
 // that executes it; everything about nodes lives in that runner (see runner/session.js).
 //   lastActivity  ISO date, memory only: the owner's latest API request or console input; an
 //                 administrator observing the session does not change it

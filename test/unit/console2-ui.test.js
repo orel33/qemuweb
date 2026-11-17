@@ -5,7 +5,7 @@ const {EventEmitter} = require('node:events');
 const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
-const {attachSockets, nodeRoom, consoleRoom} = require('../../sockets');
+const {attachSockets, nodeRoom, consoleRoom} = require('../../server/sockets');
 const {publicDir, moduleSource} = require('./web-ui-source');
 
 const HOST = 'h-0123456789abcdef';

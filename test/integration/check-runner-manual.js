@@ -18,7 +18,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
 const {setTimeout: delay} = require('node:timers/promises');
-const {USERS_LOG} = require('../../lib/audit');
+const {USERS_LOG} = require('../../server/audit');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
 
 const root = path.join(__dirname, '..', '..');

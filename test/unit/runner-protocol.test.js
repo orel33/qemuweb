@@ -7,7 +7,7 @@ const {EventEmitter, once} = require('node:events');
 const {duplexPair, Readable, Writable} = require('node:stream');
 const {pipeline} = require('node:stream/promises');
 const {encodeJson, encodeChunk, FrameDecoder, Connection, MAX_FRAME, STREAM_WINDOW} = require('../../common/runner-protocol');
-const {RunnerClient} = require('../../lib/runner-client');
+const {RunnerClient} = require('../../server/runner-client');
 const {serveConnection} = require('../../runner/endpoint');
 const {runnerPair} = require('./runner-pair');
 

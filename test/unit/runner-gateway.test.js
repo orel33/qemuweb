@@ -1,4 +1,4 @@
-// The runner gateway (lib/runner-gateway.js): who may connect, and what the registry keeps of a
+// The runner gateway (server/runner-gateway.js): who may connect, and what the registry keeps of a
 // hello. Real Unix sockets in a short temporary directory; no server and no runner process.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -7,8 +7,8 @@ const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
 const {once} = require('node:events');
-const {createRunnerGateway} = require('../../lib/runner-gateway');
-const {RunnerRegistry} = require('../../lib/runner-registry');
+const {createRunnerGateway} = require('../../server/runner-gateway');
+const {RunnerRegistry} = require('../../server/runner-registry');
 const {Connection} = require('../../common/runner-protocol');
 
 async function setup(t) {

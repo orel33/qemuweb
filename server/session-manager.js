@@ -3,8 +3,8 @@
 // Control plane: one persistent session per user. Maps login -> workspace
 // {owner, session, runner}, creates the session at the user's first request, and keeps it
 // until it is deleted explicitly (closing the browser or logging out stops nothing).
-//   session  lib/session.js: ID, owner, dates, archive lock, and the ID of its runner
-//   runner   the session's handle on its runner client (lib/runner-client.js session())
+//   session  server/session.js: ID, owner, dates, archive lock, and the ID of its runner
+//   runner   the session's handle on its runner client (server/runner-client.js session())
 // The control plane chooses the session ID and the runner (registry.pickRunner, once, at
 // creation); the runner holds everything else. A session whose runner is lost is dropped
 // like a deleted one.
@@ -46,7 +46,7 @@ function reportedSessions(hello) {
 }
 
 class SessionManager extends EventEmitter {
-  // registry: lib/runner-registry.js. Sessions bound to a lost runner are dropped, and on a
+  // registry: server/runner-registry.js. Sessions bound to a lost runner are dropped, and on a
   // runner's hello the sessions are resynchronised (see resync).
   constructor({runtimeRoot, registry}) {
     super();

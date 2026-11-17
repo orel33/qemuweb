@@ -12,7 +12,7 @@ const http = require('node:http');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
-const {setDisabled} = require('../../lib/auth/users-store');
+const {setDisabled} = require('../../server/auth/users-store');
 
 const root = path.join(__dirname, '..', '..');
 const newId = kind => `${kind === 'switch' ? 's' : 'h'}-${crypto.randomBytes(8).toString('hex')}`;

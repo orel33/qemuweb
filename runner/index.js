@@ -5,7 +5,7 @@
 //   serveConnection       the runner side of one protocol connection (endpoint.js)
 //   resolveCommands       executable paths (preflight.js)
 // The control plane never requires runner/: it talks to a runner through the protocol
-// (lib/runner-client.js).
+// (server/runner-client.js).
 const {createRunnerService} = require('./service');
 const {serveConnection} = require('./endpoint');
 const {resolveCommands} = require('./preflight');
