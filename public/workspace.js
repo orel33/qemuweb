@@ -1,7 +1,7 @@
 // Pane layout, paging, node tabs, pane state badges and resource metrics.
 import {machines, saveViewSettings, savedView, store} from './state.js';
 import {jsonRequest, nodeUrl} from './api.js';
-import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, updatePaneViewControls} from './terminal.js';
+import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setPaneView, updatePaneViewControls} from './terminal.js';
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
@@ -52,7 +52,7 @@ function updatePaneStates() {
     pane.settingsButton.hidden = !machine || machine.kind !== 'host';
     pane.clearButton.hidden = !machine;
     pane.clearButton.disabled = !machine || !isConsoleView(pane.view);
-    pane.expandButton.hidden = !machine || (store.layoutSize === 1 && store.expandedPaneIndex === null);
+    pane.soloButton.hidden = !machine || store.layoutSize === 1;
     for (const button of pane.fontButtons) button.hidden = !machine;
     pane.fontSizeLabel.hidden = !machine;
     const state = machine
@@ -134,7 +134,7 @@ function swapPaneSession(pane, selectedId) {
   [entries[currentIndex], entries[selectedIndex]] = [entries[selectedIndex], entries[currentIndex]];
   machines.clear();
   for (const [id, machine] of entries) machines.set(id, machine);
-  showPage(selected.id, true);
+  showPage(selected.id);
 }
 export function consoleSessions() {
   return [...machines.values()].filter(machine => store.showSwitchConsoles || machine.kind !== 'switch');
@@ -150,28 +150,12 @@ function updateSwitchConsoleToggle() {
 }
 
 function updateWorkspaceLayout() {
-  workspace.dataset.layout = store.expandedPaneIndex === null ? store.layout : 'single';
+  workspace.dataset.layout = store.layout;
   const current = LAYOUTS.find(layout => layout.id === store.layout);
   toggleConsoleColumns.innerHTML = layoutIcon(current);
-  toggleConsoleColumns.title = store.expandedPaneIndex === null
-    ? `Layout: ${current.label}` : `Restore the layout (${current.label}) using the terminal button`;
+  toggleConsoleColumns.title = `Layout: ${current.label}`;
   toggleConsoleColumns.setAttribute('aria-label', toggleConsoleColumns.title);
-  toggleConsoleColumns.disabled = store.expandedPaneIndex !== null;
-  if (toggleConsoleColumns.disabled) closeLayoutMenu();
-  for (const pane of panes) {
-    pane.element.hidden = pane.index >= store.layoutSize || (store.expandedPaneIndex !== null && pane.index !== store.expandedPaneIndex);
-    const expanded = pane.index === store.expandedPaneIndex;
-    const label = expanded ? `Restore the layout (${current.label})` : 'Show only this terminal';
-    pane.expandButton.title = label;
-    pane.expandButton.setAttribute('aria-label', label);
-    pane.expandButton.setAttribute('aria-pressed', String(expanded));
-    if (pane.expandButton.dataset.expanded !== String(expanded)) {
-      pane.expandButton.dataset.expanded = String(expanded);
-      pane.expandButton.innerHTML = expanded
-        ? '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3a2 2 0 0 1-2 2H3M21 8h-3a2 2 0 0 1-2-2V3M3 16h3a2 2 0 0 1 2 2v3M16 21v-3a2 2 0 0 1 2-2h3"/></svg>'
-        : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
-    }
-  }
+  for (const pane of panes) pane.element.hidden = pane.index >= store.layoutSize;
   const pages = Math.ceil(consoleSessions().length / store.layoutSize);
   previousPage.disabled = store.pageIndex === 0;
   nextPage.disabled = store.pageIndex >= pages - 1;
@@ -204,7 +188,6 @@ function setLayout(id) {
 function layoutItems() { return [...layoutMenu.querySelectorAll('[role="menuitemradio"]')]; }
 
 function openLayoutMenu(focusLast = false) {
-  if (toggleConsoleColumns.disabled) return;
   for (const item of layoutItems()) item.setAttribute('aria-checked', String(item.dataset.layout === store.layout));
   layoutMenu.hidden = false;
   const rect = toggleConsoleColumns.getBoundingClientRect();
@@ -264,7 +247,7 @@ function initLayoutMenu() {
 // publishing and saving.
 export function captureView() {
   return {mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout,
-    panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null), expanded: store.expandedPaneIndex,
+    panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null),
     switches: store.showSwitchConsoles, active: store.activeId || null};
 }
 
@@ -280,11 +263,10 @@ export function applyView(view) {
     store.layout = view.layout;
     store.showSwitchConsoles = view.switches;
     updateSwitchConsoleToggle();
-    store.expandedPaneIndex = view.expanded;
     const ids = view.panes.map(id => (id && machines.has(id) ? id : null));
     const first = consoleSessions().findIndex(machine => ids.includes(machine.id));
     store.pageIndex = first >= 0 ? Math.floor(first / store.layoutSize) : 0;
-    setPaneSessions(ids, Math.max(0, ids.indexOf(view.active)), true);
+    setPaneSessions(ids, Math.max(0, ids.indexOf(view.active)));
     if (view.active && machines.has(view.active)) store.activeId = view.active;
     if ((view.mode === 'graphic') !== store.graphicVisible) setGraphicView(view.mode === 'graphic');
   } finally { applying = false; }
@@ -311,16 +293,18 @@ export function restoreSavedView() {
   publishView();
 }
 
-export function togglePaneExpansion(pane) {
-  if (!pane.machineId || (store.layoutSize === 1 && store.expandedPaneIndex === null)) return;
-  store.expandedPaneIndex = store.expandedPaneIndex === pane.index ? null : pane.index;
-  focusPane(pane.index);
-  requestAnimationFrame(() => { fitTerminals(); pane.terminal.focus(); });
+// The button of a pane: the "1 terminal" layout showing this pane's machine, in the pane's view.
+export function showOnlyPane(pane) {
+  if (!pane.machineId || store.layoutSize === 1) return;
+  const view = pane.view;
+  store.activeId = pane.machineId;
+  setLayout('single');
+  setPaneView(panes[0], view);
+  requestAnimationFrame(() => { fitTerminals(); panes[0].terminal.focus(); });
 }
-function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
+function setPaneSessions(ids, activeIndex = 0) {
   const before = panes.map(pane => pane.machineId);
   panes.forEach((pane, index) => { pane.machineId = ids[index] || null; });
-  if (!preserveExpansion && store.expandedPaneIndex !== null && before[store.expandedPaneIndex] !== panes[store.expandedPaneIndex].machineId) store.expandedPaneIndex = null;
   panes.forEach(pane => {
     if (before[pane.index] === pane.machineId) return;
     pane.actionMenu.open = false;
@@ -359,17 +343,16 @@ function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
   requestAnimationFrame(fitTerminals);
   viewChanged();
 }
-export function showPage(preferredId = null, preserveExpansion = false) {
+export function showPage(preferredId = null) {
   const sessions = consoleSessions();
   const pages = Math.ceil(sessions.length / store.layoutSize);
   store.pageIndex = Math.max(0, Math.min(store.pageIndex, Math.max(0, pages - 1)));
   const ids = sessions.slice(store.pageIndex * store.layoutSize, (store.pageIndex + 1) * store.layoutSize).map(machine => machine.id);
   const preferredIndex = preferredId ? ids.indexOf(preferredId) : -1;
   const activeIndex = preferredIndex >= 0 ? preferredIndex : Math.min(store.activePaneIndex, Math.max(0, ids.length - 1));
-  setPaneSessions(ids, activeIndex, preserveExpansion);
+  setPaneSessions(ids, activeIndex);
 }
 export function focusPane(index) {
-  if (store.expandedPaneIndex !== null && store.expandedPaneIndex !== index) store.expandedPaneIndex = null;
   store.activePaneIndex = index;
   const pane = panes[index];
   store.activeId = pane.machineId;

@@ -56,3 +56,18 @@ test('the browser selects consoles by console ID and keeps one buffer per channe
   assert.equal(html.match(/aria-label="Console \(ttyS1\)" title="Console \(ttyS1\)"/g).length, 4);
   assert.doesNotMatch(html, /Console 2/);
 });
+
+test('the pane button switches to the 1 terminal layout in the pane\'s view; no expanded state remains', () => {
+  const {functionSource} = require('./web-ui-source');
+  const workspace = moduleSource('workspace');
+  const solo = functionSource(workspace, 'showOnlyPane');
+  assert.match(solo, /setLayout\('single'\)/);
+  assert.match(solo, /const view = pane\.view;[\s\S]*setPaneView\(panes\[0\], view\)/);
+  assert.match(workspace, /pane\.soloButton\.hidden = !machine \|\| store\.layoutSize === 1/);
+  assert.match(workspace, /toggleConsoleColumns\.title = `Layout: \$\{current\.label\}`/);
+  assert.match(moduleSource('terminal'), /soloButton\.title = 'Show only this terminal'/);
+  assert.doesNotMatch(workspace, /toggleConsoleColumns\.disabled/);
+  for (const name of ['workspace', 'terminal', 'state', 'view-state', 'observe', 'socket']) {
+    assert.doesNotMatch(moduleSource(name), /expanded(?!['"])|expandedPaneIndex|expandButton|Restore the layout/, name);
+  }
+});

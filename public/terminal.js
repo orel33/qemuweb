@@ -1,7 +1,7 @@
 // Console panes: xterm instances, menus, font size and Console/Monitor/Log views.
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
-import {focusPane, renderPaneSessionOptions, showStatusError, togglePaneExpansion, updateControls, workspace} from './workspace.js';
+import {focusPane, renderPaneSessionOptions, showStatusError, showOnlyPane, updateControls, workspace} from './workspace.js';
 import {rebootActiveMachine, removeActiveMachine, resetActiveMachine, startActiveMachine, stopActiveMachine} from './nodes.js';
 import {openHostSettings} from './host-settings.js';
 import {canType, observing, socketOptions} from './observe.js';
@@ -152,7 +152,7 @@ function showPaneConsole(pane) {
   pane.terminal.reset();
   selectPaneConsole(pane, result => { if (result?.error) showStatusError(result.error); });
 }
-function setPaneView(pane, view) {
+export function setPaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
   if (!['console', 'console2', 'monitor', 'log'].includes(view) || !machine) return;
   if (view === 'monitor' && !MonitorTerminal.isSupported(machine)) return;
@@ -437,12 +437,15 @@ export function initTerminals() {
     pane.clearButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-clear-icon"></use></svg>';
     pane.clearButton.addEventListener('click', () => clearPaneConsole(pane));
     pane.settingsButton.after(pane.clearButton);
-    pane.expandButton = document.createElement('button');
-    pane.expandButton.type = 'button';
-    pane.expandButton.className = 'pane-expand-button view-control';
-    pane.expandButton.hidden = true;
-    pane.expandButton.addEventListener('click', () => togglePaneExpansion(pane));
-    pane.clearButton.after(pane.expandButton);
+    pane.soloButton = document.createElement('button');
+    pane.soloButton.type = 'button';
+    pane.soloButton.className = 'pane-solo-button view-control';
+    pane.soloButton.hidden = true;
+    pane.soloButton.title = 'Show only this terminal';
+    pane.soloButton.setAttribute('aria-label', 'Show only this terminal');
+    pane.soloButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
+    pane.soloButton.addEventListener('click', () => showOnlyPane(pane));
+    pane.clearButton.after(pane.soloButton);
     pane.fontButtons = [-1, 1].map(change => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -458,7 +461,7 @@ export function initTerminals() {
     pane.fontSizeLabel = document.createElement('span');
     pane.fontSizeLabel.className = 'pane-font-size';
     pane.fontSizeLabel.hidden = true;
-    pane.expandButton.after(pane.fontButtons[0], pane.fontSizeLabel, pane.fontButtons[1]);
+    pane.soloButton.after(pane.fontButtons[0], pane.fontSizeLabel, pane.fontButtons[1]);
     terminal.onScroll(() => syncConsoleScroll(pane));
     terminal.onData(data => {
       if (pane.replaying || !pane.machineId) return;

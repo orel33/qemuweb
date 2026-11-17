@@ -34,7 +34,6 @@ export const store = {
   layout: savedView?.layout || 'single',
   // Number of console panes of the layout.
   get layoutSize() { return ViewState.paneCount(this.layout); },
-  expandedPaneIndex: null,
   showSwitchConsoles: savedView ? savedView.switches : true,
   pageIndex: 0,
   selectionToken: 0,
