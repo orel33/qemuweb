@@ -76,9 +76,9 @@ test('summaries: the local runner while connected, then the registered remote ru
 
 test('a registration token: created once with its command, listed without the secret, single use, audited without the token', async t => {
   const {call, audit} = await setup(t);
-  const created = await call('POST', '/runners/registration-tokens', {minutes: 60}, {Host: 'qemuweb.example.org'});
+  const created = await call('POST', '/runners/registration-tokens', {minutes: 60});
   assert.equal(created.status, 200);
-  assert.equal(created.body.command, `./scripts/runner.sh register --url http://qemuweb.example.org --token ${created.body.token}`);
+  assert.match(created.body.command, new RegExp(`^\\./scripts/runner\\.sh register --url http://127\\.0\\.0\\.1:\\d+ --token ${created.body.token}$`));
   const listed = (await call('GET', '/runners')).body.registrationTokens;
   assert.equal(listed.length, 1);
   assert.ok(!JSON.stringify(listed).includes(created.body.token));

@@ -91,8 +91,8 @@ test('a second connection of a live runner is refused with 409; after the first 
   assert.equal(registry.get(record.id).state, 'starting');
 });
 
-test('only /runner/connect is the gateway\'s: other upgrade paths are left alone', async t => {
+test('only /runner/connect is the gateway\'s: another upgrade path gets no answer from it (Socket.IO\'s handler owns its own)', async t => {
   const {dial, good} = await setup(t);
-  const result = await dial(good, '/elsewhere');
-  assert.ok(result.error || result.status, 'not upgraded');
+  const outcome = await Promise.race([dial(good, '/elsewhere'), new Promise(resolve => setTimeout(() => resolve('untouched'), 300))]);
+  assert.equal(outcome, 'untouched');
 });
