@@ -1,12 +1,28 @@
 // Console panes: xterm instances, menus, font size and Console/Monitor/Log views.
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
-import {focusPane, renderPaneSessionOptions, togglePaneExpansion, updateControls, workspace} from './workspace.js';
+import {focusPane, renderPaneSessionOptions, showStatusError, togglePaneExpansion, updateControls, workspace} from './workspace.js';
 import {rebootActiveMachine, removeActiveMachine, resetActiveMachine, startActiveMachine, stopActiveMachine} from './nodes.js';
 import {openHostSettings} from './host-settings.js';
 import {canType, observing, socketOptions} from './observe.js';
 
 export const panes = [];
+
+// A pane shows a host's first serial console (view 'console', ttyS0) or its second one
+// ('console2', ttyS1), selected on the pane's socket by console ID (public/console-id.js).
+export const isConsoleView = view => view === 'console' || view === 'console2';
+export const viewChannel = view => (view === 'console2' ? 1 : 0);
+export const paneConsoleId = pane => ConsoleId.consoleId(pane.machineId, viewChannel(pane.view));
+export const hasSecondConsole = machine => !!machine && machine.kind === 'host' && machine.serialConsoles >= 2;
+// The replay buffer of a machine's console channel.
+export const consoleBuffer = (machine, channel) => (channel === 1 ? machine.serial2 : machine.serial) || '';
+
+// Selects the pane's console on its socket; the snapshot answers with the console's buffer.
+export function selectPaneConsole(pane, callback) {
+  pane.token = ++store.selectionToken;
+  pane.selectedConsoleId = paneConsoleId(pane);
+  pane.socket.emit('select-node', pane.selectedConsoleId, pane.token, callback);
+}
 
 export function syncConsoleScroll(pane) {
   const buffer = pane.terminal.buffer.active;
@@ -61,7 +77,7 @@ export function applyConsoleAppearance(resetPaneSizes = false) {
 }
 
 export function finishReplay(pane, generation, id) {
-  if (generation !== pane.replayGeneration || id !== pane.machineId || pane.view !== 'console') return;
+  if (generation !== pane.replayGeneration || id !== pane.machineId || !isConsoleView(pane.view)) return;
   if (pane.replayPending) {
     const pending = pane.replayPending;
     pane.replayPending = '';
@@ -96,11 +112,11 @@ export function renderConsoleView(pane) {
   pane.replayPending = '';
   pane.replaying = !!machine;
   pane.terminal.write('', () => {
-    if (generation !== pane.replayGeneration || pane.view !== 'console' || pane.machineId !== (machine?.id || null)) return;
+    if (generation !== pane.replayGeneration || !isConsoleView(pane.view) || pane.machineId !== (machine?.id || null)) return;
     pane.terminal.reset();
     syncConsoleScroll(pane);
     if (!machine) { pane.replaying = false; return; }
-    pane.terminal.write(machine.serial || '', () => finishReplay(pane, generation, machine.id));
+    pane.terminal.write(consoleBuffer(machine, viewChannel(pane.view)), () => finishReplay(pane, generation, machine.id));
   });
 }
 function renderMonitorView(pane) {
@@ -120,10 +136,21 @@ function renderMonitorView(pane) {
     syncConsoleScroll(pane);
   });
 }
+// Shows the pane's console view. When the socket has selected the other console, the new one is
+// selected first: its snapshot (node-snapshot) fills the terminal.
+function showPaneConsole(pane) {
+  if (pane.selectedConsoleId === paneConsoleId(pane)) { renderConsoleView(pane); return; }
+  pane.replayGeneration++;
+  pane.replayPending = '';
+  pane.replaying = true;
+  pane.terminal.reset();
+  selectPaneConsole(pane, result => { if (result?.error) showStatusError(result.error); });
+}
 function setPaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
-  if (!['console', 'monitor', 'log'].includes(view) || !machine) return;
+  if (!['console', 'console2', 'monitor', 'log'].includes(view) || !machine) return;
   if (view === 'monitor' && !MonitorTerminal.isSupported(machine)) return;
+  if (view === 'console2' && !hasSecondConsole(machine)) return;
   pane.viewMenu.open = false;
   if (pane.view === view) { pane.terminal.focus(); return; }
   pane.view = view;
@@ -132,8 +159,8 @@ function setPaneView(pane, view) {
   updatePaneViewMenuIcon(pane);
   if (view === 'monitor') renderMonitorView(pane);
   else if (view === 'log') renderLogView(pane);
-  else renderConsoleView(pane);
-  pane.clearButton.disabled = view !== 'console';
+  else showPaneConsole(pane);
+  pane.clearButton.disabled = !isConsoleView(view);
   if (pane.index === store.activePaneIndex) updateControls();
   requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
 }
@@ -156,11 +183,12 @@ export function updatePaneViewControls() {
     if (!supported) pane.viewMenu.open = false;
     pane.viewButtons.forEach(button => {
       if (button.dataset.view === 'monitor') button.hidden = !monitorSupported;
+      if (button.dataset.view === 'console2') button.hidden = !hasSecondConsole(machine);
     });
-    if (pane.view === 'monitor' && !monitorSupported) {
+    if ((pane.view === 'monitor' && !monitorSupported) || (pane.view === 'console2' && !hasSecondConsole(machine))) {
       pane.view = 'console';
       pane.monitorInput = '';
-      renderConsoleView(pane);
+      showPaneConsole(pane);
     }
     pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === pane.view)));
     updatePaneViewMenuIcon(pane);
@@ -209,10 +237,10 @@ export function appendLog(machine, line) {
 }
 
 function clearPaneConsole(pane) {
-  if (observing || !pane.machineId || pane.view !== 'console' || !machines.has(pane.machineId)) return;
+  if (observing || !pane.machineId || !isConsoleView(pane.view) || !machines.has(pane.machineId)) return;
   const buffer = pane.terminal.buffer.active;
   const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) || '';
-  const clear = () => pane.socket.emit('clear-console', {id: pane.machineId, line, column: buffer.cursorX});
+  const clear = () => pane.socket.emit('clear-console', {id: paneConsoleId(pane), line, column: buffer.cursorX});
   clear();
   const machine = machines.get(pane.machineId);
   if (machine.kind !== 'host' || !canType(pane)) return;
@@ -230,7 +258,7 @@ function clearPaneConsole(pane) {
   fitTerminal(pane);
   pane.socket.emit('input', `stty rows ${pane.terminal.rows} cols ${pane.terminal.cols}\r`);
   setTimeout(() => {
-    if (pane.view === 'console' && pane.machineId) clear();
+    if (isConsoleView(pane.view) && pane.machineId) clear();
   }, 300);
 }
 
@@ -407,7 +435,7 @@ export function initTerminals() {
     terminal.onData(data => {
       if (pane.replaying || !pane.machineId) return;
       if (pane.view === 'monitor') handleMonitorInput(pane, data);
-      else if (pane.view === 'console') {
+      else if (isConsoleView(pane.view)) {
         if (!canType(pane)) return;
         const machine = machines.get(pane.machineId);
         // Cursor position replies are dropped for hosts: a serial getty can echo them literally at boot.

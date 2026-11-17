@@ -1,7 +1,7 @@
 // Node model, server synchronization and host/switch lifecycle actions.
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
-import {panes, syncConsoleScroll} from './terminal.js';
+import {isConsoleView, panes, selectPaneConsole, syncConsoleScroll} from './terminal.js';
 import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedView, resumeAllButton, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
@@ -39,7 +39,7 @@ export function nextMachineName(kind) {
 export async function addHost({id = `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled = false, select = true}) {
   const image = store.images.find(item => item.id === imageId);
   const body = await requestJson('/api/hosts', jsonRequest('POST', {id, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled}), 'Cannot create host');
-  const machine = {id, kind: 'host', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', monitorOutput: ''};
+  const machine = {id, kind: 'host', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, serialConsoles: body.settings?.serialConsoles ?? 1, running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', serial2: '', monitorOutput: ''};
   machines.set(id, machine);
   if (select) selectMachine(id);
   else renderGraphic();
@@ -104,9 +104,10 @@ function machineFromSession(session) {
     interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
     networkInterfaces: session.networkInterfaces || [],
     running: session.running, hasLaunched: session.hasLaunched, pendingRestart: !!session.pendingRestart,
+    serialConsoles: session.serialConsoles ?? 1,
     message: session.message,
     error: /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null,
-    logs: [], serial: '', monitorOutput: ''
+    logs: [], serial: '', serial2: '', monitorOutput: ''
   };
 }
 function mergeSession(session) {
@@ -117,6 +118,7 @@ function mergeSession(session) {
   current.running = session.running;
   current.hasLaunched = session.hasLaunched;
   current.pendingRestart = !!session.pendingRestart;
+  current.serialConsoles = session.serialConsoles ?? 1;
   current.message = session.message;
   current.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
   current.networkInterfaces = session.networkInterfaces || [];
@@ -172,7 +174,7 @@ export async function startActiveMachine() {
   updateControls();
   renderQemuOptions();
   renderTabs();
-  if (pane.view === 'console') {
+  if (isConsoleView(pane.view)) {
     pane.replaying = true;
     pane.replayPending = '';
     pane.terminal.reset();
@@ -182,8 +184,7 @@ export async function startActiveMachine() {
   try {
     await new Promise((resolve, reject) => {
       const timeout = setTimeout(() => reject(new Error('Console connection unavailable.')), 5000);
-      pane.token = ++store.selectionToken;
-      pane.socket.emit('select-node', machine.id, pane.token, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
+      selectPaneConsole(pane, result => { clearTimeout(timeout); if (result && result.error) reject(new Error(result.error)); else resolve(); });
     });
     const config = await requestJson(nodeUrl(machine.id, 'config'), {cache: 'no-store'}, 'Cannot load host configuration.');
     machine.settings = config.settings;
@@ -198,7 +199,7 @@ export async function startActiveMachine() {
     machine.running = true;
     scheduleSessionSync();
     renderQemuOptions();
-    if (pane.view === 'console') pane.terminal.focus();
+    if (isConsoleView(pane.view)) pane.terminal.focus();
   } catch (error) {
     machine.running = false;
     machine.message = error.message;

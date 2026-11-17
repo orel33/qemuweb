@@ -1,6 +1,6 @@
 // Socket.IO wiring: per-pane console sockets and the shared notification socket.
 import {generalSettings, machines, store} from './state.js';
-import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderConsoleView, renderLogView, syncConsoleScroll} from './terminal.js';
+import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderConsoleView, renderLogView, selectPaneConsole, syncConsoleScroll, updatePaneViewControls, viewChannel} from './terminal.js';
 import {captureView, renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
@@ -40,50 +40,58 @@ function socketConnectError(error) {
   console.error(error);
 }
 
+// Whether the pane currently shows that console channel (view 'console' = 0, 'console2' = 1).
+const isChannelView = (pane, channel) => (pane.view === 'console' || pane.view === 'console2') && viewChannel(pane.view) === channel;
+
 function attachPaneSocket(pane) {
   pane.socket.on('connect', () => {
     if (!pane.machineId) return;
-    pane.token = ++store.selectionToken;
     const nodeId = pane.machineId;
-    pane.socket.emit('select-node', nodeId, pane.token, result => {
+    selectPaneConsole(pane, result => {
       if (result?.error && pane.machineId === nodeId) showStatusError(result.error);
     });
   });
   pane.socket.on('node-snapshot', snapshot => {
-    const machine = machines.get(snapshot.nodeId);
-    if (!machine || pane.machineId !== snapshot.nodeId || pane.token !== snapshot.token) return;
+    const machine = machines.get(ConsoleId.baseNodeId(snapshot.nodeId));
+    if (!machine || pane.machineId !== machine.id || pane.token !== snapshot.token) return;
+    const channel = ConsoleId.consoleChannel(snapshot.nodeId);
     machine.running = snapshot.state.running;
     machine.hasLaunched = snapshot.state.hasLaunched;
     machine.message = snapshot.state.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(machine.message || '') ? machine.message : null;
     machine.logs = snapshot.logs || [];
-    machine.serial = snapshot.serial || '';
-    if (pane.view === 'console') renderConsoleView(pane);
+    if (channel === 1) machine.serial2 = snapshot.serial || '';
+    else machine.serial = snapshot.serial || '';
+    if (isChannelView(pane, channel)) renderConsoleView(pane);
     if (pane.view === 'log') renderLogView(pane);
     if (machine.id === store.activeId) updateControls();
     renderTabs();
     requestAnimationFrame(() => fitTerminal(pane));
   });
   pane.socket.on('serial-reset', event => {
-    const machine = machines.get(event.nodeId);
-    if (!machine || pane.machineId !== event.nodeId) return;
-    machine.serial = event.serial || '';
-    if (pane.view !== 'console') return;
+    const machine = machines.get(ConsoleId.baseNodeId(event.nodeId));
+    if (!machine || pane.machineId !== machine.id) return;
+    const channel = ConsoleId.consoleChannel(event.nodeId);
+    if (channel === 1) machine.serial2 = event.serial || '';
+    else machine.serial = event.serial || '';
+    if (!isChannelView(pane, channel)) return;
     const generation = ++pane.replayGeneration;
     pane.replaying = true;
     pane.replayPending = '';
     pane.terminal.write('', () => {
-      if (generation !== pane.replayGeneration || machine.id !== pane.machineId || pane.view !== 'console') return;
+      if (generation !== pane.replayGeneration || machine.id !== pane.machineId || !isChannelView(pane, channel)) return;
       pane.terminal.reset();
       if (event.preserveLine && event.serial) pane.terminal.write(event.serial, () => finishReplay(pane, generation, machine.id));
       else finishReplay(pane, generation, machine.id);
     });
   });
   pane.socket.on('serial', event => {
-    const machine = machines.get(event.nodeId);
-    if (!machine || pane.machineId !== event.nodeId) return;
-    machine.serial = (machine.serial + event.data).slice(-262144);
-    if (pane.view !== 'console') return;
+    const machine = machines.get(ConsoleId.baseNodeId(event.nodeId));
+    if (!machine || pane.machineId !== machine.id) return;
+    const channel = ConsoleId.consoleChannel(event.nodeId);
+    if (channel === 1) machine.serial2 = (machine.serial2 + event.data).slice(-262144);
+    else machine.serial = (machine.serial + event.data).slice(-262144);
+    if (!isChannelView(pane, channel)) return;
     if (pane.replaying) pane.replayPending += event.data;
     else pane.terminal.write(event.data, () => syncConsoleScroll(pane));
   });
@@ -105,10 +113,12 @@ function attachPaneSocket(pane) {
     machine.running = event.running;
     if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
     if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
+    if (event.serialConsoles !== undefined) machine.serialConsoles = event.serialConsoles;
     machine.message = event.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
     renderTabs();
     if (machine.id === store.activeId) updateControls();
+    updatePaneViewControls();
   });
   pane.socket.on('node-error', showStatusError);
   pane.socket.on('connect_error', socketConnectError);
@@ -123,10 +133,12 @@ export function initSockets() {
     machine.running = event.running;
     if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
     if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
+    if (event.serialConsoles !== undefined) machine.serialConsoles = event.serialConsoles;
     machine.message = event.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0\))|^VDE stopped \((?!0\))/.test(event.message || '') ? event.message : null;
     renderTabs();
     if (machine.id === store.activeId) updateControls();
+    updatePaneViewControls();
     if (store.graphicVisible) scheduleSessionSync();
   });
   socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); });

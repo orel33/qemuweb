@@ -1,7 +1,7 @@
 // Pane layout, paging, node tabs, pane state badges and resource metrics.
 import {machines, saveViewSettings, savedView, store} from './state.js';
 import {jsonRequest, nodeUrl} from './api.js';
-import {fitTerminal, fitTerminals, panes, updatePaneViewControls} from './terminal.js';
+import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, updatePaneViewControls} from './terminal.js';
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
@@ -51,7 +51,7 @@ function updatePaneStates() {
     updatePaneActionMenu(pane, machine);
     pane.settingsButton.hidden = !machine || machine.kind !== 'host';
     pane.clearButton.hidden = !machine;
-    pane.clearButton.disabled = !machine || pane.view !== 'console';
+    pane.clearButton.disabled = !machine || !isConsoleView(pane.view);
     pane.expandButton.hidden = !machine || (store.layoutSize === 1 && store.expandedPaneIndex === null);
     for (const button of pane.fontButtons) button.hidden = !machine;
     pane.fontSizeLabel.hidden = !machine;
@@ -345,14 +345,16 @@ function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
   }
   panes.forEach(pane => {
     if (!pane.machineId || before[pane.index] === pane.machineId) return;
-    pane.token = ++store.selectionToken;
     const nodeId = pane.machineId;
-    pane.socket.emit('select-node', nodeId, pane.token, result => {
+    selectPaneConsole(pane, result => {
       if (result?.error && pane.machineId === nodeId) showStatusError(result.error);
     });
   });
   panes.forEach(pane => {
-    if (before[pane.index] && !pane.machineId) pane.socket.emit('leave-node', before[pane.index]);
+    if (before[pane.index] && !pane.machineId) {
+      pane.socket.emit('leave-node', pane.selectedConsoleId || before[pane.index]);
+      pane.selectedConsoleId = null;
+    }
   });
   requestAnimationFrame(fitTerminals);
   viewChanged();

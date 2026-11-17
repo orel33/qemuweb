@@ -6,6 +6,7 @@ import {addHost, chooseRestartTiming, nextMachineName, scheduleSessionSync, star
 import {engineSelect} from './node-dialogs.js';
 import {clearStartupTemplateError, defaultStartScript, renderGuestMedia, renderStartupTemplateValues, showStartupTemplateError, validateStartScriptDraft} from './startup-media.js';
 import {renderGraphic} from './topology.js';
+import {renderConsoleSettings} from './host-console-settings.js';
 
 let optionsRequest = 0;
 let hostSettingsDraft = null;
@@ -36,6 +37,7 @@ const settingsStartupIso = document.getElementById('settings-startup-iso');
 const settingsExtraOptions = document.getElementById('settings-extra-options');
 
 const settingsNetworkProfile = document.getElementById('settings-network-profile');
+const settingsConsoleEditable = document.getElementById('settings-console-editable');
 const settingsConsole = document.getElementById('settings-console');
 const optionsCommands = document.getElementById('options-commands');
 
@@ -47,7 +49,7 @@ function machineDialogName(machine) {
 
 function defaultSettings(machine) {
   const profile = store.images.find(item => item.id === machine.imageId);
-  return profile ? {memory: profile.memory, cpus: profile.cpus, clock: profile.clock} : {};
+  return profile ? {memory: profile.memory, cpus: profile.cpus, clock: profile.clock, serialConsoles: profile.serialConsoles ?? 1} : {};
 }
 function getMachineSettings(machine) {
   if (!machine.settingsLoaded) {
@@ -60,7 +62,7 @@ function saveMachineSettings(machine, settings) {
   machine.settings = {...settings};
   machine.settingsLoaded = true;
 }
-function addSettingRow(container, label, value, disabled = true) {
+export function addSettingRow(container, label, value, disabled = true) {
   const row = document.createElement('div');
   row.className = 'setting-row';
   const title = document.createElement('label');
@@ -77,7 +79,7 @@ function addSettingRow(container, label, value, disabled = true) {
   container.append(row);
   return input;
 }
-function addSettingTextRow(container, label, value) {
+export function addSettingTextRow(container, label, value) {
   const row = document.createElement('div');
   row.className = 'setting-row';
   const title = document.createElement('span');
@@ -89,7 +91,7 @@ function addSettingTextRow(container, label, value) {
   row.append(title, content);
   container.append(row);
 }
-function addSettingSelectRow(container, label, choices, value, disabled, onChange) {
+export function addSettingSelectRow(container, label, choices, value, disabled, onChange) {
   const row = document.createElement('div');
   row.className = 'setting-row';
   const title = document.createElement('label');
@@ -159,6 +161,7 @@ export async function renderQemuOptions() {
   settingsStartupProfile.replaceChildren();
   settingsStartupIso.replaceChildren();
   settingsNetworkProfile.replaceChildren();
+  settingsConsoleEditable.replaceChildren();
   settingsConsole.replaceChildren();
   settingsExtraOptions.textContent = '';
   optionsCommands.textContent = '';
@@ -182,6 +185,7 @@ export async function renderQemuOptions() {
       renderStartupTemplateValues(machine);
     };
     for (const [key, field] of Object.entries(body.fields || {})) {
+      if (key === 'serialConsoles') continue;
       const row = document.createElement('div');
       row.className = 'setting-row';
       const label = document.createElement('label');
@@ -243,9 +247,11 @@ export async function renderQemuOptions() {
     addSettingRow(settingsStartupProfile, 'CD-ROM interface', body.fixed?.cdromInterface);
     settingsExtraOptions.textContent = body.fixed?.extraOptions?.length ? body.fixed.extraOptions.join(' ') : 'None';
     renderStorageSettings(body.storage, body.fixed?.diskInterface);
-    addSettingRow(settingsConsole, 'VM serial port', body.console?.guest || 'ttyS0 · 115200 baud');
-    addSettingRow(settingsConsole, 'Console socket', body.console?.socket || '');
-    if (body.monitor) addSettingRow(settingsConsole, 'Monitor socket', body.monitor);
+    renderConsoleSettings(settingsConsoleEditable, settingsConsole, {body, count: settings.serialConsoles ?? 1, limit: image?.serialConsoles ?? 1, locked,
+      onChange: count => {
+        saveMachineSettings(machine, {...getMachineSettings(machine), serialConsoles: count});
+        refreshLaunchPreview(machine);
+      }});
     optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
     showIsoPreviewStatus(machine);
   } catch (error) {
