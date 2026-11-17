@@ -10,8 +10,8 @@ const keywords = new Set(['type', 'arch', 'mode', 'label', ...editableKeys, 'fir
 
 function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 
-// Serial ports a system exposes: ttyS0 alone unless its profile lists more.
-function profileSerialPorts(profile) { return profile.serialPorts ?? ['ttyS0']; }
+// Serial ports a system exposes: the profile lists them (systems.default declares ttyS0 alone).
+function profileSerialPorts(profile) { return profile.serialPorts; }
 
 // Checks an override set; with a profile, serialPorts must be a prefix of what the system exposes.
 function validateOverrides(overrides, profile = null) {
@@ -30,6 +30,7 @@ function validateProfile(profile, id, engine) {
   if (profile.type !== 'linux' || profile.arch !== 'x86_64' || profile.mode !== 'text' ||
       typeof profile.label !== 'string' || !profile.label.trim()) throw new Error(`Invalid Linux/x86_64/text profile: ${id}/${engine}.`);
   validateOverrides(Object.fromEntries(editableKeys.map(key => [key, profile[key]])));
+  validatePorts(profile.serialPorts);
   if (profile.firmware !== 'bios' || profile.boot !== 'disk' || profile.cdromInterface !== 'ide' ||
       !['virtio', 'e1000'].includes(profile.networkModel) ||
       (engine === 'qemu' && (profile.acceleration !== 'kvm' || !['ide', 'virtio'].includes(profile.diskInterface))) ||

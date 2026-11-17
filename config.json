@@ -10,6 +10,7 @@
       "cpus": 1,
       "clock": "utc",
       "startupDiskEnabled": false,
+      "serialPorts": ["ttyS0"],
       "firmware": "bios",
       "acceleration:qemu": "kvm",
       "acceleration:vbox": "default",
