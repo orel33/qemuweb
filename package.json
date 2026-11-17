@@ -4,7 +4,7 @@
   "private": true,
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
-    "start": "node server.js",
+    "start": "node server.js --local",
     "test": "node --test test/unit/*.test.js",
     "test:two-hosts-stop-resume": "node test/integration/two-hosts-stop-resume.js",
     "test:four-hosts-startup": "node test/integration/four-hosts-startup.js",

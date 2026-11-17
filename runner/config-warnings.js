@@ -2,8 +2,8 @@
 
 // Warnings about config.json that are worth showing when a runner starts, as plain sentences:
 // a system whose base image is missing, or default resources larger than the machine. They are
-// announced in hello (runner/service.js) and printed by the server at startup. Errors that make
-// config.json unusable are not here: readCatalog throws on them.
+// announced in hello (runner/service.js) and printed by the runner itself at startup
+// (runner/main.js). Errors that make config.json unusable are not here: readCatalog throws on them.
 const fs = require('fs');
 const path = require('path');
 const {selectedProfile} = require('../common/system-config');

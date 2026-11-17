@@ -5,7 +5,9 @@
 //   handle(command, sessionId, args, io)  runs one command; io gives the archive streams
 //                                         (incoming, outgoing, afterResponse)
 //   input(sessionId, nodeId, data)        console input
-//   hello()                               capabilities and the sessions with their nodes
+//   hello()                               capabilities, runtimeRoot and the sessions (ID, owner,
+//                                         creation date, nodes)
+//   capabilities()                        engines, kvm, cpus, memory, images and config warnings
 //   setConsoleFlow(paused)                pauses console sources while the connection is congested
 //   events                                'event' (sessionId, event, payload)
 // Session IDs come from the control plane (session.create); the runner never invents one.
@@ -142,11 +144,12 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
   }
 
   function hello() {
-    return {type: 'hello', protocol: PROTOCOL_VERSION, pid: process.pid, ...capabilities(),
-      sessions: [...sessions.values()].map(({session, runner}) => ({sessionId: session.id, engine: session.engine, nodes: runner.listNodes()}))};
+    return {type: 'hello', protocol: PROTOCOL_VERSION, pid: process.pid, runtimeRoot, ...capabilities(),
+      sessions: [...sessions.values()].map(({session, runner}) => ({sessionId: session.id, engine: session.engine,
+        owner: session.owner, createdAt: session.createdAt, nodes: runner.listNodes()}))};
   }
 
-  return {events, handle, input, hello, shutdown, setConsoleFlow, availableEngines: engines};
+  return {events, handle, input, hello, capabilities, shutdown, setConsoleFlow, availableEngines: engines};
 }
 
 module.exports = {createRunnerService};

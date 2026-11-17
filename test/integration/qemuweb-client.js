@@ -25,11 +25,12 @@ async function createTestUsers(entries) {
   return {file, users, cleanup: () => fs.rmSync(dir, {recursive: true, force: true})};
 }
 
-// Starts server.js on the given port with the users file (password authentication).
-function spawnServer({port, usersFile, env = {}}) {
+// Starts server.js on the given port with the users file (password authentication), with its own
+// local runner (--local) unless `local` is false (the manual mode: a runner is started by the test).
+function spawnServer({port, usersFile, env = {}, local = true}) {
   const serverEnv = {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1', QEMUWEB_USERS_FILE: usersFile, ...env};
   delete serverEnv.QEMUWEB_AUTH;
-  return spawn(process.execPath, ['server.js'], {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']});
+  return spawn(process.execPath, ['server.js', ...(local ? ['--local'] : [])], {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']});
 }
 
 class QemuWebClient {
