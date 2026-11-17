@@ -132,7 +132,7 @@ can:
   offline. With **Follow** on (the default), the view follows what the student
   shows: the selected node, Terminals or Graphic, and the console layout (1
   terminal, 2 side by side or stacked, or 4; which node each pane shows, switch
-  consoles, a pane shown alone), and the admin's own view controls are
+  consoles, the view of each pane: Console ttyS0/ttyS1, Monitor or Log (an observer sees a followed Monitor as the console)), and the admin's own view controls are
   disabled (one driver at a time); off, the admin navigates freely from the
   view shown. An observation tab never saves its layout in the admin's
   view settings. The target belongs to the tab: another tab can stay on the admin's
@@ -144,7 +144,7 @@ can:
   tells them who controls it; they still see the commands and their output.
   The admin types into whatever console they display. While the admin holds
   control, the student's page follows the admin's view and layout (the reverse
-  of **Follow**) and its view and layout buttons are disabled. Control ends
+  of **Follow**, pane views included) and its view, layout and pane view buttons are disabled. Control ends
   with **Release control**, when the admin's last page on that session closes
   (changing the layout keeps it), or after 10 minutes without input; the student's page then keeps what it shows and is free
   again.

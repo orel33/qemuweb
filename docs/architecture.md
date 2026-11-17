@@ -125,8 +125,8 @@ flowchart TB
   when a page's view is driven by the other side (the owner's page under
   control, or an observer with Follow checked and no control held),
   `body[data-view-driven]` disables every control that changes the view state
-  (class `view-control`: view toggle, layout menu, switch consoles, paging,
-  pane expand, tab selection, pane node menus), for the mouse (CSS) and the
+  (class `view-control`: pane view menu, layout menu, switch consoles, paging,
+  tab selection, pane node menus), for the mouse (CSS) and the
   keyboard (`observe.js`); the banners say who drives. Every privileged socket
   event re-reads the account, so a disabled or removed account loses its
   sockets. `server/sockets.js` also counts each user's connected browser tabs (the
@@ -188,20 +188,28 @@ classic script shared by the server and the browser: `paneCount`,
   layout:   'single' | 'columns-2' | 'rows-2' | 'grid-4',
   panes:    (nodeId | null)[],   exactly paneCount(layout) entries: the node shown in each
                                  pane, in pane order; null = empty pane
+  views:    ('console' | 'console2' | 'monitor' | 'log')[],
+                                 parallel to panes: the view of each pane
+                                 (Console ttyS0, Console ttyS1, Monitor, Log)
   switches: boolean,             switch consoles shown
   active:   nodeId | null }      the selected node (tab or graphic selection)
 ```
 
 `normalizeView` returns a valid view state or null: known keys only (others
-dropped), known layouts and modes, `panes` of the right length with strings or
-null; node IDs not in the given list become null, and a node shown in two panes is kept in the first one. The console page is not part
+dropped), known layouts and modes, `panes` and `views` of the right length (a view state without `views` is
+invalid), `views` entries among the four views, `panes` with strings or
+null; node IDs not in the given list become null, and a node shown in two panes is kept in the first one; the view of a pane left
+empty becomes `console`. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
 the resulting `panes` is what is published.
 
 In the browser, `captureView()` reads the view and `applyView(view)` shows one
 (layout, switch consoles, the panes' nodes through the same
 assignment as the pane node menu, active node, mode), without saving it and
-attaching only the consoles of panes whose node changes. `viewChanged()`, at
+attaching only the consoles of panes whose node changes; then each pane's view
+(`setPaneView`), only if its node allows it (Monitor needs a QEMU host, ttyS1 a
+second console, else `console`; an observer is never shown the Monitor, a
+followed `monitor` shows the console). `viewChanged()`, at
 the end of `setPaneSessions` (so `showPage`), `focusPane` and
 `setGraphicView`, publishes the view (deduplicated with `sameView`) and saves
 it as `{view, graphicZoom}` in the browser; applying a received view does

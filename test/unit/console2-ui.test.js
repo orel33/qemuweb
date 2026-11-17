@@ -67,3 +67,19 @@ test('the pane "Show only this terminal" button is gone; no expanded state remai
     assert.doesNotMatch(moduleSource(name), /expanded(?!['"])|expandedPaneIndex|expandButton|Restore the layout/, name);
   }
 });
+
+test('the pane view menu is a view-control; the pane views are carried by the view state', () => {
+  const {functionSource} = require('./web-ui-source');
+  const terminal = moduleSource('terminal');
+  const workspace = moduleSource('workspace');
+  assert.match(terminal, /pane\.viewMenu\.className = 'pane-view-menu view-control'/);
+  assert.match(moduleSource('observe'), /pane\.viewMenu\.open = false/, 'a driven page closes the open view menus');
+  assert.match(functionSource(workspace, 'captureView'), /views: panes\.slice\(0, store\.layoutSize\)\.map\(pane => \(pane\.machineId \? pane\.view : 'console'\)\)/);
+  const apply = functionSource(workspace, 'applyView');
+  assert.ok(apply.indexOf('setPaneSessions(') < apply.indexOf('view.views.forEach'), 'views are applied after the panes\' nodes');
+  assert.match(apply, /usablePaneView\(pane, observing && wanted === 'monitor' \? 'console' : wanted\)/);
+  assert.match(apply, /setPaneView\(pane, shown\)/);
+  assert.match(functionSource(terminal, 'setPaneView'), /viewChanged\(\)/);
+  assert.match(terminal, /if \(view === 'console2'\) return hasSecondConsole\(machine\) \? view : 'console'/);
+  assert.match(moduleSource('view-state'), /views: \('console' \| 'console2' \| 'monitor' \| 'log'\)\[\]/);
+});
