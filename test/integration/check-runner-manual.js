@@ -1,7 +1,7 @@
 'use strict';
 
 // The manual mode: the server run alone (`node server/main.js`) spawns nothing and answers 503 until a
-// runner, started by hand (runner/main.js --connect), dials runtime/runner-<port>.sock. A session
+// runner, started by hand (runner/main.js --port), dials runtime/runner-<port>.sock. A session
 // runs on that runner (VDE switch); the runner and its switch SURVIVE a SIGKILL of the server;
 // a new server on the same port is joined again by the runner, and the user finds the SAME
 // session, adopted (`session-adopted` in users.log), with its switch still running; a second
@@ -79,7 +79,7 @@ function startServer(port, logDir) {
 }
 
 function startRunner(port, runnerRuntime, label) {
-  const child = spawn(process.execPath, ['runner/main.js', '--connect', path.join(runtime, `runner-${port}.sock`), '--runtime', runnerRuntime], {cwd: root, stdio: ['ignore', 'pipe', 'pipe']});
+  const child = spawn(process.execPath, ['runner/main.js', '--port', String(port), '--runtime', runnerRuntime], {cwd: root, stdio: ['ignore', 'pipe', 'pipe']});
   runnerOutput.set(label, '');
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => runnerOutput.set(label, (runnerOutput.get(label) + data).slice(-12000)));
   runners.push(child);

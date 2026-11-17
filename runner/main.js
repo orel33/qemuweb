@@ -3,10 +3,10 @@
 // Runner process entry point. A runner is an ordinary unprivileged process: every path is a
 // parameter, nothing is written outside them.
 //   node runner/main.js [--port <n> | --connect <socket>] [--runtime <dir>] [--config <file>] [--exit-on-disconnect]
-//   --port                the server on that port (default 3002): --connect <runtime>/runner-<n>.sock
+//   --port                the server on that port (default 3002): --connect <this project>/runtime/runner-<n>.sock
 //   --connect             Unix socket of the control plane, which the runner dials, instead of --port
-//   --runtime             sessions directory root, and where --port looks for the server socket
-//                         (default runtime/ of this project, which the server shares)
+//   --runtime             sessions directory root of this runner (default runtime/ of this project,
+//                         which the server shares: a runner with another directory is never cleaned by it)
 //   --config              system catalog (default config.json of this project)
 //   --exit-on-disconnect  the loss of the control connection ends the runner: every node is
 //                         destroyed and the process exits (scripts/start.sh, which ends with
@@ -33,10 +33,10 @@ The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessio
 server, keeps its sessions if the connection drops, and reconnects. Run it as your normal user.
 
 Options (default in brackets):
-  --port N               reach the server of port N on RUNTIME/runner-N.sock          [3002]
+  --port N               reach the server of port N on runtime/runner-N.sock of the project   [3002]
   --connect SOCKET       Unix socket of the server, instead of --port (not with --port)
-  --runtime DIR          where the runner keeps the sessions (DIR/sessions/<id>/) and looks for
-                         the server socket; the server shares it     [runtime/ of the project]
+  --runtime DIR          where the runner keeps the sessions (DIR/sessions/<id>/); the server
+                         cleans only the runtime/ of the project      [runtime/ of the project]
   --config FILE          system catalog (images, memory, QEMU options)   [config.json of the project]
   --exit-on-disconnect   stop every machine and exit when the server connection is lost
                          [keep the sessions and reconnect every 2 seconds]
@@ -71,7 +71,7 @@ function parseArguments(argv) {
   if (!options.runtime) options.runtime = path.join(root, 'runtime');
   if (!options.connect) {
     options.port = options.port || DEFAULT_PORT;
-    options.connect = path.join(options.runtime, `runner-${options.port}.sock`);
+    options.connect = path.join(root, 'runtime', `runner-${options.port}.sock`);
   }
   return options;
 }

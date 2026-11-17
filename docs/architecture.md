@@ -251,7 +251,7 @@ The server is split into layers with one-way dependencies:
 | Module | Role |
 | --- | --- |
 | `server/main.js` | Startup and wiring: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
-| `server/options.js` | The server's command line: `--listen <port>` (default 3002) and `--runtime <dir>` (default `runtime/`), anything else refused with exit status 2. |
+| `server/options.js` | The server's command line: `--listen <port>` (default 3002; the runtime directory is always `runtime/` of the repository), anything else refused with exit status 2. |
 | `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
 | `server/routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
@@ -587,9 +587,9 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
 - It assumes no root, no capability, no dedicated system account, and writes
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
   `--connect <socket>` (control connection), `--runtime <dir>` (sessions,
-  default the project's `runtime/`, shared with the server), `--config <file>` (system catalog,
-  default the project's `config.json`). `--port <n>` is `--connect <this
-  project>/runtime/runner-<n>.sock`. `scripts/runner.sh` gets `--runtime runtime/`, so the files on disk do not change.
+  default the project's `runtime/`, which the server cleans; another directory is never touched by it), `--config <file>` (system catalog,
+  default the project's `config.json`). `--port <n>` (default 3002) is `--connect <this
+  project>/runtime/runner-<n>.sock`, whatever `--runtime` is.
   The 5c configuration (`~/.config/qemuweb-runner/config.toml`, systemd
   `--user` unit) is out of scope here.
 - The control socket is created by the control plane with mode 0600 in

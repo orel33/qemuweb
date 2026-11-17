@@ -3,7 +3,7 @@
 # runner (the process that runs the machines), each as its own command. This is the only way to
 # start QemuWeb here, in development and in the tests. Output lines are prefixed [server] and
 # [runner].
-#   ./scripts/start.sh [--listen N] [--runtime DIR]     (defaults: port 3002, runtime/ of the project)
+#   ./scripts/start.sh [--listen N]     (default port 3002)
 # Each process leads its own process group (setsid): a terminal Ctrl+C reaches this script only.
 # Ctrl+C or SIGTERM stops the runner first (it stops every machine, within a bounded delay), kills
 # what is left of its group (QEMU, vde_switch), then stops the server, and exits 0. When the
@@ -19,16 +19,14 @@ script_path="$(readlink -f -- "${BASH_SOURCE[0]}")"
 root="$(cd -- "$(dirname -- "$script_path")/.." && pwd -P)"
 cd -- "$root"
 usage() {
-  echo "Usage: $0 [--listen N] [--runtime DIR]"
+  echo "Usage: $0 [--listen N]"
 }
 parse_options() {
   port=3002
-  runtime="$root/runtime"
   while (( $# )); do
     case "$1" in
       -h|--help) usage; exit 0 ;;
       --listen) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; port="$2"; shift 2 ;;
-      --runtime) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; runtime="$(realpath -m -- "$2")"; shift 2 ;;
       *) usage >&2; exit 2 ;;
     esac
   done
@@ -78,18 +76,18 @@ stop_all() {
 trap 'stop_all; exit 0' INT TERM
 trap stop_all EXIT
 
-# The server listens on <runtime>/runner-<port>.sock. A runner started with --exit-on-disconnect does
+# The server listens on runtime/runner-<port>.sock. A runner started with --exit-on-disconnect does
 # not retry a first connection that fails, so it starts once the socket exists (a dead server
 # takes its runner with it, and the script ends when either one exits).
-setsid ./scripts/server.sh --listen "$port" --runtime "$runtime" > >(sed -u 's/^/[server] /') 2>&1 &
+setsid ./scripts/server.sh --listen "$port" > >(sed -u 's/^/[server] /') 2>&1 &
 server_pid=$!
 for _ in {1..150}; do
-  [[ -S "$runtime/runner-$port.sock" ]] && break
+  [[ -S "$root/runtime/runner-$port.sock" ]] && break
   kill -0 "$server_pid" 2>/dev/null || break
   sleep 0.2
 done
 if kill -0 "$server_pid" 2>/dev/null; then
-  setsid ./scripts/runner.sh --port "$port" --runtime "$runtime" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
+  setsid ./scripts/runner.sh --port "$port" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
   runner_pid=$!
 fi
 

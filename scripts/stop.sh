@@ -2,18 +2,16 @@
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-# Stops the QemuWeb server of this project: ./scripts/stop.sh [--listen N] [--runtime DIR]
+# Stops the QemuWeb server of this project: ./scripts/stop.sh [--listen N]
 usage() {
-  echo "Usage: $0 [--listen N] [--runtime DIR]"
+  echo "Usage: $0 [--listen N]"
 }
 parse_options() {
   port=3002
-  runtime="$root/runtime"
   while (( $# )); do
     case "$1" in
       -h|--help) usage; exit 0 ;;
       --listen) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; port="$2"; shift 2 ;;
-      --runtime) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; runtime="$(realpath -m -- "$2")"; shift 2 ;;
       *) usage >&2; exit 2 ;;
     esac
   done
@@ -23,8 +21,8 @@ parse_options() {
   fi
 }
 parse_options "$@"
-pid_file="$runtime/server-$port.pid"
-session_file="$runtime/server-$port.session"
+pid_file="$root/runtime/server-$port.pid"
+session_file="$root/runtime/server-$port.session"
 
 if [[ ! -f "$pid_file" ]]; then
   rm -f -- "$session_file"
@@ -36,7 +34,7 @@ read -r pid < "$pid_file"
 if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
   rm -f -- "$pid_file"
   rm -f -- "$session_file"
-  rm -f -- "$runtime/runner-$port.sock"
+  rm -f -- "$root/runtime/runner-$port.sock"
   echo "No QemuWeb server running on port $port (stale PID removed)."
   exit 0
 fi
