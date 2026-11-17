@@ -331,7 +331,6 @@ function setPaneSessions(ids, activeIndex = 0, preserveExpansion = false) {
     pane.replayGeneration++;
     pane.replayPending = '';
     pane.replaying = !!pane.machineId;
-    pane.cursorReportDeadline = 0;
     pane.terminal.reset();
   });
   store.activePaneIndex = activeIndex;

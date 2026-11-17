@@ -198,9 +198,13 @@ start from fresh images. [`demo/`](demo/) also contains DMZ and gateway sessions
 
 - **Save session** exports hosts, switches, settings, and startup scripts as a
   ZIP archive; **Load session ZIP** restores it.
-- Before loading, the dialog summarizes the archive and warns when a base image
+- Choosing a ZIP opens a review dialog: it summarizes the archive (hosts,
+  switches, hosts with a startup disk, working disks) and warns when a base image
   changed since the session was saved and the archive contains working disks
-  (qcow2) for it: those disks are discarded, never reused. Each host with a
+  (qcow2) for it: those disks cannot be reused, so **Discard working disks** is
+  then checked and locked. Two options apply on **OK**: **Start hosts and
+  switches after loading** (default) and **Discard working disks** (greyed when the
+  archive has none); **Cancel** uploads nothing. Each host with a
   working disk records, in its `host.json`, the base image it depends on (format, size
   and SHA-256). Hosts without a working disk simply start from the current image,
   without a warning (image builds are not reproducible, so the hash differs from one

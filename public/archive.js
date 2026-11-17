@@ -61,11 +61,19 @@ async function readArchiveSummary(file) {
   const entries = await archiveEntries(file);
   const diskHosts = [...entries.keys()].map(name => /^(h-[0-9a-f]{16})\/disk\.qcow2$/.exec(name)?.[1]).filter(Boolean);
   const session = await archiveJson(file, entries.get('session.json'));
-  return {entries, diskHosts, session};
+  const hosts = await Promise.all(session.hosts.map(id => archiveJson(file, entries.get(`${id}/host.json`))));
+  return {entries, diskHosts, session, startupDisks: countStartupDisks(hosts, [...entries.keys()])};
 }
-function archiveSummaryText({session, diskHosts}) {
-  const disks = diskHosts.length ? countLabel(diskHosts.length, 'working disk') : 'no working disk';
-  return `${countLabel(session.hosts.length, 'host')} and ${countLabel(session.switches.length, 'switch', 'switches')}, ${disks} (qcow2)`;
+// host.json only records startupDiskEnabled when it differs from the system profile, which the browser
+// does not know: an absent value counts as a startup disk when the host has startup files in the archive.
+function countStartupDisks(hosts, names) {
+  return hosts.filter(host => typeof host.config?.startupDiskEnabled === 'boolean'
+    ? host.config.startupDiskEnabled : names.some(name => name.startsWith(`${host.id}/startup/`))).length;
+}
+function archiveSummaryText({session, diskHosts, startupDisks}) {
+  const disks = diskHosts.length ? `${countLabel(diskHosts.length, 'working disk')} (qcow2)` : 'no working disk (qcow2)';
+  return [`${countLabel(session.hosts.length, 'host')} and ${countLabel(session.switches.length, 'switch', 'switches')}`,
+    `${startupDisks} with startup disk`, disks].join(' · ');
 }
 // Warns before upload when a working disk depends on a base image that changed since the archive was
 // saved. Only hosts with a working disk record that image (host.json "baseImage"); without disks
@@ -88,10 +96,10 @@ async function checkArchiveBaseImages(file, {entries, diskHosts, session}) {
   return {messages, staleDisks, changed: result.changed.length > 0};
 }
 // Uploads the ZIP with progress reporting, which fetch() cannot do.
-function importArchive(file, {autoStart, discardStaleDisks}, onProgress, onUploaded) {
+function importArchive(file, {autoStart, discardDisks}, onProgress, onUploaded) {
   return new Promise((resolve, reject) => {
     const request = new XMLHttpRequest();
-    request.open('POST', `/api/session-archive/import?autoStart=${autoStart}&discardStaleDisks=${discardStaleDisks}`);
+    request.open('POST', `/api/session-archive/import?autoStart=${autoStart}&discardDisks=${discardDisks}`);
     request.setRequestHeader('Content-Type', 'application/zip');
     request.upload.addEventListener('progress', event => { if (event.lengthComputable && event.total) onProgress(Math.floor(event.loaded * 100 / event.total)); });
     request.upload.addEventListener('load', onUploaded);
@@ -109,6 +117,10 @@ function importArchive(file, {autoStart, discardStaleDisks}, onProgress, onUploa
 }
 const archiveLoadCancel = document.getElementById('cancel-session-archive-load');
 const archiveLoadConfirm = document.getElementById('confirm-session-archive-load');
+const archiveLoadOptions = document.getElementById('session-archive-load-options');
+const archiveAutoStart = document.getElementById('load-auto-start');
+const archiveDiscardDisks = document.getElementById('load-discard-disks');
+const archiveDiscardNote = document.getElementById('load-discard-note');
 let selectedArchiveFile = null;
 let archiveLoadBusy = false;
 let archiveLoadImported = false;
@@ -139,18 +151,34 @@ function showArchiveLoadBlockedWarning() {
   if (!archiveLoadBlockedDialog.open) archiveLoadBlockedDialog.showModal();
 }
 
-// Uploads and restores the archive, one visible step at a time. Hosts and switches are always started.
-async function loadArchive(file, {discardStaleDisks}) {
+// The review state: the options and OK, shown once the archive was read and its base images checked.
+// The working disks of an archive whose base image changed cannot be reused, so they are discarded.
+function showLoadReview({hasDisks, staleDisks}) {
+  archiveAutoStart.checked = true;
+  archiveDiscardDisks.checked = staleDisks;
+  archiveDiscardDisks.disabled = !hasDisks || staleDisks;
+  archiveDiscardNote.hidden = !(staleDisks || !hasDisks);
+  archiveDiscardNote.textContent = staleDisks
+    ? 'A base image changed: the working disks that depend on it cannot be reused and are discarded.'
+    : 'This archive has no working disk.';
+  archiveLoadOptions.hidden = false;
+  archiveLoadConfirm.hidden = false;
+}
+
+// Uploads and restores the archive, one visible step at a time.
+async function loadArchive(file, {autoStart, discardDisks}) {
   if (!file || archiveLoadBusy) return;
   archiveLoadBusy = true;
   archiveLoadCancel.disabled = true;
   archiveLoadConfirm.hidden = true;
+  archiveLoadOptions.hidden = true;
+  for (const name of ['upload', 'restore']) archiveLoadSteps.querySelector(`[data-step="${name}"]`).hidden = false;
   resetLoadSteps(['upload', 'restore']);
   archiveLoadDialog.setAttribute('aria-busy', 'true');
   let activeStep = 'upload';
   try {
     setLoadStep('upload', 'running', '0%');
-    const result = await importArchive(file, {autoStart: true, discardStaleDisks},
+    const result = await importArchive(file, {autoStart, discardDisks},
       percent => setLoadStep('upload', 'running', `${percent}%`),
       () => { setLoadStep('upload', 'done'); activeStep = 'restore'; setLoadStep('restore', 'running'); });
     archiveLoadImported = true;
@@ -169,8 +197,6 @@ async function loadArchive(file, {discardStaleDisks}) {
   } catch (error) {
     setLoadStep(activeStep, 'error', error.message);
     archiveLoadCancel.textContent = 'Close';
-    // The server refuses working disks recorded for another base image unless told to discard them.
-    if (/Discard working disks/.test(error.message)) archiveLoadConfirm.hidden = false;
   } finally {
     archiveLoadBusy = false;
     archiveLoadCancel.disabled = false;
@@ -245,9 +271,10 @@ export function initArchive() {
     resetLoadSteps();
     archiveLoadCancel.textContent = 'Cancel';
     archiveLoadConfirm.hidden = true;
+    archiveLoadOptions.hidden = true;
+    for (const name of ['upload', 'restore']) archiveLoadSteps.querySelector(`[data-step="${name}"]`).hidden = true;
     archiveLoadDialog.showModal();
-    // Everything runs by itself, with no confirmation. It only stops when working
-    // disks recorded for another base image would be lost.
+    // Review state: nothing is uploaded until the user chooses the options and presses OK.
     let summary = null;
     setLoadStep('read', 'running');
     try {
@@ -274,13 +301,10 @@ export function initArchive() {
       setLoadStep('check', 'warning', 'Cannot check base images; the server will validate them on load.');
     }
     if (selectedArchiveFile !== file) return;
-    if (check?.staleDisks) {
-      // The only decision left to the user: losing working disks that cannot be reused.
-      archiveLoadConfirm.hidden = false;
-      return;
-    }
-    await loadArchive(file, {discardStaleDisks: false});
+    // Without a readable summary or a check result, the server decides: the options stay available.
+    showLoadReview({hasDisks: summary ? summary.diskHosts.length > 0 : true, staleDisks: !!check?.staleDisks});
   });
   archiveLoadCancel.addEventListener('click', () => archiveLoadDialog.close());
-  archiveLoadConfirm.addEventListener('click', () => loadArchive(selectedArchiveFile, {discardStaleDisks: true}));
+  archiveLoadConfirm.addEventListener('click', () => loadArchive(selectedArchiveFile,
+    {autoStart: archiveAutoStart.checked, discardDisks: archiveDiscardDisks.checked}));
 }

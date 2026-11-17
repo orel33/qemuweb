@@ -40,3 +40,16 @@ test('the module list matches public/ and app.js initializes every feature modul
 test('the stylesheet is served from public/css/app.css', () => {
   assert.ok(fs.statSync(path.join(publicDir, 'css', 'app.css')).size > 0);
 });
+
+test('the Load session dialog is a review with Start and Discard options and OK', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+  for (const id of ['session-archive-load-options', 'load-auto-start', 'load-discard-disks', 'load-discard-note', 'confirm-session-archive-load']) {
+    assert.match(html, new RegExp(`id="${id}"`), id);
+  }
+  assert.match(html, /Start hosts and switches after loading/);
+  assert.match(html, /<input type="checkbox" id="load-discard-disks"> Discard working disks/);
+  assert.doesNotMatch(html, /Load without working disks/);
+  const archive = moduleSource('archive');
+  assert.match(archive, /discardDisks=\$\{discardDisks\}/);
+  assert.doesNotMatch(archive, /discardStaleDisks/);
+});
