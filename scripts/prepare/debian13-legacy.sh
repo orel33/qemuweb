@@ -107,7 +107,7 @@ Name=eth*
 [Network]
 DHCP=yes
 NETWORK
-systemctl enable serial-getty@ttyS0.service getty@tty1.service systemd-networkd.service
+systemctl enable serial-getty@ttyS0.service serial-getty@ttyS1.service getty@tty1.service systemd-networkd.service
 install -m 755 /tmp/guest-start.sh /usr/local/sbin/qemuweb-guest-start
 install -m 644 /tmp/qemuweb-start.service /etc/systemd/system/qemuweb-start.service
 systemctl enable qemuweb-start.service

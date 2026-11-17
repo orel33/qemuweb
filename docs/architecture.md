@@ -27,7 +27,7 @@ flowchart TB
     Auth["Authentication · lib/auth/ (signed cookie)"]
     Manager["Session manager · lib/session-manager.js (login → session + runner)"]
     Routes["HTTP API · one router per session · routes/"]
-    Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
+    Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt;, console:&lt;id&gt;:&lt;consoleId&gt; · sockets.js"]
     Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log and users.log · lib/audit.js"]
     Session["Session record · lib/session.js (ID, owner, runner ID)"]
     Client["Runner client and registry · lib/runner-client.js, lib/runner-registry.js, lib/local-runner.js"]
@@ -74,7 +74,9 @@ flowchart TB
 
 - **Host console:** xterm.js exchanges characters with `sockets.js` over
   Socket.IO. The runner relays them through a QEMU or VirtualBox Unix serial
-  socket connected to the guest's `ttyS0`.
+  socket connected to the guest's `ttyS0`. A Debian host can have a second
+  serial port (`ttyS1`, QEMU's second `-serial`, `serial1.sock`): see
+  [Console IDs](#console-ids).
 - **Switch console:** Socket.IO connects to `node-pty`, which runs `vdeterm`.
   It uses the `vde_switch` management socket. Guest Ethernet traffic uses a
   separate VDE data socket.
@@ -90,9 +92,10 @@ flowchart TB
   creating it at first use; it survives logouts and closed tabs until the user
   deletes it or the server stops. Each HTTP request goes to the router of the
   user's own session, whose runner looks a node ID up only there (404 otherwise).
-  Per-session events go to the room `session:<id>`, per-node events to
-  `node:<id>:<nodeId>`, which a socket joins only for a node of its own (or
-  observed) session.
+  Per-session events go to the room `session:<id>`, per-node events (`state`,
+  `log`, `logs-reset`) to `node:<id>:<nodeId>`, and console output (`serial`,
+  `serial-reset`) to `console:<id>:<consoleId>`; a socket joins them only for a
+  node of its own (or observed) session.
 - **Administration:** `server.js` mounts, in this order after authentication,
   the observation gate (`X-Observe`: admins only, `GET`/`HEAD` only, the
   observed workspace taken with `manager.get`, never `open`), the
@@ -136,6 +139,31 @@ flowchart TB
   archive actions from one middleware of the session router
   (`routes/index.js`, `userEvent`), written when the response is sent.
   `/admin` reads both logs from their end (`readLogTail`).
+
+
+### Console IDs
+
+A host has one console per serial port. The **console ID** of channel 0
+(`ttyS0`) is the node ID itself, so that path is unchanged; the second port
+(`ttyS1`) is `<nodeId>:1` (`common/console-id.js`: `baseNodeId`,
+`consoleChannel`, `consoleId`). The ID is used by `select-node`, `input`,
+`clear-console`, the `console.*` commands and the `nodeId` field of the
+`serial` and `serial-reset` events of channel 1. Everything else (`state`,
+`log`, node lists, views) keeps plain node IDs. `select-node` joins the node
+room and the console room, and leaves those of the previous selection, so a
+pane shows one console at a time; the browser's `console2` pane view selects
+`<nodeId>:1`. Each channel has its own connection and 256 KiB replay buffer in
+the runner (`serial`/`serialBuffer`, `serial1`/`serialBuffer1`); the startup
+hook marker filter applies to channel 0 only.
+
+The number of consoles is the `serialConsoles` key (1 or 2) of a system
+profile in `config.json` (2 for `debian13-legacy` and `debian13-cloud` on QEMU,
+absent = 1 elsewhere), overridable per host in `host.json` `config` up to the
+profile's value, and part of the launch settings. It is left out of
+`profileHash`, so archives saved before the key existed still load. A system
+without a getty on `ttyS1` (an older image) shows an empty second console.
+`state` events, `nodes-changed` and `GET /api/nodes` carry `serialConsoles`
+(the running VM's count while it runs), and changing it is a pending restart.
 
 ## View state
 
@@ -233,7 +261,8 @@ The server is split into layers with one-way dependencies:
 | `runner/launch-preview.js` | Settings, storage paths and commands a host would use, without starting it. |
 | `runner/engines/` | QEMU, QEMU monitor (HMP), VirtualBox, child process exit. |
 | `runner/network/` | NIC MAC and port assignment; VDE switch and its `vdeterm` terminal. |
-| `runner/console/` | Guest serial console and startup hook marker filtering. |
+| `runner/console/` | Guest serial consoles (one per channel) and startup hook marker filtering. |
+| `common/console-id.js` | Console IDs (node ID, `:1` for the second serial port); also served to the browser at `/console-id.js`. |
 | `runner/media/` | Working disks, startup ISO, startup files and base image hashes. |
 | `runner/preflight.js`, `runner/resources.js`, `runner/metrics.js` | Executable checks; CPU and memory sampling. |
 | `common/` | Runner protocol framing (`runner-protocol.js`), `.topo` parsing (`topology.js`), IDs, launch settings, `config.json` validation, JSON writes, shell quoting. |
@@ -256,7 +285,8 @@ order. State that several modules reassign lives on the `store` object of
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
 | `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401, `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |
-| `terminal.js` | Console panes, menus, font size and Console/Monitor/Log views. |
+| `terminal.js` | Console panes, menus, font size and Console/Console 2/Monitor/Log views. |
+| `host-console-settings.js` | Console tab of Host Settings: number of serial consoles and the read-only console sockets. |
 | `workspace.js` | Pane layout, paging, node tabs, state badges and metrics. |
 | `nodes.js` | Node model, server synchronization and lifecycle actions. |
 | `node-dialogs.js` | Add switch and Clone dialogs. |
@@ -391,8 +421,9 @@ query options, type and declared size; the result is the import response).
 Commands whose HTTP route takes a JSON body receive it as `body`
 (`host.create`, `host.configure`, `session.setEngine`, `topology.*`, ...).
 
-Consoles: `console.attach {nodeId}` (the `node-snapshot` content: state, logs,
-serial buffer), `console.resize {nodeId, cols, rows}`, `console.clear {nodeId,
+Consoles (`nodeId` of the console commands is a [console ID](#console-ids)):
+`console.attach {nodeId}` (the `node-snapshot` content: state, logs, serial
+buffer of that console), `console.resize {nodeId, cols, rows}`, `console.clear {nodeId,
 line, column}`, and `input` messages.
 
 ### Events

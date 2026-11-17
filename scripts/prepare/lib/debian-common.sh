@@ -115,6 +115,7 @@ write_files:
 runcmd:
   - [passwd, -d, root]
   - [systemctl, enable, serial-getty@ttyS0.service]
+  - [systemctl, enable, serial-getty@ttyS1.service]
   - [systemctl, enable, getty@tty1.service]
   - [systemctl, enable, systemd-networkd.service]
   - [systemctl, enable, qemuweb-start.service]
