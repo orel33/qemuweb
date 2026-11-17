@@ -15,6 +15,7 @@ Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est liv
 | 3 — Multi-utilisateurs, auth simple | 0.9.0-beta.3 |
 | 4 — Rôle admin | 0.9.0-beta.4 |
 | 5a et 5b — Interface runner, runner local en processus séparé | 0.9.0-beta.4.1 |
+| Runner manuel et adoption des sessions, seconde console ttyS1, correctifs généraux | 0.9.0-beta.4.2 |
 | 5 — Runners local et distant (5c : runners distants) | 0.9.0-beta.5 |
 | 6 — Durcissement applicatif et jail minimaliste | 0.9.0-beta.6 |
 | Stabilisation | 0.9.0 |
