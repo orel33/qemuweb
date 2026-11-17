@@ -1,7 +1,7 @@
 'use strict';
 
 // users.json: the accounts allowed to log in (repository root by default, or
-// QEMUWEB_USERS_FILE). Mode 0600, never committed. Layout:
+// the --users option). Mode 0600, never committed. Layout:
 //   {"schemaVersion": 1, "users": [{"login": "alice", "hash": "scrypt$...", "role": "student"}]}
 // The role is 'student' or 'admin' (the /admin page and API). "disabled": true, written only
 // when set, refuses the account's logins and cookies.
@@ -30,10 +30,6 @@ function validatePassword(password) {
   if (typeof password !== 'string' || !password) throw new Error('The password must not be empty.');
   if (password.length > 1024) throw new Error('The password is too long (maximum 1024 characters).');
   return password;
-}
-
-function usersFilePath(root, env = process.env) {
-  return env.QEMUWEB_USERS_FILE ? path.resolve(env.QEMUWEB_USERS_FILE) : path.join(root, 'users.json');
 }
 
 function parseUsers(text, file = 'users.json') {
@@ -148,5 +144,5 @@ function removeAccount(file, login) {
   writeUsers(file, users.filter(user => user.login !== login));
 }
 
-module.exports = {ROLES, LOGIN_PATTERN, validateLogin, validateRole, validatePassword, usersFilePath, parseUsers, readUsers,
+module.exports = {ROLES, LOGIN_PATTERN, validateLogin, validateRole, validatePassword, parseUsers, readUsers,
   writeUsers, createUsersStore, createAccount, setPassword, setRole, setDisabled, removeAccount};

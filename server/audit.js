@@ -1,6 +1,6 @@
 'use strict';
 
-// Server logs live in one directory: logs/ at the repository root, or QEMUWEB_LOG_DIR. Each is
+// Server logs live in one directory: the --logs directory (default logs/ at the repository root). Each is
 // JSON lines, created with mode 0600:
 //   admin.log  the audit log of administrator actions:
 //              {"time", "admin": login, "action": name, "target": {...}, "result": "ok" | "error: ..."}
@@ -14,10 +14,6 @@ const path = require('path');
 const ADMIN_LOG = 'admin.log';
 const USERS_LOG = 'users.log';
 const LOG_NAMES = {admin: ADMIN_LOG, users: USERS_LOG};
-
-function logDirPath(root, env = process.env) {
-  return env.QEMUWEB_LOG_DIR ? path.resolve(env.QEMUWEB_LOG_DIR) : path.join(root, 'logs');
-}
 
 // Creates the log directory (mode 0700) if missing; returns it.
 function createLogDir(dir) {
@@ -70,4 +66,4 @@ function readLogTail(file, lines = 200, maxBytes = 256 * 1024) {
   } finally { fs.closeSync(fd); }
 }
 
-module.exports = {ADMIN_LOG, USERS_LOG, LOG_NAMES, logDirPath, createLogDir, createAudit, createUserLog, readLogTail};
+module.exports = {ADMIN_LOG, USERS_LOG, LOG_NAMES, createLogDir, createAudit, createUserLog, readLogTail};

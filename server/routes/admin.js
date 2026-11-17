@@ -60,8 +60,8 @@ function adminPage(root) {
 
 // disconnectUser(login) closes the user's Socket.IO connections, browsers(login) counts the
 // user's connected browser tabs (server/sockets.js); logDir holds admin.log and users.log; `port` is the
-// server's port (the Runners panel, routes/admin-runners.js).
-function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir, port}) {
+// server's port and `runtime` its --runtime when given, else null (the Runners panel, routes/admin-runners.js).
+function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir, port, runtime}) {
   const router = express.Router();
   const usersFile = auth.usersFile;
   router.use(auth.requireAdmin);
@@ -106,7 +106,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
     } catch (error) { res.status(error.status || 500).json({error: error.message}); }
   });
 
-  router.get('/runners', runnersHandler({manager, port}));
+  router.get('/runners', runnersHandler({manager, port, runtime}));
 
   router.post('/sessions/delete', (req, res) => {
     const logins = req.body?.logins;

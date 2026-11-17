@@ -26,28 +26,27 @@ Create the accounts before opening the service (see the README, section
 ```
 
 Keep `users.json` readable only by the account that runs QemuWeb (the script
-writes it with mode 0600). Do not set `QEMUWEB_AUTH=off` on an exposed server.
+writes it with mode 0600). Do not use `--no-auth` on an exposed server.
 
-## 2. Environment of the QemuWeb service
+## 2. Options of the QemuWeb service
 
-| Variable | Value behind nginx | Why |
+The server reads no environment variable: its options are on the command line of the systemd unit
+(see [The two services](#the-two-services)).
+
+| Option | Value behind nginx | Why |
 | --- | --- | --- |
-| `PORT` | `3002` (or another local port) | Port nginx forwards to. |
-| `QEMUWEB_TRUST_PROXY` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
-| `QEMUWEB_SESSION_HOURS` | `12` (default) | Login lifetime, renewed while the user is active. |
-| `QEMUWEB_USERS_FILE` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
-| `QEMUWEB_LOG_DIR` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
-
-QemuWeb always runs as two processes: the server and a runner (the process that runs
-the machines). `./scripts/start.sh` (`npm start`) starts both for development and for tests; a
-deployment runs them as two systemd services of the same machine, so that restarting the
-server (an upgrade, a crash) leaves the machines running. See "The two services" below.
+| `--listen` | `3002` (default, or another local port) | Port nginx forwards to. |
+| `--trust-proxy` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
+| `--session-hours` | `12` (default) | Login lifetime, renewed while the user is active. |
+| `--users` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
+| `--logs` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
+| `--runtime` | optional | State directory outside the repository, e.g. `/var/lib/qemuweb` (give the runner the same one). |
 
 ## The runner process
 
 The server does not run the machines itself: a **runner** (`runner/main.js`)
 does. A runner always dials the server, on the Unix socket
-`runtime/runner-<port>.sock` (mode 0600, so only the server's own account can
+`<runtime>/runner-<port>.sock` (mode 0600, so only the server's own account can
 connect). The server never reaches out to a runner, and the web interface only
 *displays* runners (the **Runners** section of `/admin`): it registers none.
 One runner is accepted for now; a second connection is refused. Runners on
@@ -56,8 +55,8 @@ other machines, with tokens and TLS, come with a later milestone.
 There is one way to start it, in every environment:
 
 - **`./scripts/start.sh`** (what `npm start`, `scripts/demo.sh` and the integration tests
-  use) starts `./scripts/server.sh` and, once the socket exists, `./scripts/runner.sh
-  --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
+  use) starts `./scripts/server.sh --listen N --runtime DIR` and, once the socket exists, `./scripts/runner.sh
+  --port N --runtime DIR --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
   and `[runner]`. Ctrl+C or SIGTERM stops the runner first (it stops every machine), kills what
   is left of its group (QEMU, `vde_switch`), then stops the server, and exits 0. When the runner
   ends for any reason (even SIGKILL), what is left of its group is killed at once and the
@@ -66,8 +65,8 @@ There is one way to start it, in every environment:
 - **`./scripts/server.sh` and `./scripts/runner.sh` by themselves** (two terminals, or the two
   services below): the server opens HTTP at once and prints "No runner connected. Start one
   with ./scripts/runner.sh, or run ./scripts/start.sh for the server and a runner". Until a
-  runner connects, session routes answer 503 ("No runner is connected."). `PORT=<n>` selects
-  the server's port (default 3002). Without `--exit-on-disconnect` the runner keeps its
+  runner connects, session routes answer 503 ("No runner is connected."). `--listen <n>` selects
+  the server's port (default 3002; the runner then needs `--port <n>`). Without `--exit-on-disconnect` the runner keeps its
   machines if the server restarts and reconnects within 2 seconds of the server being back.
 
 The runner runs under a normal account, never root (`scripts/runner.sh` refuses
@@ -103,14 +102,14 @@ the connection (waiting for the server, connected, refused, lost). Under
   adopted. A session whose owner is invalid, or already has a session, is
   deleted on the runner. Sessions the server no longer knows are never kept.
 - **Files shared with the runner:** the server touches the runner's files only
-  when it shares `runtime/` with it, that is when the runner's `runtimeRoot`
-  (announced in `hello`) is the server's own `runtime/` (`scripts/runner.sh` uses
-  it). Then, when a runner connects, the server prunes the empty
-  `runtime/sessions/<id>` directories left by earlier servers (sparing the
+  when it shares its runtime directory with it, that is when the runner's `runtimeRoot`
+  (announced in `hello`) is the server's own `--runtime` (`runtime/` of the project by
+  default, for both; there is no environment variable for it). Then, when a runner connects, the
+  server prunes the empty `sessions/<id>` directories left by earlier servers (sparing the
   sessions that `hello` reports and those of other live servers), creates the
-  `runtime/users/<login>` aliases, and removes the session directories of a runner
-  that is lost (a runner killed by SIGKILL cannot). A runner started with another
-  `--runtime` is not touched.
+  `users/<login>` aliases, and removes the session directories of a runner
+  that is lost (a runner killed by SIGKILL cannot). A runner whose `hello` announces another
+  runtime directory is never touched.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
   empty session, recorded as `session-deleted` with the reason `runner lost` in
@@ -147,9 +146,7 @@ After=network.target
 [Service]
 User=qemuweb
 WorkingDirectory=/srv/qemuweb
-Environment=PORT=3002
-Environment=QEMUWEB_TRUST_PROXY=loopback
-ExecStart=/usr/bin/node server/main.js
+ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb --users /etc/qemuweb/users.json --logs /var/log/qemuweb --trust-proxy loopback
 KillSignal=SIGTERM
 TimeoutStopSec=30
 Restart=on-failure
@@ -160,13 +157,15 @@ WantedBy=multi-user.target
 # ~qemuweb/.config/systemd/user/qemuweb-runner.service (systemd --user, loginctl enable-linger qemuweb)
 [Service]
 WorkingDirectory=/srv/qemuweb
-Environment=PORT=3002
-ExecStart=/srv/qemuweb/scripts/runner.sh
+ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --runtime /var/lib/qemuweb
 KillMode=mixed
 Restart=on-failure
 ```
 
-Both must share `/srv/qemuweb/runtime` (the runner socket is in it). Restarts
+Both are given the same `--runtime` (here `/var/lib/qemuweb`, state kept apart from the code;
+the default is `/srv/qemuweb/runtime`): the runner socket `runner-<port>.sock` is in it, and it
+is what lets the server manage the runner's sessions. The directory must exist and belong to the
+`qemuweb` account. Restarts
 are systemd's job (`Restart=`): QemuWeb never restarts a process itself.
 `KillMode=mixed` sends SIGTERM to the runner only, which stops its machines in
 order; SIGKILL goes to every remaining process of the unit (QEMU, `vde_switch`)
@@ -177,7 +176,7 @@ running, and the sessions are adopted again when the server is back.
 ## Server logs
 
 The server writes two logs, as JSON lines, in the log directory: `logs/` at the
-repository root (ignored by Git; `QEMUWEB_LOG_DIR` selects another directory),
+repository root (ignored by Git; `--logs` selects another directory),
 which the server creates at startup with mode 0700 if it is missing. Both files
 are created with mode 0600. The **Logs** panel of `/admin` shows their last 200
 entries and downloads them. `scripts/cleanall.sh` does not touch them. A write
@@ -298,7 +297,7 @@ Check the result:
 - Cross-site request checks (`Origin`/CSRF) and a revocable logout come with
   milestone 6; until then, keep QemuWeb on its own domain name (see above).
 - Log out only clears the cookie in the browser: a copied cookie stays valid
-  until it expires (`QEMUWEB_SESSION_HOURS`). Removing the account, or restarting
+  until it expires (`--session-hours`). Removing the account, or restarting
   the server (every start draws a new cookie signing key, which logs everybody out),
   revokes it.
 - A user removed with `scripts/user.sh remove` can no longer log in, but their

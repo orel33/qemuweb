@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# Stops what belongs to this project and cleans its default runtime/ (not another --runtime directory).
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"

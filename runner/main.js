@@ -2,11 +2,11 @@
 
 // Runner process entry point. A runner is an ordinary unprivileged process: every path is a
 // parameter, nothing is written outside them.
-//   node runner/main.js (--port <n> | --connect <socket>) [--runtime <dir>] [--config <file>] [--exit-on-disconnect]
-//   --port                the server on that port: --connect <this project>/runtime/runner-<n>.sock
-//   --connect             Unix socket of the control plane, which the runner dials
-//   --runtime             sessions directory root (default $XDG_DATA_HOME/qemuweb-runner,
-//                         else ~/.local/share/qemuweb-runner)
+//   node runner/main.js [--port <n> | --connect <socket>] [--runtime <dir>] [--config <file>] [--exit-on-disconnect]
+//   --port                the server on that port (default 3002): --connect <runtime>/runner-<n>.sock
+//   --connect             Unix socket of the control plane, which the runner dials, instead of --port
+//   --runtime             sessions directory root, and where --port looks for the server socket
+//                         (default runtime/ of this project, which the server shares)
 //   --config              system catalog (default config.json of this project)
 //   --exit-on-disconnect  the loss of the control connection ends the runner: every node is
 //                         destroyed and the process exits (scripts/start.sh, which ends with
@@ -14,37 +14,36 @@
 // Started by scripts/runner.sh (also through scripts/start.sh, with a [runner] prefix) it prints
 // its own checks: dependencies, configuration warnings and the state of the connection.
 const net = require('net');
-const os = require('os');
 const path = require('path');
 const fs = require('fs');
 const {createRunnerService, serveConnection, resolveCommands} = require('./index');
 const {Connection} = require('../common/runner-protocol');
 
 const root = path.join(__dirname, '..');
+const DEFAULT_PORT = 3002;
 const RECONNECT_MS = 2000;
 // A connection the server closes within this delay was refused (a runner is already connected).
 const REFUSED_MS = 500;
 
 // `--help`: the options and variables, repeated in README.md ("Server and runner command line").
-const HELP = `Usage: node runner/main.js (--port N | --connect SOCKET) [options]
-       ./scripts/runner.sh [options]      (sets --port from PORT and --runtime to runtime/ of the project)
+const HELP = `Usage: node runner/main.js [options]
+       ./scripts/runner.sh [options]
 
 The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessions. It dials the
 server, keeps its sessions if the connection drops, and reconnects. Run it as your normal user.
 
-Options:
-  --port N               reach the server of port N on runtime/runner-N.sock of the project
-  --connect SOCKET       Unix socket of the server, instead of --port
-  --runtime DIR          where the runner keeps the sessions (DIR/sessions/<id>/)
-                         default: $XDG_DATA_HOME/qemuweb-runner, else ~/.local/share/qemuweb-runner
-  --config FILE          system catalog (images, memory, QEMU options)   default: config.json of the project
+Options (default in brackets):
+  --port N               reach the server of port N on DIR/runner-N.sock, DIR = --runtime   [3002]
+  --connect SOCKET       Unix socket of the server, instead of --port (not with --port)
+  --runtime DIR          where the runner keeps the sessions (DIR/sessions/<id>/) and looks for
+                         the server socket DIR/runner-N.sock. The server cleans it only if it
+                         has the same --runtime                      [runtime/ of the project]
+  --config FILE          system catalog (images, memory, QEMU options)   [config.json of the project]
   --exit-on-disconnect   stop every machine and exit when the server connection is lost
-                         default: keep the sessions and reconnect every 2 seconds
+                         [keep the sessions and reconnect every 2 seconds]
   -h, --help             this text
 
 Environment variables:
-  PORT                   with ./scripts/runner.sh only: the server to reach, as --port (default 3002)
-  XDG_DATA_HOME          base of the default --runtime (standard variable; default ~/.local/share)
   QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE
                          names or paths of the external programs: .env.local, then the environment,
                          then the default of .env
@@ -70,16 +69,18 @@ function parseArguments(argv) {
     options[key] = path.resolve(argv[++index]);
   }
   if (options.port && options.connect) throw new Error('Use --port or --connect, not both.');
-  if (options.port) options.connect = path.join(root, 'runtime', `runner-${options.port}.sock`);
-  if (!options.connect) throw new Error('Missing --port <n> or --connect <socket>.');
-  if (!options.runtime) options.runtime = path.join(process.env.XDG_DATA_HOME || path.join(os.homedir(), '.local', 'share'), 'qemuweb-runner');
+  if (!options.runtime) options.runtime = path.join(root, 'runtime');
+  if (!options.connect) {
+    options.port = options.port || DEFAULT_PORT;
+    options.connect = path.join(options.runtime, `runner-${options.port}.sock`);
+  }
   return options;
 }
 
 // The options and where each value comes from, printed before the dependency check.
 function printOptions() {
   const rows = [
-    ['Server', options.port ? `${options.connect}  (--port ${options.port})` : `${options.connect}  (--connect)`],
+    ['Server', options.given.has('--connect') ? `${options.connect}  (--connect)` : `${options.connect}  (port ${options.port}, ${options.given.has('--port') ? '--port' : 'default'})`],
     ['Runtime directory', `${options.runtime}  (${options.given.has('--runtime') ? '--runtime' : 'default'})`],
     ['System catalog', `${options.config}  (${options.given.has('--config') ? '--config' : 'default'})`],
     ['On disconnect', options.exitOnDisconnect ? 'stop every machine and exit  (--exit-on-disconnect)' : `keep the sessions and reconnect every ${RECONNECT_MS / 1000} s  (default)`]

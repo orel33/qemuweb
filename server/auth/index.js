@@ -2,7 +2,7 @@
 
 // Authentication facade. The rest of the server only uses this interface, so that the
 // password store can later be replaced (OpenID Connect) without touching it:
-//   mode                     'password', or 'off' (QEMUWEB_AUTH=off: one implicit local user)
+//   mode                     'password', or 'off' (--no-auth: one implicit local user)
 //   authenticate(login, pw)  -> {login, role} or null
 //   register(app)            /auth/login, /auth/logout and /auth/me
 //   identify                 Express middleware setting req.user from the session cookie
@@ -12,14 +12,12 @@
 //   currentUser(login)       {login, role} of an existing, enabled account, else null
 // Cross-site request (Origin/CSRF) checks are deferred to milestone 6: until then the
 // SameSite=Lax cookie is the only protection, so QemuWeb needs its own domain name.
-// Environment:
-//   QEMUWEB_AUTH             unset or 'password' (default), or 'off'
-//   QEMUWEB_USERS_FILE       users file (default: users.json at the repository root)
-//   QEMUWEB_SESSION_HOURS    sliding cookie lifetime in hours (default 12)
+// Settings (server/options.js): authMode ('password' or 'off'), usersFile, sessionHours (the
+// sliding cookie lifetime).
 const path = require('path');
 const express = require('express');
 const {hashPassword, verifyPassword} = require('./passwords');
-const {createUsersStore, usersFilePath, LOGIN_PATTERN} = require('./users-store');
+const {createUsersStore, LOGIN_PATTERN} = require('./users-store');
 const {COOKIE_NAME, newSecret, signSession, verifySession, parseCookies, sessionCookie} = require('./cookie');
 
 const LOCAL_USER = Object.freeze({login: 'local', role: 'admin'});
@@ -28,20 +26,6 @@ const PUBLIC_PATHS = new Set(['/login.html', '/login.js', '/css/app.css', '/favi
 // The cookie is renewed at most once a minute while the user is active.
 const RENEW_AFTER_MS = 60 * 1000;
 
-function authMode(env) {
-  const value = env.QEMUWEB_AUTH;
-  if (value === undefined || value === '' || value === 'password') return 'password';
-  if (value === 'off') return 'off';
-  throw new Error(`Invalid QEMUWEB_AUTH: ${value} (expected "password" or "off").`);
-}
-
-function sessionLifetimeMs(env) {
-  if (env.QEMUWEB_SESSION_HOURS === undefined || env.QEMUWEB_SESSION_HOURS === '') return 12 * 3600 * 1000;
-  const hours = Number(env.QEMUWEB_SESSION_HOURS);
-  if (!Number.isFinite(hours) || hours <= 0 || hours > 24 * 90) throw new Error('QEMUWEB_SESSION_HOURS must be a number of hours between 0 and 2160.');
-  return Math.round(hours * 3600 * 1000);
-}
-
 // Attempted login names in users.log: printable characters only, at most 64 of them.
 function attemptedLogin(login) {
   return typeof login === 'string' ? login.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 64) : '';
@@ -49,10 +33,10 @@ function attemptedLogin(login) {
 
 // `secret` signs the login cookies: a new one per server start (injected only by tests).
 // userLog (server/audit.js createUserLog) receives login, login-failed and logout events.
-function createAuth({root, env = process.env, now = Date.now, secret = newSecret(), userLog = {record() {}}}) {
-  const mode = authMode(env);
-  const lifetimeMs = sessionLifetimeMs(env);
-  const store = createUsersStore(usersFilePath(root, env));
+function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {record() {}}}) {
+  const mode = settings.authMode;
+  const lifetimeMs = Math.round(settings.sessionHours * 3600 * 1000);
+  const store = createUsersStore(settings.usersFile);
   // Unknown logins still cost one scrypt verification, like known ones.
   const dummyHash = hashPassword('qemuweb-unknown-user');
 

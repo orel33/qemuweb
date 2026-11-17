@@ -11,7 +11,8 @@ const {hashPassword, verifyPassword} = require('../../server/auth/passwords');
 const {readUsers, writeUsers, parseUsers, createAccount, setPassword, setRole, setDisabled} = require('../../server/auth/users-store');
 const {COOKIE_NAME, newSecret, signSession} = require('../../server/auth/cookie');
 const {createAuth} = require('../../server/auth');
-const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog, readLogTail} = require('../../server/audit');
+const {defaultSettings, parseServerArguments} = require('../../server/options');
+const {ADMIN_LOG, USERS_LOG, createLogDir, createAudit, createUserLog, readLogTail} = require('../../server/audit');
 const {userEvent} = require('../../server/routes');
 const {Session} = require('../../server/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../server/console-control');
@@ -20,6 +21,7 @@ const {inputRefusal, createObservationTracker} = require('../../server/sockets')
 const {paneCount, normalizeView, sameView} = require('../../public/view-state');
 
 const root = path.join(__dirname, '..', '..');
+const settingsFor = (usersFile, extra = {}) => ({...defaultSettings(root), usersFile, ...extra});
 const FAST = {N: 1024};
 
 function tempDir(t) {
@@ -78,7 +80,7 @@ test('a disabled account cannot log in, and its cookie and sockets are refused a
   writeUsers(usersFile, [{login: 'toto', hash: await hashPassword('toto', FAST), role: 'student'}]);
   const clock = 1000000;
   const secret = newSecret();
-  const auth = createAuth({root, env: {QEMUWEB_USERS_FILE: usersFile}, now: () => clock, secret});
+  const auth = createAuth({settings: settingsFor(usersFile), now: () => clock, secret});
   const cookie = `${COOKIE_NAME}=${signSession(secret, {login: 'toto', issued: clock, expires: clock + 3600e3})}`;
   const identify = () => { const req = request({headers: {cookie}}); run(auth.identify, req, response()); return req.user; };
   const socket = () => ({request: {headers: {cookie}}, data: {}});
@@ -101,15 +103,15 @@ test('a disabled account cannot log in, and its cookie and sockets are refused a
   assert.equal(auth.currentUser('nobody'), null);
 });
 
-test('requireAdmin answers 403 to anyone but an admin; QEMUWEB_AUTH=off is admin', t => {
-  const auth = createAuth({root, env: {QEMUWEB_USERS_FILE: path.join(tempDir(t), 'users.json')}});
+test('requireAdmin answers 403 to anyone but an admin; --no-auth is admin', t => {
+  const auth = createAuth({settings: settingsFor(path.join(tempDir(t), 'users.json'))});
   for (const user of [undefined, {login: 'toto', role: 'student'}]) {
     const res = response();
     assert.equal(run(auth.requireAdmin, request({user}), res), false);
     assert.equal(res.statusCode, 403);
   }
   assert.equal(run(auth.requireAdmin, request({user: {login: 'boss', role: 'admin'}}), response()), true);
-  const off = createAuth({root, env: {QEMUWEB_AUTH: 'off', QEMUWEB_USERS_FILE: path.join(tempDir(t), 'users.json')}});
+  const off = createAuth({settings: settingsFor(path.join(tempDir(t), 'users.json'), {authMode: 'off'})});
   const req = request();
   run(off.identify, req, response());
   assert.equal(run(off.requireAdmin, req, response()), true);
@@ -120,8 +122,8 @@ test('scripts/user.js disables and enables accounts and lists their state', asyn
   const dir = tempDir(t);
   const file = path.join(dir, 'users.json');
   writeUsers(file, [{login: 'toto', hash: await hashPassword('toto', FAST), role: 'student'}]);
-  const script = args => spawnSync(process.execPath, [path.join(root, 'scripts', 'user.js'), ...args],
-    {env: {...process.env, QEMUWEB_USERS_FILE: file}, input: '', encoding: 'utf8'});
+  const script = args => spawnSync(process.execPath, [path.join(root, 'scripts', 'user.js'), '--users', file, ...args],
+    {input: '', encoding: 'utf8'});
   assert.equal(script(['disable', 'toto']).status, 0);
   assert.equal(readUsers(file)[0].disabled, true);
   assert.equal(script(['list']).stdout, 'toto\tstudent\tdisabled\n');
@@ -131,9 +133,9 @@ test('scripts/user.js disables and enables accounts and lists their state', asyn
   assert.equal(script(['disable']).status, 2);
 });
 
-test('admin.log appends one JSON line per action, mode 0600, in logs/ or QEMUWEB_LOG_DIR', t => {
-  assert.equal(logDirPath('/srv/qemuweb', {}), '/srv/qemuweb/logs');
-  assert.equal(logDirPath('/srv/qemuweb', {QEMUWEB_LOG_DIR: '/var/log/qemuweb'}), '/var/log/qemuweb');
+test('admin.log appends one JSON line per action, mode 0600, in the logs directory', t => {
+  assert.equal(defaultSettings('/srv/qemuweb').logDir, '/srv/qemuweb/logs');
+  assert.equal(parseServerArguments(['--logs', '/var/log/qemuweb'], {root: '/srv/qemuweb'}).logDir, '/var/log/qemuweb');
   assert.equal(ADMIN_LOG, 'admin.log');
   const dir = path.join(tempDir(t), 'nested', 'logs');
   assert.equal(createLogDir(dir), dir);
@@ -323,7 +325,7 @@ test('the login routes write login, login-failed and logout to users.log, never 
   const usersFile = path.join(tempDir(t), 'users.json');
   writeUsers(usersFile, [{login: 'toto', hash: await hashPassword('secret-pw', FAST), role: 'student'}]);
   const lines = [];
-  const auth = createAuth({root, env: {QEMUWEB_USERS_FILE: usersFile}, userLog: {record: (...args) => lines.push(args)}});
+  const auth = createAuth({settings: settingsFor(usersFile), userLog: {record: (...args) => lines.push(args)}});
   const routes = {};
   auth.register({post: (route, ...handlers) => { routes[`POST ${route}`] = handlers.at(-1); }, get: (route, ...handlers) => { routes[`GET ${route}`] = handlers.at(-1); }});
   const call = async (route, req) => { const res = response(); res.set = () => res; await routes[route]({secure: false, ...req}, res); return res; };

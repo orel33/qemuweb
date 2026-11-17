@@ -25,16 +25,19 @@ async function createTestUsers(entries) {
   return {file, users, cleanup: () => fs.rmSync(dir, {recursive: true, force: true})};
 }
 
-// Starts QemuWeb on the given port with the users file (password authentication), through the
-// real launch sequence: scripts/start.sh, the server and a runner as two processes. With
-// `standalone` it starts only `node server/main.js` (a runner is started by the test). The returned
-// ChildProcess keeps the tail of its output in `output`.
-function spawnServer({port, usersFile, env = {}, standalone = false}) {
-  const serverEnv = {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1', QEMUWEB_USERS_FILE: usersFile, ...env};
-  delete serverEnv.QEMUWEB_AUTH;
+// Starts QemuWeb on the given port with the users file (password authentication, or `noAuth`),
+// as an ephemeral test server, through the real launch sequence: scripts/start.sh, the server and a
+// runner as two processes. With `standalone` it starts only `node server/main.js` (a runner is
+// started by the test). `logDir` is the --logs directory. The returned ChildProcess keeps the tail
+// of its output in `output`.
+function spawnServer({port, usersFile, logDir = null, noAuth = false, standalone = false}) {
+  const options = ['--listen', String(port), '--users', usersFile, '--ephemeral'];
+  if (logDir) options.push('--logs', logDir);
+  if (noAuth) options.push('--no-auth');
+  const stdio = ['ignore', 'pipe', 'pipe'];
   const child = standalone
-    ? spawn(process.execPath, ['server/main.js'], {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']})
-    : spawn(path.join(root, 'scripts', 'start.sh'), {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']});
+    ? spawn(process.execPath, ['server/main.js', ...options], {cwd: root, stdio})
+    : spawn(path.join(root, 'scripts', 'start.sh'), options, {cwd: root, stdio});
   child.output = '';
   child.standalone = standalone;
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { child.output = (child.output + data).slice(-12000); });

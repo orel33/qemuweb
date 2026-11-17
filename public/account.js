@@ -1,5 +1,5 @@
 // Account controls in the header: user name, Supervision link (admins), Delete session, Log out, and the warning
-// shown when authentication is disabled (QEMUWEB_AUTH=off). The session survives Log out.
+// shown when authentication is disabled (--no-auth). The session survives Log out.
 import {installAuthRedirect, redirectToLogin, requestJson} from './api.js';
 import {confirmAction} from './nodes.js';
 import {showStatusError} from './workspace.js';
