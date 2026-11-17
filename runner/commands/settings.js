@@ -26,7 +26,7 @@ const commands = {
 
   'catalog.systems': ({session, runner}) => {
     const config = runner.readConfig();
-    return Object.keys(config.systems).filter(id => id !== 'default').map(id => {
+    return Object.keys(config.systems).filter(id => id !== 'default' && runner.systemOffered(id)).map(id => {
       const p = selectedProfile(config, id, session.engine);
       return {id, label: p.label,
         images: {raw: config.systems[id].qemu.image, vdi: config.systems[id].vbox.image},

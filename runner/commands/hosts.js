@@ -29,6 +29,7 @@ const commands = {
     if (session.nodes.has(id)) throw new Error('Host ID already exists.');
     const image = imageById(imageId || Object.keys(readConfig().systems).find(system => system !== 'default'));
     if (!image) throw new Error('Unknown system in config.json.');
+    runner.requireInstalledImage(image);
     if (!['qemu', 'vbox'].includes(engine)) throw new Error('Unknown engine.');
     requireSessionEngine(engine);
     if (name !== undefined && (typeof name !== 'string' || !name.trim() || name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(name))) throw new Error('Invalid host name (1 to 64 characters).');

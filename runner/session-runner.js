@@ -38,8 +38,8 @@ function nodeBusy(node) {
 // Creates the runtime of one session. Each call returns an independent instance with its
 // own context, EventEmitter and resource sampling timer. hostNodes() lists the nodes of every
 // session of this runner, flow tells whether console sources are paused (see context.js).
-function createSessionRunner({session, commands, root, runtimeRoot, configPath, hostNodes, flow}) {
-  const ctx = createContext({session, commands, root, runtimeRoot, configPath, hostNodes, flow});
+function createSessionRunner({session, commands, root, runtimeRoot, configPath, hostNodes, flow, requireImages}) {
+  const ctx = createContext({session, commands, root, runtimeRoot, configPath, hostNodes, flow, requireImages});
   // Dependency order: each module uses only the modules created before it.
   ctx.catalog = createCatalog(ctx);
   ctx.runtime = createSessionRuntime(ctx);
@@ -159,6 +159,8 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     readConfig: catalog.readConfig,
     imageById: catalog.imageById,
     imagePath: catalog.imagePath,
+    requireInstalledImage: catalog.requireInstalledImage,
+    systemOffered: id => !ctx.requireImages || catalog.imageInstalled(id),
     allocateName: catalog.allocateName,
     qemuOptionsFor: catalog.qemuOptionsFor,
     launchSettingsFor: catalog.launchSettingsFor,

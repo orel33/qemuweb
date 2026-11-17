@@ -2,12 +2,12 @@
 
 // Where runners reach the server: the Unix socket runtime/runner-<port>.sock (mode 0600, so
 // only the server's own user can connect). A runner always dials the server, never the reverse.
-// A connection is registered as the runner "local", trusted: whoever can open this socket is
-// the server's own user. One runner at a time; a second connection is closed at once.
+// A connection is registered as the runner "local", trusted and `local` (the only entry whose
+// files the server touches): whoever can open this socket is the server's own user. One runner at a time; a second connection is closed at once.
 //   start()   removes a stale socket (refuses the one of a live server) and listens
 //   close()   stops listening and removes the socket
-// Runners that are not on this machine or this user come with 5c (tokens, TLS); they will
-// never be trusted by this path.
+// Runners that are not on this machine or this user come through server/remote-gateway.js (a
+// token, over a WebSocket); they are never trusted.
 const fs = require('fs');
 const net = require('net');
 const path = require('path');
@@ -35,7 +35,7 @@ function createRunnerGateway({root, runtimeRoot, port, registry}) {
   function onConnection(socket) {
     const current = registry.get('local');
     if (current && current.state !== 'lost') { socket.destroy(); return; }
-    registry.add({id: 'local', client: new RunnerClient(new Connection(socket)), trusted: true});
+    registry.add({id: 'local', client: new RunnerClient(new Connection(socket)), local: true, trusted: true});
   }
 
   async function start() {

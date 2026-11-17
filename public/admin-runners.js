@@ -1,7 +1,8 @@
-// "Runners" panel of /admin: the runners the server knows (read-only), with their engines,
-// resources, configuration warnings and sessions; when none is online, the command that starts
-// one. Nothing is registered here: a runner dials the server (docs/deployment.md).
-// api(path) and cell(content) come from admin.js.
+// "Runners" panel of /admin: the local and the registered remote runners with their state, engines,
+// resources, configuration warnings and sessions; pause (drain), revoke and remove; registration
+// tokens for new remote runners (the command is shown once). A runner dials the server
+// (docs/deployment.md). Text that comes from a runner (its name, address, warnings) is always
+// set with textContent. api(path, options), cell(content) and confirm(...) come from admin.js.
 // Inline Lucide icon TriangleAlert (License: /icons/LICENSE-lucide.txt).
 const WARNING_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg>';
 
@@ -19,17 +20,51 @@ function warningList(warnings) {
   return list;
 }
 
-function renderRunners({runners, connectHint}, {body, hint, cell}) {
+const when = iso => (iso ? new Date(iso).toLocaleString() : '—');
+
+function button(label, onClick, title = label) {
+  const element = Object.assign(document.createElement('button'), {type: 'button', className: 'admin-tool', title});
+  element.append(Object.assign(document.createElement('span'), {textContent: label}));
+  element.addEventListener('click', onClick);
+  return element;
+}
+
+function stateLabel(runner) {
+  const label = Object.assign(document.createElement('span'), {className: 'session-state'});
+  const text = {online: 'online', starting: 'starting', offline: 'offline', revoked: 'revoked'}[runner.state] || 'offline';
+  label.textContent = runner.paused ? `${text}, paused` : text;
+  label.dataset.state = runner.state === 'online' && !runner.paused ? 'active' : 'idle';
+  return label;
+}
+
+function renderRunners(data, {body, hint, cell, act}) {
+  const {runners, connectHint} = data;
   body.replaceChildren(...runners.map(runner => {
     const row = document.createElement('tr');
-    const state = Object.assign(document.createElement('span'), {className: 'session-state', textContent: runner.state === 'online' ? 'online' : 'starting'});
-    state.dataset.state = runner.state === 'online' ? 'active' : 'idle';
     const engines = runner.engines.map(engine => (engine === 'vbox' ? 'VirtualBox' : 'QEMU')).join(', ') || 'none';
     const kvm = runner.engines.includes('qemu') ? (runner.kvm ? ', KVM' : ', no KVM') : '';
-    row.append(cell(runner.id), cell(state), cell(`${engines}${kvm}`),
+    const name = document.createElement('div');
+    name.textContent = runner.name;
+    name.append(Object.assign(document.createElement('small'), {textContent: ` ${runner.local ? 'local' : `remote ${runner.id}`}`}));
+    const where = runner.state === 'online' || runner.state === 'starting' ? (runner.address || 'this machine') : `last seen ${when(runner.lastSeen)}`;
+    const actions = document.createElement('div');
+    actions.className = 'admin-actions';
+    const id = encodeURIComponent(runner.id);
+    actions.append(runner.paused
+      ? button('Resume', () => act(() => `/runners/${id}/resume`, 'POST'), 'Resume: new sessions can be placed on this runner again')
+      : button('Pause', () => act(() => `/runners/${id}/pause`, 'POST'), 'Pause: no new session is placed here; the running ones continue'));
+    if (!runner.local && runner.state !== 'revoked') {
+      actions.append(button('Revoke', () => act(() => `/runners/${id}/revoke`, 'POST', {title: 'Revoke runner',
+        message: `Revoke ${runner.name}? It is disconnected and cannot connect again; its sessions are dropped after the grace period.`, accept: 'Revoke'}), 'Revoke the token of this runner'));
+    }
+    if (!runner.local && runner.state === 'revoked') {
+      actions.append(button('Remove', () => act(() => `/runners/${id}`, 'DELETE'), 'Forget this revoked runner'));
+    }
+    row.append(cell(name), cell(stateLabel(runner)), cell(where), cell(`${engines}${kvm}`),
       cell(`${runner.cpus ?? '—'} CPU, ${gigabytes(runner.memoryBytes)}`), cell(runner.systems.join(', ') || '—'),
-      cell(String(runner.sessions)), cell(runner.warnings.length ? warningList(runner.warnings) : '—'));
-    row.cells[6].className = 'runner-warning-cell';
+      cell(runner.maxSessions ? `${runner.sessions} / ${runner.maxSessions}` : String(runner.sessions)),
+      cell(runner.warnings.length ? warningList(runner.warnings) : '—'), cell(actions));
+    row.cells[7].className = 'runner-warning-cell';
     return row;
   }));
   hint.hidden = runners.length > 0;
@@ -40,13 +75,51 @@ function renderRunners({runners, connectHint}, {body, hint, cell}) {
   }
 }
 
-// Returns refresh(): fetches and draws the table; errors are shown in `status`.
-export function createRunnersPanel({api, cell, body, hint, status}) {
-  return async function refreshRunners() {
+function renderPending(data, {pending, act}) {
+  pending.hidden = !data.registrationTokens.length;
+  pending.replaceChildren(...data.registrationTokens.map(token => {
+    const item = document.createElement('li');
+    item.append(`Registration token ${token.id} (by ${token.by}) expires ${when(token.expiresAt)} `);
+    item.append(button('Cancel', () => act(() => `/runners/registration-tokens/${token.id}`, 'DELETE')));
+    return item;
+  }));
+}
+
+// Returns refresh(): fetches and draws the table; errors are shown in `status`. `elements` are the
+// panel's nodes: body, hint, status, pending (list of unused tokens), lifetime (select), create
+// (button), tokenBox (where the new command is shown once) and error.
+export function createRunnersPanel({api, cell, confirm, elements}) {
+  const {body, hint, status, pending, lifetime, create, tokenBox, error} = elements;
+  async function refresh() {
     try {
       const data = await api('/runners');
-      renderRunners(data, {body, hint, cell});
-      status.textContent = '';
-    } catch (error) { status.textContent = `Not updated: ${error.message}`; }
-  };
+      if (!lifetime.options.length) {
+        for (const minutes of data.lifetimes) lifetime.append(new Option(minutes >= 60 ? `${minutes / 60} h` : `${minutes} min`, String(minutes)));
+        lifetime.value = '60';
+      }
+      renderRunners(data, {body, hint, cell, act});
+      renderPending(data, {pending, act});
+      status.textContent = `Sessions of a remote runner that lost its connection are kept ${data.runnerGraceSeconds} s.`;
+    } catch (problem) { status.textContent = `Not updated: ${problem.message}`; }
+  }
+  // confirmation: {title, message, accept} asked first; the path is built lazily, the result shown by refresh.
+  async function act(path, method, confirmation = null) {
+    error.hidden = true;
+    try {
+      if (confirmation && !await confirm(confirmation.title, confirmation.message, [], confirmation.accept)) return;
+      await api(path(), {method});
+    } catch (problem) { error.textContent = problem.message; error.hidden = false; }
+    await refresh();
+  }
+  create.addEventListener('click', async () => {
+    error.hidden = true;
+    try {
+      const created = await api('/runners/registration-tokens', {method: 'POST', body: {minutes: Number(lifetime.value)}});
+      tokenBox.replaceChildren(`Run this on the runner machine within ${lifetime.selectedOptions[0].textContent}; the token is shown only now: `,
+        Object.assign(document.createElement('code'), {textContent: created.command}));
+      tokenBox.hidden = false;
+    } catch (problem) { error.textContent = problem.message; error.hidden = false; }
+    await refresh();
+  });
+  return refresh;
 }

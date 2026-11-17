@@ -9,7 +9,7 @@
 const path = require('path');
 const express = require('express');
 const {LOG_NAMES, readLogTail} = require('../audit');
-const {runnersHandler} = require('./admin-runners');
+const {createRunnersRouter} = require('./admin-runners');
 const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled, removeAccount} = require('../auth/users-store');
 
 // Summary of one session for the supervision table: the control plane's own fields, and the
@@ -60,8 +60,9 @@ function adminPage(root) {
 
 // disconnectUser(login) closes the user's Socket.IO connections, browsers(login) counts the
 // user's connected browser tabs (server/sockets.js); logDir holds admin.log and users.log; `port` is the
-// server's port and `runtime` its --runtime when given, else null (the Runners panel, routes/admin-runners.js).
-function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir, port, runtime}) {
+// server's port and `runtime` its --runtime when given, else null (the Runners panel, routes/admin-runners.js,
+// which also takes the runners store, the registration tokens, --runner-grace and whether a proxy is trusted).
+function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir, port, runtime, runnerStore, runnerTokens, runnerGrace, trustProxy}) {
   const router = express.Router();
   const usersFile = auth.usersFile;
   router.use(auth.requireAdmin);
@@ -106,7 +107,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
     } catch (error) { res.status(error.status || 500).json({error: error.message}); }
   });
 
-  router.get('/runners', runnersHandler({manager, port, runtime}));
+  router.use('/runners', createRunnersRouter({manager, store: runnerStore, tokens: runnerTokens, audited, port, runtime, graceSeconds: runnerGrace, trustProxy}));
 
   router.post('/sessions/delete', (req, res) => {
     const logins = req.body?.logins;

@@ -42,10 +42,18 @@
         <h2 id="runners-title">Runners</h2>
         <span class="admin-updated" id="runners-updated" role="status"></span>
       </div>
+      <div class="admin-toolbar">
+        <label for="runners-lifetime">Registration token valid for</label>
+        <select id="runners-lifetime"></select>
+        <button id="runners-create-token" class="admin-tool act-green" type="button"><span>Create registration token</span></button>
+      </div>
+      <p class="admin-runners-hint" id="runners-token" hidden></p>
+      <ul class="admin-runners-hint" id="runners-pending" hidden></ul>
+      <p class="admin-error" id="runners-error" role="alert" hidden></p>
       <p class="admin-runners-hint" id="runners-hint" hidden></p>
       <div class="admin-table-wrap">
         <table class="admin-table">
-          <thead><tr><th>Runner</th><th>State</th><th>Engines</th><th>Machine</th><th>Systems</th><th>Sessions</th><th>Warnings</th></tr></thead>
+          <thead><tr><th>Runner</th><th>State</th><th>Where</th><th>Engines</th><th>Machine</th><th>Systems</th><th>Sessions</th><th>Warnings</th><th>Actions</th></tr></thead>
           <tbody id="runners-body"></tbody>
         </table>
       </div>

@@ -1,6 +1,7 @@
 'use strict';
 
 // System catalog helpers: image lookup, launch settings, QEMU options, engine selection.
+const fs = require('fs');
 const path = require('path');
 const {validatePorts} = require('../common/console-id');
 const {validateQemuOptions, validateLaunchSettings} = require('../common/launch-settings');
@@ -24,6 +25,20 @@ function createCatalog(ctx) {
         firmware: vbox.firmware, diskBus: vbox.diskInterface,
         diskController: 'IntelAhci', cdromBus: vbox.cdromInterface,
         cdromController: 'PIIX4'}};
+  }
+
+  // Whether the base image of a system, in the format of the session's engine, is on this machine.
+  function imageInstalled(id) {
+    const file = selectedProfile(readConfig(), id, ctx.session.engine).image;
+    return typeof file === 'string' && fs.existsSync(imagePath(file));
+  }
+
+  // A remote runner (ctx.requireImages) refuses a system whose image it does not have: the server
+  // offers it only the systems of the runner that holds the session (catalog.systems).
+  function requireInstalledImage(image) {
+    if (ctx.requireImages && !imageInstalled(image.id)) {
+      throw new Error(`System ${image.label || image.id} is not installed on this runner (its image is missing): run scripts/prepare.sh there.`);
+    }
   }
 
   function allocateName(prefix) {
@@ -62,7 +77,7 @@ function createCatalog(ctx) {
 
   function imagePath(file) { return path.resolve(ctx.root, file); }
 
-  return {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath};
+  return {requireSessionEngine, imageById, imageInstalled, requireInstalledImage, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath};
 }
 
 module.exports = {createCatalog};

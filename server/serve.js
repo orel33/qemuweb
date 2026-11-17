@@ -10,6 +10,10 @@ const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
 const {RunnerRegistry} = require('./runner-registry');
 const {createRunnerGateway} = require('./runner-gateway');
+const {createRemoteGateway} = require('./remote-gateway');
+const {createRunnerStore} = require('./runner-store');
+const {createRegistrationTokens} = require('./runner-registration');
+const {createRegisterRouter} = require('./routes/runner-register');
 const {ServerInstance} = require('./server-instance');
 const {SessionManager} = require('./session-manager');
 const {attachSockets} = require('./sockets');
@@ -36,16 +40,27 @@ function serve({root, settings}) {
   // One session per user, each with its own HTTP router, executed by a runner that dials
   // <runtime>/runner-<port>.sock (server/runner-gateway.js), started by ./scripts/runner.sh.
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({runtimeRoot: runtime, registry});
+  const manager = new SessionManager({runtimeRoot: runtime, registry, graceSeconds: settings.runnerGrace});
   const gateway = createRunnerGateway({root, runtimeRoot: runtime, port, registry});
+  // Remote runners (registered with a token, runners.json) dial /runner/connect on this HTTP server.
+  const runnerStore = createRunnerStore(settings.runnersFile);
+  const runnerTokens = createRegistrationTokens();
+  const remoteGateway = createRemoteGateway({server, registry, store: runnerStore, trustProxy: settings.trustProxy !== null});
+  const runnerLabel = entry => (entry.local ? 'Runner' : `Runner ${entry.name} (${entry.id})`);
   registry.on('online', (entry, hello) => {
     const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
-    console.log(`Runner connected (engines: ${engines || 'none'}).`);
-    // The server cleans the empty sessions that earlier servers left only in a runtime/ it shares
-    // with the runner (same runtimeRoot in the hello); the sessions the runner reports stay.
-    if (entry.runtimeRoot === path.resolve(runtime)) instance.pruneEmptyRuntimeSessions({keep: (hello.sessions || []).map(item => item?.sessionId)});
+    console.log(`${runnerLabel(entry)} connected${entry.address ? ` from ${entry.address}` : ''} (engines: ${engines || 'none'}).`);
+    // The server cleans the empty sessions that earlier servers left in the runtime/ it shares with
+    // the local runner when it shares this runtime/ (the only runner whose files it touches); the sessions the runner reports stay.
+    if (manager.sharesRuntime(entry)) instance.pruneEmptyRuntimeSessions({keep: (hello.sessions || []).map(item => item?.sessionId)});
   });
-  registry.on('lost', () => console.log(`Runner disconnected. Start one with ${RUNNER_HINT}.`));
+  registry.on('lost', entry => {
+    if (entry.local) console.log(`Runner disconnected. Start one with ${RUNNER_HINT}.`);
+    else {
+      console.log(`${runnerLabel(entry)} disconnected.`);
+      try { runnerStore.change(entry.id, {lastSeenAt: new Date().toISOString()}); } catch (_) { /* Removed meanwhile. */ }
+    }
+  });
   manager.on('created', (workspace, {adopted}) => {
     const {session, runner} = workspace;
     workspace.router = createSessionRouter({session, runner, userLog});
@@ -65,6 +80,8 @@ function serve({root, settings}) {
 
   app.use(auth.identify);
   auth.register(app);
+  // A runner machine registers with a one-time token, not with a login.
+  app.use('/api/runner/register', createRegisterRouter({tokens: runnerTokens, store: runnerStore, audit}));
   app.use(auth.requireUser);
   app.use(express.json({limit: '6mb'}));
   app.use('/vendor', express.static(path.join(root, 'node_modules/@xterm/xterm')));
@@ -80,7 +97,8 @@ function serve({root, settings}) {
   // X-Observe (admins, read-only) and the admin API come before anything that could open or
   // change the caller's own session.
   app.use('/api', observationGate(manager));
-  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null}));
+  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null,
+    runnerStore, runnerTokens, runnerGrace: settings.runnerGrace, trustProxy: settings.trustProxy !== null}));
   // Self-service deletion: stops and removes every node, then the session; the next request
   // opens a new, empty session.
   app.delete('/api/session', async (req, res) => {
@@ -97,6 +115,8 @@ function serve({root, settings}) {
       catch (error) { return res.status(503).json({error: error.message}); }
       req.workspace.session.touch();
     }
+    // The runner of a kept session is offline (a network cut): the page stays and recovers.
+    if (!manager.available(req.workspace)) return res.status(503).json({error: 'The runner of this session is offline; reconnecting…'});
     req.workspace.router(req, res, next);
   });
 
@@ -144,6 +164,7 @@ function serve({root, settings}) {
     shuttingDown = true;
     const forceExit = setTimeout(() => process.exit(1), 10000);
     gateway.close();
+    remoteGateway.close();
     io.close(() => {
       clearTimeout(forceExit);
       process.exit(0);

@@ -21,6 +21,7 @@
     "test:admin": "node test/integration/admin.js",
     "test:check-runner": "node test/integration/check-runner.js",
     "test:check-runner-manual": "node test/integration/check-runner-manual.js",
+    "test:check-runner-remote": "node test/integration/check-runner-remote.js",
     "test:check-load": "node test/integration/check-load.js",
     "test:check-load-start": "node test/integration/check-load-start.js",
     "test:check-console": "node test/integration/check-console.js"
@@ -36,7 +37,8 @@
     "@xterm/xterm": "6.0.0",
     "express": "4.22.3",
     "node-pty": "1.1.0",
-    "socket.io": "4.8.4"
+    "socket.io": "4.8.4",
+    "ws": "8.21.3"
   },
   "devDependencies": {
     "socket.io-client": "4.8.4"

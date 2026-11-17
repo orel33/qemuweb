@@ -29,10 +29,11 @@ async function createTestUsers(entries) {
 // as an ephemeral test server, through the real launch sequence: scripts/start.sh, the server and a
 // runner as two processes. With `standalone` it starts only `node server/main.js` (a runner is
 // started by the test). `logDir` is the --logs directory. The returned ChildProcess keeps the tail
-// of its output in `output`.
-function spawnServer({port, usersFile, logDir = null, noAuth = false, standalone = false}) {
+// of its output in `output`. `runnersFile` is the --runners file (remote runners registered).
+function spawnServer({port, usersFile, logDir = null, runnersFile = null, noAuth = false, standalone = false}) {
   const options = ['--listen', String(port), '--users', usersFile, '--ephemeral'];
   if (logDir) options.push('--logs', logDir);
+  if (runnersFile) options.push('--runners', runnersFile);
   if (noAuth) options.push('--no-auth');
   const stdio = ['ignore', 'pipe', 'pipe'];
   const child = standalone

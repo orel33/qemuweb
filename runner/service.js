@@ -5,7 +5,7 @@
 //   handle(command, sessionId, args, io)  runs one command; io gives the archive streams
 //                                         (incoming, outgoing, afterResponse)
 //   input(sessionId, nodeId, data)        console input
-//   hello()                               capabilities, runtimeRoot and the sessions (ID, owner,
+//   hello()                               capabilities, runtimeRoot, limits and the sessions (ID, owner,
 //                                         creation date, nodes)
 //   capabilities()                        engines, kvm, cpus, memory, images and config warnings
 //   setConsoleFlow(paused)                pauses console sources while the connection is congested
@@ -32,7 +32,10 @@ const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology',
 // drafts that do not exist yet, and consoles have their own messages.
 const OWN_NODE_CHECK = new Set(['node.preview', 'console.attach', 'console.resize', 'console.clear']);
 
-function createRunnerService({commands, root, runtimeRoot, configPath}) {
+// `requireImages`: remote runner, see runner/context.js.
+// `limits`: {maxSessions, memoryBytes, cpus} from the runner file of a remote runner, or null. They
+// only lower what hello announces: the control plane places no more sessions than maxSessions.
+function createRunnerService({commands, root, runtimeRoot, configPath, limits = null, requireImages = false}) {
   const sessions = new Map();
   const events = new EventEmitter();
   const flow = {paused: false};
@@ -55,7 +58,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
     fs.mkdirSync(session.runtimeDir);
     session.saveMetadata();
     session.saveMeta();
-    const runner = createSessionRunner({session, commands, root, runtimeRoot, configPath, hostNodes, flow});
+    const runner = createSessionRunner({session, commands, root, runtimeRoot, configPath, hostNodes, flow, requireImages});
     const emit = (event, payload) => events.emit('event', sessionId, event, payload);
     for (const event of RUNNER_EVENTS) runner.events.on(event, payload => emit(event, payload));
     sessions.set(sessionId, {session, runner, emit});
@@ -144,7 +147,10 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
   }
 
   function hello() {
-    return {type: 'hello', protocol: PROTOCOL_VERSION, pid: process.pid, runtimeRoot, ...capabilities(),
+    const announced = capabilities();
+    if (limits?.cpus) announced.cpus = Math.min(announced.cpus, limits.cpus);
+    if (limits?.memoryBytes) announced.memoryBytes = Math.min(announced.memoryBytes, limits.memoryBytes);
+    return {type: 'hello', protocol: PROTOCOL_VERSION, pid: process.pid, runtimeRoot, ...announced, ...(limits?.maxSessions ? {limits: {maxSessions: limits.maxSessions}} : {}),
       sessions: [...sessions.values()].map(({session, runner}) => ({sessionId: session.id, engine: session.engine,
         owner: session.owner, createdAt: session.createdAt, nodes: runner.listNodes()}))};
   }

@@ -192,7 +192,8 @@ function updateSelection() {
   $('select-all').checked = boxes.length > 0 && boxes.every(box => box.checked);
 }
 
-const refreshRunners = createRunnersPanel({api, cell, body: $('runners-body'), hint: $('runners-hint'), status: $('runners-updated')});
+const refreshRunners = createRunnersPanel({api, cell, confirm: confirmDialog, elements: {body: $('runners-body'), hint: $('runners-hint'), status: $('runners-updated'),
+  pending: $('runners-pending'), lifetime: $('runners-lifetime'), create: $('runners-create-token'), tokenBox: $('runners-token'), error: $('runners-error')}});
 
 let refreshing = false;
 async function refreshSessions() {

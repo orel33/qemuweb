@@ -44,13 +44,17 @@ function socketConnectError(error) {
 const isChannelView = (pane, channel) => (pane.view === 'console' || pane.view === 'console2') && viewChannel(pane.view) === channel;
 
 function attachPaneSocket(pane) {
-  pane.socket.on('connect', () => {
+  const reselect = () => {
     if (!pane.machineId) return;
     const nodeId = pane.machineId;
     selectPaneConsole(pane, result => {
       if (result?.error && pane.machineId === nodeId) showStatusError(result.error);
     });
-  });
+  };
+  pane.socket.on('connect', reselect);
+  // The runner of the session is back after a network cut: it kept the console output, so the
+  // console is selected again to get the snapshot that covers the gap.
+  pane.socket.on('runner-state', ({online}) => { if (online) reselect(); });
   pane.socket.on('node-snapshot', snapshot => {
     const machine = machines.get(ConsoleId.baseNodeId(snapshot.nodeId));
     if (!machine || pane.machineId !== machine.id || pane.token !== snapshot.token) return;
@@ -142,6 +146,11 @@ export function initSockets() {
     if (store.graphicVisible) scheduleSessionSync();
   });
   socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); });
+  // The runner of the session is offline (a network cut; the machines keep running) or back.
+  socket.on('runner-state', ({online}) => {
+    if (!online) showStatusError('Runner offline, reconnecting…');
+    else { syncSessionsFromServer(); publishView({force: true}); }
+  });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;

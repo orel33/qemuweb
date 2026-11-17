@@ -1,6 +1,6 @@
 // Static dependency rules of the runner (see docs/architecture.md):
-// runner/ depends only on common/, Node built-ins and node-pty (the VDE switch
-// management terminal), and the control plane reaches the runner only through
+// runner/ depends only on common/, Node built-ins, node-pty (the VDE switch
+// management terminal) and ws (the WebSocket of a remote runner, runner/remote.js), and the control plane reaches the runner only through
 // the protocol (server/runner-client.js): it never requires runner/ (the runner is a
 // separate process, runner/main.js, started by scripts/runner.sh).
 const assert = require('node:assert/strict');
@@ -24,8 +24,8 @@ function requires(file) {
   return [...source.matchAll(/\brequire\(\s*['"]([^'"]+)['"]\s*\)/g)].map(match => match[1]);
 }
 
-test('runner/ requires only runner/, common/, Node built-ins and node-pty', () => {
-  const builtins = new Set([...builtinModules, 'node-pty']);
+test('runner/ requires only runner/, common/, Node built-ins, node-pty and ws', () => {
+  const builtins = new Set([...builtinModules, 'node-pty', 'ws']);
   for (const file of sources('runner')) {
     for (const request of requires(file)) {
       if (!request.startsWith('.')) {

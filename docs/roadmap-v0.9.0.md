@@ -271,7 +271,7 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 1. L'admin crée un jeton d'enregistrement dans `/admin/runners` (usage unique, durée limitée).
 2. Sur la machine runner : `qemuweb-runner register --url https://qemuweb.example --token <jeton>`.
-3. Le plan de contrôle renvoie un jeton d'authentification propre au runner, stocké dans `~/.config/qemuweb-runner/config.toml` (`$XDG_CONFIG_HOME`) avec ses limites (RAM, vCPU, sessions max).
+3. Le plan de contrôle renvoie un jeton d'authentification propre au runner, stocké dans `~/.config/qemuweb-runner/runner.json` (`$XDG_CONFIG_HOME`, JSON plutôt que TOML pour éviter une dépendance) avec ses limites (RAM, vCPU, sessions max).
 4. `qemuweb-runner run` (en terminal ou en unité `systemd --user`) ouvre une connexion WebSocket TLS **sortante** et la maintient. Aucun port entrant n'est nécessaire côté runner, ce qui marche derrière un NAT ou un pare-feu de salle de TP.
 5. Le runner annonce sa capacité : RAM, vCPU, moteurs (`qemu`, `vbox`), images disponibles avec leur empreinte.
 
@@ -328,7 +328,7 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 - Par VM : mémoire et vCPU maximum, au lieu des 32 768 Mo et 64 vCPU codés en dur dans `common/launch-settings.js` ; les champs de l'interface en dérivent.
 - Par session : nombre de nodes, RAM totale des hôtes démarrés.
 - Pour le serveur ou le runner : refus de démarrer une VM au-delà de la RAM disponible.
-- Appliqués par le runner, avec un message d'erreur clair. Les limites propres à un runner distant restent dans son `config.toml` (jalon 5).
+- Appliqués par le runner, avec un message d'erreur clair. Les limites propres à un runner distant restent dans son `runner.json` (jalon 5).
 
 **Jail minimaliste**
 
