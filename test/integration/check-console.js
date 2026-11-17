@@ -1,7 +1,7 @@
 'use strict';
 
-// Second serial console (ttyS1) of a Debian Legacy host: the host starts with two consoles
-// (/api/nodes reports serialConsoles 2), two sockets select the console IDs `<id>` and `<id>:1`,
+// Second serial port (ttyS1) of a Debian Legacy host: the host starts with ttyS0 and ttyS1
+// (/api/nodes reports serialPorts [ttyS0, ttyS1]), two sockets select the console IDs `<id>` and `<id>:1`,
 // and their output stays separate and simultaneous (a command running on ttyS0 does not block
 // or leak into ttyS1). Clear on the second console resets only its buffer. If the image has no
 // getty on ttyS1 (prepared before the second console existed), the scenario skips with a clear
@@ -94,7 +94,7 @@ async function run() {
     settings: {memory: 1024, cpus: 1, clock: 'utc'}}});
   await client.request(`/api/nodes/${hostId}/start`, {method: 'POST', body: {engine: 'qemu', imageId}});
   const node = (await client.request('/api/nodes')).find(item => item.id === hostId);
-  assert.equal(node.serialConsoles, 2, 'a Debian Legacy host starts with two consoles');
+  assert.deepEqual(node.serialPorts, ['ttyS0', 'ttyS1'], 'a Debian Legacy host starts with ttyS0 and ttyS1');
 
   const first = await openConsole(hostId);
   const second = await openConsole(`${hostId}:1`);

@@ -1,13 +1,14 @@
 'use strict';
 
 // Validation of per-host launch settings and QEMU options (shared by control plane and runner).
+const {validatePorts} = require('./console-id');
 const qemuProfileFields = ['machine', 'cpuKvm', 'display', 'diskInterface', 'networkModel', 'bootDisk', 'nic'];
 const qemuFields = [...qemuProfileFields, 'extraOptions', 'memory', 'smp', 'rtcBase'];
 const launchSettingFields = {
   memory: {label: 'Memory', type: 'number', unit: 'MB', min: 64, max: 32768, step: 64},
   cpus: {label: 'Processors', type: 'number', min: 1, max: 64, step: 1},
   clock: {label: 'Hardware clock', type: 'select', options: ['utc', 'localtime']},
-  serialConsoles: {label: 'Serial consoles', type: 'number', min: 1, max: 2, step: 1}
+  serialPorts: {label: 'Serial ports', type: 'ports'}
 };
 
 function validateQemuOptions(options, partial = false) {
@@ -44,13 +45,13 @@ function validateQemuOptions(options, partial = false) {
 
 function validateLaunchSettings(settings, partial = false) {
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) throw new Error('Invalid launch settings.');
-  const allowed = ['memory', 'cpus', 'clock', 'serialConsoles'];
+  const allowed = ['memory', 'cpus', 'clock', 'serialPorts'];
   for (const key of Object.keys(settings)) if (!allowed.includes(key)) throw new Error(`Unknown launch setting: ${key}.`);
   if (!partial && allowed.some(key => !Object.hasOwn(settings, key))) throw new Error('Incomplete launch settings.');
   if (settings.memory !== undefined && (!Number.isInteger(settings.memory) || settings.memory < 64 || settings.memory > 32768)) throw new Error('Memory must be between 64 and 32768 MB.');
   if (settings.cpus !== undefined && (!Number.isInteger(settings.cpus) || settings.cpus < 1 || settings.cpus > 64)) throw new Error('Processors must be between 1 and 64.');
   if (settings.clock !== undefined && !['utc', 'localtime'].includes(settings.clock)) throw new Error('Hardware clock must be utc or localtime.');
-  if (settings.serialConsoles !== undefined && (!Number.isInteger(settings.serialConsoles) || settings.serialConsoles < 1 || settings.serialConsoles > 2)) throw new Error('Serial consoles must be 1 or 2.');
+  if (settings.serialPorts !== undefined) validatePorts(settings.serialPorts);
   return settings;
 }
 

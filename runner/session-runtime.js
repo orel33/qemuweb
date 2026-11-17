@@ -133,16 +133,17 @@ function createSessionRuntime(ctx) {
   function pendingRestart(node) {
     if (node?.kind !== 'host' || !node.machine || !node.activeConfig) return false;
     const active = node.activeConfig;
-    return ['memory', 'cpus', 'clock', 'serialConsoles'].some(key => node.launchSettings[key] !== active.settings[key]) ||
+    return ['memory', 'cpus', 'clock'].some(key => node.launchSettings[key] !== active.settings[key]) ||
+      JSON.stringify(node.launchSettings.serialPorts) !== JSON.stringify(active.settings.serialPorts) ||
       JSON.stringify(node.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
       JSON.stringify(readStartupFiles(startupDirectory(node))) !== JSON.stringify(active.guestMedia) ||
       node.guestIsoAttached !== active.startupDiskEnabled;
   }
 
-  // Serial consoles of the running VM (the configured count while stopped; 1 for VirtualBox).
-  function consoleCount(node) {
-    if (node?.kind !== 'host' || !node.launchSettings || !node.engine?.startsWith('qemu')) return 1;
-    return (node.machine && node.activeConfig ? node.activeConfig.settings : node.launchSettings).serialConsoles ?? 1;
+  // Serial ports of the running VM (the configured ports while stopped; ttyS0 alone for VirtualBox).
+  function serialPortsOf(node) {
+    if (node?.kind !== 'host' || !node.launchSettings || !node.engine?.startsWith('qemu')) return ['ttyS0'];
+    return (node.machine && node.activeConfig ? node.activeConfig.settings : node.launchSettings).serialPorts;
   }
 
   // Removes the console and monitor sockets QEMU leaves behind.
@@ -161,7 +162,7 @@ function createSessionRuntime(ctx) {
 
   function publishState(node, message = stateMessage(node)) {
     node.lastMessage = message;
-    const state = {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), serialConsoles: consoleCount(node), message};
+    const state = {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), serialPorts: serialPortsOf(node), message};
     ctx.events.emit('state', state);
   }
 
@@ -190,13 +191,13 @@ function createSessionRuntime(ctx) {
       hostname: node.hostname,
       networkInterfaces: node.networkInterfaces,
       pendingRestart: pendingRestart(node),
-      serialConsoles: consoleCount(node),
+      serialPorts: serialPortsOf(node),
       hasDifferentialDisk: !!node.runDisk && fs.existsSync(node.runDisk),
       message: stateMessage(node)
     }));
   }
 
-  return {listNodes, sessionPaths, setNodeHostname, removeHostnameAlias, getNode, tempFile, startupDirectory, persistSwitchConfiguration, activeConfiguration, pendingRestart, consoleCount, removeConsoleSockets, stateMessage, publishState, appendLog, execLogged};
+  return {listNodes, sessionPaths, setNodeHostname, removeHostnameAlias, getNode, tempFile, startupDirectory, persistSwitchConfiguration, activeConfiguration, pendingRestart, serialPortsOf, removeConsoleSockets, stateMessage, publishState, appendLog, execLogged};
 }
 
 module.exports = {createSessionRuntime};

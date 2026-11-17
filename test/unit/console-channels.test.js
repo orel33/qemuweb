@@ -23,32 +23,32 @@ function setup() {
   return {runner, session, runtimeDir, cleanup: () => fs.rmSync(runtimeRoot, {recursive: true, force: true})};
 }
 
-test('QEMU gets a second -serial only when two consoles are configured', t => {
+test('QEMU gets a second -serial only when ttyS1 is configured', t => {
   const {runner, runtimeDir, cleanup} = setup();
   t.after(cleanup);
   const preview = (system, settings) => runner.previewLaunch(HOST, {system, engine: 'qemu', settings: JSON.stringify(settings)});
   const two = preview('debian13-legacy', {});
-  assert.equal(two.settings.serialConsoles, 2);
+  assert.deepEqual(two.settings.serialPorts, ['ttyS0', 'ttyS1']);
   const line = two.commands.at(-1);
   assert.ok(line.indexOf(`unix:${path.join(runtimeDir, HOST, 'serial.sock')}`) < line.indexOf(`unix:${path.join(runtimeDir, HOST, 'serial1.sock')}`));
   assert.equal((line.match(/-serial/g) || []).length, 2);
   assert.equal(two.console2.guest, 'ttyS1 · 115200 baud');
-  const one = preview('debian13-legacy', {serialConsoles: 1});
+  const one = preview('debian13-legacy', {serialPorts: ['ttyS0']});
   assert.equal((one.commands.at(-1).match(/-serial/g) || []).length, 1);
   assert.equal(one.console2, null);
   const alpine = preview('alpine', {});
-  assert.equal(alpine.settings.serialConsoles, 1);
+  assert.deepEqual(alpine.settings.serialPorts, ['ttyS0']);
   assert.equal((alpine.commands.at(-1).match(/-serial/g) || []).length, 1);
-  assert.throws(() => preview('alpine', {serialConsoles: 2}), /exposes only 1 console/);
+  assert.throws(() => preview('alpine', {serialPorts: ['ttyS0', 'ttyS1']}), /This system exposes only ttyS0\./);
 });
 
-test('catalog and launch settings expose the number of consoles per system', t => {
+test('catalog and launch settings expose the serial ports of each system', t => {
   const {runner, cleanup} = setup();
   t.after(cleanup);
-  assert.equal(runner.imageById('debian13-legacy').serialConsoles, 2);
-  assert.equal(runner.imageById('openwrt').serialConsoles, 1);
-  assert.equal(runner.launchSettingsFor('debian13-cloud').serialConsoles, 2);
-  assert.throws(() => runner.limitSerialConsoles({serialConsoles: 2}, 'alpine'), /exposes only 1 console/);
+  assert.deepEqual(runner.imageById('debian13-legacy').serialPorts, ['ttyS0', 'ttyS1']);
+  assert.deepEqual(runner.imageById('openwrt').serialPorts, ['ttyS0']);
+  assert.deepEqual(runner.launchSettingsFor('debian13-cloud').serialPorts, ['ttyS0', 'ttyS1']);
+  assert.throws(() => runner.limitSerialPorts({serialPorts: ['ttyS0', 'ttyS1']}, 'alpine'), /This system exposes only ttyS0\./);
 });
 
 test('console IDs select the buffer, the input socket and the clear of one channel', t => {
@@ -82,19 +82,19 @@ test('console IDs select the buffer, the input socket and the clear of one chann
   assert.ok(session.nodes.has(HOST));
 });
 
-test('the number of consoles is part of the node description and of pending restart', t => {
+test('the serial ports are part of the node description and of pending restart', t => {
   const {runner, cleanup} = setup();
   t.after(cleanup);
   const host = runner.createNode(HOST, 'host');
   host.engine = 'qemu';
-  host.launchSettings = {memory: 1024, cpus: 1, clock: 'utc', serialConsoles: 2};
-  assert.equal(runner.listNodes()[0].serialConsoles, 2);
+  host.launchSettings = {memory: 1024, cpus: 1, clock: 'utc', serialPorts: ['ttyS0', 'ttyS1']};
+  assert.deepEqual(runner.listNodes()[0].serialPorts, ['ttyS0', 'ttyS1']);
   host.machine = {};
   host.activeConfig = runner.activeConfiguration(host);
   assert.equal(runner.pendingRestart(host), false);
-  host.launchSettings = {...host.launchSettings, serialConsoles: 1};
+  host.launchSettings = {...host.launchSettings, serialPorts: ['ttyS0']};
   assert.equal(runner.pendingRestart(host), true);
-  assert.equal(runner.consoleCount(host), 2, 'the running VM keeps its two consoles until restart');
+  assert.deepEqual(runner.serialPortsOf(host), ['ttyS0', 'ttyS1'], 'the running VM keeps its two ports until restart');
   host.machine = null;
-  assert.equal(runner.consoleCount(host), 1);
+  assert.deepEqual(runner.serialPortsOf(host), ['ttyS0']);
 });

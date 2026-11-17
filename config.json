@@ -29,7 +29,7 @@
       "image:vbox": "images/debian13-legacy.vdi",
       "diskInterface:qemu": "ide",
       "networkModel": "e1000",
-      "serialConsoles:qemu": 2
+      "serialPorts:qemu": ["ttyS0", "ttyS1"]
     },
     "alpine": {
       "basedOn": "default",
@@ -44,7 +44,7 @@
       "memory": 1024,
       "image:qemu": "images/debian13-cloud.raw",
       "image:vbox": "images/debian13-cloud.vdi",
-      "serialConsoles:qemu": 2
+      "serialPorts:qemu": ["ttyS0", "ttyS1"]
     },
     "openwrt": {
       "basedOn": "default",

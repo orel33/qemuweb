@@ -15,10 +15,10 @@ const CHANNELS = [
 ];
 
 function createSerial(ctx) {
-  const {getNode, stateMessage, publishState, consoleCount} = ctx.runtime;
+  const {getNode, stateMessage, publishState, serialPortsOf} = ctx.runtime;
 
   function connectSerial(node) {
-    const channels = node.engine?.startsWith('qemu') ? consoleCount(node) : 1;
+    const channels = node.engine?.startsWith('qemu') ? serialPortsOf(node).length : 1;
     for (let channel = 0; channel < channels; channel++) connectChannel(node, channel, 0, node.generation);
   }
 

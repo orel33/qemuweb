@@ -102,7 +102,7 @@ test('state and log events carry the payloads forwarded to browsers', t => {
   runner.appendLog(host, 'QEMU started  \n');
   runner.appendLog(host, '   ');
   assert.deepEqual(events, [
-    ['state', {nodeId: HOST_1, running: false, hasLaunched: false, pendingRestart: false, serialConsoles: 1, message: 'Stopped'}],
+    ['state', {nodeId: HOST_1, running: false, hasLaunched: false, pendingRestart: false, serialPorts: ['ttyS0'], message: 'Stopped'}],
     ['log', {nodeId: HOST_1, line: 'QEMU started'}]
   ]);
   assert.equal(runner.stateMessage(host), 'Stopped');
@@ -117,7 +117,7 @@ test('listNodes describes nodes for the web layer', t => {
   addSwitch(runner, SWITCH_1, 's1');
   assert.deepEqual(runner.listNodes(), [{
     id: SWITCH_1, kind: 'switch', running: false, hasLaunched: false, engine: null, imageId: null,
-    settings: null, hostname: 's1', networkInterfaces: [], pendingRestart: false, serialConsoles: 1, hasDifferentialDisk: false,
+    settings: null, hostname: 's1', networkInterfaces: [], pendingRestart: false, serialPorts: ['ttyS0'], hasDifferentialDisk: false,
     message: 'Stopped'
   }]);
 });

@@ -17,8 +17,8 @@ function createQemu(ctx) {
       '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${node.monitorPath},server=on,wait=off`,
       '-serial', `unix:${node.socketPath},server=on,wait=off`
     ];
-    // The second -serial is COM2, ttyS1 in the guest.
-    if (node.launchSettings.serialConsoles >= 2) common.push('-serial', `unix:${node.socketPath1},server=on,wait=off`);
+    // The next -serial is COM2, ttyS1 in the guest.
+    if (node.launchSettings.serialPorts.length >= 2) common.push('-serial', `unix:${node.socketPath1},server=on,wait=off`);
     // QEMU PC boot notation: c = first hard disk.
     const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
     if (node.guestIsoAttached && node.guestIso) args.push('-drive', `file=${node.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);

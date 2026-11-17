@@ -3,7 +3,7 @@
 // The runtime of one session inside the runner: a context (runner/context.js) and the runner
 // modules attached to it, with the operations the commands of runner/commands/ use. Created
 // once per session by runner/service.js. Events go through ctx.events:
-//   state         {nodeId, running, hasLaunched, pendingRestart, serialConsoles, message}
+//   state         {nodeId, running, hasLaunched, pendingRestart, serialPorts, message}
 //   log           {nodeId, line}
 //   logs-reset    {nodeId}
 //   serial        {nodeId, data}    nodeId is a console ID (common/console-id.js)
@@ -141,7 +141,7 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     },
 
     // Console and monitor
-    consoleCount: runtime.consoleCount,
+    serialPortsOf: runtime.serialPortsOf,
     attachConsole: serial.attachConsole,
     resolveConsole: serial.resolveConsole,
     setConsoleFlow: serial.setConsoleFlow,
@@ -161,7 +161,7 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     allocateName: catalog.allocateName,
     qemuOptionsFor: catalog.qemuOptionsFor,
     launchSettingsFor: catalog.launchSettingsFor,
-    limitSerialConsoles: catalog.limitSerialConsoles,
+    limitSerialPorts: catalog.limitSerialPorts,
     requireSessionEngine: catalog.requireSessionEngine,
 
     // Startup media

@@ -2,32 +2,28 @@
 
 const fs = require('fs');
 const crypto = require('crypto');
+const {validatePorts} = require('./console-id');
 
 const engines = ['qemu', 'vbox'];
-const editableKeys = ['memory', 'cpus', 'clock', 'startupDiskEnabled', 'serialConsoles'];
+const editableKeys = ['memory', 'cpus', 'clock', 'startupDiskEnabled', 'serialPorts'];
 const keywords = new Set(['type', 'arch', 'mode', 'label', ...editableKeys, 'firmware',
   'acceleration', 'boot', 'extraOptions', 'cdromInterface', 'diskInterface', 'networkModel', 'image']);
 
 function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 
-// Number of serial consoles (ttyS0, ttyS1) a system exposes: 1 unless its profile says 2.
-function serialConsoleLimit(profile) { return profile.serialConsoles ?? 1; }
+// Serial ports a system exposes: ttyS0 alone unless its profile lists more.
+function profileSerialPorts(profile) { return profile.serialPorts ?? ['ttyS0']; }
 
-// Checks an override set; with a profile, serialConsoles may not exceed what the system exposes.
+// Checks an override set; with a profile, serialPorts must be a prefix of what the system exposes.
 function validateOverrides(overrides, profile = null) {
   if (!isObject(overrides) || Object.keys(overrides).some(key => !editableKeys.includes(key))) {
-    throw new Error('Host config may only override memory, cpus, clock, startupDiskEnabled and serialConsoles.');
+    throw new Error('Host config may only override memory, cpus, clock, startupDiskEnabled and serialPorts.');
   }
   if (overrides.memory !== undefined && (!Number.isInteger(overrides.memory) || overrides.memory < 64 || overrides.memory > 32768)) throw new Error('Memory must be between 64 and 32768 MB.');
   if (overrides.cpus !== undefined && (!Number.isInteger(overrides.cpus) || overrides.cpus < 1 || overrides.cpus > 64)) throw new Error('Processors must be between 1 and 64.');
   if (overrides.clock !== undefined && !['utc', 'localtime'].includes(overrides.clock)) throw new Error('Clock must be utc or localtime.');
   if (overrides.startupDiskEnabled !== undefined && typeof overrides.startupDiskEnabled !== 'boolean') throw new Error('startupDiskEnabled must be boolean.');
-  if (overrides.serialConsoles !== undefined) {
-    if (!Number.isInteger(overrides.serialConsoles) || overrides.serialConsoles < 1 || overrides.serialConsoles > 2) throw new Error('Serial consoles must be 1 or 2.');
-    if (profile && overrides.serialConsoles > serialConsoleLimit(profile)) {
-      throw new Error(`This system exposes only ${serialConsoleLimit(profile)} console(s).`);
-    }
-  }
+  if (overrides.serialPorts !== undefined) validatePorts(overrides.serialPorts, profile && profileSerialPorts(profile));
   return overrides;
 }
 
@@ -108,18 +104,19 @@ function selectedProfile(catalog, system, engine) {
   return profiles[engine];
 }
 
-// serialConsoles is a capability of the system, not hardware identity: it is left out of the
+// serialPorts is a capability of the system, not hardware identity: it is left out of the
 // hash so that hosts and archives saved before the key existed keep matching their profile.
 function profileHash(profile) {
-  const ordered = Object.fromEntries(Object.keys(profile).filter(key => key !== 'serialConsoles').sort().map(key => [key, profile[key]]));
+  const ordered = Object.fromEntries(Object.keys(profile).filter(key => key !== 'serialPorts').sort().map(key => [key, profile[key]]));
   return crypto.createHash('sha256').update(JSON.stringify(ordered), 'utf8').digest('hex');
 }
 
 function sparseOverrides(profile, values) {
   validateOverrides(values, profile);
-  const defaults = {...profile, serialConsoles: serialConsoleLimit(profile)};
-  return Object.fromEntries(editableKeys.filter(key => values[key] !== undefined && values[key] !== defaults[key])
+  const defaults = {...profile, serialPorts: profileSerialPorts(profile)};
+  const same = key => JSON.stringify(values[key]) === JSON.stringify(defaults[key]);
+  return Object.fromEntries(editableKeys.filter(key => values[key] !== undefined && !same(key))
     .map(key => [key, values[key]]));
 }
 
-module.exports = {readCatalog, selectedProfile, profileHash, validateOverrides, sparseOverrides, serialConsoleLimit, editableKeys};
+module.exports = {readCatalog, selectedProfile, profileHash, validateOverrides, sparseOverrides, profileSerialPorts, editableKeys};

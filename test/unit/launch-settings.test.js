@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const {launchSettingFields, validateLaunchSettings, validateQemuOptions} = require('../../common/launch-settings');
 
 test('launch settings accept valid values and reject unknown or out-of-range ones', () => {
-  const valid = {memory: 512, cpus: 2, clock: 'utc', serialConsoles: 1};
+  const valid = {memory: 512, cpus: 2, clock: 'utc', serialPorts: ['ttyS0']};
   assert.equal(validateLaunchSettings(valid), valid);
   assert.throws(() => validateLaunchSettings({...valid, extra: 1}), /Unknown launch setting: extra/);
   assert.throws(() => validateLaunchSettings({memory: 512, cpus: 2, clock: 'utc'}), /Incomplete launch settings/);

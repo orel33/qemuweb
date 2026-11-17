@@ -9,7 +9,7 @@ const {readStartupFiles} = require('./media/guest-media');
 const {waitForChildExit} = require('./engines/child-exit');
 
 function createLifecycle(ctx) {
-  const {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, limitSerialConsoles, imagePath} = ctx.catalog;
+  const {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath} = ctx.catalog;
   const {tempFile, startupDirectory, getNode, setNodeHostname, removeHostnameAlias, activeConfiguration, publishState, appendLog, removeConsoleSockets} = ctx.runtime;
   const {buildGuestIso, cleanupGuestIsoFiles} = ctx.guestIso;
   const {cleanupRunFiles} = ctx.disks;
@@ -49,7 +49,7 @@ function createLifecycle(ctx) {
       node.guestIsoAttached = options.startupDiskEnabled;
     }
     const launchSettings = resume
-      ? limitSerialConsoles(validateLaunchSettings({...node.launchSettings, ...(options.settings || {})}), image.id)
+      ? limitSerialPorts(validateLaunchSettings({...node.launchSettings, ...(options.settings || {})}), image.id)
       : launchSettingsFor(image.id, options.settings || {});
     const qemuOptions = selectedEngine.startsWith('qemu')
       ? resume ? {...node.qemuOptions, memory: launchSettings.memory, smp: launchSettings.cpus, rtcBase: launchSettings.clock} : qemuOptionsFor(image.id, launchSettings)
@@ -146,7 +146,7 @@ function createLifecycle(ctx) {
     validateRestartPrerequisites(node);
     const engine = node.engine;
     const imageId = node.selectedImage.id;
-    const launchSettings = settings ? limitSerialConsoles(validateLaunchSettings({...node.launchSettings, ...settings}), imageId) : node.launchSettings;
+    const launchSettings = settings ? limitSerialPorts(validateLaunchSettings({...node.launchSettings, ...settings}), imageId) : node.launchSettings;
     node.action = 'reset';
     try {
       publishState(node, 'Resetting from the base image…');

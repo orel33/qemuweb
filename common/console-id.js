@@ -11,27 +11,51 @@
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.ConsoleId = api;
 })(this, function () {
-  const MAX_CHANNEL = 1;
+  // Serial ports a host can expose, in QEMU -serial order: the channel index of a port is its
+  // position here (ttyS0 is the kernel console, COM1). Extend the list to allow more ports.
+  const PORTS = ['ttyS0', 'ttyS1'];
   const PATTERN = /^([hs]-[0-9a-f]{16})(?::([0-9]+))?$/;
+
+  // The channel index of a port name, null if the name is not an allowed port.
+  function portChannel(name) {
+    const index = PORTS.indexOf(name);
+    return index < 0 ? null : index;
+  }
+
+  // The port name of a channel index, null if out of range.
+  function portName(channel) {
+    return Number.isInteger(channel) && channel >= 0 && channel < PORTS.length ? PORTS[channel] : null;
+  }
+
+  // Checks a list of serial ports: unique allowed names, a contiguous prefix of PORTS (it starts
+  // with ttyS0). With a limit (the list a system exposes) it must also be a prefix of that list.
+  function validatePorts(ports, limit = null) {
+    if (!Array.isArray(ports) || ports.length === 0 || ports.some((name, index) => name !== PORTS[index])) {
+      throw new Error(`Serial ports must be a list starting with ttyS0, in order (${PORTS.join(', ')}).`);
+    }
+    if (limit && ports.length > limit.length) throw new Error(`This system exposes only ${limit.join(', ')}.`);
+    return ports;
+  }
 
   // The node ID of a console ID (a plain node ID is its own base).
   function baseNodeId(id) {
     return typeof id === 'string' && id.includes(':') ? id.slice(0, id.indexOf(':')) : id;
   }
 
-  // The serial channel of a console ID: 0 for a plain node ID, 1 for '<id>:1', null if invalid.
+  // The serial channel of a console ID: 0 for a plain node ID, N for '<id>:N', null if invalid.
   function consoleChannel(id) {
     const match = typeof id === 'string' ? PATTERN.exec(id) : null;
     if (!match) return null;
     if (match[2] === undefined) return 0;
-    return match[2] === '1' ? 1 : null;
+    const channel = Number(match[2]);
+    return channel >= 1 && channel < PORTS.length && String(channel) === match[2] ? channel : null;
   }
 
   // The console ID of a node and channel; channel 0 is the node ID itself.
   function consoleId(nodeId, channel = 0) {
-    if (!Number.isInteger(channel) || channel < 0 || channel > MAX_CHANNEL) throw new Error('Invalid console channel.');
+    if (!Number.isInteger(channel) || channel < 0 || channel >= PORTS.length) throw new Error('Invalid console channel.');
     return channel === 0 ? nodeId : `${nodeId}:${channel}`;
   }
 
-  return {baseNodeId, consoleChannel, consoleId, MAX_CHANNEL};
+  return {baseNodeId, consoleChannel, consoleId, portChannel, portName, validatePorts, PORTS};
 });
