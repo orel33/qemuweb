@@ -38,38 +38,10 @@ writes it with mode 0600). Do not set `QEMUWEB_AUTH=off` on an exposed server.
 | `QEMUWEB_USERS_FILE` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
 | `QEMUWEB_LOG_DIR` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
 
-Example systemd unit (`/etc/systemd/system/qemuweb.service`), assuming the
-repository in `/srv/qemuweb` and a `qemuweb` account in the `kvm` group:
-
-```ini
-[Unit]
-Description=QemuWeb
-After=network.target
-
-[Service]
-User=qemuweb
-WorkingDirectory=/srv/qemuweb
-Environment=PORT=3002
-Environment=QEMUWEB_TRUST_PROXY=loopback
-ExecStart=/usr/bin/node server.js --local
-KillSignal=SIGTERM
-KillMode=mixed
-TimeoutStopSec=30
-
-[Install]
-WantedBy=multi-user.target
-```
-
-`--local` makes the server start and supervise its own runner (see below), as
-`npm start` does. Stopping the service then stops every machine of every user
-and empties `runtime/sessions/`; tell users to save a session ZIP first.
-
-`KillMode=mixed` sends SIGTERM to the server only: the server then stops its
-runner, which stops the machines in order. SIGKILL goes to every remaining
-process of the unit only after `TimeoutStopSec`.
-
-To keep the machines running while the server restarts (an upgrade, a crash),
-run the runner on its own: see "Server and runner as two services" below.
+QemuWeb always runs as two processes: the server and a runner (the process that runs
+the machines). `./scripts/start.sh` (`npm start`) starts both for development and for tests; a
+deployment runs them as two systemd services of the same machine, so that restarting the
+server (an upgrade, a crash) leaves the machines running. See "The two services" below.
 
 ## The runner process
 
@@ -81,26 +53,28 @@ connect). The server never reaches out to a runner, and the web interface only
 One runner is accepted for now; a second connection is refused. Runners on
 other machines, with tokens and TLS, come with a later milestone.
 
-There are two ways to run it:
+There is one way to start it, in every environment:
 
-- **`node server.js --local`** (what `npm start` and `scripts/demo.sh` do): the
-  server starts a runner as its child, in its own process group with every
-  QEMU and `vde_switch` it starts, supervises it, and serves browsers only once
-  it has announced itself. The runner ends with the server.
-- **`node server.js`** (manual mode, the default): the server starts nothing,
-  opens HTTP at once and prints "No runner connected. Start one with
-  ./scripts/runner.sh". Until a runner connects, session routes answer 503
-  ("No runner is connected."). Start the runner from another terminal with
-  `./scripts/runner.sh` (`PORT=<n>` selects the server's port, default 3002;
-  `--exit-on-disconnect` makes it end with the server). It keeps its machines
-  if the server restarts and reconnects within 2 seconds of the server being
-  back.
+- **`./scripts/start.sh`** (what `npm start`, `scripts/demo.sh` and the integration tests
+  use) starts `node server.js` and, once the socket exists, `./scripts/runner.sh
+  --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
+  and `[runner]`. Ctrl+C or SIGTERM stops the runner first (it stops every machine), kills what
+  is left of its group (QEMU, `vde_switch`), then stops the server, and exits 0. When the runner
+  ends for any reason (even SIGKILL), what is left of its group is killed at once and the
+  server is stopped; when the server dies, the runner ends with it. In both cases the script
+  exits with the status of the process that ended. Nothing is restarted.
+- **`node server.js` and `./scripts/runner.sh` by themselves** (two terminals, or the two
+  services below): the server opens HTTP at once and prints "No runner connected. Start one
+  with ./scripts/runner.sh, or run ./scripts/start.sh for the server and a runner". Until a
+  runner connects, session routes answer 503 ("No runner is connected."). `PORT=<n>` selects
+  the server's port (default 3002). Without `--exit-on-disconnect` the runner keeps its
+  machines if the server restarts and reconnects within 2 seconds of the server being back.
 
 The runner runs under a normal account, never root (`scripts/runner.sh` refuses
 root); it needs the `kvm` group for `/dev/kvm`. It prints its own checks on its
 console: "Checking dependencies…", "Checking configuration…" and the state of
-the connection (waiting for the server, connected, refused, lost). With
-`--local` these lines appear on the server's console.
+the connection (waiting for the server, connected, refused, lost). Under
+`scripts/start.sh` they carry the `[runner]` prefix.
 
 - **Engines:** a runner needs VDE, `genisoimage`, Node.js and Python, and at
   least one engine. QEMU (with its disk tool) and VirtualBox are checked
@@ -110,8 +84,7 @@ the connection (waiting for the server, connected, refused, lost). With
   runner has. QEMU also needs `/dev/kvm`: when it is not accessible the runner
   warns at startup and QEMU hosts cannot start.
 - **Startup failure:** a missing common tool or no engine at all stops the
-  runner with its message. With `--local`, a runner that does not connect within
-  10 seconds also stops the server. Another server already using the socket of
+  runner with its message (`scripts/start.sh` then ends). Another server already using the socket of
   the same port is refused.
 - **Configuration warnings:** the runner prints one line per warning about
   `config.json` on this machine, marked with a warning icon (a system whose base
@@ -122,56 +95,67 @@ the connection (waiting for the server, connected, refused, lost). With
 - **Start-time memory warning:** when a host starts and the hosts running on
   that runner (every session) would reserve more than 90 % of the machine's
   RAM, a `# Warning:` line is added to the host's Log. The host still starts.
-- **Server restart with a manual runner:** the runner keeps its machines. When
+- **Server restart with a separate runner:** the runner keeps its machines. When
   it reconnects, the server **adopts** each of its sessions for its owner (the
   login recorded in the session's `meta.json`): the user logs in again (cookies
   do not survive a restart) and finds the same session, machines and consoles,
-  recorded as `session-adopted` in `users.log`. Only the trusted local runner is
+  recorded as `session-adopted` in `users.log`. Only the trusted runner of this machine is
   adopted. A session whose owner is invalid, or already has a session, is
   deleted on the runner. Sessions the server no longer knows are never kept.
 - **Files shared with the runner:** the server touches the runner's files only
-  when it shares `runtime/` with it: it prunes empty `runtime/sessions/<id>`
-  directories only with `--local`, and creates the `runtime/users/<login>`
-  aliases only when the runner's `runtimeRoot` (announced in `hello`) is the
-  server's own `runtime/` (`scripts/runner.sh` uses it). A runner started with
-  another `--runtime` is not touched.
+  when it shares `runtime/` with it, that is when the runner's `runtimeRoot`
+  (announced in `hello`) is the server's own `runtime/` (`scripts/runner.sh` uses
+  it). Then, when a runner connects, the server prunes the empty
+  `runtime/sessions/<id>` directories left by earlier servers (sparing the
+  sessions that `hello` reports and those of other live servers), creates the
+  `runtime/users/<login>` aliases, and removes the session directories of a runner
+  that is lost (a runner killed by SIGKILL cannot). A runner started with another
+  `--runtime` is not touched.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
   empty session, recorded as `session-deleted` with the reason `runner lost` in
-  `users.log`). With `--local` the server kills the runner's process group and
-  starts a new runner after 1, 2, then 4 seconds; after three failed restarts it
-  exits with status 1, and systemd's `Restart=` policy, if any, takes over. In
-  manual mode nothing is restarted: start the runner again. Machines of a dead
-  manual runner may be left running (QEMU belongs to its process group):
-  `scripts/killall.sh` stops them.
-- **Server crash:** with `--local` the runner notices the closed connection,
-  stops every machine, removes the session directories and exits. A manual
-  runner keeps everything and reconnects.
-- **What to check:** `./scripts/tree.sh` shows each server, its runner and the
-  machines below it. A runner started by hand appears on its own, as "Runner
-  (started by hand)" while a server is connected, or "Runner (waiting for a
-  server)". `ps -o pid,pgid,args -C node` shows `runner/main.js --port 3002 ...`
-  (or `--connect .../runner-3002.sock ...` with `--local`).
+  `users.log`). Nothing restarts the runner by itself: under `scripts/start.sh`
+  the script kills what is left of the runner's process group (QEMU belongs to
+  it) and stops the server, and systemd's `Restart=` policy restarts the
+  services in a deployment. A runner killed outside `start.sh` may leave
+  machines running: `scripts/killall.sh` stops them.
+- **Server crash:** a runner started with `--exit-on-disconnect` (as by
+  `scripts/start.sh`) notices the closed connection, stops every machine,
+  removes the session directories and exits. Without that option the runner
+  keeps everything and reconnects.
+- **What to check:** `./scripts/tree.sh` shows each server, then each runner
+  with the machines below it, as "Runner" while a server runs on its port, or
+  "Runner (waiting for a server)". `ps -o pid,pgid,args -C node` shows
+  `runner/main.js --port 3002 ...`.
   `scripts/stop.sh` stops the server only. `scripts/killall.sh` also stops
   runner processes. VirtualBox VMs run under VBoxSVC, outside the runner's
   group: after a runner crash, `scripts/killall.sh` cleans them up.
 
-### Server and runner as two services
+### The two services
 
-The server and the runner can be two systemd services of the same machine, so
-that restarting the server (an upgrade) leaves the machines running. The
-server unit is the one above without `--local`; the runner is a user service
-(never root), here for an account `qemuweb` that also runs the server:
+Both are systemd services of the same machine, so that restarting the server
+(an upgrade) leaves the machines running. The runner is a user service (never
+root), here for an account `qemuweb` that also runs the server, assuming the
+repository in `/srv/qemuweb` and `qemuweb` in the `kvm` group:
 
 ```ini
 # /etc/systemd/system/qemuweb.service
+[Unit]
+Description=QemuWeb
+After=network.target
+
 [Service]
 User=qemuweb
 WorkingDirectory=/srv/qemuweb
 Environment=PORT=3002
+Environment=QEMUWEB_TRUST_PROXY=loopback
 ExecStart=/usr/bin/node server.js
 KillSignal=SIGTERM
 TimeoutStopSec=30
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
 
 # ~qemuweb/.config/systemd/user/qemuweb-runner.service (systemd --user, loginctl enable-linger qemuweb)
 [Service]
@@ -182,8 +166,13 @@ KillMode=mixed
 Restart=on-failure
 ```
 
-Both must share `/srv/qemuweb/runtime` (the runner socket is in it). Stopping
-the runner service stops its machines.
+Both must share `/srv/qemuweb/runtime` (the runner socket is in it). Restarts
+are systemd's job (`Restart=`): QemuWeb never restarts a process itself.
+`KillMode=mixed` sends SIGTERM to the runner only, which stops its machines in
+order; SIGKILL goes to every remaining process of the unit (QEMU, `vde_switch`)
+only after the stop timeout. Stopping the runner service stops its machines;
+tell users to save a session ZIP first. Stopping the server service leaves them
+running, and the sessions are adopted again when the server is back.
 
 ## Server logs
 

@@ -47,7 +47,7 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
 Open <http://127.0.0.1:3002> and log in. Press `Ctrl+C` to stop the server, or
 use `PORT=3003 ./start.sh` to choose another port. `./start.sh` starts two processes, the server and a
 runner (the process that runs the machines), each as its own command, with output lines prefixed
-`[server]` and `[runner]`; stopping it stops both. To keep the machines running when the server
+`[server]` and `[runner]`; stopping it stops both, and if one of them dies the other is stopped. To keep the machines running when the server
 restarts, run `node server.js` in one terminal and `./scripts/runner.sh` in another (see
 [docs/deployment.md](docs/deployment.md#the-runner-process)).
 
@@ -290,11 +290,11 @@ feature have no login on `ttyS1`: run `scripts/prepare.sh` again.
 | `runtime/runner-<port>.sock` | Socket (mode 0600) that the runner, which runs the machines, dials to reach the server. |
 
 `runtime/` is temporary: a node's files are removed with the node or when
-the server stops. With `node server.js --local` (`npm start`), the server starts its
-runner (`runner/main.js`, a child process) and stops it with itself; if the runner dies, the
-server closes its sessions and starts a new one. With `node server.js` alone, a runner started by
-hand (`./scripts/runner.sh`) keeps its machines when the server restarts, and the server adopts its
-sessions again (see [docs/deployment.md](docs/deployment.md#the-runner-process)). Use **Save session** to keep a portable copy; archives do not
+the server stops. `./scripts/start.sh` (`npm start`) runs the server and a runner (`runner/main.js`)
+as two processes and stops both together; if the runner dies, the server closes its sessions and
+`start.sh` ends (nothing is restarted: that is systemd's job in a deployment). A runner started by
+itself (`./scripts/runner.sh`) keeps its machines when the server restarts, and the server adopts
+its sessions again (see [docs/deployment.md](docs/deployment.md#the-runner-process)). Use **Save session** to keep a portable copy; archives do not
 record the owner, so any user can load them.
 
 ## Maintenance scripts
@@ -302,8 +302,9 @@ record the owner, so any user can load them.
 | Command | Effect |
 | --- | --- |
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
-| `scripts/runner.sh [--exit-on-disconnect]` | Start a runner by hand for the server of `PORT` (default 3002), which must run without `--local` (`node server.js`). It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
-| `scripts/stop.sh` | Stop the server started on `PORT` (default 3002); a runner started by hand keeps running. |
+| `scripts/start.sh` | Start the server and a runner as two processes (`PORT`, default 3002; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
+| `scripts/runner.sh [--exit-on-disconnect]` | Start a runner for the server of `PORT` (default 3002), for example one started alone with `node server.js`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
+| `scripts/stop.sh` | Stop the server started on `PORT` (default 3002); a runner started alone keeps running. |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
 | `scripts/tree.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
 | `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads; `logs/` is always kept. |
@@ -313,11 +314,11 @@ record the owner, so any user can load them.
 
 | Path | Role |
 | --- | --- |
-| `server.js` | Startup (`--local` starts a runner; without it a runner dials in): runner socket, authentication, session manager, HTTP routes and Socket.IO wiring. |
+| `server.js` | Startup (a runner dials in, see `scripts/start.sh`): runner socket, authentication, session manager, HTTP routes and Socket.IO wiring. |
 | `routes/` | HTTP API of one session (`routes/index.js` builds one router per session), by area: settings, nodes, hosts, topology, archives, metrics. Each route sends one command to the session's runner. |
 | `sockets.js` | Socket.IO consoles; forwards each runner's events to the browsers of its session only. |
 | `runner/` | The runner, a separate process (`runner/main.js`) serving every session of the machine over the runner protocol: QEMU, VirtualBox, VDE switches, consoles, startup media, archives, metrics. |
-| `lib/` | Control plane: session manager (one session per user), runner client, registry, runner gateway and local runner launcher, server instance records. |
+| `lib/` | Control plane: session manager (one session per user), runner client, registry, runner gateway, server instance records. |
 | `lib/auth/` | Authentication: users file, password hashes, signed cookie. |
 | `scripts/user.sh`, `scripts/user.js` | User account administration. |
 | `scripts/demo.sh`, `scripts/demo.js` | Web demo with test accounts and `demo/lan.zip`. |
