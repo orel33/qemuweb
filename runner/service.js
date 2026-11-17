@@ -32,9 +32,10 @@ const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology',
 // drafts that do not exist yet, and consoles have their own messages.
 const OWN_NODE_CHECK = new Set(['node.preview', 'console.attach', 'console.resize', 'console.clear']);
 
+// `requireImages`: remote runner, see runner/context.js.
 // `limits`: {maxSessions, memoryBytes, cpus} from the runner file of a remote runner, or null. They
 // only lower what hello announces: the control plane places no more sessions than maxSessions.
-function createRunnerService({commands, root, runtimeRoot, configPath, limits = null}) {
+function createRunnerService({commands, root, runtimeRoot, configPath, limits = null, requireImages = false}) {
   const sessions = new Map();
   const events = new EventEmitter();
   const flow = {paused: false};
@@ -57,7 +58,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     fs.mkdirSync(session.runtimeDir);
     session.saveMetadata();
     session.saveMeta();
-    const runner = createSessionRunner({session, commands, root, runtimeRoot, configPath, hostNodes, flow});
+    const runner = createSessionRunner({session, commands, root, runtimeRoot, configPath, hostNodes, flow, requireImages});
     const emit = (event, payload) => events.emit('event', sessionId, event, payload);
     for (const event of RUNNER_EVENTS) runner.events.on(event, payload => emit(event, payload));
     sessions.set(sessionId, {session, runner, emit});

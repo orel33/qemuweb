@@ -48,7 +48,7 @@ function main(remote) {
     cli.abort('runner', error.message);
   }
 
-  const service = createRunnerService({commands, root, runtimeRoot: options.runtime, configPath: options.config, limits: identity?.config?.limits || null});
+  const service = createRunnerService({commands, root, runtimeRoot: options.runtime, configPath: options.config, limits: identity?.config?.limits || null, requireImages: remote});
   let stopping = false;
   let remoteLink = null;
 

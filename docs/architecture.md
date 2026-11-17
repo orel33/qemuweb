@@ -252,7 +252,7 @@ The server is split into layers with one-way dependencies:
 | --- | --- |
 | `server/main.js` | Entry point: command line (`common/cli.js`, table in `server/options.js`), banner, `Options`, `Checking dependencies…`, then `server/startup-checks.js` (`Checking configuration…`: `config.json`, users file, log and runtime directories); the web stack is loaded only after these pass, so `--help` and a refused option answer at once. |
 | `server/serve.js` | Wiring of the web stack: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
-| `server/options.js` | The server's command line: `--listen <port>` (default 3002) and `--runtime <dir>` (default `runtime/`), anything else refused with exit status 2. |
+| `server/options.js` | The server's command line table (`--listen`, `--runtime`, `--users`, `--runners`, `--logs`, `--session-hours`, `--runner-grace`, `--trust-proxy`, `--no-auth`, `--ephemeral`), anything else refused with exit status 2. |
 | `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
 | `server/routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
@@ -266,13 +266,17 @@ The server is split into layers with one-way dependencies:
 | `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`, `runtime/users/<login>` links. |
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
-| `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities and client; `pickRunner(login)`. |
+| `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `local`/`trusted`/`paused` flags and client; `pickRunner(login, sessionsOf)`, the single placement point. |
+| `server/remote-gateway.js` | `/runner/connect`: the WebSocket upgrade of remote runners (bearer token and runner ID checked against `runners.json`, 401 / 409), the `ws` duplex stream under a protocol `Connection`, ping/pong (`common/ws-heartbeat.js`). |
+| `server/runner-store.js`, `server/runner-registration.js` | `runners.json` (token hashes, 0600, revoked, paused) and the in-memory one-time registration tokens (15 min, 1 h, 24 h). |
+| `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
 | `server/runner-gateway.js` | The runner socket `<runtime>/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
 | `server/server-instance.js` | `<runtime>/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `runtime/` connects). |
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
 | `server/audit.js` | Log directory (`logs/` or `--logs`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
-| `runner/main.js` | Runner process entry point, same startup sequence as the server: command line (`common/cli.js`, table in `runner/options.js`: `--port` or `--connect`, `--runtime`, `--config`, `--exit-on-disconnect`), banner, `Options`, preflight, its own configuration checks, connection and its state lines. |
+| `runner/main.js` | Runner process entry point, same startup sequence as the server: command line (`common/cli.js`, tables in `runner/options.js`: the local form `--port` or `--connect`, `--runtime`, `--config`, `--exit-on-disconnect`; the `run` and `register` subcommands of a remote runner), banner, `Options`, preflight, its own configuration checks, connection and its state lines. |
+| `runner/remote.js`, `runner/remote-identity.js`, `runner/remote-url.js`, `runner/config-file.js`, `runner/register.js`, `runner/register-command.js` | The remote runner: the outbound WebSocket with its backoff and ping, the runner file `runner.json` (0600), URL rules (`ws://` only for loopback unless `--insecure`), the registration request. `runner/` may require `ws` for this. |
 | `runner/index.js` | Runner facade: `createRunnerService`, `serveConnection`, `resolveCommands`. |
 | `runner/service.js` | Every session of the runner: `session.create`/`session.delete`, command dispatch (404 for an unknown session or node), console input, `hello` with the capabilities, `runtimeRoot` and the sessions (ID, owner, creation date), shutdown. |
 | `runner/endpoint.js` | The runner side of a connection: requests in arrival order, events, console output coalescing and backpressure. |
@@ -398,7 +402,8 @@ hello     runner -> CP, first message of every connection
           {type:'hello', protocol:1, pid, engines:['qemu'|'vbox'...], kvm,
            cpus, memoryBytes, images:{<system>:{raw?, vdi?}} (each {size, sha256|null}),
            warnings:[<sentence>...] (config.json against this machine, max 20),
-           runtimeRoot (the runner's runtime directory),
+           runtimeRoot (the runner's runtime directory; only the local runner's is kept),
+           limits:{maxSessions} (optional, from the runner file),
            sessions:[{sessionId, engine, owner, createdAt, nodes:[<listNodes entry>...]}]}
 request   CP -> runner  {type:'request', id, command, sessionId?, args}
 response  runner -> CP  {type:'response', id, result}
@@ -486,16 +491,23 @@ Order is kept since nothing is dropped.
 with its own client (`server/runner-client.js`, one instance per connection,
 never a global): `id`, `state` (`starting`, `online`, `lost`), the
 capabilities from `hello` (engines, images, capacity, warnings), its
-`runtimeRoot`, `trusted` and `ownerLogin` (null for a shared runner; reserved for
-a runner owned by one student, unused). It holds one entry, `local`: the
-runner of this machine, which dialled the gateway. `trusted` is set only
-for that entry; a `hello` is untrusted input, so later runners (5c) will not
-be trusted by default.
+`local`, `trusted`, `paused`, `address` and `ownerLogin` (null for a shared runner; reserved for
+a runner owned by one student, unused). The entry `local` is the
+runner of this machine, which dialled the Unix-socket gateway; a remote runner has
+the ID given at registration (`r-xxxxxxxx`) and stays in the registry, state `lost`, while offline.
+`local` and `trusted` are set only by the Unix-socket gateway: a `hello` is untrusted input, so a remote
+runner is never trusted, and **every filesystem action of the server on a runner's directories**
+(session directory removal, `users/` aliases, pruning) requires `local`; the `runtimeRoot` of a hello is
+kept only for the local runner, to tell whether it shares the server's `runtime/`.
 
 The session manager binds each session ID to a runner ID. The control plane
 assigns session IDs (the runner never invents one) and chooses the runner in
-one place, `pickRunner(login)`, called once when a session is created; it
-returns the local runner until placement arrives in 5c. Resource rules that
+one place, `pickRunner(login, sessionsOf)`, called once when a session is created: among the runners
+that are online, not paused, have an engine and are under their `maxSessions` (declared in the
+runner file, announced in `hello`), the one with the smallest sessions / `maxSessions` ratio (the plain
+count without a limit); a tie goes to the local runner, then to the earliest registered. With no
+candidate the user gets 503 "No runner is available" and the log gives the reasons. A session stays on its
+runner for life. Resource rules that
 span sessions (QEMU/KVM next to VirtualBox, metrics, later capacity) are
 evaluated by each runner over its own sessions.
 
@@ -543,7 +555,8 @@ routes answer 503 until one is online.
    (adoption above). Its console shows "Waiting for the server", "Connected",
    "The server refused the connection" (a runner is already connected) and
    "Connection to the server lost".
-6. The server touches the runner's filesystem only when they share
+6. The server touches a runner's filesystem only for the local runner (`entry.local`, set by the
+   Unix-socket gateway) when it also shares
    `runtime/`, that is when `hello.runtimeRoot` equals the server's
    `runtime/`: it then runs `pruneEmptyRuntimeSessions` when the runner
    connects (sparing the sessions of that `hello` and those of other live
@@ -591,7 +604,7 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
   default the project's `runtime/`, shared with the server), `--config <file>` (system catalog,
   default the project's `config.json`). `--port PORT` is `--connect <this
   project>/runtime/runner-<n>.sock`. `scripts/runner.sh` gets `--runtime runtime/`, so the files on disk do not change.
-  The 5c configuration (`~/.config/qemuweb-runner/config.toml`, systemd
+  The 5c configuration (`~/.config/qemuweb-runner/runner.json`, systemd
   `--user` unit) is out of scope here.
 - The control socket is created by the control plane with mode 0600 in
   `runtime/`, a directory the same user owns.
@@ -615,6 +628,25 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
   streams, the launch preview shows paths for display only), and a session
   is named by its ID only.
 
+### Remote runners (5c)
+
+A remote runner is the same protocol over a WebSocket (`/runner/connect`, `ws` duplex stream under a
+`Connection`), dialled **by the runner**, which authenticates with `Authorization: Bearer <authToken>` and
+`X-Runner-Id`. The server keeps only a sha256 of each token (`runners.json`) and compares it in constant
+time; unknown or revoked is 401 (the runner stops), a second live connection of an ID is 409. A runner gets its
+identity once by redeeming a single-use, time-limited **registration token** created by an admin
+(`POST /api/runner/register`, the one unauthenticated route). It is never trusted and never local.
+
+Both ends ping every 15 s and terminate a connection that misses a pong; the runner reconnects after 2 s doubling to
+30 s and keeps its machines meanwhile. On a loss of a **remote** runner the session manager keeps its sessions for
+`--runner-grace` seconds (0: drop at once, as for the local runner): the handle (`client.session(id)`) is
+a stable object, routes answer 503 (`manager.available`), and pages get `runner-state {online: false}`. When the
+runner returns (same ID) and its `hello` lists a session, the new client **adopts** the handle (`RunnerClient.adopt`):
+routers, Socket.IO rooms and event subscribers keep working, `runner-state {online: true}` makes the pages select
+their consoles again (the runner kept the output); a session the hello no longer lists is dropped, one the server
+no longer knows (grace expired) is deleted on the runner. A remote runner's unknown sessions are never adopted, so a
+server restart ends them.
+
 ### Multiple runners and untrusted runners
 
 The 5a/5b choices hold for N runners: one client per runner, sessions bound
@@ -629,7 +661,7 @@ the trust model of the local runner: the control plane must not trust it.
 - A runner provides no identity or authorization: logins, roles, console
   control and audit stay in the control plane, and a runner only ever receives
   commands for its own sessions.
-- Later (5c/6, no code now): runner tokens bound to a user (`ownerLogin`),
+- Later (6, no code now; the remote runners of 5c are for trusted machines): runner tokens bound to a user (`ownerLogin`),
   placement restricted to the owner's runners, quotas enforced by the control
   plane as well as by the runner, and archive streams size-limited on both
   sides.

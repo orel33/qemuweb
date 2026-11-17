@@ -348,8 +348,9 @@ with their arguments, so the process is the Node.js one (`./scripts/status.sh`, 
 The port and the runtime directory are options (there is no environment variable for them). The server and the runner started
 with the same `--runtime` (`runtime/` of the repository by default) share that directory: the server creates
 `runner-<port>.sock` in it and the runner looks for it there. The server cleans the empty sessions and
-aliases only of a runner whose `hello` announces the same runtime directory; a runner with another
-`--runtime` is never touched.
+aliases only of the local runner (the one on the Unix socket) whose `hello` announces the same runtime
+directory; a runner with another `--runtime`, and every remote runner, is never touched, whatever its
+`hello` says.
 
 ### Server: `./scripts/server.sh [options]`
 
@@ -357,11 +358,13 @@ The server is configured by options only: it reads **no environment variable**.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--listen PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `<runtime>/runner-PORT.sock`, the socket its runner dials |
-| `--runtime DIR` | `runtime/ of the repository` | runtime directory: sessions of a local runner, `users/` aliases, `server-PORT.pid` and `.session`, and the socket `DIR/runner-PORT.sock` |
+| `--listen PORT` | `3002` | TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-PORT.sock, the socket its runner dials |
+| `--runtime DIR` | `runtime/ of the repository` | runtime directory: sessions of a local runner, users/ aliases, server-PORT.pid and .session, and the socket DIR/runner-PORT.sock |
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
-| `--logs DIR` | `logs/ of the repository` | directory of `admin.log` and `users.log` (mode 0700) |
+| `--runners FILE` | `runners.json of the repository` | registered remote runners (mode 0600): a hash of the token of each |
+| `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
 | `--session-hours N` | `12` | login lifetime in hours (more than 0, at most 2160), renewed while the user is active |
+| `--runner-grace SECONDS` | `300` | how long the sessions of a remote runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once) |
 | `--trust-proxy VALUE` | `unset` | Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS |
 | `--no-auth` | `off` | disables authentication: one shared local session, for single-user local work only (default: authentication on) |
 | `--ephemeral` | `off` | marks an ephemeral server of the test scenarios (tests only) |
@@ -379,8 +382,10 @@ Options
   --listen         3002                                       (default)
   --runtime        /home/me/qemuweb/runtime                   (default)
   --users          /home/me/qemuweb/users.json                (default)
+  --runners        /home/me/qemuweb/runners.json              (default)
   --logs           /home/me/qemuweb/logs                      (default)
   --session-hours  12                                         (default)
+  --runner-grace   300                                        (default)
   --trust-proxy    unset                                      (default)
   --no-auth        off                                        (default)
   --ephemeral      off                                        (default)
@@ -392,6 +397,7 @@ Checking dependencies…
 Checking configuration…
   ✓ config.json  9 systems
   ✓ users.json  3 accounts
+  ✓ runners.json  1 registered runner
   ✓ logs directory  /home/me/qemuweb/logs  (mode 0700)
   ✓ runtime directory  /home/me/qemuweb/runtime  (writable)
 
@@ -446,6 +452,63 @@ Waiting for the server at /home/me/qemuweb/runtime/runner-3002.sock…
 Connected to the server.
 ```
 
+
+### Remote runner: `./scripts/runner.sh register` and `run`
+
+A runner on **another machine or account** connects to the server over the network, with its own
+token, instead of the local Unix socket. It is for **trusted machines** until milestone 6 (jail and
+quotas): it runs the machines of the sessions the server places on it under the account that starts
+it, never root. The machine needs this repository (or a copy of `runner/`, `common/`, `scripts/` and
+`config.json`), Node.js, QEMU, VDE and the images prepared there by `scripts/prepare.sh`; it needs no
+inbound port. Setup, nginx and systemd are in [docs/deployment.md](docs/deployment.md#remote-runners).
+
+1. An administrator opens **Runners** in `/admin` and creates a **registration token** (single use,
+   valid 15 minutes, 1 hour or 24 hours); the page shows the command **once**.
+2. On the runner machine: `./scripts/runner.sh register --url https://qemuweb.example.org --token TOKEN [--name NAME] [--ca FILE]`.
+   The runner file (`$XDG_CONFIG_HOME/qemuweb-runner/runner.json`, else
+   `~/.config/qemuweb-runner/runner.json`; directory 0700, file 0600) receives the server URL, the
+   runner ID, the runner's own token, its name and optional limits
+   (`"limits": {"maxSessions": 4, "memoryBytes": 17179869184, "cpus": 8}`, edited by hand).
+3. `./scripts/runner.sh run` opens an outbound WebSocket (`/runner/connect`) and keeps it. A network cut
+   stops no machine: the runner reconnects (2 s, doubling up to 30 s) and the server resynchronises.
+   If the server refuses the token (revoked), the runner stops its machines and exits with status 1.
+
+The server places each new session on the least loaded online runner that is not paused (the local
+runner first on a tie); a session stays on its runner. While a remote runner is offline, its sessions
+are kept for `--runner-grace` seconds and answer 503 "offline" (the page says "Runner offline,
+reconnecting…"); then they are dropped. After a server restart a remote runner's sessions are not
+adopted (only the local runner's are) and are deleted when it reconnects. `/admin` can pause (drain),
+revoke and remove a runner; every action is in `admin.log`. `ws://` and `http://` URLs are accepted
+only for this machine unless `--insecure` is given (with a warning).
+
+`./scripts/runner.sh run [options]`:
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--runtime DIR` | `runtime/ of the repository` | where the runner keeps its sessions (DIR/sessions/<id>/); default: the "runtime" of the runner file, else this |
+| `--config FILE` | `config.json of the repository` | system catalog (images, memory, QEMU options) |
+| `--url URL` | `the runner file` | server URL (https://host); default: the one that register wrote in the runner file |
+| `--ca FILE` | `none` | PEM file of the certificate authority that signed the server certificate (self-signed); default: the one of the runner file, else the system ones |
+| `--insecure` | `off` | accepts a plain http:// or ws:// server URL that is not on this machine (the token and the traffic are then readable on the network) |
+| `--runner-config FILE` | `qemuweb-runner/runner.json in $XDG_CONFIG_HOME, else ~/.config` | runner file written by register: server URL, runner ID, token, name, limits |
+| `-h`, `--help` | | this text |
+
+`./scripts/runner.sh register [options]` (it also takes `--help`):
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--url URL` | `required` | server URL, for example https://qemuweb.example.org |
+| `--token TOKEN` | `required` | registration token created in /admin/runners (single use, short lived) |
+| `--name NAME` | `the runner ID` | name shown in /admin/runners (up to 64 characters) |
+| `--ca FILE` | `none` | PEM file of the certificate authority that signed the server certificate (self-signed); kept in the runner file |
+| `--insecure` | `off` | accepts a plain http:// or ws:// server URL that is not on this machine (the token and the traffic are then readable on the network) |
+| `--runtime DIR` | `runtime/ of the repository` | sessions directory the runner will use, kept in the runner file; default: runtime/ of the repository where it runs |
+| `--runner-config FILE` | `qemuweb-runner/runner.json in $XDG_CONFIG_HOME, else ~/.config` | where to write the runner file (directory 0700, file 0600) |
+| `-h`, `--help` | | this text |
+
+The environment variables are those of the local runner above. The tokens are never printed: the
+`Options` block shows `********` for `--token`, and the runner file is only reported by its path.
+
 ## Maintenance scripts
 
 | Command | Effect |
@@ -453,7 +516,7 @@ Connected to the server.
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
 | `scripts/start.sh` | Start the server and a runner as two processes (`[server options]`, see above; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
 | `scripts/server.sh` | Start the server alone (`[options]`, `--help` lists them), the counterpart of `runner.sh`: a front end to `node server/main.js` (see [Server and runner command line](#server-and-runner-command-line)). Ctrl+C stops it. |
-| `scripts/runner.sh [options]` | Start a runner (`--port PORT` for the server to reach, default 3002; `--runtime DIR`; `--exit-on-disconnect`), the counterpart of `server.sh`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
+| `scripts/runner.sh [options]` | Start a runner (`--port PORT` for the server to reach, default 3002; `--runtime DIR`; `--exit-on-disconnect`), the counterpart of `server.sh`. `runner.sh register` and `runner.sh run` are the form for a runner on another machine (see Remote runner). It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
 | `scripts/stop.sh [--listen PORT] [--runtime DIR]` | Stop the server started on that port (default 3002); a runner started alone keeps running. |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
 | `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show (default `runtime/` only) the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |

@@ -195,3 +195,24 @@ test('the local runner is never kept: its sessions are dropped at once', async t
   fake.client.close();
   assert.equal(manager.get('toto'), null);
 });
+
+test('a remote runner offers and accepts only the systems whose image it has', async t => {
+  const dir = tempDir(t, 'qw-images-');
+  const catalog = JSON.parse(fs.readFileSync(path.join(root, 'config.json'), 'utf8'));
+  const [system] = Object.keys(catalog.systems).filter(id => id !== 'default');
+  for (const id of Object.keys(catalog.systems).filter(id => id !== 'default')) {
+    for (const engine of ['qemu', 'vbox']) catalog.systems[id][`image:${engine}`] = 'images/not-installed-here.img';
+  }
+  const configPath = path.join(dir, 'config.json');
+  fs.writeFileSync(configPath, JSON.stringify(catalog));
+  const make = requireImages => createRunnerService({commands, root, runtimeRoot: path.join(dir, requireImages ? 'remote' : 'local'), configPath, requireImages});
+  const remote = make(true);
+  t.after(() => remote.shutdown());
+  await remote.handle('session.create', '00000000000000a1', {owner: 'toto'});
+  assert.deepEqual(await remote.handle('catalog.systems', '00000000000000a1', {}), [], 'nothing is offered');
+  await assert.rejects(remote.handle('host.create', '00000000000000a1', {body: {id: 'h-00000000000000a1', imageId: system}}), /not installed on this runner/);
+  const local = make(false);
+  t.after(() => local.shutdown());
+  await local.handle('session.create', '00000000000000a2', {owner: 'toto'});
+  assert.ok((await local.handle('catalog.systems', '00000000000000a2', {})).length > 0, 'the local runner is unchanged');
+});

@@ -8,6 +8,8 @@
 //   root              project root, used to resolve image paths from config.json
 //   runtimeRoot       the runtime directory of the runner (only used to shorten paths in previews)
 //   configPath        path of config.json
+//   requireImages     a remote runner offers, and accepts for a new host, only the systems whose
+//                     base image exists on this machine (runner/catalog.js)
 //   availableEngines  engines usable on this runner
 //   hostNodes()       every node of every session of this runner; QEMU/KVM and VirtualBox
 //                     cannot run side by side on one machine, whichever session owns them
@@ -20,9 +22,9 @@
 const {EventEmitter} = require('events');
 const {availableEngines} = require('./preflight');
 
-function createContext({session, commands, root, runtimeRoot, configPath, hostNodes, flow}) {
+function createContext({session, commands, root, runtimeRoot, configPath, hostNodes, flow, requireImages = false}) {
   return {
-    session, commands, root, runtimeRoot, configPath,
+    session, commands, root, runtimeRoot, configPath, requireImages,
     availableEngines: availableEngines(commands),
     hostNodes: hostNodes || (() => [...session.nodes.values()]),
     flow: flow || {paused: false},

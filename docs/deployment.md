@@ -48,9 +48,9 @@ The server does not run the machines itself: a **runner** (`runner/main.js`)
 does. A runner always dials the server, on the Unix socket
 `<runtime>/runner-<port>.sock` (mode 0600, so only the server's own account can
 connect). The server never reaches out to a runner, and the web interface only
-*displays* runners (the **Runners** section of `/admin`): it registers none.
-One runner is accepted for now; a second connection is refused. Runners on
-other machines, with tokens and TLS, come with a later milestone.
+manages runners (the **Runners** section of `/admin`). One local runner is accepted on the
+Unix socket; a second connection is refused. Runners on other machines connect over
+the network with their own token: see [Remote runners](#remote-runners).
 
 There is one way to start it, in every environment:
 
@@ -65,7 +65,7 @@ There is one way to start it, in every environment:
 - **`./scripts/server.sh` and `./scripts/runner.sh` by themselves** (two terminals, or the two
   services below): the server opens HTTP at once and prints "No runner connected. Start one
   with ./scripts/runner.sh, or run ./scripts/start.sh for the server and a runner". Until a
-  runner connects, session routes answer 503 ("No runner is connected."). `--listen PORT` selects
+  runner connects, session routes answer 503 ("No runner is available."). `--listen PORT` selects
   the server's port (default 3002; the runner then needs `--port PORT`). Without `--exit-on-disconnect` the runner keeps its
   machines if the server restarts and reconnects within 2 seconds of the server being back.
 
@@ -106,14 +106,15 @@ server, connected, refused, lost). A refused option ends either program with sta
   adopted. A session whose owner is invalid, or already has a session, is
   deleted on the runner. Sessions the server no longer knows are never kept.
 - **Files shared with the runner:** the server touches the runner's files only
-  when it shares its runtime directory with it, that is when the runner's `runtimeRoot`
+  for the **local runner** (the one on the Unix socket, never a remote one), and only when it shares its runtime directory
+  with the server, that is when the runner's `runtimeRoot`
   (announced in `hello`) is the server's own `--runtime` (`runtime/` of the project by
   default, for both; there is no environment variable for it). Then, when a runner connects, the
   server prunes the empty `sessions/<id>` directories left by earlier servers (sparing the
   sessions that `hello` reports and those of other live servers), creates the
   `users/<login>` aliases, and removes the session directories of a runner
   that is lost (a runner killed by SIGKILL cannot). A runner whose `hello` announces another
-  runtime directory is never touched.
+  runtime directory is never touched, and a remote runner is never touched whatever its `hello` says.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
   empty session, recorded as `session-deleted` with the reason `runner lost` in
@@ -176,6 +177,117 @@ order; SIGKILL goes to every remaining process of the unit (QEMU, `vde_switch`)
 only after the stop timeout. Stopping the runner service stops its machines;
 tell users to save a session ZIP first. Stopping the server service leaves them
 running, and the sessions are adopted again when the server is back.
+
+## Remote runners
+
+A runner can run on another machine (or another account) and connect to the server over the
+network. It dials **out**: there is no inbound port, so it works behind a NAT or a lab firewall.
+The frame protocol of the local runner runs unchanged over a WebSocket on the path
+`/runner/connect` of the web server; nginx terminates TLS and passes the upgrade.
+
+> **Remote runners are for trusted machines.** Until milestone 6 (jail, quotas, HMP allowlist) a runner
+> runs the machines under the account that starts it with no confinement, and the server relies on
+> its answers. Never use a machine you do not control, and never root. A runner per student is a later idea.
+
+### On the server
+
+1. The server keeps the registered runners in `runners.json` (`--runners FILE`, mode 0600, only a hash of each token). The
+   startup line `Checking configuration…` shows how many are registered.
+2. Add two locations to the nginx `server` block of [section 3](#3-nginx), before `location /`:
+
+```nginx
+    # Remote runners: a long-lived WebSocket, outbound from the runner.
+    location = /runner/connect {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+    }
+
+    # One-time registration of a runner (rate limited by the server).
+    location = /api/runner/register {
+        proxy_pass http://127.0.0.1:3002;
+        proxy_set_header Host $host;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        client_max_body_size 8k;
+    }
+```
+
+   (The generic `location /` of section 3 already passes both; the point of these blocks is the long
+   `proxy_read_timeout` and the small body limit.) Both ends also ping every 15 seconds and drop a dead
+   connection, so the timeout only needs to exceed that. Start the server with `--trust-proxy loopback`
+   so that the registration command and the runner's address use the public name.
+3. `--runner-grace SECONDS` (default 300) is how long the sessions of a remote runner that lost
+   its connection are kept; `0` drops them at once, like the local runner.
+
+### On the runner machine
+
+Needs the repository (or a copy of `runner/`, `common/`, `scripts/`, `config.json`, `.env`),
+Node.js, QEMU, VDE and the images prepared by `./scripts/prepare.sh` **on that machine**; a
+system whose image is missing is not offered for the sessions placed there. As an unprivileged account (in
+the `kvm` group for `/dev/kvm`):
+
+```sh
+# the administrator creates a registration token in /admin/runners and copies the command
+./scripts/runner.sh register --url https://qemuweb.example.org --token <registration token> --name salle-12
+./scripts/runner.sh run
+```
+
+`register` writes `$XDG_CONFIG_HOME/qemuweb-runner/runner.json` (else `~/.config/qemuweb-runner/runner.json`,
+directory 0700, file 0600): the server URL, the runner ID, the runner's own token, its name, and optionally
+the `runtime` and `ca` given to `register` and hand-written `limits` (`maxSessions`, `memoryBytes`, `cpus`). A
+registration token is single use and expires (15 minutes, 1 hour or 24 hours, chosen in `/admin`). Sessions live in
+`<runtime>/sessions/` of the machine (`--runtime`, default `runtime/` of the repository).
+
+- **TLS:** use an `https://` URL. A server certificate signed by a private authority needs
+  `--ca FILE` (the PEM file; `register` keeps it in `runner.json`), or `NODE_EXTRA_CA_CERTS=file` in the environment.
+- **Unencrypted URLs:** `http://` and `ws://` are accepted only for this machine (loopback), for tests. Another host needs
+  `--insecure`, which prints a warning: the token and all console traffic are then readable on the network.
+- **Firewall:** nothing to open on the runner; it needs outbound access to the server's HTTPS port.
+- **Network cut:** no machine stops. The runner reconnects after 2 s, then 4, 8, 16 and 30 s; the server keeps its
+  sessions during `--runner-grace` and then drops them (and tells the runner to delete them if it returns). A
+  restart of the server does not adopt a remote runner's sessions: they are deleted when it reconnects.
+- **Revocation:** after **Revoke** in `/admin` the server refuses the token (401): the runner stops its machines and exits
+  with status 1 instead of retrying. Register it again to bring it back.
+
+A `systemd --user` unit (run `loginctl enable-linger` for the account so that it starts at boot):
+
+```ini
+# ~/.config/systemd/user/qemuweb-runner.service
+[Unit]
+Description=QemuWeb remote runner
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+WorkingDirectory=%h/qemuweb
+ExecStart=%h/qemuweb/scripts/runner.sh run
+KillMode=mixed
+Restart=on-failure
+# A revoked runner exits with status 1 and must not loop: remove the unit, or register it again.
+RestartPreventExitStatus=1
+# Private certificate authority: Environment=NODE_EXTRA_CA_CERTS=%h/ca.pem
+
+[Install]
+WantedBy=default.target
+```
+
+### Administration
+
+**Runners** in `/admin` lists the local runner and every registered one: state (online, offline since, paused, revoked),
+last seen, remote address, engines, CPU and memory, systems, warnings, sessions and limit. It creates registration
+tokens (the command is shown once), **pauses** a runner (drain: no new session, the running ones continue),
+**revokes** it, and removes an offline revoked one. The local runner can be paused but not revoked or removed.
+Every action is in `logs/admin.log`; a token is never logged. A new session goes to the least loaded online runner
+that is not paused and is under its `maxSessions`; when there is none the user gets 503 "No runner is available" and the
+server log gives the reasons.
 
 ## Server logs
 
