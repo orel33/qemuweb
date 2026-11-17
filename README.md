@@ -45,8 +45,9 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    ```
 
 Open <http://127.0.0.1:3002> and log in. Press `Ctrl+C` to stop the server, or
-use `PORT=3003 ./start.sh` to choose another port. `./start.sh` runs `node server.js --local`, which starts
-the runner (the process that runs the machines) itself. To keep the machines running when the server
+use `PORT=3003 ./start.sh` to choose another port. `./start.sh` starts two processes, the server and a
+runner (the process that runs the machines), each as its own command, with output lines prefixed
+`[server]` and `[runner]`; stopping it stops both. To keep the machines running when the server
 restarts, run `node server.js` in one terminal and `./scripts/runner.sh` in another (see
 [docs/deployment.md](docs/deployment.md#the-runner-process)).
 

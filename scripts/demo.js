@@ -58,6 +58,15 @@ async function prepare(usersFile) {
     ({login, role, hash: await hashPassword(password)}))));
 }
 
+// The server answers 503 until its runner has connected (a few seconds after both started).
+async function waitForRunner(client) {
+  const deadline = Date.now() + 60000;
+  while ((await client.fetch('/api/nodes')).status === 503) {
+    if (Date.now() > deadline) throw new Error('no runner connected to the server within 60 s');
+    await new Promise(resolve => setTimeout(resolve, 500));
+  }
+}
+
 async function load(baseUrl) {
   if (!baseUrl) fail('usage: demo.js load <base-url>');
   const data = fs.readFileSync(archive);
@@ -66,6 +75,7 @@ async function load(baseUrl) {
     try {
       await client.waitForServer(30000);
       await client.signIn(login, password);
+      await waitForRunner(client);
       const result = await client.request('/api/session-archive/import?autoStart=true', {
         method: 'POST', body: data, headers: {'content-type': 'application/zip'}
       });
