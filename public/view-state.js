@@ -1,7 +1,7 @@
 // View state: what a page of the workspace shows, as one plain JSON object. It is published by
 // the owner's page to observers (owner-view), by the controlling admin's page to the owner's
 // pages (controller-view), and saved in the browser's view settings. Shared by the server
-// (sockets.js validates the events) and the browser (classic script, global ViewState).
+// (server/sockets.js validates the events) and the browser (classic script, global ViewState).
 //   {mode: 'terminals' | 'graphic',
 //    layout: 'single' | 'columns-2' | 'rows-2' | 'grid-4',
 //    panes: (nodeId | null)[],   exactly paneCount(layout) entries, in pane order; null = empty

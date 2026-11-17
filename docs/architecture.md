@@ -23,14 +23,14 @@ flowchart TB
     Terminal["Terminals · xterm.js"]
   end
 
-  subgraph Server["Node.js server · server.js"]
-    Auth["Authentication · lib/auth/ (signed cookie)"]
-    Manager["Session manager · lib/session-manager.js (login → session + runner)"]
-    Routes["HTTP API · one router per session · routes/"]
-    Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt;, console:&lt;id&gt;:&lt;consoleId&gt; · sockets.js"]
-    Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log and users.log · lib/audit.js"]
-    Session["Session record · lib/session.js (ID, owner, runner ID)"]
-    Client["Runner client and registry · lib/runner-client.js, lib/runner-registry.js, lib/runner-gateway.js"]
+  subgraph Server["Node.js server · server/main.js"]
+    Auth["Authentication · server/auth/ (signed cookie)"]
+    Manager["Session manager · server/session-manager.js (login → session + runner)"]
+    Routes["HTTP API · one router per session · server/routes/"]
+    Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt;, console:&lt;id&gt;:&lt;consoleId&gt; · server/sockets.js"]
+    Admin["Admin API /api/admin/* and /admin · server/routes/admin.js, logs/admin.log and users.log · server/audit.js"]
+    Session["Session record · server/session.js (ID, owner, runner ID)"]
+    Client["Runner client and registry · server/runner-client.js, server/runner-registry.js, server/runner-gateway.js"]
   end
 
   subgraph RunnerProcess["Runner process · runner/main.js (own process group)"]
@@ -72,7 +72,7 @@ flowchart TB
 
 ## Main paths
 
-- **Host console:** xterm.js exchanges characters with `sockets.js` over
+- **Host console:** xterm.js exchanges characters with `server/sockets.js` over
   Socket.IO. The runner relays them through a QEMU or VirtualBox Unix serial
   socket connected to the guest's `ttyS0`. A Debian host can have a second
   serial port (`ttyS1`, QEMU's second `-serial`, `serial1.sock`): see
@@ -85,10 +85,10 @@ flowchart TB
 - **Actions and status:** each HTTP request of a session becomes one command
   to the runner over the runner protocol (see [Runner interface](#runner-interface)).
   The runner reports state, logs and serial output as events, which
-  `sockets.js` forwards over Socket.IO to the relevant browser tabs.
-- **Users and sessions:** `lib/auth/` checks the signed cookie of every request
+  `server/sockets.js` forwards over Socket.IO to the relevant browser tabs.
+- **Users and sessions:** `server/auth/` checks the signed cookie of every request
   and of the Socket.IO handshake (Origin checks are planned for milestone 6).
-  `lib/session-manager.js` maps the login to its workspace `{session, runner}`,
+  `server/session-manager.js` maps the login to its workspace `{session, runner}`,
   creating it at first use; it survives logouts and closed tabs until the user
   deletes it or the server stops. Each HTTP request goes to the router of the
   user's own session, whose runner looks a node ID up only there (404 otherwise).
@@ -96,7 +96,7 @@ flowchart TB
   `log`, `logs-reset`) to `node:<id>:<nodeId>`, and console output (`serial`,
   `serial-reset`) to `console:<id>:<consoleId>`; a socket joins them only for a
   node of its own (or observed) session.
-- **Administration:** `server.js` mounts, in this order after authentication,
+- **Administration:** `server/main.js` mounts, in this order after authentication,
   the observation gate (`X-Observe`: admins only, `GET`/`HEAD` only, the
   observed workspace taken with `manager.get`, never `open`), the
   `/api/admin` router (first middleware: role `admin`, then 403 on any path
@@ -104,13 +104,13 @@ flowchart TB
   caller's own session and records its activity. An admin call therefore never
   opens a session for the admin, and an observed session never gets an
   activity mark. An observer socket (`auth.observe`) joins the observed
-  session's rooms and `observers:<id>`; `sockets.js` refuses its `input`,
+  session's rooms and `observers:<id>`; `server/sockets.js` refuses its `input`,
   `clear-console` and `terminal-resize`, relays what the owner's page shows
   (`owner-view`, a [view state](#view-state) validated by `normalizeView`,
   published by that page whenever it changes, never derived from console
   sockets attaching; the last one is also sent to a new observer), sends `observe-unavailable` when the login has no session, and
   lets it type only while its admin controls the session (`take-control`
-  from any of that admin's observer sockets, `lib/console-control.js`: one lock
+  from any of that admin's observer sockets, `server/console-control.js`: one lock
   per session, held by the admin's login, released explicitly, after 10
   minutes without input, on session deletion, or when that admin's last
   observer socket on the session closes; the owner's input is then dropped on
@@ -129,15 +129,15 @@ flowchart TB
   pane expand, tab selection, pane node menus), for the mouse (CSS) and the
   keyboard (`observe.js`); the banners say who drives. Every privileged socket
   event re-reads the account, so a disabled or removed account loses its
-  sockets. `sockets.js` also counts each user's connected browser tabs (the
+  sockets. `server/sockets.js` also counts each user's connected browser tabs (the
   tab's session socket carries `auth.main`), shown as online/offline in
   `/admin`. Admin actions are appended to `logs/admin.log`, the audit log of
-  administrator actions (`lib/audit.js`).
+  administrator actions (`server/audit.js`).
 - **User events:** `logs/users.log` receives logins and logouts from the
   `/auth` routes, session creation and deletion from the session manager
   events (`removed` carries who asked), and the owner's explicit node and
   archive actions from one middleware of the session router
-  (`routes/index.js`, `userEvent`), written when the response is sent.
+  (`server/routes/index.js`, `userEvent`), written when the response is sent.
   `/admin` reads both logs from their end (`readLogTail`).
 
 
@@ -227,37 +227,37 @@ The server is split into layers with one-way dependencies:
   (`runner/session-runner.js`): a context (no module-level state), modules
   created as factories (`createCatalog(ctx)`, ...) in dependency order, and a
   resource sampling timer.
-- **`lib/`** is the control plane: `session-manager.js` (one session per user,
+- **`server/`** is the control plane: `session-manager.js` (one session per user,
   bound to a runner), `runner-client.js`, `runner-registry.js`
   and `runner-gateway.js` (the runners and their connections), `server-instance.js`
   (server records used by the scripts) and `auth/` (authentication).
-- **`routes/`** and **`sockets.js`** form the web layer: HTTP routes by area and
-  Socket.IO wiring. `server.js` only starts and wires everything.
+- **`server/routes/`** and **`server/sockets.js`** form the web layer: HTTP routes by area and
+  Socket.IO wiring. `server/main.js` only starts and wires everything.
 - **`common/`** holds code shared by the runner and the server, including the
   protocol framing.
 
 | Module | Role |
 | --- | --- |
-| `server.js` | Startup and wiring: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
-| `sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
-| `routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
-| `routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
-| `routes/index.js` | Builds the router of one session from the route modules, and `handle(command, args, status)`: a route that sends one runner command. |
-| `routes/settings.js` | General settings, system catalog and startup CD-ROM capability. |
-| `routes/nodes.js` | Node listing, switches, start, stop, Resume all, Stop all, reboot, reset, monitor, rename and deletion. |
-| `routes/hosts.js` | Host creation, configuration and startup CD-ROM. |
-| `routes/topology.js` | Topology (`.topo`) preview, creation and export. |
-| `routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream. |
-| `routes/metrics.js` | Per-host CPU and memory metrics. |
-| `lib/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`, `runtime/users/<login>` links. |
-| `lib/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
-| `lib/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
-| `lib/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities and client; `pickRunner(login)`. |
-| `lib/runner-gateway.js` | The runner socket `runtime/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
-| `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `runtime/` connects). |
-| `lib/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
-| `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
-| `lib/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
+| `server/main.js` | Startup and wiring: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
+| `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
+| `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
+| `server/routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
+| `server/routes/index.js` | Builds the router of one session from the route modules, and `handle(command, args, status)`: a route that sends one runner command. |
+| `server/routes/settings.js` | General settings, system catalog and startup CD-ROM capability. |
+| `server/routes/nodes.js` | Node listing, switches, start, stop, Resume all, Stop all, reboot, reset, monitor, rename and deletion. |
+| `server/routes/hosts.js` | Host creation, configuration and startup CD-ROM. |
+| `server/routes/topology.js` | Topology (`.topo`) preview, creation and export. |
+| `server/routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream. |
+| `server/routes/metrics.js` | Per-host CPU and memory metrics. |
+| `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`, `runtime/users/<login>` links. |
+| `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
+| `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
+| `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities and client; `pickRunner(login)`. |
+| `server/runner-gateway.js` | The runner socket `runtime/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
+| `server/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `runtime/` connects). |
+| `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
+| `server/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
+| `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
 | `runner/main.js` | Runner process entry point: options (`--port` or `--connect`, `--runtime`, `--config`, `--exit-on-disconnect`), preflight, its own configuration checks, connection and its state lines. |
 | `runner/index.js` | Runner facade: `createRunnerService`, `serveConnection`, `resolveCommands`. |
 | `runner/service.js` | Every session of the runner: `session.create`/`session.delete`, command dispatch (404 for an unknown session or node), console input, `hello` with the capabilities, `runtimeRoot` and the sessions (ID, owner, creation date), shutdown. |
@@ -308,7 +308,7 @@ order. State that several modules reassign lives on the `store` object of
 | `topology.js` | Graphic network view and `.topo` load/save. |
 | `archive.js` | Session ZIP save and load dialogs. |
 | `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
-| `view-state.js` | Classic script, also required by `sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |
+| `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |
 
 ## Images and the session
 
@@ -350,7 +350,7 @@ pair (`test/unit/runner-pair.js`).
 The control plane keeps no copy of node records. Everything that reads or
 changes a node (validation of a host configuration, topology loading, archive
 installation, start/stop ordering) runs in the runner, as one command. A route
-of `routes/` becomes: parse the HTTP request, send one command, map the result
+of `server/routes/` becomes: parse the HTTP request, send one command, map the result
 or the error to the HTTP response. The runner's answers are exactly the JSON
 bodies the routes return today.
 
@@ -405,7 +405,7 @@ stream    either way    {type:'stream', id, op:'end'|'error'|'credit', message?,
   serves every session of the machine (resource rules such as "no
   VirtualBox next to QEMU/KVM" and the 5c capacity limits span sessions).
 - `input` (console keystrokes, at most 4096 characters, already checked by
-  `sockets.js`) has no response, to keep typing latency at one write. Messages
+  `server/sockets.js`) has no response, to keep typing latency at one write. Messages
   on one connection are handled in order, so input, resize and clear keep
   their order, and so do the events of a node.
 
@@ -444,7 +444,7 @@ line, column}`, and `input` messages.
 
 `state`, `log`, `logs-reset`, `serial`, `serial-reset`, `nodes-removed`,
 `nodes-changed`, `node-renamed` and `general-settings-changed`, with today's
-Socket.IO payloads; `sockets.js` forwards them to the rooms of `sessionId`
+Socket.IO payloads; `server/sockets.js` forwards them to the rooms of `sessionId`
 (the last three were emitted by routes, they now come from the runner like the
 others).
 
@@ -468,8 +468,8 @@ Order is kept since nothing is dropped.
 
 ### Runners in the control plane
 
-`lib/runner-registry.js` holds every runner the control plane knows, each
-with its own client (`lib/runner-client.js`, one instance per connection,
+`server/runner-registry.js` holds every runner the control plane knows, each
+with its own client (`server/runner-client.js`, one instance per connection,
 never a global): `id`, `state` (`starting`, `online`, `lost`), the
 capabilities from `hello` (engines, images, capacity, warnings), its
 `runtimeRoot`, `trusted` and `ownerLogin` (null for a shared runner; reserved for
@@ -495,7 +495,7 @@ by hand, or as a systemd service. The server only listens; a runner dials in at
 any time, and the server serves browsers without waiting for it. Session
 routes answer 503 until one is online.
 
-1. The server (`lib/runner-gateway.js`) listens on `runtime/runner-<port>.sock`
+1. The server (`server/runner-gateway.js`) listens on `runtime/runner-<port>.sock`
    (mode 0600). It accepts one connection when no runner is registered or the
    registered one is lost, and closes any other at once.
 2. The runner resolves its executables (`runner/preflight.js`), prints its
@@ -631,12 +631,12 @@ the trust model of the local runner: the control plane must not trust it.
   unit tests drive the runner service directly.
 - Boundaries: `runner/` requires only `runner/`, `common/`, built-ins and
   `node-pty`; the control plane reaches the runner only through the client
-  (`lib/runner-client.js`) and never requires `runner/`.
+  (`server/runner-client.js`) and never requires `runner/`.
 - Integration: every scenario starts QemuWeb through `scripts/start.sh`, the real
   launch sequence. `check-runner` (VDE only) checks that sequence: the server and
   runner processes under `start.sh`, a switch session through it, the effect of
   SIGKILL on the runner, and that no `vde_switch`/`qemu-system` process nor
   `runtime/sessions/<id>` remains after a stop.
-  `check-runner-manual` runs the server alone (`node server.js`): a runner started
+  `check-runner-manual` runs the server alone (`node server/main.js`): a runner started
   by hand survives a SIGKILL of the server, reconnects to a new one and its session is
   adopted.

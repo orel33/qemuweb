@@ -48,7 +48,7 @@ Open <http://127.0.0.1:3002> and log in. Press `Ctrl+C` to stop the server, or
 use `PORT=3003 ./start.sh` to choose another port. `./start.sh` starts two processes, the server and a
 runner (the process that runs the machines), each as its own command, with output lines prefixed
 `[server]` and `[runner]`; stopping it stops both, and if one of them dies the other is stopped. To keep the machines running when the server
-restarts, run `node server.js` in one terminal and `./scripts/runner.sh` in another (see
+restarts, run `node server/main.js` in one terminal and `./scripts/runner.sh` in another (see
 [docs/deployment.md](docs/deployment.md#the-runner-process)).
 
 The server listens only on `127.0.0.1`. To use it from another machine, forward
@@ -302,7 +302,7 @@ record the owner, so any user can load them.
 | --- | --- |
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
 | `scripts/start.sh` | Start the server and a runner as two processes (`PORT`, default 3002; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
-| `scripts/runner.sh [--exit-on-disconnect]` | Start a runner for the server of `PORT` (default 3002), for example one started alone with `node server.js`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
+| `scripts/runner.sh [--exit-on-disconnect]` | Start a runner for the server of `PORT` (default 3002), for example one started alone with `node server/main.js`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
 | `scripts/stop.sh` | Stop the server started on `PORT` (default 3002); a runner started alone keeps running. |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
 | `scripts/tree.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
@@ -313,12 +313,11 @@ record the owner, so any user can load them.
 
 | Path | Role |
 | --- | --- |
-| `server.js` | Startup (a runner dials in, see `scripts/start.sh`): runner socket, authentication, session manager, HTTP routes and Socket.IO wiring. |
-| `routes/` | HTTP API of one session (`routes/index.js` builds one router per session), by area: settings, nodes, hosts, topology, archives, metrics. Each route sends one command to the session's runner. |
-| `sockets.js` | Socket.IO consoles; forwards each runner's events to the browsers of its session only. |
+| `server/` | The server (control plane), `node server/main.js`, symmetric to `runner/`: startup (a runner dials in, see `scripts/start.sh`) in `main.js`, session manager (one session per user), runner client, registry, runner gateway, server instance records, audit logs. |
+| `server/routes/` | HTTP API of one session (`server/routes/index.js` builds one router per session), by area: settings, nodes, hosts, topology, archives, metrics. Each route sends one command to the session's runner. |
+| `server/sockets.js` | Socket.IO consoles; forwards each runner's events to the browsers of its session only. |
 | `runner/` | The runner, a separate process (`runner/main.js`) serving every session of the machine over the runner protocol: QEMU, VirtualBox, VDE switches, consoles, startup media, archives, metrics. |
-| `lib/` | Control plane: session manager (one session per user), runner client, registry, runner gateway, server instance records. |
-| `lib/auth/` | Authentication: users file, password hashes, signed cookie. |
+| `server/auth/` | Authentication: users file, password hashes, signed cookie. |
 | `scripts/user.sh`, `scripts/user.js` | User account administration. |
 | `scripts/demo.sh`, `scripts/demo.js` | Web demo with test accounts and `demo/lan.zip`. |
 | `common/` | Code shared by the runner and the server: runner protocol framing, IDs, launch settings, `config.json` validation, `.topo` parsing. |
