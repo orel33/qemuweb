@@ -3,6 +3,7 @@
 const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
+const cli = require('../common/cli');
 
 // A runner needs the common tools and at least one engine: a missing engine only disables the
 // hosts of that engine (config.json is shared by runners that do not all have both).
@@ -68,7 +69,7 @@ function resolveCommands(root) {
   const commands = {};
   const failures = [];
   const labelWidth = Math.max(...[...requiredKeys, ...optionalKeys].map(key => commandLabels[key].length));
-  console.log('Checking dependencies…');
+  cli.heading('Checking dependencies…');
   for (const key of [...requiredKeys, ...optionalKeys]) {
     const defaultCommand = base[key];
     const label = commandLabels[key].padEnd(labelWidth);
@@ -91,18 +92,19 @@ function resolveCommands(root) {
         }
       }
       commands[key] = resolved;
-      console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}  (${setting})`);
+      cli.pass(`${label}  ${resolved}  (${setting})`);
     } catch (error) {
       if (requiredKeys.includes(key)) {
         failures.push(key);
-        console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}  (${setting})`);
+        cli.failure(`${label}  ${error.message}  (${setting})`);
       } else {
         commands[key] = null;
         const engine = Object.keys(engineKeys).find(name => engineKeys[name].includes(key));
-        console.log(`  - ${label}  unavailable (${error.message}); ${engineNames[engine]} hosts disabled  (${setting})`);
+        cli.skipped(`${label}  unavailable (${error.message}); ${engineNames[engine]} hosts disabled  (${setting})`);
       }
     }
   }
+  cli.end();
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);
   if (!availableEngines(commands).length) throw new Error('Startup aborted: no virtualization engine is available; install QEMU (with KVM) or VirtualBox.');
   return commands;
