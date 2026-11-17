@@ -18,15 +18,19 @@ const {readCatalog} = require('../common/system-config');
 const {createAuth} = require('./auth');
 const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
-const {startupReport} = require('./startup-report');
+const {startupReport, helpText} = require('./startup-report');
 const packageInfo = require('../package.json');
 
 const RUNNER_HINT = './scripts/runner.sh';
 
 const root = path.join(__dirname, '..');
 const args = process.argv.slice(2);
+if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) {
+  console.log(helpText({root}));
+  process.exit(0);
+}
 if (args.length) {
-  console.error(`Unknown argument: ${args[0]}. Usage: node server/main.js`);
+  console.error(`Unknown argument: ${args[0]}. Usage: node server/main.js (--help lists the environment variables)`);
   process.exit(2);
 }
 const runtime = path.join(root, 'runtime');

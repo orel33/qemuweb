@@ -334,16 +334,18 @@ recognise it). Both read `PORT` (default 3002), which ties a runner to its serve
 
 ### Server: `./scripts/server.sh`
 
-The server takes **no option** (an argument is refused with exit status 2); it is configured by
-environment variables, set in front of the command or in a systemd unit.
+The server takes **no option** except `-h`/`--help` (any other argument is refused with exit
+status 2); it is configured by environment variables, set in front of the command or in a systemd
+unit. `./scripts/server.sh --help` prints the same list. The values in effect, with where each
+comes from (`default`, `environment`, `derived`), are printed when the server starts.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names the runner socket `runtime/runner-<PORT>.sock` and the records `runtime/server-<PORT>.pid`. |
-| `QEMUWEB_USERS_FILE` | `users.json` | Users file (mode 0600). |
+| `PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `runtime/runner-<PORT>.sock`, the socket its runner dials. |
 | `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
+| `QEMUWEB_USERS_FILE` | `users.json` | Users file (mode 0600). |
 | `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime in hours (0 to 2160), renewed while the user is active. |
-| `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (`loopback`, `true`, a hop count or an address list), so that cookies get `Secure` over HTTPS. |
+| `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (`loopback`, `true`, a hop count or addresses), so that cookies get `Secure` over HTTPS. |
 | `QEMUWEB_LOG_DIR` | `logs` | Directory of `admin.log` and `users.log` (mode 0700). |
 | `QEMUWEB_TEST_SERVER` | unset | `1` marks an ephemeral server of the test scenarios; for tests only. |
 
@@ -351,20 +353,30 @@ environment variables, set in front of the command or in a systemd unit.
 
 The script runs `node runner/main.js --port $PORT --runtime <repository>/runtime` and passes any
 further option on. The runner is an ordinary unprivileged process; every path is a parameter.
+`--help` prints the lists below.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--exit-on-disconnect` | off | Losing the connection to the server stops every machine and ends the runner (what `start.sh` uses). Without it, the runner keeps its sessions and reconnects every 2 seconds. |
-| `--runtime DIR` | `<repository>/runtime` with `runner.sh` | Where the runner keeps the sessions (`DIR/sessions/<id>/`). Run directly, `node runner/main.js` defaults to `$XDG_DATA_HOME/qemuweb-runner`, else `~/.local/share/qemuweb-runner`. |
-| `--config FILE` | `config.json` of the project | System catalog (images, memory, QEMU options). |
-| `--port N` | `$PORT` | Reach the server of that port on `runtime/runner-N.sock` of the project. Set by `runner.sh`. |
+| `--port N` | `$PORT` | Reach the server of port N on `runtime/runner-N.sock` of the project. Set by `runner.sh`. |
 | `--connect SOCKET` | none | Unix socket of the server, instead of `--port`; use it by running `node runner/main.js` directly (`runner.sh` already passes `--port`, and the two are exclusive). |
+| `--runtime DIR` | `<repository>/runtime` with `runner.sh`; `$XDG_DATA_HOME/qemuweb-runner` otherwise | Where the runner keeps the sessions (`DIR/sessions/<id>/`). |
+| `--config FILE` | `config.json` of the project | System catalog (images, memory, QEMU options). |
+| `--exit-on-disconnect` | off | Losing the connection to the server stops every machine and ends the runner (what `start.sh` uses). Without it, the runner keeps its sessions and reconnects every 2 seconds. |
+| `-h`, `--help` | | Print the options and variables. |
 
-| Variable | Effect |
-| --- | --- |
-| `PORT` | The server to reach, as `--port` (default 3002). |
-| `XDG_DATA_HOME` | Base of the default `--runtime` when `node runner/main.js` is run directly. |
-| `VBOXMANAGE`, `GENISOIMAGE`, `NODE`, `PYTHON3`, `QEMU_IMG`, `QEMU_SYSTEM_X86_64`, `VDE_SWITCH`, `VDETERM` | Executable names: `.env.local` (absolute paths for this machine) wins over the environment, which wins over the default of `.env`. The runner checks them at startup and disables an engine whose commands are missing. |
+| Variable | Default | Effect |
+| --- | --- | --- |
+| `PORT` | `3002` | With `runner.sh` only: the server to reach, as `--port`. |
+| `XDG_DATA_HOME` | `~/.local/share` | Standard variable. Base of the default `--runtime` of `node runner/main.js` (`$XDG_DATA_HOME/qemuweb-runner`); `runner.sh` always passes `--runtime`, so it has no effect there. |
+| `QEMU_SYSTEM_X86_64`, `QEMU_IMG`, `VDE_SWITCH`, `VDETERM`, `GENISOIMAGE`, `NODE`, `PYTHON3`, `VBOXMANAGE` | names in `.env` | Names or paths of the external programs: `.env.local` (absolute paths for this machine) wins over the environment, which wins over the default of `.env`. The runner disables an engine whose programs are missing. |
+
+`PORT` and `XDG_DATA_HOME` are different on purpose. `PORT` is a QemuWeb variable that identifies
+**which server instance** a runner belongs to: the same value on both sides, which is why
+`start.sh` and `runner.sh` read it. `XDG_DATA_HOME` is the system-wide standard for where a user
+program keeps its data: a runner is a user-land process that may run on a machine without this
+repository (a remote one, later), so by default it keeps its sessions in the user's data
+directory; `runner.sh` overrides that to keep the sessions under the project's `runtime/`.
+The server has no equivalent: it always lives in its repository and uses its `runtime/`.
 
 At startup each process prints what controls its behaviour, with the value and where it comes from
 (`default`, `environment` or the option or file that set it), also when it is the default. The server

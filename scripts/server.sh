@@ -2,7 +2,7 @@
 # Starts the QemuWeb server (the control plane: web interface, accounts, sessions) by hand, the
 # counterpart of scripts/runner.sh. A runner (./scripts/runner.sh) dials it on PORT.
 #   ./scripts/server.sh              PORT=3003 ./scripts/server.sh to choose another port
-# It takes no option: the server is configured by environment variables (see README.md,
+# It takes no option but --help: the server is configured by environment variables (see README.md,
 # "Server and runner command line"). Run it as your normal user, never as root. Stop it with
 # Ctrl+C or ./scripts/stop.sh.
 set -euo pipefail

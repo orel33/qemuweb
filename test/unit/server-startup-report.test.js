@@ -33,3 +33,15 @@ test('values from the environment are shown with their source, paths resolved', 
   assert.match(text, /QEMUWEB_TEST_SERVER +1 +\(environment\)/);
   assert.match(text, /runner-3003\.sock/);
 });
+
+test('every server variable is listed by --help (with its description) and documented in the README', () => {
+  const fs = require('node:fs');
+  const {helpText, settingRows} = require('../../server/startup-report');
+  const readme = fs.readFileSync(path.join(__dirname, '..', '..', 'README.md'), 'utf8');
+  const help = helpText({root, env: {}});
+  for (const [name, , description] of settingRows({root, env: {}})) {
+    assert.ok(help.includes(name) && help.includes(description), `--help lists ${name}`);
+    assert.ok(readme.includes(`\`${name}\``), `README documents ${name}`);
+  }
+  assert.ok(help.includes('QEMUWEB_TEST_SERVER') && readme.includes('`QEMUWEB_TEST_SERVER`'));
+});

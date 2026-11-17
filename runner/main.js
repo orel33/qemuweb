@@ -25,11 +25,39 @@ const RECONNECT_MS = 2000;
 // A connection the server closes within this delay was refused (a runner is already connected).
 const REFUSED_MS = 500;
 
+// `--help`: the options and variables, repeated in README.md ("Server and runner command line").
+const HELP = `Usage: node runner/main.js (--port N | --connect SOCKET) [options]
+       ./scripts/runner.sh [options]      (sets --port from PORT and --runtime to runtime/ of the project)
+
+The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessions. It dials the
+server, keeps its sessions if the connection drops, and reconnects. Run it as your normal user.
+
+Options:
+  --port N               reach the server of port N on runtime/runner-N.sock of the project
+  --connect SOCKET       Unix socket of the server, instead of --port
+  --runtime DIR          where the runner keeps the sessions (DIR/sessions/<id>/)
+                         default: $XDG_DATA_HOME/qemuweb-runner, else ~/.local/share/qemuweb-runner
+  --config FILE          system catalog (images, memory, QEMU options)   default: config.json of the project
+  --exit-on-disconnect   stop every machine and exit when the server connection is lost
+                         default: keep the sessions and reconnect every 2 seconds
+  -h, --help             this text
+
+Environment variables:
+  PORT                   with ./scripts/runner.sh only: the server to reach, as --port (default 3002)
+  XDG_DATA_HOME          base of the default --runtime (standard variable; default ~/.local/share)
+  QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE
+                         names or paths of the external programs: .env.local, then the environment,
+                         then the default of .env
+
+At startup it prints its options and dependency check, with where each value comes from.
+`;
+
 function parseArguments(argv) {
   const options = {port: null, connect: null, runtime: null, config: path.join(root, 'config.json'), exitOnDisconnect: false, given: new Set()};
   for (let index = 0; index < argv.length; index++) {
     const name = argv[index];
     options.given.add(name);
+    if (name === '--help' || name === '-h') { console.log(HELP); process.exit(0); }
     if (name === '--exit-on-disconnect') { options.exitOnDisconnect = true; continue; }
     if (name === '--port' && index + 1 < argv.length) {
       const port = argv[++index];
@@ -38,7 +66,7 @@ function parseArguments(argv) {
       continue;
     }
     const key = {'--connect': 'connect', '--runtime': 'runtime', '--config': 'config'}[name];
-    if (!key || index + 1 >= argv.length) throw new Error(`Unknown or incomplete option: ${name}`);
+    if (!key || index + 1 >= argv.length) throw new Error(`Unknown or incomplete option: ${name} (--help lists the options)`);
     options[key] = path.resolve(argv[++index]);
   }
   if (options.port && options.connect) throw new Error('Use --port or --connect, not both.');
