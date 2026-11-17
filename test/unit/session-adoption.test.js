@@ -81,7 +81,7 @@ test('an invalid or missing owner is never adopted: the session is deleted', asy
 
 test('an invalid session ID is ignored, never adopted', async t => {
   const {manager, entry, created} = await setup(t);
-  for (const sessionId of ['', 'xyz', '../../etc', ID(1).toUpperCase(), `${ID(1)}0`, 5, null]) {
+  for (const sessionId of ['', 'xyz', '../../etc', ID(0xabcdef).toUpperCase(), `${ID(1)}0`, 5, null]) {
     manager.resync(entry, {sessions: [{sessionId, owner: 'toto'}]});
   }
   assert.equal(created.length, 0);

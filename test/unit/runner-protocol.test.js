@@ -207,7 +207,9 @@ test('the dispatcher refuses unknown commands, sessions and nodes', async t => {
   await assert.rejects(session.request('node.start', {nodeId: 'h-00000000000000aa'}), error => error.status === 404 && /Unknown host or switch/.test(error.message));
   await assert.rejects(session.request('console.attach', {nodeId: 'h-00000000000000aa'}), error => !error.status && error.message === 'Unknown node.');
   assert.deepEqual(await session.request('nodes.list'), []);
-  assert.deepEqual(service.hello().sessions, [{sessionId, engine: 'qemu', nodes: []}]);
+  // hello also carries each session's owner and creation date (the control plane adopts them).
+  assert.deepEqual(service.hello().sessions.map(({createdAt, ...rest}) => ({...rest, dated: Number.isFinite(Date.parse(createdAt))})),
+    [{sessionId, engine: 'qemu', owner: 'toto', nodes: [], dated: true}]);
   const hello = service.hello();
   assert.equal(hello.protocol, 1);
   assert.ok(Array.isArray(hello.engines) && hello.engines.includes('qemu'));

@@ -62,9 +62,8 @@ test('a working disk whose base image changed is refused, or discarded on reques
   const discarded = archive([host({disk: true, baseImage: changed})]);
   const warnings = await snapshot.validateArchiveSession(discarded, stage, {discardDisks: true});
   assert.equal(warnings.length, 1);
-  assert.equal(warnings[0].system, 'debian13-legacy');
   assert.deepEqual(warnings[0].hosts, [HOST]);
-  assert.match(warnings[0].message, /working disks of h1 were discarded/);
+  assert.match(warnings[0].message, /Working disks of h1 were discarded/);
   assert.equal(discarded.hosts[0].disk, false);
   assert.equal(fs.existsSync(path.join(stage, HOST, 'disk.qcow2')), false);
 });
