@@ -18,11 +18,12 @@
 // The runner modules are attached to the context as they are created (ctx.catalog,
 // ctx.runtime, ...), in dependency order, so that each one can use the previous ones.
 const {EventEmitter} = require('events');
+const {availableEngines} = require('./preflight');
 
 function createContext({session, commands, root, runtimeRoot, configPath, hostNodes, flow}) {
   return {
     session, commands, root, runtimeRoot, configPath,
-    availableEngines: commands.VBOXMANAGE ? ['qemu', 'vbox'] : ['qemu'],
+    availableEngines: availableEngines(commands),
     hostNodes: hostNodes || (() => [...session.nodes.values()]),
     flow: flow || {paused: false},
     events: new EventEmitter()

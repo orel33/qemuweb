@@ -11,15 +11,21 @@ const {selectedProfile} = require('../common/system-config');
 const MAX_WARNINGS = 20;
 
 // catalog: the result of readCatalog; root: the directory image paths are relative to;
-// engines: the engines this runner can run; cpus and memoryBytes: what the machine has.
-function configWarnings({catalog, root, engines, cpus, memoryBytes}) {
+// engines: the engines this runner can run; kvm: whether /dev/kvm is usable; cpus and memoryBytes:
+// what the machine has. config.json is shared by runners that differ, so a system that this
+// runner cannot run is a warning for this runner, never an error.
+function configWarnings({catalog, root, engines, kvm = true, cpus, memoryBytes}) {
   const warnings = [];
+  if (engines.includes('qemu') && !kvm) {
+    warnings.push('QEMU is installed but /dev/kvm is missing or not accessible: QEMU hosts cannot start (add this user to the kvm group, or use VirtualBox).');
+  }
+  if (!engines.length) warnings.push('This runner has no virtualization engine: install QEMU (with KVM) or VirtualBox.');
   for (const system of Object.keys(catalog.systems)) {
     if (system === 'default') continue;
     for (const engine of engines) {
       const profile = selectedProfile(catalog, system, engine);
       if (typeof profile.image === 'string' && !fs.existsSync(path.resolve(root, profile.image))) {
-        warnings.push(`${system}: ${profile.image} is missing; run bash scripts/prepare.sh --system ${system}.`);
+        warnings.push(`${system}: ${profile.image} is missing on this runner; run bash scripts/prepare.sh --system ${system}.`);
       }
     }
     const qemu = selectedProfile(catalog, system, 'qemu');

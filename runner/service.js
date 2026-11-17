@@ -19,6 +19,7 @@ const {Session, SESSION_ID} = require('./session');
 const {createSessionRunner} = require('./session-runner');
 const {knownImageIdentity} = require('./media/image-hash');
 const {configWarnings} = require('./config-warnings');
+const {availableEngines} = require('./preflight');
 const {statusError} = require('./commands/errors');
 
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
@@ -34,7 +35,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
   const events = new EventEmitter();
   const flow = {paused: false};
   const hostNodes = () => [...sessions.values()].flatMap(entry => [...entry.session.nodes.values()]);
-  const availableEngines = commands.VBOXMANAGE ? ['qemu', 'vbox'] : ['qemu'];
+  const engines = availableEngines(commands);
 
   function entryOf(sessionId) {
     const entry = typeof sessionId === 'string' && sessions.get(sessionId);
@@ -45,7 +46,8 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
   function createSession({sessionId, owner = null, createdAt}) {
     if (!SESSION_ID.test(sessionId || '')) throw new Error('Invalid session ID.');
     if (sessions.has(sessionId)) throw statusError('Session already exists.', 409);
-    const session = new Session({runtimeRoot, id: sessionId, owner: typeof owner === 'string' ? owner : null,
+    // A new session uses the first engine this runner has (QEMU when it has it).
+    const session = new Session({runtimeRoot, id: sessionId, engine: engines[0], owner: typeof owner === 'string' ? owner : null,
       ...(typeof createdAt === 'string' ? {createdAt} : {})});
     fs.mkdirSync(path.dirname(session.runtimeDir), {recursive: true});
     fs.mkdirSync(session.runtimeDir);
@@ -124,7 +126,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
     let warnings = [];
     try {
       const catalog = readCatalog(configPath);
-      warnings = configWarnings({catalog, root, engines: availableEngines, cpus: os.cpus().length, memoryBytes: os.totalmem()});
+      warnings = configWarnings({catalog, root, engines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem()});
       for (const [system, profiles] of Object.entries(catalog.systems)) {
         if (system === 'default') continue;
         const entry = {};
@@ -136,7 +138,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
         images[system] = entry;
       }
     } catch (error) { console.error(`Cannot read the system catalog: ${error.message}`); }
-    return {engines: availableEngines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem(), images, warnings};
+    return {engines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem(), images, warnings};
   }
 
   function hello() {
@@ -144,7 +146,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
       sessions: [...sessions.values()].map(({session, runner}) => ({sessionId: session.id, engine: session.engine, nodes: runner.listNodes()}))};
   }
 
-  return {events, handle, input, hello, shutdown, setConsoleFlow, availableEngines};
+  return {events, handle, input, hello, shutdown, setConsoleFlow, availableEngines: engines};
 }
 
 module.exports = {createRunnerService};

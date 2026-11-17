@@ -76,8 +76,16 @@ connected and announced itself. The runner runs under the same account as the
 server, never root, in its own process group with every QEMU and `vde_switch`
 it starts; it needs the `kvm` group for `/dev/kvm`.
 
-- **Startup failure:** a missing executable or a runner that does not connect
-  within 10 seconds stops the server with the runner's message on its output.
+- **Engines:** a runner needs VDE, `genisoimage`, Node.js and Python, and at
+  least one engine. QEMU (with its disk tool) and VirtualBox are checked
+  separately: a missing one only disables the hosts of that engine (a line
+  marked `-` in "Checking dependencies…"), because `config.json` is shared by
+  runners that do not all have both. A new session uses the first engine the
+  runner has. QEMU also needs `/dev/kvm`: when it is not accessible the runner
+  warns at startup and QEMU hosts cannot start.
+- **Startup failure:** a missing common tool, no engine at all, or a runner that
+  does not connect within 10 seconds stops the server with the runner's message
+  on its output.
   Another server already using the socket of the same port is refused.
 - **Configuration warnings:** once the runner has announced itself, the server
   prints "Checking configuration…" with one line per warning about `config.json`

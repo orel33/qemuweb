@@ -547,7 +547,8 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
   `runtime/`, a directory the same user owns.
 - QEMU and VDE run unprivileged; only `/dev/kvm` needs the `kvm` group. The
   runner announces what it can do in `hello` instead of failing late:
-  `engines`, `kvm` (true when `/dev/kvm` is readable and writable),
+  `engines` (QEMU needs its emulator and disk tool, VirtualBox `VBoxManage`;
+  a runner may have only one), `kvm` (true when `/dev/kvm` is readable and writable),
   `cpus`, `memoryBytes`, and `images` (per system of its catalog: the RAW
   and VDI images present, with size and SHA-256 when known from
   `<image>.sha256` or the cache, never computed at connection time), and

@@ -4,8 +4,12 @@ const fs = require('fs');
 const path = require('path');
 const {spawnSync} = require('child_process');
 
-const requiredKeys = ['QEMU_SYSTEM_X86_64', 'QEMU_IMG', 'VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
-const optionalKeys = ['VBOXMANAGE'];
+// A runner needs the common tools and at least one engine: a missing engine only disables the
+// hosts of that engine (config.json is shared by runners that do not all have both).
+const requiredKeys = ['VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
+const engineKeys = {qemu: ['QEMU_SYSTEM_X86_64', 'QEMU_IMG'], vbox: ['VBOXMANAGE']};
+const engineNames = {qemu: 'QEMU', vbox: 'VirtualBox'};
+const optionalKeys = [...engineKeys.qemu, ...engineKeys.vbox];
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU',
   QEMU_IMG: 'QEMU disk tools',
@@ -59,7 +63,7 @@ function findCommand(value) {
 function resolveCommands(root) {
   const base = readEnvFile(path.join(root, '.env'));
   const local = readEnvFile(path.join(root, '.env.local'));
-  const missing = requiredKeys.filter(key => !Object.hasOwn(base, key));
+  const missing = [...requiredKeys, ...engineKeys.qemu].filter(key => !Object.hasOwn(base, key));
   if (missing.length) throw new Error(`Missing command defaults in .env: ${missing.join(', ')}`);
   const commands = {};
   const failures = [];
@@ -92,12 +96,19 @@ function resolveCommands(root) {
         console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
       } else {
         commands[key] = null;
-        console.log(`  - ${label}  unavailable (${error.message}); VirtualBox hosts disabled`);
+        const engine = Object.keys(engineKeys).find(name => engineKeys[name].includes(key));
+        console.log(`  - ${label}  unavailable (${error.message}); ${engineNames[engine]} hosts disabled`);
       }
     }
   }
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);
+  if (!availableEngines(commands).length) throw new Error('Startup aborted: no virtualization engine is available; install QEMU (with KVM) or VirtualBox.');
   return commands;
 }
 
-module.exports = {resolveCommands};
+// The engines a set of resolved commands can run: QEMU needs its emulator and disk tool.
+function availableEngines(commands) {
+  return Object.keys(engineKeys).filter(engine => engineKeys[engine].every(key => commands[key]));
+}
+
+module.exports = {resolveCommands, availableEngines};

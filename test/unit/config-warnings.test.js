@@ -49,3 +49,19 @@ test('default memory or processors above the machine are warnings, and the list 
     assert.ok(configWarnings({catalog: many, root: path.join(root, 'none'), ...roomy}).length <= 20);
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
 });
+
+test('QEMU without a usable /dev/kvm, and a runner without any engine, are warnings', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-warnings-'));
+  try {
+    for (const id of systems) {
+      const file = path.join(root, catalog.systems[id].qemu.image);
+      fs.mkdirSync(path.dirname(file), {recursive: true});
+      fs.writeFileSync(file, '');
+    }
+    assert.ok(configWarnings({catalog, root, ...roomy, kvm: false}).some(text => /\/dev\/kvm is missing or not accessible/.test(text)));
+    assert.deepEqual(configWarnings({catalog, root, ...roomy, kvm: true}), []);
+    assert.deepEqual(configWarnings({catalog, root, ...roomy, engines: ['vbox'], kvm: false}).filter(text => /kvm/.test(text)), [],
+      'a VirtualBox-only runner does not need KVM');
+    assert.ok(configWarnings({catalog, root, ...roomy, engines: []}).some(text => /no virtualization engine/.test(text)));
+  } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});

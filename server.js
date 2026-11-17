@@ -122,7 +122,6 @@ server.on('error', error => {
 });
 // Browsers are served once the local runner said hello; a runner that cannot start stops the server.
 localRunner.start().then(hello => {
-  if (!hello.kvm) console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
   // The runner checks config.json against its machine and announces what is worth a warning.
   console.log('Checking configuration…');
   const warnings = Array.isArray(hello.warnings) ? hello.warnings : [];
