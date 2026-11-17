@@ -64,11 +64,11 @@ registry.on('online', (_entry, hello) => {
   console.log(`Runner connected (engines: ${engines || 'none'}).`);
 });
 registry.on('lost', () => console.log(local ? 'Runner disconnected.' : `Runner disconnected. Start one with ${RUNNER_HINT}.`));
-manager.on('created', workspace => {
+manager.on('created', (workspace, {adopted}) => {
   const {session, runner} = workspace;
   workspace.router = createSessionRouter({session, runner, userLog});
-  userLog.record(workspace.owner, 'session-created', {sessionId: session.id});
-  console.log(`Session ${session.id} opened for ${workspace.owner}.`);
+  userLog.record(workspace.owner, adopted ? 'session-adopted' : 'session-created', {sessionId: session.id});
+  console.log(`Session ${session.id} ${adopted ? 'adopted from the runner' : 'opened'} for ${workspace.owner}.`);
 });
 manager.on('removed', (workspace, by, reason) => {
   userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by, ...(reason ? {reason} : {})});
