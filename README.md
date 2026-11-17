@@ -366,10 +366,6 @@ further option on. The runner is an ordinary unprivileged process; every path is
 | `XDG_DATA_HOME` | Base of the default `--runtime` when `node runner/main.js` is run directly. |
 | `VBOXMANAGE`, `GENISOIMAGE`, `NODE`, `PYTHON3`, `QEMU_IMG`, `QEMU_SYSTEM_X86_64`, `VDE_SWITCH`, `VDETERM` | Executable names: `.env.local` (absolute paths for this machine) wins over the environment, which wins over the default of `.env`. The runner checks them at startup and disables an engine whose commands are missing. |
 
-At startup the server prints `Checking dependencies…`: Node.js (version range of `package.json`),
-Express and Socket.IO, the xterm.js files it serves to the browser, and the writable `runtime/`
-directory. A missing one stops the server with its fix (usually `npm ci`).
-
 At startup the runner prints its dependency and configuration checks and the state of its connection
 (`Waiting for the server…`, `Connected to the server.`, `Connection to the server lost, reconnecting…`).
 
