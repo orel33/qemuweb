@@ -149,7 +149,8 @@ function describe(entry, style) {
   const info = where ? nodeInfo(where.sessionsDir, where.sessionId, where.nodeId) : {};
   const kind = base.startsWith('qemu-system') ? 'qemu' : base;
   const label = info.name ? `${style.bold(info.name)}${info.system ? style.dim(` · ${info.system}`) : ''}` : style.dim(where?.nodeId || '');
-  const detail = [kind === 'qemu' && memory ? `${memory[1]} MB guest` : null, megabytes(entry.rssKb)].filter(Boolean).join(' · ');
+  // A QEMU process shows the memory in use over the memory given to its machine (-m).
+  const detail = kind === 'qemu' && memory ? `${megabytes(entry.rssKb)} / ${memory[1]} MB` : megabytes(entry.rssKb);
   const paint = kind === 'qemu' ? style.vm : style.net;
   return {where, text: `${paint(kind.padEnd(10))} ${label}  ${style.dim(`pid ${entry.pid}`)}  ${style.dim(detail)}`};
 }
