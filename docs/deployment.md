@@ -47,7 +47,7 @@ server (an upgrade, a crash) leaves the machines running. See "The two services"
 
 The server does not run the machines itself: a **runner** (`runner/main.js`)
 does. A runner always dials the server, on the Unix socket
-`runtime/runner-<port>.sock` of the project (mode 0600, so only the server's own account can
+`<runtime>/runner-<port>.sock` (mode 0600, so only the server's own account can
 connect). The server never reaches out to a runner, and the web interface only
 *displays* runners (the **Runners** section of `/admin`): it registers none.
 One runner is accepted for now; a second connection is refused. Runners on
@@ -56,8 +56,8 @@ other machines, with tokens and TLS, come with a later milestone.
 There is one way to start it, in every environment:
 
 - **`./scripts/start.sh`** (what `npm start`, `scripts/demo.sh` and the integration tests
-  use) starts `./scripts/server.sh --listen N` and, once the socket exists, `./scripts/runner.sh
-  --port N --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
+  use) starts `./scripts/server.sh --listen N --runtime DIR` and, once the socket exists, `./scripts/runner.sh
+  --port N --runtime DIR --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
   and `[runner]`. Ctrl+C or SIGTERM stops the runner first (it stops every machine), kills what
   is left of its group (QEMU, `vde_switch`), then stops the server, and exits 0. When the runner
   ends for any reason (even SIGKILL), what is left of its group is killed at once and the
@@ -104,13 +104,13 @@ the connection (waiting for the server, connected, refused, lost). Under
   deleted on the runner. Sessions the server no longer knows are never kept.
 - **Files shared with the runner:** the server touches the runner's files only
   when it shares `runtime/` with it, that is when the runner's `runtimeRoot`
-  (announced in `hello`) is the server's own `runtime/` (the default of `--runtime`). Then, when a runner connects, the server prunes the empty
+  (announced in `hello`) is the server's own runtime directory (`runtime/` of the
+  project by default, for both). Then, when a runner connects, the server prunes the empty
   `runtime/sessions/<id>` directories left by earlier servers (sparing the
   sessions that `hello` reports and those of other live servers), creates the
   `runtime/users/<login>` aliases, and removes the session directories of a runner
   that is lost (a runner killed by SIGKILL cannot). A runner started with another
-  `--runtime` is never touched: only a local runner (today, the same `runtimeRoot` in
-  `hello`) is cleaned by the server.
+  `--runtime` is not touched.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
   empty session, recorded as `session-deleted` with the reason `runner lost` in

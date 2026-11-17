@@ -330,19 +330,21 @@ record the owner, so any user can load them.
 `scripts/server.sh` and `scripts/runner.sh` are thin front ends to `node server/main.js` and
 `node runner/main.js`: they refuse to run as root, move to the repository root and `exec` Node.js
 with their arguments, so the process is the Node.js one (`./scripts/status.sh`, `stop.sh` and
-`killall.sh` recognise it). The port is an option. The server creates `runtime/runner-<port>.sock` of the repository, which
-the runner dials with `--port`; the runner's own `--runtime` (default the same `runtime/`) is only where it keeps its sessions.
+`killall.sh` recognise it). The port and the runtime directory are options. The server and the runner share the runtime directory
+(`runtime/` of the repository by default), where the server creates `runner-<port>.sock` and the
+runner looks for it.
 
 ### Server: `./scripts/server.sh`
 
-The server takes the option below and `-h`/`--help` (any other argument is refused with exit
+The server takes the two options below and `-h`/`--help` (any other argument is refused with exit
 status 2); the other settings are environment variables, set in front of the command or in a systemd
 unit. `./scripts/server.sh --help` prints the same lists. The values in effect, with where each
-comes from (`default`, `option`, `environment`, `derived`; its runtime directory is always `runtime/` of the repository), are printed when the server starts.
+comes from (`default`, `option`, `environment`, `derived`), are printed when the server starts.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--listen PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `runtime/runner-<PORT>.sock`, the socket its runner dials. |
+| `--listen PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `<runtime>/runner-<PORT>.sock`, the socket its runner dials. |
+| `--runtime DIR` | `runtime/` of the repository | Runtime directory: sessions, user aliases, pid files and the runner socket. |
 | `-h`, `--help` | | Print the options and variables. |
 
 | Variable | Default | Effect |
@@ -361,9 +363,9 @@ The script runs `node runner/main.js` and passes its options on. The runner is a
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--port N` | `3002` | Port of the server to reach: the runner dials `runtime/runner-N.sock` of the repository, whatever its `--runtime`. |
+| `--port N` | `3002` | Port of the server to reach: the runner dials `<runtime>/runner-N.sock`, where `<runtime>` is its `--runtime`. |
 | `--connect SOCKET` | none | Unix socket of the server, instead of `--port` (the two are exclusive). |
-| `--runtime DIR` | `runtime/` of the repository | Where this runner keeps its sessions (`DIR/sessions/<id>/`). The server shares the default and cleans the empty sessions it leaves there; it never touches the files of a runner with another `--runtime` (only a local runner is cleaned). |
+| `--runtime DIR` | `runtime/` of the repository | Where the runner keeps the sessions (`DIR/sessions/<id>/`) and, with `--port`, looks for the server socket. The server shares it by default and cleans the empty sessions it leaves there. |
 | `--config FILE` | `config.json` of the project | System catalog (images, memory, QEMU options). |
 | `--exit-on-disconnect` | off | Losing the connection to the server stops every machine and ends the runner (what `start.sh` uses). Without it, the runner keeps its sessions and reconnects every 2 seconds. |
 | `-h`, `--help` | | Print the options and variables. |
@@ -387,10 +389,10 @@ At startup the runner prints its dependency and configuration checks and the sta
 | Command | Effect |
 | --- | --- |
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
-| `scripts/start.sh` | Start the server and a runner as two processes (`[--listen N]`, default 3002; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
-| `scripts/server.sh` | Start the server alone (`[--listen N]`, default 3002), the counterpart of `runner.sh`: a front end to `node server/main.js`; other settings are environment variables (see [Server and runner command line](#server-and-runner-command-line)). Ctrl+C stops it. |
+| `scripts/start.sh` | Start the server and a runner as two processes (`[--listen N] [--runtime DIR]`, defaults 3002 and `runtime/`; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
+| `scripts/server.sh` | Start the server alone (`[--listen N] [--runtime DIR]`, defaults 3002 and `runtime/`), the counterpart of `runner.sh`: a front end to `node server/main.js`; other settings are environment variables (see [Server and runner command line](#server-and-runner-command-line)). Ctrl+C stops it. |
 | `scripts/runner.sh [options]` | Start a runner (`--port N` for the server to reach, default 3002; `--runtime DIR`; `--exit-on-disconnect`), for example one started alone with `node server/main.js`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
-| `scripts/stop.sh [--listen N]` | Stop the server started on that port (default 3002); a runner started alone keeps running. |
+| `scripts/stop.sh [--listen N] [--runtime DIR]` | Stop the server started on that port (default 3002); a runner started alone keeps running. |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
 | `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
 | `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads; `logs/` is always kept. |

@@ -11,7 +11,8 @@ const {logDirPath} = require('./audit');
 // Options of the server: [name, default as shown, description]; same documentation rules as the variables.
 function optionRows({root}) {
   return [
-    ['--listen PORT', '3002', 'TCP port of the web interface on 127.0.0.1; also names runtime/runner-<PORT>.sock, the socket its runner dials']
+    ['--listen PORT', '3002', 'TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-<PORT>.sock, the socket its runner dials'],
+    ['--runtime DIR', path.join(root, 'runtime'), 'runtime directory: sessions, user aliases, pid files and the runner socket']
   ];
 }
 
@@ -31,14 +32,15 @@ function settingRows({root, env}) {
 // The lines to print: a title, then one aligned line per option, per variable and per derived path.
 // `given` is the set of options present on the command line.
 function startupReport({root, env = process.env, runtimeDir = path.join(root, 'runtime'), port, given = new Set()}) {
-  const rows = [['--listen', port, given.has('--listen') ? 'option' : 'default']];
+  const source = name => given.has(name) ? 'option' : 'default';
+  const rows = [['--listen', port, source('--listen')], ['--runtime', runtimeDir, source('--runtime')]];
   for (const [name, fallback, , resolve] of settingRows({root, env})) {
     const raw = env[name];
     const set = raw !== undefined && raw !== '';
     rows.push([name, set ? resolve(raw) : fallback, set ? 'environment' : 'default']);
   }
   if (env.QEMUWEB_TEST_SERVER === '1') rows.push(['QEMUWEB_TEST_SERVER', '1', 'environment']);
-  rows.push(['Runtime directory', runtimeDir, 'derived'], ['Runner socket', path.join(runtimeDir, `runner-${port}.sock`), 'derived']);
+  rows.push(['Runner socket', path.join(runtimeDir, `runner-${port}.sock`), 'derived']);
   const nameWidth = Math.max(...rows.map(([name]) => name.length));
   const valueWidth = Math.max(...rows.map(([, value]) => String(value).length));
   return ['Settings', ...rows.map(([name, value, source]) => `  ${name.padEnd(nameWidth)}  ${String(value).padEnd(valueWidth)}  (${source})`)];
@@ -49,10 +51,10 @@ function helpText({root, env = process.env}) {
   const rows = settingRows({root, env});
   const options = optionRows({root});
   const width = Math.max(...rows.map(([name]) => name.length), ...options.map(([name]) => name.length));
-  return `Usage: node server/main.js [--listen PORT]     (or ./scripts/server.sh [--listen PORT])
+  return `Usage: node server/main.js [--listen PORT] [--runtime DIR]     (or ./scripts/server.sh [options])
 
 The QemuWeb server (web interface, accounts, sessions). A runner (./scripts/runner.sh --port PORT)
-dials it on runtime/runner-<PORT>.sock of the repository. Any other argument is refused (exit status 2).
+dials it on <runtime>/runner-<PORT>.sock. Any other argument is refused (exit status 2).
 
 Options (default in brackets):
 ${options.map(([name, fallback, description]) => `  ${name.padEnd(width)}  [${fallback}]\n  ${' '.repeat(width)}  ${description}`).join('\n')}

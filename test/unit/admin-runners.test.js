@@ -20,6 +20,8 @@ test('no runner: an empty list and the command to start one (it is the same for 
   const manager = {registry, list: () => []};
   assert.deepEqual(call(runnersHandler({manager, port: 3002})), {runners: [], connectHint: './scripts/runner.sh'});
   assert.equal(call(runnersHandler({manager, port: 4100})).connectHint, './scripts/runner.sh --port 4100');
+  assert.equal(call(runnersHandler({manager, port: 3002, runtime: '/srv/rt'})).connectHint, './scripts/runner.sh --runtime /srv/rt');
+  assert.equal(call(runnersHandler({manager, port: 4100, runtime: '/srv/rt'})).connectHint, './scripts/runner.sh --port 4100 --runtime /srv/rt');
 });
 
 test('an online runner: capabilities, warnings and the number of its sessions', () => {
