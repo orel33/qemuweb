@@ -7,9 +7,10 @@
 // A program describes itself with a spec (server/options.js, runner/options.js):
 //   {program, node, script, summary, options: [...], environment: null | [{names, description}]}
 // and each option is {flag, metavar (null: a flag without value), kind (text | port | number |
-// path), key, default (the value when absent), fallback (the default as shown by --help and,
-// when the value is null, by the startup block), description, value (what a flag without value
-// sets), max, expected, convert, exclusive: [flags], showWhenGiven}.
+// path | integer), key, default (the value when absent), fallback (the default as shown by --help
+// and, when the value is null, by the startup block), description, value (what a flag without
+// value sets), min, max, expected, convert, exclusive: [flags], showWhenGiven, required (the
+// option must be given), secret (its value is never printed)}.
 //
 // Both programs then print the same things in the same order: the banner, the Options block, the
 // "Checking dependencies…" and "Checking configuration…" blocks (heading, pass, warning,
@@ -41,6 +42,12 @@ const KINDS = {
   },
   port: (option, value) => {
     if (!/^\d{1,5}$/.test(value) || Number(value) < 1 || Number(value) > MAX_PORT) throw invalid(option.flag, value, `1 to ${MAX_PORT}`);
+    return Number(value);
+  },
+  // A whole number from option.min (default 0) to option.max, 0 included.
+  integer: (option, value) => {
+    const min = option.min ?? 0;
+    if (!/^\d{1,9}$/.test(value) || Number(value) < min || Number(value) > option.max) throw invalid(option.flag, value, option.expected || `a whole number from ${min} to ${option.max}`);
     return Number(value);
   },
   number: (option, value) => {
@@ -79,6 +86,7 @@ function parseArguments(spec, argv) {
     settings.given.add(name);
   }
   for (const option of spec.options) {
+    if (option.required && !settings.given.has(option.flag)) throw new UsageError(`Missing required option ${option.flag} (${option.flag} ${option.metavar})`);
     const other = (option.exclusive || []).find(flag => settings.given.has(option.flag) && settings.given.has(flag));
     if (other) throw new UsageError(`${option.flag} and ${other} exclude each other`);
   }
@@ -146,15 +154,17 @@ function formatHelp(spec) {
 function shownValue(option, settings) {
   const value = settings[option.key];
   if (!option.metavar) return value === option.value ? 'on' : 'off';
+  if (option.secret && settings.given.has(option.flag)) return '********';
   return value === null ? option.fallback : String(value);
 }
 
 // The rows [name, value, source] of the Options block: every option, with the value in effect and
-// where it comes from (default or option), then the derived values [[name, value]].
+// where it comes from (default or option, or settings.sources[flag] for a value read from a file),
+// then the derived values [[name, value]].
 function startupRows(spec, settings, derived = []) {
   const rows = spec.options
     .filter(option => !option.showWhenGiven || settings.given.has(option.flag))
-    .map(option => [option.flag, shownValue(option, settings), settings.given.has(option.flag) ? 'option' : 'default']);
+    .map(option => [option.flag, shownValue(option, settings), settings.given.has(option.flag) ? 'option' : settings.sources?.[option.flag] || 'default']);
   return [...rows, ...derived.map(([name, value]) => [name, value, 'derived'])];
 }
 

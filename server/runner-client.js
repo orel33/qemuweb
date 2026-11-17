@@ -9,6 +9,7 @@
 //   events                   EventEmitter of the session's runner events (state, log, ...)
 //   outgoing()               {id, stream}: a Writable sent to the runner (archive upload)
 //   incoming(id)             the Readable of a runner stream (archive download)
+// The handle and its events survive a reconnection of a remote runner (adopt).
 // The client emits 'hello' (the runner's hello message) and 'close' (error or null).
 // Events for a session that has no handle on this client are dropped: a runner only speaks
 // for the sessions bound to it.
@@ -54,7 +55,7 @@ class RunnerClient extends EventEmitter {
 
   // A request outside any session (runner.shutdown) when sessionId is null.
   request(command, args = {}, sessionId = null) {
-    if (this.closed) return Promise.reject(Object.assign(new Error('Runner connection lost.'), {status: 503}));
+    if (this.closed) return Promise.reject(Object.assign(new Error('The runner is offline; reconnecting…'), {status: 503}));
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, {resolve, reject});
@@ -62,20 +63,30 @@ class RunnerClient extends EventEmitter {
     });
   }
 
-  // The handle of one session bound to this runner (created on first use).
+  // The handle of one session bound to this runner (created on first use). A handle is stable:
+  // when a remote runner reconnects, the new client takes the handle over (adopt), so that the
+  // routers and sockets that hold it keep working.
   session(sessionId) {
     let handle = this.sessions.get(sessionId);
     if (handle) return handle;
     handle = {
       sessionId,
+      client: this,
       events: new EventEmitter(),
-      request: (command, args = {}) => this.request(command, args, sessionId),
-      input: (nodeId, data) => this.connection.send({type: 'input', sessionId, nodeId, data}),
-      outgoing: () => this.connection.outgoing(),
-      incoming: id => this.connection.incoming(id)
+      request: (command, args = {}) => handle.client.request(command, args, sessionId),
+      input: (nodeId, data) => handle.client.connection.send({type: 'input', sessionId, nodeId, data}),
+      outgoing: () => handle.client.connection.outgoing(),
+      incoming: id => handle.client.connection.incoming(id)
     };
     this.sessions.set(sessionId, handle);
     return handle;
+  }
+
+  // Takes over the handle of a session from the client of a lost connection of the same runner.
+  adopt(handle) {
+    handle.client.sessions.delete(handle.sessionId);
+    handle.client = this;
+    this.sessions.set(handle.sessionId, handle);
   }
 
   // Forgets a session: its events are dropped from now on.

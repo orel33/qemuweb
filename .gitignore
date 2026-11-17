@@ -14,3 +14,4 @@ preview/
 users.json
 logs/*
 !logs/.gitkeep
+runners.json

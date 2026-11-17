@@ -13,7 +13,8 @@
 //   console:<sessionId>:<consoleId>  browsers that selected that console (serial, serial-reset);
 //                                 a console ID is the node ID, or '<nodeId>:1' for a host's
 //                                 second serial port (common/console-id.js)
-// select-node, input and clear-console take a console ID.
+// select-node, input and clear-console take a console ID. runner-state {online} tells the session's
+// pages that its runner went offline or came back.
 // The handshake must already have set socket.data.user (see server/auth/). An admin observes
 // another user's session with the handshake option auth: {observe: <login>}: the socket then
 // reads that session (snapshots, console output, logs) but its input, clear-console and
@@ -97,6 +98,9 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   const ownerViews = new Map();
   for (const workspace of manager.list()) bindWorkspace(io, workspace);
   manager.on('created', workspace => bindWorkspace(io, workspace));
+  // The runner of a session went offline or came back (a remote runner after a network cut): the
+  // pages say so, and re-select their consoles when it is back (the runner kept the output).
+  manager.on('connectivity', (workspace, online) => io.to(sessionRoom(workspace.session)).emit('runner-state', {online}));
   // Browsers of a deleted session reload, which opens the user's new session.
   manager.on('removed', ({session}) => {
     ownerViews.delete(session.id);

@@ -49,7 +49,7 @@ test('the gateway accepts one runner, trusted, and refuses a second while it liv
   await second.closed;
   assert.equal(registry.get('local'), entry, 'the first runner keeps its place');
   assert.equal(entry.state, 'starting');
-  first.connection.send({type: 'hello', engines: ['qemu'], runtimeRoot: '/tmp/x', sessions: []});
+  first.connection.send({type: 'hello', engines: ['qemu'], sessions: []});
   await once(registry, 'online');
   assert.equal(entry.state, 'online');
   const third = await dial();
@@ -76,7 +76,7 @@ test('the registry keeps only checked fields of a hello', async t => {
   const {registry, dial} = await setup(t);
   const runner = await dial();
   const online = once(registry, 'online');
-  runner.connection.send({type: 'hello', engines: ['qemu', 'bogus', 3], kvm: 'yes', cpus: '4', memoryBytes: 8e9, runtimeRoot: '/data/runtime/../runtime',
+  runner.connection.send({type: 'hello', engines: ['qemu', 'bogus', 3], kvm: 'yes', cpus: '4', memoryBytes: 8e9, runtimeRoot: '/data/runtime/../runtime', limits: {maxSessions: 3},
     images: [], warnings: ['ok', 7, 'x'.repeat(400)], sessions: []});
   await online;
   const entry = registry.get('local');
@@ -87,17 +87,12 @@ test('the registry keeps only checked fields of a hello', async t => {
   assert.deepEqual(entry.capabilities.images, {});
   assert.equal(entry.capabilities.warnings.length, 2);
   assert.equal(entry.capabilities.warnings[1].length, 300);
-  assert.equal(entry.runtimeRoot, '/data/runtime');
-  for (const runtimeRoot of ['relative/path', 5, null, undefined, `/${'x'.repeat(5000)}`]) {
-    const other = new RunnerRegistry();
-    const [client] = [{on: (event, handler) => { if (event === 'hello') other.helloHandler = handler; }}];
-    const added = other.add({id: 'local', client});
-    other.helloHandler({runtimeRoot});
-    assert.equal(added.runtimeRoot, null, `runtimeRoot ${String(runtimeRoot).slice(0, 20)} is refused`);
-  }
+  assert.deepEqual(entry.capabilities.limits, {maxSessions: 3});
+  assert.equal(entry.local, true, 'the Unix-socket gateway sets the local flag');
+  assert.equal(entry.runtimeRoot, undefined, 'the announced runtime directory is not kept');
 });
 
 test('pickRunner says whether a runner is connected', () => {
   const registry = new RunnerRegistry();
-  assert.throws(() => registry.pickRunner('toto'), error => error.status === 503 && /No runner is connected/.test(error.message));
+  assert.throws(() => registry.pickRunner('toto'), error => error.status === 503 && /No runner is available/.test(error.message));
 });

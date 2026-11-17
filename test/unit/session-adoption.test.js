@@ -111,9 +111,9 @@ test('a session bound to the runner that it no longer reports is dropped, an ado
   assert.deepEqual(manager.list().map(workspace => workspace.owner), ['toto']);
 });
 
-test('the user alias is created only when the runner shares the runtime directory', async t => {
+test('the user alias is created only for the local runner', async t => {
   const {runtimeRoot, manager, service, entry} = await setup(t);
-  entry.runtimeRoot = '/somewhere/else/runtime';
+  entry.local = false;
   await service.handle('session.create', ID(7), {owner: 'toto'});
   manager.resync(entry, service.hello());
   assert.ok(manager.get('toto'), 'still adopted');

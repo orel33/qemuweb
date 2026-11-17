@@ -7,13 +7,19 @@
 //   runner   the session's handle on its runner client (server/runner-client.js session())
 // The control plane chooses the session ID and the runner (registry.pickRunner, once, at
 // creation); the runner holds everything else. A session whose runner is lost is dropped
-// like a deleted one.
-// A readable alias runtime/users/<login> -> ../sessions/<id> helps administrators of a runner
-// that shares this server's runtime/ (its hello announces the same runtimeRoot); the server
-// never touches the files of any other runner.
+// like a deleted one, except for a remote runner: its sessions are kept for `graceSeconds`
+// (--runner-grace; 0 drops them at once), during which they answer 503 "offline". When the
+// runner returns (same ID) with a hello that lists a session, the session is bound to the new
+// connection again (the handle is the same object, so routers and sockets keep working); a
+// session the runner no longer lists is dropped, and one dropped after the grace period is
+// deleted on the runner when it returns (it is then unknown to the control plane).
+// A readable alias runtime/users/<login> -> ../sessions/<id> helps administrators of the local
+// runner, which shares this server's runtime/ (entry.local, set only by the Unix-socket
+// gateway); the server never touches the files of any other runner, whatever its hello says.
 // A trusted runner (the local one) that reconnects after a server restart keeps its sessions:
 // the server adopts them, each for its owner (see resync).
-// Events: 'created' (workspace, {adopted}) once a workspace exists, `adopted` when it was
+// Events: 'connectivity' (workspace, online) when the runner of a kept session goes offline or returns,
+// 'created' (workspace, {adopted}) once a workspace exists, `adopted` when it was
 // taken over from a runner's hello instead of opened by the user, 'removed' (workspace, by, reason) after
 // deletion, `by` being the login that asked for it (the owner or an administrator), or null
 // with a reason ('runner lost', 'creation failed') when the session was dropped.
@@ -48,15 +54,44 @@ function reportedSessions(hello) {
 class SessionManager extends EventEmitter {
   // registry: server/runner-registry.js. Sessions bound to a lost runner are dropped, and on a
   // runner's hello the sessions are resynchronised (see resync).
-  constructor({runtimeRoot, registry}) {
+  constructor({runtimeRoot, registry, graceSeconds = 0}) {
     super();
     this.runtimeRoot = runtimeRoot;
     this.usersDir = path.join(runtimeRoot, 'users');
     this.registry = registry;
     this.workspaces = new Map();
     this.deleting = new Set();
-    registry.on('lost', entry => this.dropRunnerSessions(entry.id, 'runner lost'));
-    registry.on('online', (entry, hello) => this.resync(entry, hello));
+    this.graceMs = graceSeconds * 1000;
+    this.graceTimers = new Map();
+    registry.on('lost', entry => this.runnerLost(entry));
+    registry.on('online', (entry, hello) => {
+      clearTimeout(this.graceTimers.get(entry.id));
+      this.graceTimers.delete(entry.id);
+      this.resync(entry, hello);
+    });
+  }
+
+  sessionsOf(runnerId) { return this.list().filter(workspace => workspace.session.runnerId === runnerId).length; }
+
+  // Whether the session's runner is connected and ready (else its routes answer 503).
+  available(workspace) {
+    const entry = this.registry.get(workspace.session.runnerId);
+    return entry?.state === 'online' && entry.client === workspace.runner.client;
+  }
+
+  // A lost runner: the local one, or any when there is no grace period, drops its sessions at once.
+  runnerLost(entry) {
+    if (entry.local || !this.graceMs) return this.dropRunnerSessions(entry.id, 'runner lost');
+    const kept = this.list().filter(workspace => workspace.session.runnerId === entry.id);
+    if (!kept.length) return;
+    console.log(`Runner ${entry.id} is offline; its ${kept.length} session${kept.length === 1 ? '' : 's'} kept for ${this.graceMs / 1000} s.`);
+    for (const workspace of kept) this.emit('connectivity', workspace, false);
+    const timer = setTimeout(() => {
+      this.graceTimers.delete(entry.id);
+      this.dropRunnerSessions(entry.id, 'runner offline too long');
+    }, this.graceMs);
+    timer.unref();
+    this.graceTimers.set(entry.id, timer);
   }
 
   get(login) { return this.workspaces.get(login) || null; }
@@ -73,7 +108,7 @@ class SessionManager extends EventEmitter {
     const existing = this.workspaces.get(login);
     if (existing) return existing;
     if (this.deleting.has(login)) throw new Error('This session is being deleted; try again in a moment.');
-    const entry = this.registry.pickRunner(login);
+    const entry = this.registry.pickRunner(login, id => this.sessionsOf(id));
     const ids = new Set(this.sessionIds());
     let session;
     do session = new Session({runtimeRoot: this.runtimeRoot, runnerId: entry.id, owner: login});
@@ -133,9 +168,9 @@ class SessionManager extends EventEmitter {
   }
 
   dropRunnerSessions(runnerId, reason) {
-    // A lost runner that shared this runtime/ cannot remove its sessions' directories any more
-    // (a runner killed by SIGKILL): they are removed here, with the sessions.
-    const shared = this.registry.get(runnerId)?.runtimeRoot === path.resolve(this.runtimeRoot);
+    // The lost local runner shares this runtime/ and cannot remove its sessions' directories any more
+    // (a runner killed by SIGKILL): they are removed here, with the sessions. Only for the local runner.
+    const shared = this.registry.get(runnerId)?.local === true;
     for (const workspace of this.list()) {
       if (workspace.session.runnerId !== runnerId) continue;
       this.drop(workspace, reason);
@@ -143,7 +178,8 @@ class SessionManager extends EventEmitter {
     }
   }
 
-  // On a runner's hello: a session bound to it that it does not report is gone. A reported
+  // On a runner's hello: a session bound to it that it does not report is gone; one it reports
+  // is bound to the new connection (a remote runner that came back). A reported
   // session the control plane does not know is ADOPTED when all of these hold, else deleted:
   //   - the runner is trusted (entry.trusted: the local runner only; a hello is untrusted input
   //     and a later, remote runner never chooses the owner of a session);
@@ -152,7 +188,12 @@ class SessionManager extends EventEmitter {
   resync(entry, hello) {
     const reported = reportedSessions(hello);
     for (const workspace of this.list()) {
-      if (workspace.session.runnerId === entry.id && !reported.has(workspace.session.id)) this.drop(workspace, 'runner lost');
+      if (workspace.session.runnerId !== entry.id) continue;
+      if (!reported.has(workspace.session.id)) this.drop(workspace, 'runner lost');
+      else if (workspace.runner.client !== entry.client) {
+        entry.client.adopt(workspace.runner);
+        this.emit('connectivity', workspace, true);
+      }
     }
     for (const item of reported.values()) {
       if (this.sessionIds().includes(item.sessionId)) continue;
@@ -166,9 +207,9 @@ class SessionManager extends EventEmitter {
 
   userAliasPath(login) { return path.join(this.usersDir, userAliasName(login)); }
 
-  // Only for a runner that shares this runtime/ (same runtimeRoot in its hello).
+  // Only for the local runner, which shares this runtime/.
   linkUserAlias({owner, session}, entry) {
-    if (entry.runtimeRoot !== path.resolve(this.runtimeRoot)) return;
+    if (!entry.local) return;
     const alias = this.userAliasPath(owner);
     const target = path.relative(this.usersDir, session.runtimeDir);
     try {

@@ -1,7 +1,7 @@
 'use strict';
 
 // The checks of "Checking configuration…", run by server/main.js before the web stack is loaded:
-// config.json, the users file, the log directory and the runtime directory, each printed with the
+// config.json, the users file, the runners file, the log directory and the runtime directory, each printed with the
 // same marks as the runner's checks (✓ ⚠ ✗). Light modules only. Returns false when a check
 // failed (the cause is printed with ✗).
 const fs = require('fs');
@@ -10,6 +10,7 @@ const cli = require('../common/cli');
 const {readCatalog} = require('../common/system-config');
 const {createLogDir} = require('./audit');
 const {createUsersStore} = require('./auth/users-store');
+const {readRunners} = require('./runner-store');
 
 const octal = mode => (mode & 0o777).toString(8).padStart(4, '0');
 
@@ -50,6 +51,15 @@ function checkUsers(settings) {
   else cli.warning(`No user account in ${settings.usersFile}: nobody can log in. Add one with ./scripts/user.sh add <login>.`);
 }
 
+function checkRunners(settings) {
+  if (!fs.existsSync(settings.runnersFile)) {
+    cli.warning(`${path.basename(settings.runnersFile)} absent: no remote runner is registered (create a registration token in /admin/runners).`);
+    return;
+  }
+  const count = readRunners(settings.runnersFile).length;
+  cli.pass(`${path.basename(settings.runnersFile)}  ${count} registered ${count === 1 ? 'runner' : 'runners'}`);
+}
+
 function checkLogDir(settings) {
   const existed = fs.existsSync(settings.logDir);
   createLogDir(settings.logDir);
@@ -66,7 +76,7 @@ function checkStartup({root, settings}) {
   cli.heading('Checking configuration…');
   let ok = true;
   for (const [label, check] of [['config.json', () => checkCatalog(root)], [path.basename(settings.usersFile), () => checkUsers(settings)],
-    ['logs directory', () => checkLogDir(settings)], ['runtime directory', () => checkRuntime(settings)]]) {
+    [path.basename(settings.runnersFile), () => checkRunners(settings)], ['logs directory', () => checkLogDir(settings)], ['runtime directory', () => checkRuntime(settings)]]) {
     try { check(); }
     catch (error) {
       ok = false;
