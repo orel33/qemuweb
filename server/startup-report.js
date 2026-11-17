@@ -12,7 +12,7 @@ const {logDirPath} = require('./audit');
 function optionRows({root}) {
   return [
     ['--listen PORT', '3002', 'TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-<PORT>.sock, the socket its runner dials'],
-    ['--runtime DIR', path.join(root, 'runtime'), 'runtime directory: sessions, user aliases, pid files and the runner socket']
+    ['--runtime DIR', path.join(root, 'runtime'), 'runtime directory: sessions of a local runner, users/ aliases, server-<PORT>.pid and .session, and the socket DIR/runner-<PORT>.sock']
   ];
 }
 

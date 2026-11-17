@@ -103,14 +103,14 @@ the connection (waiting for the server, connected, refused, lost). Under
   adopted. A session whose owner is invalid, or already has a session, is
   deleted on the runner. Sessions the server no longer knows are never kept.
 - **Files shared with the runner:** the server touches the runner's files only
-  when it shares `runtime/` with it, that is when the runner's `runtimeRoot`
-  (announced in `hello`) is the server's own runtime directory (`runtime/` of the
-  project by default, for both). Then, when a runner connects, the server prunes the empty
-  `runtime/sessions/<id>` directories left by earlier servers (sparing the
+  when it shares its runtime directory with it, that is when the runner's `runtimeRoot`
+  (announced in `hello`) is the server's own `--runtime` (`runtime/` of the project by
+  default, for both; there is no environment variable for it). Then, when a runner connects, the
+  server prunes the empty `sessions/<id>` directories left by earlier servers (sparing the
   sessions that `hello` reports and those of other live servers), creates the
-  `runtime/users/<login>` aliases, and removes the session directories of a runner
-  that is lost (a runner killed by SIGKILL cannot). A runner started with another
-  `--runtime` is not touched.
+  `users/<login>` aliases, and removes the session directories of a runner
+  that is lost (a runner killed by SIGKILL cannot). A runner whose `hello` announces another
+  runtime directory is never touched.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
   empty session, recorded as `session-deleted` with the reason `runner lost` in
@@ -148,7 +148,7 @@ After=network.target
 User=qemuweb
 WorkingDirectory=/srv/qemuweb
 Environment=QEMUWEB_TRUST_PROXY=loopback
-ExecStart=/usr/bin/node server/main.js --listen 3002
+ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb
 KillSignal=SIGTERM
 TimeoutStopSec=30
 Restart=on-failure
@@ -159,12 +159,15 @@ WantedBy=multi-user.target
 # ~qemuweb/.config/systemd/user/qemuweb-runner.service (systemd --user, loginctl enable-linger qemuweb)
 [Service]
 WorkingDirectory=/srv/qemuweb
-ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002
+ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --runtime /var/lib/qemuweb
 KillMode=mixed
 Restart=on-failure
 ```
 
-Both must share `/srv/qemuweb/runtime` (the runner socket is in it). Restarts
+Both are given the same `--runtime` (here `/var/lib/qemuweb`, state kept apart from the code;
+the default is `/srv/qemuweb/runtime`): the runner socket `runner-<port>.sock` is in it, and it
+is what lets the server manage the runner's sessions. The directory must exist and belong to the
+`qemuweb` account. Restarts
 are systemd's job (`Restart=`): QemuWeb never restarts a process itself.
 `KillMode=mixed` sends SIGTERM to the runner only, which stops its machines in
 order; SIGKILL goes to every remaining process of the unit (QEMU, `vde_switch`)

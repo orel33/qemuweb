@@ -33,10 +33,11 @@ The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessio
 server, keeps its sessions if the connection drops, and reconnects. Run it as your normal user.
 
 Options (default in brackets):
-  --port N               reach the server of port N on RUNTIME/runner-N.sock          [3002]
+  --port N               reach the server of port N on DIR/runner-N.sock, DIR = --runtime   [3002]
   --connect SOCKET       Unix socket of the server, instead of --port (not with --port)
   --runtime DIR          where the runner keeps the sessions (DIR/sessions/<id>/) and looks for
-                         the server socket; the server shares it     [runtime/ of the project]
+                         the server socket DIR/runner-N.sock. The server cleans it only if it
+                         has the same --runtime                      [runtime/ of the project]
   --config FILE          system catalog (images, memory, QEMU options)   [config.json of the project]
   --exit-on-disconnect   stop every machine and exit when the server connection is lost
                          [keep the sessions and reconnect every 2 seconds]

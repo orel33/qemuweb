@@ -330,9 +330,11 @@ record the owner, so any user can load them.
 `scripts/server.sh` and `scripts/runner.sh` are thin front ends to `node server/main.js` and
 `node runner/main.js`: they refuse to run as root, move to the repository root and `exec` Node.js
 with their arguments, so the process is the Node.js one (`./scripts/status.sh`, `stop.sh` and
-`killall.sh` recognise it). The port and the runtime directory are options. The server and the runner share the runtime directory
-(`runtime/` of the repository by default), where the server creates `runner-<port>.sock` and the
-runner looks for it.
+`killall.sh` recognise it). The port and the runtime directory are options (there is no environment variable for them). The server and the runner started
+with the same `--runtime` (`runtime/` of the repository by default) share that directory: the server creates
+`runner-<port>.sock` in it and the runner looks for it there. The server cleans the empty sessions and
+aliases only of a runner whose `hello` announces the same runtime directory; a runner with another
+`--runtime` is never touched.
 
 ### Server: `./scripts/server.sh`
 
@@ -344,7 +346,7 @@ comes from (`default`, `option`, `environment`, `derived`), are printed when the
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--listen PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `<runtime>/runner-<PORT>.sock`, the socket its runner dials. |
-| `--runtime DIR` | `runtime/` of the repository | Runtime directory: sessions, user aliases, pid files and the runner socket. |
+| `--runtime DIR` | `runtime/` of the repository | Runtime directory: sessions of a local runner, `users/` aliases, `server-<port>.pid` and `.session`, and the socket `DIR/runner-<port>.sock`. |
 | `-h`, `--help` | | Print the options and variables. |
 
 | Variable | Default | Effect |
@@ -365,7 +367,7 @@ The script runs `node runner/main.js` and passes its options on. The runner is a
 | --- | --- | --- |
 | `--port N` | `3002` | Port of the server to reach: the runner dials `<runtime>/runner-N.sock`, where `<runtime>` is its `--runtime`. |
 | `--connect SOCKET` | none | Unix socket of the server, instead of `--port` (the two are exclusive). |
-| `--runtime DIR` | `runtime/` of the repository | Where the runner keeps the sessions (`DIR/sessions/<id>/`) and, with `--port`, looks for the server socket. The server shares it by default and cleans the empty sessions it leaves there. |
+| `--runtime DIR` | `runtime/` of the repository | Where the runner keeps the sessions (`DIR/sessions/<id>/`) and, with `--port`, looks for the server socket. The server cleans the empty sessions it leaves there only when this is the same directory as its own `--runtime`. |
 | `--config FILE` | `config.json` of the project | System catalog (images, memory, QEMU options). |
 | `--exit-on-disconnect` | off | Losing the connection to the server stops every machine and ends the runner (what `start.sh` uses). Without it, the runner keeps its sessions and reconnects every 2 seconds. |
 | `-h`, `--help` | | Print the options and variables. |
@@ -394,8 +396,8 @@ At startup the runner prints its dependency and configuration checks and the sta
 | `scripts/runner.sh [options]` | Start a runner (`--port N` for the server to reach, default 3002; `--runtime DIR`; `--exit-on-disconnect`), for example one started alone with `node server/main.js`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
 | `scripts/stop.sh [--listen N] [--runtime DIR]` | Stop the server started on that port (default 3002); a runner started alone keeps running. |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
-| `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
-| `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads; `logs/` is always kept. |
+| `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show (default `runtime/` only) the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
+| `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove the default `runtime/` files and optionally images or downloads; `logs/` is always kept. |
 | `scripts/demo.sh [--listen N]` | Start the application on port N (default 3003) with a temporary users file (`admin`, `toto`, `tutu`, passwords equal to logins) and `demo/lan.zip` loaded and started for `toto` and `tutu`. Ctrl+C stops it. See [test/TESTS.md](test/TESTS.md#manual-tests-of-the-web-interface). |
 
 ## Development
