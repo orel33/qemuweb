@@ -14,8 +14,9 @@
 // session the runner no longer lists is dropped, and one dropped after the grace period is
 // deleted on the runner when it returns (it is then unknown to the control plane).
 // A readable alias runtime/users/<login> -> ../sessions/<id> helps administrators of the local
-// runner, which shares this server's runtime/ (entry.local, set only by the Unix-socket
-// gateway); the server never touches the files of any other runner, whatever its hello says.
+// runner when it shares this server's runtime/ (entry.local, set only by the Unix-socket gateway,
+// and the same runtimeRoot in its hello); the server never touches the files of any other runner,
+// whatever its hello says.
 // A trusted runner (the local one) that reconnects after a server restart keeps its sessions:
 // the server adopts them, each for its owner (see resync).
 // Events: 'connectivity' (workspace, online) when the runner of a kept session goes offline or returns,
@@ -72,6 +73,10 @@ class SessionManager extends EventEmitter {
   }
 
   sessionsOf(runnerId) { return this.list().filter(workspace => workspace.session.runnerId === runnerId).length; }
+
+  // Whether the server may touch this runner's files: the local runner (never a remote one,
+  // whatever its hello announces) whose runtime directory is this server's.
+  sharesRuntime(entry) { return entry?.local === true && entry.runtimeRoot === path.resolve(this.runtimeRoot); }
 
   // Whether the session's runner is connected and ready (else its routes answer 503).
   available(workspace) {
@@ -170,7 +175,7 @@ class SessionManager extends EventEmitter {
   dropRunnerSessions(runnerId, reason) {
     // The lost local runner shares this runtime/ and cannot remove its sessions' directories any more
     // (a runner killed by SIGKILL): they are removed here, with the sessions. Only for the local runner.
-    const shared = this.registry.get(runnerId)?.local === true;
+    const shared = this.sharesRuntime(this.registry.get(runnerId));
     for (const workspace of this.list()) {
       if (workspace.session.runnerId !== runnerId) continue;
       this.drop(workspace, reason);
@@ -207,9 +212,9 @@ class SessionManager extends EventEmitter {
 
   userAliasPath(login) { return path.join(this.usersDir, userAliasName(login)); }
 
-  // Only for the local runner, which shares this runtime/.
+  // Only for the local runner when it shares this runtime/.
   linkUserAlias({owner, session}, entry) {
-    if (!entry.local) return;
+    if (!this.sharesRuntime(entry)) return;
     const alias = this.userAliasPath(owner);
     const target = path.relative(this.usersDir, session.runtimeDir);
     try {

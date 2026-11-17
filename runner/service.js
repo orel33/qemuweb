@@ -5,7 +5,7 @@
 //   handle(command, sessionId, args, io)  runs one command; io gives the archive streams
 //                                         (incoming, outgoing, afterResponse)
 //   input(sessionId, nodeId, data)        console input
-//   hello()                               capabilities, limits and the sessions (ID, owner,
+//   hello()                               capabilities, runtimeRoot, limits and the sessions (ID, owner,
 //                                         creation date, nodes)
 //   capabilities()                        engines, kvm, cpus, memory, images and config warnings
 //   setConsoleFlow(paused)                pauses console sources while the connection is congested
@@ -149,7 +149,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     const announced = capabilities();
     if (limits?.cpus) announced.cpus = Math.min(announced.cpus, limits.cpus);
     if (limits?.memoryBytes) announced.memoryBytes = Math.min(announced.memoryBytes, limits.memoryBytes);
-    return {type: 'hello', protocol: PROTOCOL_VERSION, pid: process.pid, ...announced, ...(limits?.maxSessions ? {limits: {maxSessions: limits.maxSessions}} : {}),
+    return {type: 'hello', protocol: PROTOCOL_VERSION, pid: process.pid, runtimeRoot, ...announced, ...(limits?.maxSessions ? {limits: {maxSessions: limits.maxSessions}} : {}),
       sessions: [...sessions.values()].map(({session, runner}) => ({sessionId: session.id, engine: session.engine,
         owner: session.owner, createdAt: session.createdAt, nodes: runner.listNodes()}))};
   }

@@ -89,7 +89,16 @@ test('the registry keeps only checked fields of a hello', async t => {
   assert.equal(entry.capabilities.warnings[1].length, 300);
   assert.deepEqual(entry.capabilities.limits, {maxSessions: 3});
   assert.equal(entry.local, true, 'the Unix-socket gateway sets the local flag');
-  assert.equal(entry.runtimeRoot, undefined, 'the announced runtime directory is not kept');
+  assert.equal(entry.runtimeRoot, '/data/runtime');
+});
+
+test('a remote entry never keeps the runtime directory it announces', () => {
+  const registry = new RunnerRegistry();
+  const handlers = {};
+  registry.add({id: 'r-00000001', client: {on: (event, handler) => { handlers[event] = handler; }}});
+  handlers.hello({runtimeRoot: '/data/runtime', engines: ['qemu']});
+  assert.equal(registry.get('r-00000001').runtimeRoot, null);
+  assert.equal(registry.get('r-00000001').local, false);
 });
 
 test('pickRunner says whether a runner is connected', () => {

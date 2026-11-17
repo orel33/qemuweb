@@ -13,6 +13,7 @@ Available tests:
   session-reconnect              Log out and back in: running nodes, consoles and logs restored
   check-runner                   start.sh sequence: server and runner, session through it, runner SIGKILL, clean stop (VDE only)
   check-runner-manual            Manual mode: server alone and a runner started by hand, survives a SIGKILL of the server, session adopted (VDE only)
+  check-runner-remote            Remote runner: register with a one-time token, run over WebSocket, session placed, network cut and restored, pause, revoke (VDE only)
   admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
   check-load                     Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)
   check-load-start               Load demo/lan.zip with automatic start like the Load session button: switch and 4 hosts running
@@ -47,6 +48,7 @@ case "${1:-}" in
   session-reconnect) run_test 'Reconnection: running nodes, consoles and logs restored' npm run test:session-reconnect ;;
   check-runner) run_test 'start.sh sequence: session, runner SIGKILL and clean stop' npm run test:check-runner ;;
   check-runner-manual) run_test 'Manual runner: server alone, runner survives a server SIGKILL, session adopted' npm run test:check-runner-manual ;;
+  check-runner-remote) run_test 'Remote runner: registration, placement, network cut and restore, pause, revoke' npm run test:check-runner-remote ;;
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
   check-load) run_test 'Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)' npm run test:check-load ;;
   check-load-start) run_test 'Load demo/lan.zip with automatic start like the Load session button: switch and 4 hosts running' npm run test:check-load-start ;;

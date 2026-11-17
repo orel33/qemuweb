@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const cli = require('../../common/cli');
 const {serverSpec, parseServerArguments} = require('../../server/options');
-const {runnerSpec, parseRunnerArguments, serverSocket} = require('../../runner/options');
+const {runnerSpec, runSpec, registerSpec, parseRunnerArguments, serverSocket} = require('../../runner/options');
 
 const root = path.join(path.sep, 'srv', 'qemuweb');
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -20,7 +20,7 @@ test('server: the defaults are listed, each marked as default, with the derived 
   assert.match(text, /^Options/);
   assert.doesNotMatch(text, /Settings/);
   for (const [name, value] of [['--listen', '3002'], ['--runtime', path.join(root, 'runtime')], ['--users', path.join(root, 'users.json')],
-    ['--logs', path.join(root, 'logs')], ['--session-hours', '12'], ['--trust-proxy', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
+    ['--runners', path.join(root, 'runners.json')], ['--logs', path.join(root, 'logs')], ['--session-hours', '12'], ['--runner-grace', '300'], ['--trust-proxy', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
   assert.match(text, /Runner socket +\/srv\/qemuweb\/runtime\/runner-3002\.sock +\(derived\)/);
@@ -32,11 +32,11 @@ test('server: given options are shown with their source; the environment is igno
   try {
     assert.equal(parseServerArguments([], {root}).port, 3002);
     assert.equal(parseServerArguments([], {root}).authMode, 'password');
-    const settings = parseServerArguments(['--listen', '3003', '--runtime', '/var/lib/qemuweb', '--users', '/etc/qemuweb/users.json', '--logs', '/var/log/qemuweb',
-      '--session-hours', '8', '--trust-proxy', 'loopback', '--no-auth', '--ephemeral'], {root});
+    const settings = parseServerArguments(['--listen', '3003', '--runtime', '/var/lib/qemuweb', '--users', '/etc/qemuweb/users.json', '--runners', '/etc/qemuweb/runners.json', '--logs', '/var/log/qemuweb',
+      '--session-hours', '8', '--runner-grace', '60', '--trust-proxy', 'loopback', '--no-auth', '--ephemeral'], {root});
     const text = blockOf(serverSpec(root), settings, [['Runner socket', '/var/lib/qemuweb/runner-3003.sock']]);
-    for (const [name, value] of [['--listen', '3003'], ['--runtime', '/var/lib/qemuweb'], ['--users', '/etc/qemuweb/users.json'], ['--logs', '/var/log/qemuweb'],
-      ['--session-hours', '8'], ['--trust-proxy', 'loopback'], ['--no-auth', 'on'], ['--ephemeral', 'on']]) {
+    for (const [name, value] of [['--listen', '3003'], ['--runtime', '/var/lib/qemuweb'], ['--users', '/etc/qemuweb/users.json'], ['--runners', '/etc/qemuweb/runners.json'], ['--logs', '/var/log/qemuweb'],
+      ['--session-hours', '8'], ['--runner-grace', '60'], ['--trust-proxy', 'loopback'], ['--no-auth', 'on'], ['--ephemeral', 'on']]) {
       assert.match(text, new RegExp(`${name} +${escape(value)} +\\(option\\)`), `${name} option`);
     }
     assert.match(text, /\/var\/lib\/qemuweb\/runner-3003\.sock/);
@@ -50,10 +50,12 @@ test('server: given options are shown with their source; the environment is igno
 test('server command line: every option, anything else or an invalid value refused', () => {
   const defaults = parseServerArguments([], {root});
   assert.deepEqual([defaults.port, defaults.sessionHours, defaults.trustProxy, defaults.ephemeral, defaults.given.size], [3002, 12, null, false, 0]);
+  assert.equal(parseServerArguments(['--runner-grace', '0'], {root}).runnerGrace, 0, '0 drops the sessions of a lost runner at once');
+  assert.equal(parseServerArguments(['--runner-grace', '86400'], {root}).runnerGrace, 86400);
   const given = parseServerArguments(['--listen', '3005', '--runtime', '/var/rt'], {root});
   assert.deepEqual([given.port, given.runtime, [...given.given]], [3005, '/var/rt', ['--listen', '--runtime']]);
   for (const bad of [['--listen'], ['--listen', 'abc'], ['--listen', '0'], ['--listen', '65536'], ['--port', '3002'], ['3002'], ['--runtime'],
-    ['--session-hours', '0'], ['--session-hours', '2161'], ['--trust-proxy', ''], ['--no-auth', 'x']]) {
+    ['--session-hours', '0'], ['--session-hours', '2161'], ['--runner-grace'], ['--runner-grace', '-1'], ['--runner-grace', '86401'], ['--runner-grace', 'x'], ['--runner-grace', '1.5'], ['--runners'], ['--trust-proxy', ''], ['--no-auth', 'x']]) {
     assert.throws(() => parseServerArguments(bad, {root}), cli.UsageError, bad.join(' '));
   }
 });
@@ -80,8 +82,30 @@ test('runner: defaults, the Options block, the socket to dial and the command li
   assert.equal(cli.parseArguments(spec, ['--bogus', '--help']).help, true);
 });
 
+test('runner run and register: their own tables, required options, a masked token, no local-socket options', () => {
+  const parse = (spec, argv) => cli.parseArguments(spec, argv).settings;
+  const run = runSpec(root);
+  const defaults = parse(run, []);
+  assert.deepEqual([defaults.url, defaults.ca, defaults.insecure, defaults.runtime], [null, null, false, path.join(root, 'runtime')]);
+  assert.match(defaults.runnerConfig, /qemuweb-runner[\\/]runner\.json$/);
+  const given = parse(run, ['--url', 'https://q.example.org', '--ca', '/ca.pem', '--insecure', '--runner-config', '/r.json']);
+  assert.deepEqual([given.url, given.ca, given.insecure, given.runnerConfig], ['https://q.example.org', '/ca.pem', true, '/r.json']);
+  for (const bad of [['--port', '3002'], ['--connect', '/s'], ['--exit-on-disconnect'], ['--url'], ['--token', 'x']]) assert.throws(() => parse(run, bad), cli.UsageError, bad.join(' '));
+  const register = registerSpec(root);
+  assert.throws(() => parse(register, ['--url', 'https://q']), /Missing required option --token/);
+  assert.throws(() => parse(register, ['--token', 'abc']), /Missing required option --url/);
+  const registered = parse(register, ['--url', 'https://q', '--token', 'abc', '--name', 'salle']);
+  assert.deepEqual([registered.token, registered.name], ['abc', 'salle']);
+  const text = blockOf(register, registered, []);
+  assert.doesNotMatch(text, /abc/, 'the registration token is never printed');
+  assert.match(text, /--token +\*+ +\(option\)/);
+  assert.equal(cli.parseArguments(register, ['--help']).help, true, '--help needs no required option');
+  // The local runner refuses the remote options.
+  for (const bad of [['--url', 'https://q'], ['--token', 'x'], ['--ca', '/c'], ['--insecure']]) assert.throws(() => parseRunnerArguments(bad, {root}), cli.UsageError, bad.join(' '));
+});
+
 test('both programs share the help layout, usage forms and errors', () => {
-  const helps = [serverSpec(root), runnerSpec(root)].map(spec => ({spec, text: cli.formatHelp(spec)}));
+  const helps = [serverSpec(root), runnerSpec(root), runSpec(root), registerSpec(root)].map(spec => ({spec, text: cli.formatHelp(spec)}));
   for (const {spec, text} of helps) {
     assert.ok(text.startsWith(`Usage: ${spec.node} [options]\n       ${spec.script} [options]\n`), `${spec.program} usage`);
     assert.match(text, /\nOptions \(default in brackets\):\n/);
@@ -102,7 +126,7 @@ test('both programs share the help layout, usage forms and errors', () => {
 });
 
 test('README: the tables of both programs match --help on options, defaults and descriptions, word for word', () => {
-  for (const spec of [serverSpec(root), runnerSpec(root)]) {
+  for (const spec of [serverSpec(root), runnerSpec(root), runSpec(root), registerSpec(root)]) {
     for (const option of spec.options) {
       const name = option.metavar ? `${option.flag} ${option.metavar}` : option.flag;
       assert.ok(readme.includes(`| ${name} | ${option.fallback} | ${option.description} |`), `README ${spec.program} row of ${name}`);

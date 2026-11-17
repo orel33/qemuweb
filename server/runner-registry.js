@@ -1,14 +1,16 @@
 'use strict';
 
 // Every runner the control plane knows, each with its own client (server/runner-client.js).
-// An entry: {id, name, state, capabilities, ownerLogin, local, trusted, paused, registeredAt,
+// An entry: {id, name, state, capabilities, runtimeRoot, ownerLogin, local, trusted, paused, registeredAt,
 //            address, connectedAt, lostAt, client}
 //   state         'starting' until its hello, 'online', then 'lost' once its connection closed
 //   capabilities  from hello: engines, kvm, cpus, memoryBytes, images, warnings, limits ({maxSessions})
 //   local         true only for the runner that dialled the server's own Unix socket
 //                 (server/runner-gateway.js). It is the one fact that lets the server touch a
 //                 runner's files (session directories, aliases): never the paths a hello announces,
-//                 which any remote runner could forge.
+//                 which any remote runner could forge. For the local runner only, the server also
+//                 compares the runtimeRoot of its hello with its own runtime/ (a local runner may
+//                 use another one, --connect); a remote entry never keeps runtimeRoot (always null).
 //   trusted       true only for the local runner: its hello may be adopted (server/session-manager.js).
 //                 A hello is untrusted input: a remote runner is never trusted.
 //   paused        drained by an administrator: no new session is placed on it, the running ones continue
@@ -19,9 +21,11 @@
 // The local runner has the entry "local"; a remote runner has its registered ID (server/runner-store.js)
 // and, once lost, its entry stays (state 'lost') until it reconnects: add() then replaces it.
 // pickRunner() is the single place where a runner is chosen for a new session.
+const path = require('path');
 const {EventEmitter} = require('events');
 
 const MAX_LIMIT = 1e6;
+const MAX_PATH = 4096;
 
 class RunnerRegistry extends EventEmitter {
   constructor() {
@@ -33,12 +37,13 @@ class RunnerRegistry extends EventEmitter {
   add({id, client, name = id, local = false, trusted = false, paused = false, registeredAt = 0, address = null, ownerLogin = null}) {
     const previous = this.runners.get(id);
     if (previous && previous.state !== 'lost') throw new Error(`Runner ${id} is already registered.`);
-    const entry = {id, name, state: 'starting', capabilities: null, ownerLogin, local, trusted, paused, registeredAt, address,
+    const entry = {id, name, state: 'starting', capabilities: null, runtimeRoot: null, ownerLogin, local, trusted, paused, registeredAt, address,
       connectedAt: Date.now(), lostAt: null, client};
     this.runners.set(id, entry);
     client.on('hello', hello => {
       if (entry.state === 'lost') return;
-      const {engines, kvm, cpus, memoryBytes, images, warnings, limits} = hello;
+      const {engines, kvm, cpus, memoryBytes, images, warnings, limits, runtimeRoot} = hello;
+      if (local) entry.runtimeRoot = typeof runtimeRoot === 'string' && runtimeRoot.length <= MAX_PATH && path.isAbsolute(runtimeRoot) ? path.resolve(runtimeRoot) : null;
       const maxSessions = limits?.maxSessions;
       entry.capabilities = {engines: Array.isArray(engines) ? engines.filter(engine => ['qemu', 'vbox'].includes(engine)) : [],
         kvm: kvm === true, cpus: Number.isSafeInteger(cpus) ? cpus : null,

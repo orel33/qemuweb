@@ -51,8 +51,8 @@ function serve({root, settings}) {
     const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
     console.log(`${runnerLabel(entry)} connected${entry.address ? ` from ${entry.address}` : ''} (engines: ${engines || 'none'}).`);
     // The server cleans the empty sessions that earlier servers left in the runtime/ it shares with
-    // the local runner (the only runner whose files it touches); the sessions the runner reports stay.
-    if (entry.local) instance.pruneEmptyRuntimeSessions({keep: (hello.sessions || []).map(item => item?.sessionId)});
+    // the local runner when it shares this runtime/ (the only runner whose files it touches); the sessions the runner reports stay.
+    if (manager.sharesRuntime(entry)) instance.pruneEmptyRuntimeSessions({keep: (hello.sessions || []).map(item => item?.sessionId)});
   });
   registry.on('lost', entry => {
     if (entry.local) console.log(`Runner disconnected. Start one with ${RUNNER_HINT}.`);
