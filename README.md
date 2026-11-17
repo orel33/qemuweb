@@ -373,7 +373,7 @@ Environment variables: none (this program reads no environment variable).
 from `--listen`, `--runtime DIR` and `--exit-on-disconnect`). `scripts/user.sh [--users FILE] <command>` manages the accounts of another users file.
 
 ```text
-QemuWeb 0.9.0-beta.4.3 server
+QemuWeb 0.9.0-beta.4.4 server
 
 Options
   --listen         3002                                       (default)
@@ -425,7 +425,7 @@ against the range of `package.json`. After the checks the runner prints the stat
 connection (`Waiting for the server…`, `Connected to the server.`, `Connection to the server lost, reconnecting…`).
 
 ```text
-QemuWeb 0.9.0-beta.4.3 runner
+QemuWeb 0.9.0-beta.4.4 runner
 
 Options
   --port                3002                                       (default)
