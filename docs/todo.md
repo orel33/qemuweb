@@ -23,6 +23,11 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   must report the server's status and exit with it (read, never run): check it by hand
   (`./scripts/start.sh --session-hours 0` must exit 2 at once and leave nothing running).
 
+- **Runner with an unreadable config.json**: it still prints `✓ config.json  0 systems` after the
+  `Cannot read the system catalog` error line. It should print a ✗ and abort.
+- **start.sh message**: when the server refuses its options and exits at once, it prints "The server
+  exited (status 2); stopping the runner." although no runner was started.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
