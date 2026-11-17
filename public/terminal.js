@@ -255,23 +255,32 @@ export function appendLog(machine, line) {
   }
 }
 
+// A short note under the machine's controls (cleared after 5 s).
+function notePaneError(machine, note) {
+  machine.error = note;
+  updateControls();
+  setTimeout(() => { if (machine.error === note) { machine.error = ''; updateControls(); } }, 5000);
+}
+
 function clearPaneConsole(pane) {
   if (observing || !pane.machineId || !isConsoleView(pane.view) || !machines.has(pane.machineId)) return;
   const buffer = pane.terminal.buffer.active;
+  const machine = machines.get(pane.machineId);
+  // A full-screen program (nano, vi, less) draws on the alternate screen: clearing would only blank
+  // it, so nothing is cleared until the program exits.
+  if (buffer.type !== 'normal') {
+    notePaneError(machine, 'Console not cleared: a full-screen program is running.');
+    return;
+  }
   const line = buffer.getLine(buffer.baseY + buffer.cursorY)?.translateToString(true) || '';
   const clear = () => pane.socket.emit('clear-console', {id: paneConsoleId(pane), line, column: buffer.cursorX});
   clear();
-  const machine = machines.get(pane.machineId);
   if (machine.kind !== 'host' || !canType(pane)) return;
-  // The size is typed into the guest only where a command can be typed: not in a full-screen
-  // program (nano, vi, less use the alternate screen), not at a login or password prompt, not
-  // while a command runs, and not after text already typed on the line.
-  const atShellPrompt = buffer.type === 'normal' && /[#$%>]$/.test(line) && buffer.cursorX >= line.length;
+  // The size is typed into the guest only where a command can be typed: not at a login or password
+  // prompt, not while a command runs, and not after text already typed on the line.
+  const atShellPrompt = /[#$%>]$/.test(line) && buffer.cursorX >= line.length;
   if (!atShellPrompt) {
-    const note = 'Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt.';
-    machine.error = note;
-    updateControls();
-    setTimeout(() => { if (machine.error === note) { machine.error = ''; updateControls(); } }, 5000);
+    notePaneError(machine, 'Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt.');
     return;
   }
   fitTerminal(pane);

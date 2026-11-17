@@ -7,7 +7,7 @@
 //   scripts/tree.sh                  servers recorded in this project's runtime/server-<port>.pid, else those started elsewhere
 //   scripts/tree.sh --all            every QemuWeb server of the current user, in any directory
 //   scripts/tree.sh --pid PID        one server by PID (also --server-pid)
-//   scripts/tree.sh --watch [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
+//   scripts/tree.sh --watch|-w [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
 //   scripts/tree.sh --details        also list the processes of each switch (vde_switch, vdeterm); d toggles it with --watch
 //   scripts/tree.sh --no-color       plain text (also when NO_COLOR is set or stdout is not a terminal)
 const fs = require('fs');
@@ -25,12 +25,12 @@ function parseArguments(argv) {
     else if (arg === '--no-color') options.color = false;
     else if (arg === '--details' || arg === '-d') options.details = true;
     else if ((arg === '--pid' || arg === '--server-pid') && /^\d+$/.test(argv[i + 1] || '')) options.pid = Number(argv[++i]);
-    else if (arg === '--watch') options.watch = /^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? Number(argv[++i]) : 2;
+    else if (arg === '--watch' || arg === '-w') options.watch = /^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? Number(argv[++i]) : 2;
     else if (arg === '-h' || arg === '--help') {
       const lines = fs.readFileSync(__filename, 'utf8').split("\n").slice(2, 12);
       console.log(lines.map(line => line.replace(/^\/\/ ?/, '')).join('\n'));
       process.exit(0);
-    } else { console.error(`Usage: scripts/tree.sh [--all | --pid PID] [--details] [--watch [SECONDS]] [--no-color]`); process.exit(2); }
+    } else { console.error(`Usage: scripts/tree.sh [--all | --pid PID] [--details] [--watch|-w [SECONDS]] [--no-color]`); process.exit(2); }
   }
   return options;
 }
@@ -53,7 +53,8 @@ function processTable() {
 const readLink = target => { try { return fs.readlinkSync(target); } catch (_) { return ''; } };
 const isNode = entry => /(^|\/)node$/.test(entry.args.split(' ')[0]);
 const isServer = entry => isNode(entry) && /(^| )(\S*\/)?server\.js( |$)/.test(entry.args);
-const isRunner = entry => isNode(entry) && / \S*\/runner\/main\.js( |$)/.test(entry.args);
+// ./scripts/runner.sh runs `node runner/main.js` from the project directory (relative path).
+const isRunner = entry => isNode(entry) && /(^| )(\S*\/)?runner\/main\.js( |$)/.test(entry.args);
 
 // The root directory of a server: its working directory, or the folder of an absolute server.js.
 function serverRoot(entry) {
