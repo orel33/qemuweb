@@ -94,7 +94,7 @@ export function viewDriver() {
 function renderViewDriver() {
   const reason = viewDriver();
   document.body.dataset.viewDriven = String(!!reason);
-  if (reason) closeLayoutMenu();
+  if (reason) { closeLayoutMenu(); for (const pane of panes) pane.viewMenu.open = false; }
 }
 
 // Keyboard and programmatic clicks on a disabled view control are ignored too.

@@ -196,9 +196,7 @@ classic script shared by the server and the browser: `paneCount`,
 dropped), known layouts and modes, `panes` of the right length with strings or
 null; node IDs not in the given list become null, and a node shown in two panes is kept in the first one. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
-the resulting `panes` is what is published. A pane's "Show only this terminal"
-button is just the `single` layout showing that pane's node, in the pane's
-view; the Layout menu brings the other layouts back.
+the resulting `panes` is what is published.
 
 In the browser, `captureView()` reads the view and `applyView(view)` shows one
 (layout, switch consoles, the panes' nodes through the same

@@ -1,7 +1,7 @@
 // Pane layout, paging, node tabs, pane state badges and resource metrics.
 import {machines, saveViewSettings, savedView, store} from './state.js';
 import {jsonRequest, nodeUrl} from './api.js';
-import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setPaneView, updatePaneViewControls} from './terminal.js';
+import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setPaneView, updatePaneViewControls, usablePaneView} from './terminal.js';
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
@@ -52,7 +52,6 @@ function updatePaneStates() {
     pane.settingsButton.hidden = !machine || machine.kind !== 'host';
     pane.clearButton.hidden = !machine;
     pane.clearButton.disabled = !machine || !isConsoleView(pane.view);
-    pane.soloButton.hidden = !machine || store.layoutSize === 1;
     for (const button of pane.fontButtons) button.hidden = !machine;
     pane.fontSizeLabel.hidden = !machine;
     const state = machine
@@ -248,6 +247,7 @@ function initLayoutMenu() {
 export function captureView() {
   return {mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout,
     panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null),
+    views: panes.slice(0, store.layoutSize).map(pane => (pane.machineId ? pane.view : 'console')),
     switches: store.showSwitchConsoles, active: store.activeId || null};
 }
 
@@ -267,6 +267,11 @@ export function applyView(view) {
     const first = consoleSessions().findIndex(machine => ids.includes(machine.id));
     store.pageIndex = first >= 0 ? Math.floor(first / store.layoutSize) : 0;
     setPaneSessions(ids, Math.max(0, ids.indexOf(view.active)));
+    view.views.forEach((wanted, index) => {
+      const pane = panes[index];
+      const shown = usablePaneView(pane, observing && wanted === 'monitor' ? 'console' : wanted);
+      if (pane.machineId && pane.view !== shown) setPaneView(pane, shown);
+    });
     if (view.active && machines.has(view.active)) store.activeId = view.active;
     if ((view.mode === 'graphic') !== store.graphicVisible) setGraphicView(view.mode === 'graphic');
   } finally { applying = false; }
@@ -293,15 +298,6 @@ export function restoreSavedView() {
   publishView();
 }
 
-// The button of a pane: the "1 terminal" layout showing this pane's machine, in the pane's view.
-export function showOnlyPane(pane) {
-  if (!pane.machineId || store.layoutSize === 1) return;
-  const view = pane.view;
-  store.activeId = pane.machineId;
-  setLayout('single');
-  setPaneView(panes[0], view);
-  requestAnimationFrame(() => { fitTerminals(); panes[0].terminal.focus(); });
-}
 function setPaneSessions(ids, activeIndex = 0) {
   const before = panes.map(pane => pane.machineId);
   panes.forEach((pane, index) => { pane.machineId = ids[index] || null; });
