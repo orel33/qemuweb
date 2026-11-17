@@ -282,9 +282,10 @@ record the owner, so any user can load them.
 | --- | --- |
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
 | `scripts/stop.sh` | Stop the server started on `PORT` (default 3002). |
-| `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, and VirtualBox VMs, including orphans. |
+| `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
 | `scripts/tree.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
-| `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads. |
+| `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads; `logs/` is always kept. |
+| `scripts/demo.sh` | Start the application on `PORT` (default 3003) with a temporary users file (`admin`, `toto`, `tutu`, passwords equal to logins) and `demo/lan.zip` loaded and started for `toto` and `tutu`. Ctrl+C stops it. See [test/TESTS.md](test/TESTS.md#manual-tests-of-the-web-interface). |
 
 ## Development
 
@@ -297,6 +298,7 @@ record the owner, so any user can load them.
 | `lib/` | Control plane: session manager (one session per user), runner client, registry and local runner process, server instance records. |
 | `lib/auth/` | Authentication: users file, password hashes, signed cookie. |
 | `scripts/user.sh`, `scripts/user.js` | User account administration. |
+| `scripts/demo.sh`, `scripts/demo.js` | Web demo with test accounts and `demo/lan.zip`. |
 | `common/` | Code shared by the runner and the server: runner protocol framing, IDs, launch settings, `config.json` validation, `.topo` parsing. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |

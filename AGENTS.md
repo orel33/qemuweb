@@ -120,7 +120,7 @@ this order:
 1. The orchestrator merges the task branch into `main` **locally** (no push, no
    tag) and tells the user the checkout is on `main` and ready.
 2. The user tests the Web interface manually on `main` (for example with
-   `./scripts/run-tests.sh web`), not inside the task worktree.
+   `./scripts/demo.sh`), not inside the task worktree.
 3. Only when the user explicitly confirms that this manual test passed, the
    orchestrator bumps the version, creates the annotated tag and pushes `main`
    and the tag. Never treat an ambiguous message as that confirmation: ask.

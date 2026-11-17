@@ -64,7 +64,7 @@ The four check-network scenarios run `check-network.js` with `GUEST_NETWORK_PROF
 
 ## Manual tests of the Web interface
 
-`./scripts/run-tests.sh web` starts the application on port 3003 (`PORT` overrides it) for manual tests in a browser. It never reads or changes the repository's `users.json`: it writes a separate, temporary users file (`QEMUWEB_USERS_FILE`) with three accounts, and deletes it when the application stops (Ctrl+C):
+`./scripts/demo.sh` starts the application on port 3003 (`PORT` overrides it) for manual tests in a browser. It never reads or changes the repository's `users.json`: it writes a separate, temporary users file (`QEMUWEB_USERS_FILE`) with three accounts, and deletes it when the application stops (Ctrl+C or TERM). The server runs from the project root, so `./scripts/stop.sh` (with the same `PORT`) and `./scripts/tree.sh` find it:
 
 | Login | Password | Role | Session at start |
 |---|---|---|---|
@@ -72,6 +72,6 @@ The four check-network scenarios run `check-network.js` with `GUEST_NETWORK_PROF
 | `toto` | `toto` | student | `demo/lan.zip` loaded and started |
 | `tutu` | `tutu` | student | `demo/lan.zip` loaded and started |
 
-Passwords equal to logins exist only in this test mode. After the server is up, `test/manual/web-setup.js` logs in as `toto` and `tutu` and loads `demo/lan.zip` with automatic start, exactly like the **Load session** button; start errors are printed without stopping the setup. Both sessions start a switch and four hosts at once: about 8 GiB of guest memory, and QEMU/KVM and VDE are needed. The scenario stops with a message before starting the server when the archive or a base image it needs (`images/debian13-legacy.raw`) is missing. Logs go to `logs/` as usual.
+Passwords equal to logins exist only in this demo mode. After the server is up, `scripts/demo.js` logs in as `toto` and `tutu` and loads `demo/lan.zip` with automatic start, exactly like the **Load session** button; start errors are printed without stopping the demo. Memory: 2 sessions x (1 switch + 4 hosts) start at once, about 8 GiB of guest memory, and QEMU/KVM and VDE are needed. The script stops with a message before starting the server when the archive or a base image it needs (`images/debian13-legacy.raw`) is missing. Logs go to `logs/` as usual.
 
 Check isolation by logging in as `toto` and `tutu` in two browsers (or a private window). For the admin role, log in as a student in one browser and as `admin` in another: open **Supervision**, **Observe** the student, check that the banner, the follow-node behaviour and **Take control** work on both sides, then try **Stop all** and **Resume all**, **Delete** and the account actions, and read the **Logs** panel (`logs/admin.log`, `logs/users.log`).
