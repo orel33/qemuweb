@@ -16,6 +16,13 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   runner, in their own sessions, could survive a hung stop (`test/integration/qemuweb-client.js`).
 - **Clear notes**: the lines written to the Log view by Clear have no timestamp.
 
+- **Scripts on a custom runtime directory**: `status.sh`, `killall.sh` and `cleanall.sh` only know the
+  default `runtime/` (their paths are written in several places). With `--runtime /var/lib/qemuweb`
+  they do not see that directory. Add a `--runtime DIR` option to each, like `start.sh` and `stop.sh`.
+- **start.sh with refused arguments**: when the server refuses its options and exits at once, the script
+  must report the server's status and exit with it (read, never run): check it by hand
+  (`./scripts/start.sh --session-hours 0` must exit 2 at once and leave nothing running).
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
