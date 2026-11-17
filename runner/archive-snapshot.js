@@ -9,7 +9,7 @@ const path = require('path');
 const {execFileSync} = require('child_process');
 const {entityKind} = require('../common/node-id');
 const {validateLaunchSettings} = require('../common/launch-settings');
-const {selectedProfile, profileHash, validateOverrides} = require('../common/system-config');
+const {selectedProfile, profileHash, validateOverrides, serialConsoleLimit} = require('../common/system-config');
 
 // session: runner/session.js Session; runner: runner/session-runner.js; commands: resolved executables;
 // emit(event, payload): send to every browser of this session.
@@ -90,10 +90,12 @@ function createSessionSnapshot({session, runner, commands, emit}) {
       if (host.schemaVersion !== 3 || host.engine !== snapshot.engine || !imageById(host.system)) throw new Error(`Unknown system or engine for ${host.name}.`);
       const profile = selectedProfile(readConfig(), host.system, host.engine);
       if (host.profileHash !== profileHash(profile)) throw new Error(`System profile changed for ${host.name}; restore its original config.json or recreate the host.`);
-      validateOverrides(host.config);
-      if (Object.keys(host.config).some(key => host.config[key] === profile[key])) throw new Error(`Redundant host override for ${host.name}.`);
+      validateOverrides(host.config, profile);
+      const defaults = {...profile, serialConsoles: serialConsoleLimit(profile)};
+      if (Object.keys(host.config).some(key => host.config[key] === defaults[key])) throw new Error(`Redundant host override for ${host.name}.`);
       validateLaunchSettings({memory: host.config.memory ?? profile.memory,
-        cpus: host.config.cpus ?? profile.cpus, clock: host.config.clock ?? profile.clock});
+        cpus: host.config.cpus ?? profile.cpus, clock: host.config.clock ?? profile.clock,
+        serialConsoles: host.config.serialConsoles ?? serialConsoleLimit(profile)});
       if (typeof (host.config.startupDiskEnabled ?? profile.startupDiskEnabled) !== 'boolean' || typeof host.disk !== 'boolean' ||
           !host.network || !Array.isArray(host.network.interfaces) || host.network.interfaces.length > 4 ||
           (host.disk && !snapshot.engine.startsWith('qemu'))) throw new Error(`Invalid host configuration: ${host.name}.`);
@@ -205,7 +207,8 @@ function createSessionSnapshot({session, runner, commands, emit}) {
         item.profileHash = entry.profileHash;
         const profile = selectedProfile(readConfig(), entry.system, entry.engine);
         item.launchSettings = validateLaunchSettings({memory: entry.config.memory ?? profile.memory,
-          cpus: entry.config.cpus ?? profile.cpus, clock: entry.config.clock ?? profile.clock});
+          cpus: entry.config.cpus ?? profile.cpus, clock: entry.config.clock ?? profile.clock,
+          serialConsoles: entry.config.serialConsoles ?? serialConsoleLimit(profile)});
         item.networkInterfaces = entry.network.interfaces;
         item.guestIsoAttached = entry.config.startupDiskEnabled ?? profile.startupDiskEnabled;
         item.guestMedia = readStartupFiles(startupDirectory(item));

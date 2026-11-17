@@ -72,7 +72,7 @@ const commands = {
 
   'host.configure': ({session, runner, emit}, {nodeId, body}) => {
     const {getNode, tempFile, setNodeHostname, hostConfiguration, hostConfigurationResponse, startupDirectory,
-      assignNetworkInterfaces, validateNetworkInterfaces, stateMessage, pendingRestart} = runner;
+      assignNetworkInterfaces, validateNetworkInterfaces, stateMessage, pendingRestart, consoleCount} = runner;
     const {validateBootFiles, validateStartupTemplate, normalizeScript, readStartupFiles, writeStartupFiles} = runner.media;
     const node = getNode(nodeId);
     if (!node || node.kind !== 'host' || !node.selectedImage) throw new Error('Unknown host.');
@@ -84,7 +84,7 @@ const commands = {
     if (typeof body.name !== 'string' || !body.name.trim() || body.name.trim().length > 64 || /[\x00-\x1f\x7f]/.test(body.name)) throw new Error('Invalid host name (1 to 64 characters).');
     const name = body.name.trim();
     if ([...session.nodes.values()].some(other => other.id !== node.id && other.hostname === name)) throw new Error('Host name already exists.');
-    const settings = validateLaunchSettings(body.settings);
+    const settings = runner.limitSerialConsoles(validateLaunchSettings(body.settings), node.selectedImage.id);
     const media = validateBootFiles(body.guestMedia);
     const script = normalizeScript(media.script);
     if (typeof body.startupDiskEnabled !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
@@ -117,7 +117,7 @@ const commands = {
     node.guestIsoAttached = body.startupDiskEnabled;
     if (mediaChanged || name !== previousName) node.guestIsoOutdated = !!node.guestIso;
     if (name !== previousName) emit('node-renamed', {nodeId: node.id, name});
-    emit('nodes-changed', {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message: stateMessage(node)});
+    emit('nodes-changed', {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), serialConsoles: consoleCount(node), message: stateMessage(node)});
     return hostConfigurationResponse(node);
   },
 

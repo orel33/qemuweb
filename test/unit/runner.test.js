@@ -50,6 +50,7 @@ test('createNode builds the runtime directory layout of a host and a switch', t 
   assert.equal(host.runtimeDir, path.join(runtimeDir, HOST_1));
   assert.ok(fs.statSync(path.join(runtimeDir, HOST_1, 'startup')).isDirectory());
   assert.equal(host.socketPath, path.join(runtimeDir, HOST_1, 'serial.sock'));
+  assert.equal(host.socketPath1, path.join(runtimeDir, HOST_1, 'serial1.sock'));
   assert.equal(host.monitorPath, path.join(runtimeDir, HOST_1, 'mon.sock'));
   assert.equal(host.socketDir, null);
   assert.equal(session.nodes.get(HOST_1), host);
@@ -116,7 +117,7 @@ test('listNodes describes nodes for the web layer', t => {
   addSwitch(runner, SWITCH_1, 's1');
   assert.deepEqual(runner.listNodes(), [{
     id: SWITCH_1, kind: 'switch', running: false, hasLaunched: false, engine: null, imageId: null,
-    settings: null, hostname: 's1', networkInterfaces: [], pendingRestart: false, hasDifferentialDisk: false,
+    settings: null, hostname: 's1', networkInterfaces: [], pendingRestart: false, serialConsoles: 1, hasDifferentialDisk: false,
     message: 'Stopped'
   }]);
 });

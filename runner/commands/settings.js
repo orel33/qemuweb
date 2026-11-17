@@ -3,7 +3,7 @@
 // Session settings and system catalog commands. Each command receives {session, runner, emit}
 // (runner/service.js) and the request arguments; its result is the JSON body of the matching
 // HTTP route.
-const {selectedProfile} = require('../../common/system-config');
+const {selectedProfile, serialConsoleLimit} = require('../../common/system-config');
 const {statusError} = require('./errors');
 
 const commands = {
@@ -31,7 +31,7 @@ const commands = {
       return {id, label: p.label,
         images: {raw: config.systems[id].qemu.image, vdi: config.systems[id].vbox.image},
         memory: p.memory, cpus: p.cpus, clock: p.clock,
-        startupDiskEnabled: p.startupDiskEnabled,
+        startupDiskEnabled: p.startupDiskEnabled, serialConsoles: serialConsoleLimit(p),
         vboxNetworkModel: p.networkModel === 'virtio' ? 'virtio' : '82540EM',
         hasDifferentialDisk: true};
     });

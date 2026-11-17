@@ -28,7 +28,8 @@
       "image:qemu": "images/debian13-legacy.raw",
       "image:vbox": "images/debian13-legacy.vdi",
       "diskInterface:qemu": "ide",
-      "networkModel": "e1000"
+      "networkModel": "e1000",
+      "serialConsoles:qemu": 2
     },
     "alpine": {
       "basedOn": "default",
@@ -42,7 +43,8 @@
       "label": "Debian 13 Cloud",
       "memory": 1024,
       "image:qemu": "images/debian13-cloud.raw",
-      "image:vbox": "images/debian13-cloud.vdi"
+      "image:vbox": "images/debian13-cloud.vdi",
+      "serialConsoles:qemu": 2
     },
     "openwrt": {
       "basedOn": "default",

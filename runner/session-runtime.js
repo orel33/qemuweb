@@ -19,11 +19,12 @@ function createSessionRuntime(ctx) {
       // VirtualBox VM name, global to the machine, also carries the session ID.
       vmName: ctx.session.id ? `qemuweb-${process.pid}-${ctx.session.id}-${id}` : `qemuweb-${process.pid}-${id}`,
       socketPath: path.join(runtimeDir, 'serial.sock'),
+      socketPath1: path.join(runtimeDir, 'serial1.sock'),
       monitorPath: path.join(runtimeDir, 'mon.sock'),
       socketDir: kind === 'switch' ? path.join(runtimeDir, 'vde') : null,
       mgmtPath: kind === 'switch' ? path.join(runtimeDir, 'mgmt.sock') : null
     };
-    if ([paths.socketPath, paths.monitorPath, paths.mgmtPath].some(name => name && Buffer.byteLength(name) > 107)) {
+    if ([paths.socketPath, paths.socketPath1, paths.monitorPath, paths.mgmtPath].some(name => name && Buffer.byteLength(name) > 107)) {
       throw new Error('Runtime socket path is too long; move the project to a shorter directory.');
     }
     return paths;
@@ -75,6 +76,7 @@ function createSessionRuntime(ctx) {
         ...paths,
         machine: null,
         serial: null,
+        serial1: null,
         engine: null,
         qemuAcceleration: null,
         qemuOptions: null,
@@ -87,6 +89,7 @@ function createSessionRuntime(ctx) {
         action: null,
         runLog: [],
         serialBuffer: '',
+        serialBuffer1: '',
         serialFilterPending: '',
         serialFilterPassThrough: false,
         generation: 0,
@@ -130,10 +133,23 @@ function createSessionRuntime(ctx) {
   function pendingRestart(node) {
     if (node?.kind !== 'host' || !node.machine || !node.activeConfig) return false;
     const active = node.activeConfig;
-    return ['memory', 'cpus', 'clock'].some(key => node.launchSettings[key] !== active.settings[key]) ||
+    return ['memory', 'cpus', 'clock', 'serialConsoles'].some(key => node.launchSettings[key] !== active.settings[key]) ||
       JSON.stringify(node.networkInterfaces) !== JSON.stringify(active.networkInterfaces) ||
       JSON.stringify(readStartupFiles(startupDirectory(node))) !== JSON.stringify(active.guestMedia) ||
       node.guestIsoAttached !== active.startupDiskEnabled;
+  }
+
+  // Serial consoles of the running VM (the configured count while stopped; 1 for VirtualBox).
+  function consoleCount(node) {
+    if (node?.kind !== 'host' || !node.launchSettings || !node.engine?.startsWith('qemu')) return 1;
+    return (node.machine && node.activeConfig ? node.activeConfig.settings : node.launchSettings).serialConsoles ?? 1;
+  }
+
+  // Removes the console and monitor sockets QEMU leaves behind.
+  function removeConsoleSockets(node) {
+    for (const file of [node.socketPath, node.socketPath1, node.monitorPath]) {
+      try { fs.unlinkSync(file); } catch (_) {}
+    }
   }
 
   function stateMessage(node) {
@@ -145,7 +161,7 @@ function createSessionRuntime(ctx) {
 
   function publishState(node, message = stateMessage(node)) {
     node.lastMessage = message;
-    const state = {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), message};
+    const state = {nodeId: node.id, running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node), serialConsoles: consoleCount(node), message};
     ctx.events.emit('state', state);
   }
 
@@ -174,12 +190,13 @@ function createSessionRuntime(ctx) {
       hostname: node.hostname,
       networkInterfaces: node.networkInterfaces,
       pendingRestart: pendingRestart(node),
+      serialConsoles: consoleCount(node),
       hasDifferentialDisk: !!node.runDisk && fs.existsSync(node.runDisk),
       message: stateMessage(node)
     }));
   }
 
-  return {listNodes, sessionPaths, setNodeHostname, removeHostnameAlias, getNode, tempFile, startupDirectory, persistSwitchConfiguration, activeConfiguration, pendingRestart, stateMessage, publishState, appendLog, execLogged};
+  return {listNodes, sessionPaths, setNodeHostname, removeHostnameAlias, getNode, tempFile, startupDirectory, persistSwitchConfiguration, activeConfiguration, pendingRestart, consoleCount, removeConsoleSockets, stateMessage, publishState, appendLog, execLogged};
 }
 
 module.exports = {createSessionRuntime};

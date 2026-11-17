@@ -8,8 +8,12 @@
 //   session:<sessionId>           every browser of the session's owner, and of the admins
 //                                 observing it (per-session events)
 //   observers:<sessionId>         the admins observing the session (owner-view)
-//   node:<sessionId>:<nodeId>     browsers that selected that node (per-node events); a socket
-//                                 joins it only for a node of its own or observed session
+//   node:<sessionId>:<nodeId>     browsers that selected that node (state, log, logs-reset); a
+//                                 socket joins it only for a node of its own or observed session
+//   console:<sessionId>:<consoleId>  browsers that selected that console (serial, serial-reset);
+//                                 a console ID is the node ID, or '<nodeId>:1' for a host's
+//                                 second serial port (common/console-id.js)
+// select-node, input and clear-console take a console ID.
 // The handshake must already have set socket.data.user (see lib/auth/). An admin observes
 // another user's session with the handshake option auth: {observe: <login>}: the socket then
 // reads that session (snapshots, console output, logs) but its input, clear-console and
@@ -20,10 +24,12 @@
 // relayed to the session room and shown by the owner's pages.
 const {ConsoleControl} = require('./lib/console-control');
 const {normalizeView} = require('./public/view-state');
+const {baseNodeId} = require('./common/console-id');
 
 function sessionRoom(session) { return `session:${session.id}`; }
 function observerRoom(session) { return `observers:${session.id}`; }
 function nodeRoom(session, nodeId) { return `node:${session.id}:${nodeId}`; }
+function consoleRoom(session, consoleId) { return `console:${session.id}:${consoleId}`; }
 
 // Why a socket may not type into a console, or null when it may.
 // lock is the session's control lock (or null), admin the socket's login.
@@ -56,9 +62,15 @@ function createObservationTracker(audit) {
 // Forwards the events of one session's runner to that session's browsers only. Per-node
 // events need a payload naming a node.
 function bindWorkspace(io, {session, runner}) {
-  for (const event of ['state', 'log', 'logs-reset', 'serial', 'serial-reset']) {
+  for (const event of ['state', 'log', 'logs-reset']) {
     runner.events.on(event, payload => {
       if (typeof payload?.nodeId === 'string') io.to(nodeRoom(session, payload.nodeId)).emit(event, payload);
+    });
+  }
+  // Console output goes to the room of its console (payload.nodeId is a console ID).
+  for (const event of ['serial', 'serial-reset']) {
+    runner.events.on(event, payload => {
+      if (typeof payload?.nodeId === 'string') io.to(consoleRoom(session, payload.nodeId)).emit(event, payload);
     });
   }
   runner.events.on('state', state => io.to(sessionRoom(session)).emit('nodes-changed', state));
@@ -150,21 +162,26 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     };
     const guard = handler => (...args) => { if (authorized()) handler(...args); };
     let selectionQueue = Promise.resolve();
-    // The node room is joined before the snapshot is asked for: output produced meanwhile
-    // reaches the page before the snapshot, which replaces it. The previous node's room is
-    // left once the runner confirmed the new node.
+    // The node and console rooms are joined before the snapshot is asked for: output produced
+    // meanwhile reaches the page before the snapshot, which replaces it. The previous
+    // selection's rooms are left once the runner confirmed the new one.
+    const joinRooms = id => Promise.all([socket.join(nodeRoom(session, baseNodeId(id))), socket.join(consoleRoom(session, id))]);
+    const leaveRooms = async (id, keep = null) => {
+      if (baseNodeId(id) !== baseNodeId(keep)) await socket.leave(nodeRoom(session, baseNodeId(id)));
+      if (id !== keep) await socket.leave(consoleRoom(session, id));
+    };
     socket.on('select-node', guard((id, token, acknowledge) => {
       selectionQueue = selectionQueue.then(async () => {
         if (!validId(id)) throw new Error('Unknown node.');
         const previous = socket.data.nodeId;
-        await socket.join(nodeRoom(session, id));
+        await joinRooms(id);
         let snapshot;
         try { snapshot = await runner.request('console.attach', {nodeId: id}); }
         catch (error) {
-          if (id !== previous) await socket.leave(nodeRoom(session, id));
+          if (id !== previous) await leaveRooms(id, previous);
           throw error;
         }
-        if (previous && previous !== id) await socket.leave(nodeRoom(session, previous));
+        if (previous && previous !== id) await leaveRooms(previous, id);
         socket.data.nodeId = id;
         const {nodeId, state, logs, serial} = snapshot;
         socket.emit('node-snapshot', {nodeId, token, state, logs, serial});
@@ -207,7 +224,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     if (!observer && controllerViews.has(session.id)) socket.emit('controller-view', controllerViews.get(session.id));
     socket.on('leave-node', id => {
       if (id !== socket.data.nodeId) return;
-      socket.leave(nodeRoom(session, id));
+      leaveRooms(id);
       socket.data.nodeId = null;
     });
     socket.on('input', guard(data => {
@@ -265,4 +282,4 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
   };
 }
 
-module.exports = {attachSockets, sessionRoom, nodeRoom, inputRefusal, createObservationTracker};
+module.exports = {attachSockets, sessionRoom, nodeRoom, consoleRoom, inputRefusal, createObservationTracker};

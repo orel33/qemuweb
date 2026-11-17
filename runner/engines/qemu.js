@@ -6,7 +6,7 @@ const {spawn} = require('child_process');
 const {shellQuote} = require('../../common/shell-quote');
 
 function createQemu(ctx) {
-  const {tempFile, appendLog, publishState, execLogged} = ctx.runtime;
+  const {tempFile, appendLog, publishState, execLogged, removeConsoleSockets} = ctx.runtime;
   const {qemuOverlayArgs} = ctx.disks;
 
   function qemuArgs(node, image, overlay) {
@@ -17,6 +17,8 @@ function createQemu(ctx) {
       '-rtc', `base=${settings.rtcBase}`, '-monitor', `unix:${node.monitorPath},server=on,wait=off`,
       '-serial', `unix:${node.socketPath},server=on,wait=off`
     ];
+    // The second -serial is COM2, ttyS1 in the guest.
+    if (node.launchSettings.serialConsoles >= 2) common.push('-serial', `unix:${node.socketPath1},server=on,wait=off`);
     // QEMU PC boot notation: c = first hard disk.
     const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
     if (node.guestIsoAttached && node.guestIso) args.push('-drive', `file=${node.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);
@@ -63,14 +65,12 @@ function createQemu(ctx) {
         node.machine = null;
         node.activeConfig = null;
         node.everStarted = !!node.runDisk;
-        try { fs.unlinkSync(node.socketPath); } catch (_) {}
-        try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+        removeConsoleSockets(node);
         publishState(node, `QEMU error: ${error.message}`);
       }
     });
     child.once('exit', code => {
-      try { fs.unlinkSync(node.socketPath); } catch (_) {}
-      try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+      removeConsoleSockets(node);
       if (node.machine === child) { node.machine = null; node.activeConfig = null; }
       if (node.stopping || node.action === 'reboot' || node.action === 'reset' || node.action === 'destroy') return;
       publishState(node, `QEMU stopped (${code})`);

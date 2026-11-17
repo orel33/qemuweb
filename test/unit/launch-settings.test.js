@@ -5,10 +5,10 @@ const assert = require('node:assert/strict');
 const {launchSettingFields, validateLaunchSettings, validateQemuOptions} = require('../../common/launch-settings');
 
 test('launch settings accept valid values and reject unknown or out-of-range ones', () => {
-  const valid = {memory: 512, cpus: 2, clock: 'utc'};
+  const valid = {memory: 512, cpus: 2, clock: 'utc', serialConsoles: 1};
   assert.equal(validateLaunchSettings(valid), valid);
   assert.throws(() => validateLaunchSettings({...valid, extra: 1}), /Unknown launch setting: extra/);
-  assert.throws(() => validateLaunchSettings({memory: 512, cpus: 2}), /Incomplete launch settings/);
+  assert.throws(() => validateLaunchSettings({memory: 512, cpus: 2, clock: 'utc'}), /Incomplete launch settings/);
   assert.doesNotThrow(() => validateLaunchSettings({memory: 512}, true));
   assert.throws(() => validateLaunchSettings({...valid, memory: 63}), /Memory must be between/);
   assert.throws(() => validateLaunchSettings({...valid, cpus: 65}), /Processors must be between/);

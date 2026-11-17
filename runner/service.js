@@ -100,12 +100,13 @@ function createRunnerService({commands, root, runtimeRoot, configPath}) {
     return handler({session, runner, commands, emit, io}, args);
   }
 
-  // Console input from a browser: the guest serial socket, or the VDE terminal of a switch.
-  function input(sessionId, nodeId, data) {
+  // Console input from a browser: the guest serial socket of the console (a console ID), or
+  // the VDE terminal of a switch.
+  function input(sessionId, consoleId, data) {
     const entry = typeof sessionId === 'string' && sessions.get(sessionId);
-    const node = entry && typeof nodeId === 'string' && entry.session.nodes.get(nodeId);
-    if (!node || typeof data !== 'string' || data.length > 4096) return;
-    entry.runner.writeConsoleInput(node, data);
+    const target = entry && typeof consoleId === 'string' && entry.runner.resolveConsole(consoleId);
+    if (!target || typeof data !== 'string' || data.length > 4096) return;
+    entry.runner.writeConsoleInput(target.node, data, target.channel);
   }
 
   function setConsoleFlow(paused) {

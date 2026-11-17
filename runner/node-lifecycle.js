@@ -4,15 +4,16 @@
 const fs = require('fs');
 const {validateLaunchSettings} = require('../common/launch-settings');
 const {selectedProfile, profileHash} = require('../common/system-config');
+const {consoleId} = require('../common/console-id');
 const {readStartupFiles} = require('./media/guest-media');
 const {waitForChildExit} = require('./engines/child-exit');
 
 function createLifecycle(ctx) {
-  const {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, imagePath} = ctx.catalog;
-  const {tempFile, startupDirectory, getNode, setNodeHostname, removeHostnameAlias, activeConfiguration, publishState, appendLog} = ctx.runtime;
+  const {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, limitSerialConsoles, imagePath} = ctx.catalog;
+  const {tempFile, startupDirectory, getNode, setNodeHostname, removeHostnameAlias, activeConfiguration, publishState, appendLog, removeConsoleSockets} = ctx.runtime;
   const {buildGuestIso, cleanupGuestIsoFiles} = ctx.guestIso;
   const {cleanupRunFiles} = ctx.disks;
-  const {connectSerial} = ctx.serial;
+  const {connectSerial, closeSerial} = ctx.serial;
   const {validateNetworkInterfaces, assignNetworkInterfaces, linkedHosts} = ctx.nics;
   const {stopSwitch} = ctx.vde;
   const {qemuAcceleration, spawnQemu} = ctx.qemu;
@@ -48,7 +49,7 @@ function createLifecycle(ctx) {
       node.guestIsoAttached = options.startupDiskEnabled;
     }
     const launchSettings = resume
-      ? validateLaunchSettings({...node.launchSettings, ...(options.settings || {})})
+      ? limitSerialConsoles(validateLaunchSettings({...node.launchSettings, ...(options.settings || {})}), image.id)
       : launchSettingsFor(image.id, options.settings || {});
     const qemuOptions = selectedEngine.startsWith('qemu')
       ? resume ? {...node.qemuOptions, memory: launchSettings.memory, smp: launchSettings.cpus, rtcBase: launchSettings.clock} : qemuOptionsFor(image.id, launchSettings)
@@ -62,16 +63,18 @@ function createLifecycle(ctx) {
         ? node.networkInterfaces : assignNetworkInterfaces(node, switches);
     }
     const displayName = node.hostname || allocateName('h');
-    if (fs.existsSync(node.socketPath)) fs.unlinkSync(node.socketPath);
+    removeConsoleSockets(node);
     node.stopping = false;
     node.generation += 1;
     if (!options.reset && !resume) node.runLog = [];
     node.serialBuffer = '';
+    node.serialBuffer1 = '';
     node.serialFilterPending = '';
     node.serialFilterPassThrough = false;
     node.lastMessage = 'Starting…';
     if (!options.reset && !resume) ctx.events.emit('logs-reset', {nodeId: node.id});
     ctx.events.emit('serial-reset', {nodeId: node.id});
+    ctx.events.emit('serial-reset', {nodeId: consoleId(node.id, 1)});
     appendLog(node, `${options.reset ? '# Reset from base image' : resume ? '# Resuming from current disk' : '# Starting'} · ${selectedEngine} · ${image.label}`);
     node.engine = selectedEngine;
     node.qemuAcceleration = acceleration;
@@ -143,7 +146,7 @@ function createLifecycle(ctx) {
     validateRestartPrerequisites(node);
     const engine = node.engine;
     const imageId = node.selectedImage.id;
-    const launchSettings = settings ? validateLaunchSettings({...node.launchSettings, ...settings}) : node.launchSettings;
+    const launchSettings = settings ? limitSerialConsoles(validateLaunchSettings({...node.launchSettings, ...settings}), imageId) : node.launchSettings;
     node.action = 'reset';
     try {
       publishState(node, 'Resetting from the base image…');
@@ -213,11 +216,10 @@ function createLifecycle(ctx) {
           }
         }
       }
-      if (node.serial) { node.serial.destroy(); node.serial = null; }
+      closeSerial(node);
       if (node.machine === current) node.machine = null;
       node.activeConfig = null;
-      try { fs.unlinkSync(node.socketPath); } catch (_) {}
-      try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+      removeConsoleSockets(node);
       if (options.publish !== false && node.action !== 'destroy') publishState(node, 'Host stopped; current disk kept');
     } finally {
       node.stopping = false;
@@ -239,7 +241,7 @@ function createLifecycle(ctx) {
     node.action = 'destroy';
     node.stopping = true;
     node.generation += 1;
-    if (node.serial) { node.serial.destroy(); node.serial = null; }
+    closeSerial(node);
     const current = node.machine;
     const image = node.selectedImage || {};
     node.machine = null;
@@ -257,11 +259,11 @@ function createLifecycle(ctx) {
       try { await waitForChildExit(current, 5000); } catch (_) {}
     }
     cleanupRunFiles(node, image);
-    try { fs.unlinkSync(node.socketPath); } catch (_) {}
-    try { fs.unlinkSync(node.monitorPath); } catch (_) {}
+    removeConsoleSockets(node);
     cleanupGuestIsoFiles(node);
     node.runLog = [];
     node.serialBuffer = '';
+    node.serialBuffer1 = '';
     node.selectedImage = null;
     node.qemuOptions = null;
     node.everStarted = false;

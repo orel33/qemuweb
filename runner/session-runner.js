@@ -3,11 +3,11 @@
 // The runtime of one session inside the runner: a context (runner/context.js) and the runner
 // modules attached to it, with the operations the commands of runner/commands/ use. Created
 // once per session by runner/service.js. Events go through ctx.events:
-//   state         {nodeId, running, hasLaunched, pendingRestart, message}
+//   state         {nodeId, running, hasLaunched, pendingRestart, serialConsoles, message}
 //   log           {nodeId, line}
 //   logs-reset    {nodeId}
-//   serial        {nodeId, data}
-//   serial-reset  {nodeId, serial?, preserveLine?}
+//   serial        {nodeId, data}    nodeId is a console ID (common/console-id.js)
+//   serial-reset  {nodeId, serial?, preserveLine?}   console ID, like serial
 //   nodes-removed {ids}
 // Their payloads are exactly what the web layer forwards to browsers over Socket.IO.
 const {createContext} = require('./context');
@@ -141,7 +141,9 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     },
 
     // Console and monitor
+    consoleCount: runtime.consoleCount,
     attachConsole: serial.attachConsole,
+    resolveConsole: serial.resolveConsole,
     setConsoleFlow: serial.setConsoleFlow,
     writeConsoleInput: serial.writeConsoleInput,
     resizeSwitchTerminal: serial.resizeSwitchTerminal,
@@ -159,6 +161,7 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     allocateName: catalog.allocateName,
     qemuOptionsFor: catalog.qemuOptionsFor,
     launchSettingsFor: catalog.launchSettingsFor,
+    limitSerialConsoles: catalog.limitSerialConsoles,
     requireSessionEngine: catalog.requireSessionEngine,
 
     // Startup media

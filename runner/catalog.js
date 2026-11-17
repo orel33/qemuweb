@@ -3,7 +3,7 @@
 // System catalog helpers: image lookup, launch settings, QEMU options, engine selection.
 const path = require('path');
 const {validateQemuOptions, validateLaunchSettings} = require('../common/launch-settings');
-const {readCatalog, selectedProfile} = require('../common/system-config');
+const {readCatalog, selectedProfile, serialConsoleLimit} = require('../common/system-config');
 
 function createCatalog(ctx) {
   function requireSessionEngine(engine) {
@@ -17,7 +17,7 @@ function createCatalog(ctx) {
     const qemu = selectedProfile(catalog, id, 'qemu');
     const vbox = selectedProfile(catalog, id, 'vbox');
     const active = selectedProfile(catalog, id, ctx.session.engine);
-    return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled,
+    return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled, serialConsoles: serialConsoleLimit(active),
       images: {raw: qemu.image, vdi: vbox.image},
       virtualbox: {osType: 'Linux_64', networkModel: vbox.networkModel === 'virtio' ? 'virtio' : '82540EM',
         firmware: vbox.firmware, diskBus: vbox.diskInterface,
@@ -40,7 +40,7 @@ function createCatalog(ctx) {
 
   function qemuOptionsFor(imageId, overrides = {}) {
     const p = selectedProfile(readConfig(), imageId, 'qemu');
-    const settings = validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, ...overrides});
+    const settings = validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, serialConsoles: serialConsoleLimit(p), ...overrides});
     const extra = Object.fromEntries([0, 2, 4].map(index => [p.extraOptions[index], p.extraOptions[index + 1]]));
     return validateQemuOptions({machine: extra['-machine'], cpuKvm: extra['-cpu'], display: p.mode === 'text' ? 'none' : null,
       diskInterface: p.diskInterface, networkModel: p.networkModel === 'virtio' ? 'virtio-net-pci' : 'e1000',
@@ -50,12 +50,19 @@ function createCatalog(ctx) {
 
   function launchSettingsFor(imageId, overrides = {}) {
     const p = selectedProfile(readConfig(), imageId, ctx.session.engine);
-    return validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, ...overrides});
+    return limitSerialConsoles(validateLaunchSettings({memory: p.memory, cpus: p.cpus, clock: p.clock, serialConsoles: serialConsoleLimit(p), ...overrides}), imageId);
+  }
+
+  // Rejects more consoles than the system exposes on the session engine.
+  function limitSerialConsoles(settings, imageId) {
+    const limit = serialConsoleLimit(selectedProfile(readConfig(), imageId, ctx.session.engine));
+    if (settings.serialConsoles > limit) throw new Error(`This system exposes only ${limit} console(s).`);
+    return settings;
   }
 
   function imagePath(file) { return path.resolve(ctx.root, file); }
 
-  return {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, imagePath};
+  return {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, limitSerialConsoles, imagePath};
 }
 
 module.exports = {createCatalog};

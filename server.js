@@ -85,6 +85,8 @@ app.use((req, res, next) => {
   next();
 });
 app.get(['/admin', '/admin.html'], adminPage(root));
+// Shared with the runner, which cannot require from public/.
+app.get('/console-id.js', (_req, res) => res.sendFile(path.join(root, 'common', 'console-id.js')));
 app.use(express.static(path.join(root, 'public')));
 // X-Observe (admins, read-only) and the admin API come before anything that could open or
 // change the caller's own session.

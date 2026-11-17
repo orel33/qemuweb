@@ -5,11 +5,9 @@
 // (runner/service.js input()).
 
 const commands = {
-  // The node-snapshot content (state, logs, serial buffer) sent when a browser selects a node.
-  'console.attach': ({session, runner}, {nodeId}) => {
-    if (!session.nodes.has(nodeId)) throw new Error('Unknown node.');
-    return runner.attachConsole(nodeId);
-  },
+  // The node-snapshot content (state, logs, serial buffer) sent when a browser selects a
+  // console. nodeId is a console ID (common/console-id.js): a node ID, or '<node ID>:1' for ttyS1.
+  'console.attach': ({runner}, {nodeId}) => runner.attachConsole(nodeId),
 
   // Switch terminal size; ignored for a host or a stopped switch.
   'console.resize': ({session, runner}, {nodeId, cols, rows}) => {
@@ -20,13 +18,13 @@ const commands = {
     return {ok: true};
   },
 
-  // Clears the console buffer, keeping the current prompt line.
-  'console.clear': ({session, runner}, {nodeId, line, column}) => {
-    const node = session.nodes.get(nodeId);
-    if (!node) return {ok: false};
+  // Clears the buffer of a console (console ID), keeping the current prompt line.
+  'console.clear': ({runner}, {nodeId, line, column}) => {
+    const target = runner.resolveConsole(nodeId);
+    if (!target) return {ok: false};
     const text = typeof line === 'string' ? line.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 1024) : '';
     const at = Number.isInteger(column) ? Math.max(0, Math.min(column, 1024)) : text.length;
-    runner.clearConsole(node, text, at);
+    runner.clearConsole(target.node, text, at, target.channel);
     return {ok: true};
   },
 
