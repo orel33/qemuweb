@@ -109,6 +109,10 @@ function findServers(table, options) {
 }
 
 const descendants = entry => entry.children.flatMap(child => [child, ...descendants(child)]);
+// The machine processes below a runner: QEMU, VirtualBox, vde_switch and vdeterm. Its other
+// children (the sed that start.sh puts on its output, zombies) are not machines.
+const isMachineProcess = entry => !/<defunct>/.test(entry.args) && /^(qemu-system|VBox|vde_switch$|vdeterm$)/.test(path.basename(entry.args.split(' ')[0]));
+const machineProcesses = entry => descendants(entry).filter(isMachineProcess);
 
 // Colours and cell formatting.
 function styles(enabled) {
@@ -314,7 +318,7 @@ function standaloneRunnerReport(entry, servers, style, details) {
   const port = runnerPort(entry);
   const dialled = runnerServerRoot(entry);
   const connected = port !== null && servers.some(server => server.port === port && server.root === dialled);
-  const machines = descendants(entry);
+  const machines = machineProcesses(entry);
   const label = connected ? 'Runner' : 'Runner (waiting for a server)';
   return [`${runnerLine(entry, machines, style, label)}${port ? style.dim(` · port ${port}`) : ''}`,
     ...render(sessionItems(machines, path.join(ROOT, 'runtime', 'sessions'), style, details))];
