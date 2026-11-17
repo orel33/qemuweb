@@ -162,15 +162,14 @@ export function usablePaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
   if (!machine) return 'console';
   if (view === 'log') return view;
-  if (view === 'monitor') return MonitorTerminal.isSupported(machine) ? view : 'console';
+  if (view === 'monitor') return MonitorTerminal.isSupported(machine) && !observing ? view : 'console';
   if (view === 'console2') return hasSecondConsole(machine) ? view : 'console';
   return 'console';
 }
 export function setPaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
   if (!['console', 'console2', 'monitor', 'log'].includes(view) || !machine) return;
-  if (view === 'monitor' && !MonitorTerminal.isSupported(machine)) return;
-  if (view === 'console2' && !hasSecondConsole(machine)) return;
+  if (usablePaneView(pane, view) !== view) return;
   pane.viewMenu.open = false;
   if (pane.view === view) { pane.terminal.focus(); return; }
   pane.view = view;
@@ -207,7 +206,12 @@ export function updatePaneViewControls() {
     pane.viewMenu.hidden = !supported;
     if (!supported) pane.viewMenu.open = false;
     pane.viewButtons.forEach(button => {
-      if (button.dataset.view === 'monitor') button.hidden = !monitorSupported;
+      if (button.dataset.view === 'monitor') {
+        // Shown to an observer too, but disabled: sending monitor commands is a write action.
+        button.hidden = !monitorSupported;
+        button.disabled = observing;
+        if (observing) button.setAttribute('aria-disabled', 'true'); else button.removeAttribute('aria-disabled');
+      }
       if (button.dataset.view === 'console2') button.hidden = !hasSecondConsole(machine);
       if (isConsoleView(button.dataset.view)) {
         const label = consoleViewLabel(button.dataset.view, machine);

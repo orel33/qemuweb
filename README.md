@@ -123,7 +123,8 @@ request and kept after logging out or closing the browser. From there an admin
 can:
 
 - **Observe** a session: `/?observe=<login>` opens the normal interface on the
-  student's session, read-only, with the admin's own layout. A banner of
+  student's session, read-only: the same buttons as the student's page, the
+  write actions greyed out instead of hidden. A banner of
   distinct colour shows the observed user, previous/next active session, a
   session list, **Follow**, **Take control** and **My session**; **Supervision**
   stays in the header.
@@ -140,7 +141,8 @@ can:
   or deleted) shows a message and a link back to **Supervision**. The server refuses every change from an observer, including
   console input, Clear and resizing.
 - **Take control** of the student's session: an exclusive lock on the whole
-  session. The student's keyboard is blocked on every console and a banner
+  session (Follow is forced on and the student's current view applied first; the
+  Follow box stays checked and disabled while control is held). The student's keyboard is blocked on every console and a banner
   tells them who controls it; they still see the commands and their output.
   The admin types into whatever console they display. While the admin holds
   control, the student's page follows the admin's view and layout (the reverse

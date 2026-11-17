@@ -353,8 +353,9 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .control-banner { flex: none; height: var(--banner-height); padding: 0 16px; overflow: hidden; line-height: var(--banner-height); white-space: nowrap; text-overflow: ellipsis; color: #1d1405; background: #f08a5d; font-weight: 600; }
 /* Observation is read-only: the server refuses every change. Every control that writes, loads
    or exports something carries the class write-action (index.html, terminal.js, workspace.js)
-   and is hidden in an observation tab. */
-body.observing .write-action { display: none !important; }
+   and is shown disabled in an observation tab (same layout as the user's page; observe.js
+   also blocks the keyboard and sets aria-disabled). */
+body.observing .write-action { pointer-events: none; opacity: .45; }
 /* Supervision page (/admin). */
 .admin-page header { gap: 12px; }
 .admin-heading { margin-left: 14px; color: #f2c46d; font-weight: 600; }

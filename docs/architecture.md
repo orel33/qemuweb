@@ -127,7 +127,13 @@ flowchart TB
   `body[data-view-driven]` disables every control that changes the view state
   (class `view-control`: pane view menu, layout menu, switch consoles, paging,
   tab selection, pane node menus), for the mouse (CSS) and the
-  keyboard (`observe.js`); the banners say who drives. Every privileged socket
+  keyboard (`observe.js`); the banners say who drives. Nothing is hidden for an
+  observer: the page has the user's exact layout, and every write action (class
+  `write-action`) is shown disabled (greyed, no mouse, `aria-disabled`, keyboard
+  and programmatic clicks blocked by `observe.js`; the Monitor entry of the view
+  menu too, and a followed `monitor` shows the console). Taking control forces
+  Follow on and applies the owner's view first, then the admin's page drives;
+  while control is held the Follow box is checked and disabled. Every privileged socket
   event re-reads the account, so a disabled or removed account loses its
   sockets. `server/sockets.js` also counts each user's connected browser tabs (the
   tab's session socket carries `auth.main`), shown as online/offline in

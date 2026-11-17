@@ -6,7 +6,7 @@ import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
 import {renderGraphic, setGraphicView} from './topology.js';
-import {controlChanged, observedLogin, observing} from './observe.js';
+import {controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
 import {publishView} from './socket.js';
 
 let workspaceError = null;
@@ -269,7 +269,7 @@ export function applyView(view) {
     setPaneSessions(ids, Math.max(0, ids.indexOf(view.active)));
     view.views.forEach((wanted, index) => {
       const pane = panes[index];
-      const shown = usablePaneView(pane, observing && wanted === 'monitor' ? 'console' : wanted);
+      const shown = usablePaneView(pane, wanted);
       if (pane.machineId && pane.view !== shown) setPaneView(pane, shown);
     });
     if (view.active && machines.has(view.active)) store.activeId = view.active;
@@ -410,6 +410,7 @@ export function renderTabs() {
   }
   renderPaneTitles();
   renderGraphic();
+  markDisabledControls();
 }
 export function updateControls() {
   renderGraphic();
