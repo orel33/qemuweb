@@ -111,6 +111,25 @@ const duration = seconds => {
   return d ? `${d}d ${clock}` : clock;
 };
 const megabytes = kb => `${Math.round(kb / 1024)} MB`;
+const plural = (count, one, many = `${one}s`) => `${count} ${count === 1 ? one : many}`;
+
+// "N QEMU, M switches" for a list of processes.
+const machineCount = items => `${items.filter(item => /qemu-system/.test(item.args)).length} QEMU, ` +
+  plural(items.filter(item => /(^|\/)vde_switch /.test(item.args)).length, 'switch', 'switches');
+
+// Memory in use over memory given to the QEMU machines of a list of processes.
+function memoryTotals(items) {
+  const given = items.reduce((sum, item) => sum + Number(/(?:^| )-m (\d+)(?: |$)/.exec(item.args)?.[1] || 0), 0);
+  return `${megabytes(items.reduce((sum, item) => sum + item.rssKb, 0))} / ${given} MB`;
+}
+
+// Seconds since the session was created, from its meta.json.
+function sessionAge(sessionsDir, sessionId) {
+  try {
+    const created = Date.parse(JSON.parse(fs.readFileSync(path.join(sessionsDir, sessionId, 'meta.json'), 'utf8')).createdAt);
+    return Number.isFinite(created) ? Math.max(0, Math.round((Date.now() - created) / 1000)) : null;
+  } catch (_) { return null; }
+}
 
 // Name and system of a node from its host.json or switch.json, when readable.
 function nodeInfo(sessionsDir, sessionId, nodeId) {
@@ -166,6 +185,13 @@ function render(items, prefix = '') {
   return lines;
 }
 
+// "Session 88686978 (toto) · 4 QEMU, 1 switch · 1456 MB / 4096 MB · age 00:36:27".
+function sessionLine(id, login, items, sessionsDir, style) {
+  const age = sessionAge(sessionsDir, id);
+  const parts = [machineCount(items), memoryTotals(items), age === null ? null : `age ${duration(age)}`].filter(Boolean);
+  return `${style.user(`Session ${id.slice(0, 8)} (${login || '?'})`)} · ${style.dim(parts.join(' · '))}`;
+}
+
 function serverReport({entry, root, port}, table, style) {
   const lines = [`${style.server('Server')} ${style.bold(`pid ${entry.pid}`)}${port ? ` · port ${port}` : ''} · up ${duration(entry.seconds)} · ${style.dim(root)}`];
   const below = descendants(entry);
@@ -182,12 +208,12 @@ function serverReport({entry, root, port}, table, style) {
     bySession.get(key).push({text, item, rank: /qemu-system/.test(item.args) ? 1 : 0});
   }
   const sessions = [...bySession.entries()].map(([id, list]) => ({
-    text: id ? `${style.user(logins.get(id) || '?')} ${style.dim(`session ${id.slice(0, 8)}`)}` : style.dim('other processes'),
+    text: id ? sessionLine(id, logins.get(id), list.map(({item}) => item), sessionsDir, style) : style.dim('other processes'),
     children: list.sort((a, b) => a.rank - b.rank || a.item.pid - b.item.pid).map(({text}) => ({text}))
   }));
   if (runner) {
     const runnerText = `${style.runner('Runner')} ${style.bold(`pid ${runner.pid}`)} · pgid ${runner.pgid} · up ${duration(runner.seconds)} · ${megabytes(runner.rssKb)}` +
-      ` · ${machines.filter(item => /qemu-system/.test(item.args)).length} QEMU, ${machines.filter(item => /vde_switch/.test(item.args)).length} switches`;
+      ` · ${machineCount(machines)}`;
     lines.push(...render([{text: runnerText, children: sessions}]));
   } else {
     lines.push(...render(sessions));
