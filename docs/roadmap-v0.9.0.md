@@ -6,6 +6,8 @@
 
 QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les six jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, runners, puis durcissement applicatif et jail minimaliste.
 
+Les tâches annexes (correctifs, idées, petites fonctions) hors jalons sont dans [todo.md](todo.md).
+
 Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est livré sous forme d'une bêta, et 0.9.0 sort une fois les critères du jalon 6 remplis.
 
 | Jalon | Version livrée |
