@@ -44,6 +44,10 @@ export function fitTerminal(pane) {
   }
   pane.fit.fit();
   syncConsoleScroll(pane);
+  // The size Clear sends to the guest (stty rows N cols M), shown in the button's tooltip.
+  const clearTitle = `Clear console and resize the guest terminal (${pane.terminal.cols} columns × ${pane.terminal.rows} rows)`;
+  pane.clearButton.title = clearTitle;
+  pane.clearButton.setAttribute('aria-label', clearTitle);
   const machine = pane.machineId && machines?.get(pane.machineId);
   if (machine?.kind === 'switch' && !observing) pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
 }
