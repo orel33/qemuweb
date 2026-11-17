@@ -7,6 +7,7 @@
 //   scripts/tree.sh --all            every QemuWeb server of the current user, in any directory
 //   scripts/tree.sh --pid PID        one server by PID (also --server-pid)
 //   scripts/tree.sh --watch [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
+//   scripts/tree.sh --details        also list the processes of each switch (vde_switch, vdeterm); d toggles it with --watch
 //   scripts/tree.sh --no-color       plain text (also when NO_COLOR is set or stdout is not a terminal)
 const fs = require('fs');
 const path = require('path');
@@ -16,18 +17,19 @@ const ROOT = path.resolve(__dirname, '..');
 const SESSION_PATH = /(\/[^\s,]*?\/sessions)\/([0-9a-f]{16})(?:\/([hs]-[0-9a-f]{16}))?/;
 
 function parseArguments(argv) {
-  const options = {all: false, pid: null, watch: 0, color: process.stdout.isTTY && !process.env.NO_COLOR};
+  const options = {all: false, details: false, pid: null, watch: 0, color: process.stdout.isTTY && !process.env.NO_COLOR};
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === '--all') options.all = true;
     else if (arg === '--no-color') options.color = false;
+    else if (arg === '--details' || arg === '-d') options.details = true;
     else if ((arg === '--pid' || arg === '--server-pid') && /^\d+$/.test(argv[i + 1] || '')) options.pid = Number(argv[++i]);
     else if (arg === '--watch') options.watch = /^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? Number(argv[++i]) : 2;
     else if (arg === '-h' || arg === '--help') {
-      const lines = fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 10);
+      const lines = fs.readFileSync(__filename, 'utf8').split('\n').slice(2, 11);
       console.log(lines.map(line => line.replace(/^\/\/ ?/, '')).join('\n'));
       process.exit(0);
-    } else { console.error(`Usage: scripts/tree.sh [--all | --pid PID] [--watch [SECONDS]] [--no-color]`); process.exit(2); }
+    } else { console.error(`Usage: scripts/tree.sh [--all | --pid PID] [--details] [--watch [SECONDS]] [--no-color]`); process.exit(2); }
   }
   return options;
 }
@@ -199,18 +201,34 @@ function locate(entry) {
   return match ? {sessionsDir: match[1], sessionId: match[2], nodeId: match[3] || null} : null;
 }
 
-function describe(entry, style) {
+// One process, as a line of the details view or of an orphan runner.
+function processText(entry, style) {
   const base = path.basename(entry.args.split(' ')[0]);
-  const memory = /(?:^| )-m (\d+)(?: |$)/.exec(entry.args);
-  const where = locate(entry);
-  const info = where ? nodeInfo(where.sessionsDir, where.sessionId, where.nodeId) : {};
   const kind = base.startsWith('qemu-system') ? 'qemu' : base;
-  const label = info.name ? `${style.bold(info.name)}${info.system ? style.dim(` · ${info.system}`) : ''}` : style.dim(where?.nodeId || '');
-  // A QEMU process shows the memory in use over the memory given to its machine (-m).
-  const detail = kind === 'qemu' && memory ? `${megabytes(entry.rssKb)} / ${memory[1]} MB` : megabytes(entry.rssKb);
-  const paint = kind === 'qemu' ? style.vm : style.net;
-  const rest = [`pid ${entry.pid}`, detail, kind === 'qemu' ? percent(entry.cpu) : null].filter(Boolean).join(' · ');
-  return {where, text: `${paint(kind.padEnd(10))} ${label ? `${label} · ` : ''}${style.dim(rest)}`};
+  return `${style.net(kind.padEnd(12))} ${style.dim(`pid ${entry.pid} · ${megabytes(entry.rssKb)}`)}`;
+}
+
+// The processes of one node (a switch or a host), as a line plus, with --details, its processes.
+// A host is a single QEMU process (its threads are not processes), a switch is a vde_switch
+// with its vdeterm management terminal.
+function nodeItem(processes, style, details) {
+  const where = locate(processes[0]);
+  const info = where ? nodeInfo(where.sessionsDir, where.sessionId, where.nodeId) : {};
+  const qemu = processes.find(item => /(^|\/)qemu-system/.test(item.args.split(' ')[0]));
+  const vde = processes.find(item => /(^|\/)vde_switch$/.test(item.args.split(' ')[0]));
+  const label = info.name ? `${style.bold(info.name)}${info.system ? style.dim(` · ${info.system}`) : ''}` : style.dim(where?.nodeId || '?');
+  if (qemu) {
+    const memory = /(?:^| )-m (\d+)(?: |$)/.exec(qemu.args);
+    const used = megabytes(qemu.rssKb);
+    const rest = [`pid ${qemu.pid}`, memory ? `${used} / ${memory[1]} MB` : used, percent(qemu.cpu)].filter(Boolean).join(' · ');
+    const others = processes.filter(item => item !== qemu);
+    return {rank: 1, name: info.name || '', text: `${style.vm('host (qemu)'.padEnd(12))} ${label} · ${style.dim(rest)}`,
+      children: others.map(item => ({text: processText(item, style)}))};
+  }
+  const main = vde || processes[0];
+  const total = megabytes(processes.reduce((sum, item) => sum + item.rssKb, 0));
+  const text = `${style.net('switch (vde)'.padEnd(12))} ${label} · ${style.dim(`pid ${main.pid} · ${total}`)}`;
+  return {rank: 0, name: info.name || '', text, children: details ? processes.map(item => ({text: processText(item, style)})) : []};
 }
 
 // Lines of a tree: items are {text, children}.
@@ -232,7 +250,7 @@ function sessionLine(id, login, items, sessionsDir, style) {
   return `${style.user(`Session ${id.slice(0, 8)} (${login || '?'})`)}${style.userText(` · ${parts.join(' · ')}`)}`;
 }
 
-function serverReport({entry, root, port}, table, style) {
+function serverReport({entry, root, port}, table, style, details) {
   const serverParts = [port ? `port ${port}` : null, `up ${duration(entry.seconds)}`, percent(entry.cpu)].filter(Boolean);
   const lines = [`${style.server('Server')} ${style.bold(`pid ${entry.pid}`)} · ${serverParts.join(' · ')} · ${style.dim(root)}`];
   const below = descendants(entry);
@@ -240,17 +258,21 @@ function serverReport({entry, root, port}, table, style) {
   const machines = (runner ? descendants(runner) : below).filter(item => !isRunner(item));
   const sessionsDir = machines.map(item => locate(item)?.sessionsDir).find(Boolean) || path.join(root, 'runtime', 'sessions');
   const logins = owners(sessionsDir);
-  // Group the machines by session, in a stable order.
+  // Group the machines by session, then by node (a switch or a host), switches first.
   const bySession = new Map();
   for (const item of machines) {
-    const {where, text} = describe(item, style);
-    const key = where?.sessionId || '';
-    if (!bySession.has(key)) bySession.set(key, []);
-    bySession.get(key).push({text, item, rank: /qemu-system/.test(item.args) ? 1 : 0});
+    const where = locate(item);
+    const session = where?.sessionId || '';
+    if (!bySession.has(session)) bySession.set(session, new Map());
+    const node = where?.nodeId || `pid-${item.pid}`;
+    const nodes = bySession.get(session);
+    if (!nodes.has(node)) nodes.set(node, []);
+    nodes.get(node).push(item);
   }
-  const sessions = [...bySession.entries()].map(([id, list]) => ({
-    text: id ? sessionLine(id, logins.get(id), list.map(({item}) => item), sessionsDir, style) : style.dim('other processes'),
-    children: list.sort((a, b) => a.rank - b.rank || a.item.pid - b.item.pid).map(({text}) => ({text}))
+  const sessions = [...bySession.entries()].map(([id, nodes]) => ({
+    text: id ? sessionLine(id, logins.get(id), [...nodes.values()].flat(), sessionsDir, style) : style.dim('other processes'),
+    children: [...nodes.values()].map(list => nodeItem(list, style, details))
+      .sort((a, b) => a.rank - b.rank || a.name.localeCompare(b.name))
   }));
   if (runner) {
     const runnerParts = [`pgid ${runner.pgid}`, `up ${duration(runner.seconds)}`, megabytes(runner.rssKb), percent(runner.cpu), machineCount(machines)].filter(Boolean);
@@ -269,7 +291,7 @@ function report(options) {
   const servers = findServers(table, options);
   measureCpu(table, servers);
   const lines = [`${style.bold('QemuWeb processes')} of ${process.env.USER || process.getuid()} at ${new Date().toTimeString().slice(0, 8)}`];
-  for (const server of servers) lines.push('', ...serverReport(server, table, style));
+  for (const server of servers) lines.push('', ...serverReport(server, table, style, options.details));
   // A runner whose server is gone keeps nothing running by itself, but its machines may.
   const known = new Set(servers.map(server => server.entry.pid));
   for (const entry of table.values()) {
@@ -277,7 +299,7 @@ function report(options) {
       const parent = table.get(entry.ppid);
       if (parent && isServer(parent)) continue;
       lines.push('', `${style.warn('Orphan runner')} pid ${entry.pid} (no server above it): ${descendants(entry).length} processes below`,
-        ...render(descendants(entry).map(item => ({text: describe(item, style).text}))));
+        ...render(descendants(entry).map(item => ({text: processText(item, style)}))));
     }
   }
   if (!servers.length) {
@@ -290,8 +312,17 @@ function report(options) {
 
 const options = parseArguments(process.argv.slice(2));
 if (options.watch) {
-  const draw = () => process.stdout.write(`\x1b[H\x1b[2J${report(options)}\n\n${styles(options.color).dim(`Refreshing every ${options.watch}s, Ctrl+C to quit.`)}\n`);
+  const draw = () => process.stdout.write(`\x1b[H\x1b[2J${report(options)}\n\n${styles(options.color).dim(`Refreshing every ${options.watch}s. d: ${options.details ? 'hide' : 'show'} details, q or Ctrl+C: quit.`)}\n`);
   draw();
   setInterval(draw, options.watch * 1000);
   process.on('SIGINT', () => process.exit(0));
+  if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+    process.stdin.resume();
+    process.stdin.on('data', key => {
+      const text = key.toString();
+      if (text === 'q' || text === '\u0003') process.exit(0);
+      if (text === 'd') { options.details = !options.details; draw(); }
+    });
+  }
 } else console.log(report(options));
