@@ -284,7 +284,7 @@ function clearPaneConsole(pane) {
   // prompt, not while a command runs, and not after text already typed on the line.
   const atShellPrompt = /[#$%>]$/.test(line) && buffer.cursorX >= line.length;
   if (!atShellPrompt) {
-    notePaneError(machine, 'Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt.');
+    notePaneError(machine, `Console cleared; the terminal size was not sent because the cursor is not at an empty shell prompt (line: "${line}", cursor at ${buffer.cursorX}, line length ${line.length}).`);
     return;
   }
   fitTerminal(pane);
