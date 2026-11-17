@@ -56,14 +56,14 @@ other machines, with tokens and TLS, come with a later milestone.
 There is one way to start it, in every environment:
 
 - **`./scripts/start.sh`** (what `npm start`, `scripts/demo.sh` and the integration tests
-  use) starts `node server/main.js` and, once the socket exists, `./scripts/runner.sh
+  use) starts `./scripts/server.sh` and, once the socket exists, `./scripts/runner.sh
   --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
   and `[runner]`. Ctrl+C or SIGTERM stops the runner first (it stops every machine), kills what
   is left of its group (QEMU, `vde_switch`), then stops the server, and exits 0. When the runner
   ends for any reason (even SIGKILL), what is left of its group is killed at once and the
   server is stopped; when the server dies, the runner ends with it. In both cases the script
   exits with the status of the process that ended. Nothing is restarted.
-- **`node server/main.js` and `./scripts/runner.sh` by themselves** (two terminals, or the two
+- **`./scripts/server.sh` and `./scripts/runner.sh` by themselves** (two terminals, or the two
   services below): the server opens HTTP at once and prints "No runner connected. Start one
   with ./scripts/runner.sh, or run ./scripts/start.sh for the server and a runner". Until a
   runner connects, session routes answer 503 ("No runner is connected."). `PORT=<n>` selects
@@ -123,7 +123,7 @@ the connection (waiting for the server, connected, refused, lost). Under
   `scripts/start.sh`) notices the closed connection, stops every machine,
   removes the session directories and exits. Without that option the runner
   keeps everything and reconnects.
-- **What to check:** `./scripts/tree.sh` shows each server, then each runner
+- **What to check:** `./scripts/status.sh` shows each server, then each runner
   with the machines below it, as "Runner" while a server runs on its port, or
   "Runner (waiting for a server)". `ps -o pid,pgid,args -C node` shows
   `runner/main.js --port 3002 ...`.

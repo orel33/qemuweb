@@ -2,7 +2,7 @@
 # Demo of the Web interface on PORT (default 3003): a separate, temporary users file (never the
 # repository's users.json) with admin/admin (admin), toto/toto and tutu/tutu (students), and
 # demo/lan.zip loaded and started in the sessions of toto and tutu. Passwords equal to logins
-# exist only in this mode. Stop with Ctrl+C; scripts/stop.sh and scripts/tree.sh also find the server.
+# exist only in this mode. Stop with Ctrl+C; scripts/stop.sh and scripts/status.sh also find the server.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"

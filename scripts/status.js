@@ -4,12 +4,12 @@
 // scripts/start.sh, scripts/runner.sh or a unit; "waiting for a server" when none runs on its port) and
 // the QEMU, vde_switch and vdeterm processes below it, grouped by session and labelled with the
 // account, the node name and its system. Read-only: it only looks at /proc, ps and runtime/.
-//   scripts/tree.sh                  servers recorded in this project's runtime/server-<port>.pid, else those started elsewhere
-//   scripts/tree.sh --all            every QemuWeb server of the current user, in any directory
-//   scripts/tree.sh --pid PID        one server by PID (also --server-pid)
-//   scripts/tree.sh --watch|-w [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
-//   scripts/tree.sh --details        also list the processes of each switch (vde_switch, vdeterm); d toggles it with --watch
-//   scripts/tree.sh --no-color       plain text (also when NO_COLOR is set or stdout is not a terminal)
+//   scripts/status.sh                  servers recorded in this project's runtime/server-<port>.pid, else those started elsewhere
+//   scripts/status.sh --all            every QemuWeb server of the current user, in any directory
+//   scripts/status.sh --pid PID        one server by PID (also --server-pid)
+//   scripts/status.sh --watch|-w [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
+//   scripts/status.sh --details        also list the processes of each switch (vde_switch, vdeterm); d toggles it with --watch
+//   scripts/status.sh --no-color       plain text (also when NO_COLOR is set or stdout is not a terminal)
 const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
@@ -30,7 +30,7 @@ function parseArguments(argv) {
       const lines = fs.readFileSync(__filename, 'utf8').split("\n").slice(2, 12);
       console.log(lines.map(line => line.replace(/^\/\/ ?/, '')).join('\n'));
       process.exit(0);
-    } else { console.error(`Usage: scripts/tree.sh [--all | --pid PID] [--details] [--watch|-w [SECONDS]] [--no-color]`); process.exit(2); }
+    } else { console.error(`Usage: scripts/status.sh [--all | --pid PID] [--details] [--watch|-w [SECONDS]] [--no-color]`); process.exit(2); }
   }
   return options;
 }

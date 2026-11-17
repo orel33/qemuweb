@@ -11,7 +11,7 @@
 # the server or the runner exits by itself, the other is stopped and this script exits with
 # the status of the one that ended. Nothing is ever restarted (that is systemd's job in a
 # deployment, see docs/deployment.md).
-# To keep the machines running while the server restarts, run `node server/main.js` and
+# To keep the machines running while the server restarts, run ./scripts/server.sh and
 # ./scripts/runner.sh yourself in two terminals.
 set -euo pipefail
 
@@ -66,7 +66,7 @@ trap stop_all EXIT
 # The server listens on runtime/runner-<port>.sock. A runner started with --exit-on-disconnect does
 # not retry a first connection that fails, so it starts once the socket exists (a dead server
 # takes its runner with it, and the script ends when either one exits).
-setsid node server/main.js > >(sed -u 's/^/[server] /') 2>&1 &
+setsid ./scripts/server.sh > >(sed -u 's/^/[server] /') 2>&1 &
 server_pid=$!
 for _ in {1..150}; do
   [[ -S "$root/runtime/runner-$port.sock" ]] && break
