@@ -379,6 +379,13 @@ body.observing .write-action { display: none !important; }
 /* /admin action colours, from the palette of the header icon buttons; the .icon-button look
    (40x38, 22px icon, border in currentColor on hover) is unchanged. */
 .act-blue { color: #8ec5ff; } .act-green { color: #9ee6b4; } .act-amber { color: #f2c46d; } .act-red { color: #ff777d; }
+/* Runners panel of /admin: one line per configuration warning, with its icon. */
+.admin-runners-hint { margin: 0 0 10px; color: #cfd9e4; }
+.admin-runners-hint code { padding: 2px 6px; background: #0b0f14; border: 1px solid #2c3743; border-radius: 4px; }
+.admin-table td.runner-warning-cell { white-space: normal; }
+.runner-warnings { margin: 0; padding: 0; list-style: none; }
+.runner-warnings li { display: flex; gap: 6px; align-items: flex-start; color: #f2c46d; }
+.runner-warnings svg { flex: none; width: 16px; height: 16px; margin-top: 2px; }
 /* Toolbar buttons with an icon and a text, in the same style as the icon buttons. */
 .admin-tool { display: inline-flex; align-items: center; gap: 7px; height: var(--control); padding: 0 12px; border-color: #405166; background: #202c3a; transition: background .15s, border-color .15s, transform .15s; }
 .admin-tool svg { width: 20px; height: 20px; flex: none; }

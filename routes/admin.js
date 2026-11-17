@@ -9,6 +9,7 @@
 const path = require('path');
 const express = require('express');
 const {LOG_NAMES, readLogTail} = require('../lib/audit');
+const {runnersHandler} = require('./admin-runners');
 const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled, removeAccount} = require('../lib/auth/users-store');
 
 // Summary of one session for the supervision table: the control plane's own fields, and the
@@ -58,8 +59,9 @@ function adminPage(root) {
 }
 
 // disconnectUser(login) closes the user's Socket.IO connections, browsers(login) counts the
-// user's connected browser tabs (sockets.js); logDir holds admin.log and users.log.
-function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir}) {
+// user's connected browser tabs (sockets.js); logDir holds admin.log and users.log; `local` and
+// `port` describe how the server was started (the Runners panel, routes/admin-runners.js).
+function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir, local = false, port}) {
   const router = express.Router();
   const usersFile = auth.usersFile;
   router.use(auth.requireAdmin);
@@ -103,6 +105,8 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
       res.json(summaries.sort((a, b) => a.login.localeCompare(b.login)));
     } catch (error) { res.status(error.status || 500).json({error: error.message}); }
   });
+
+  router.get('/runners', runnersHandler({manager, local, port}));
 
   router.post('/sessions/delete', (req, res) => {
     const logins = req.body?.logins;

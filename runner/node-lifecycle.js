@@ -2,10 +2,12 @@
 
 // Host lifecycle: start, stop, reboot, reset, deletion.
 const fs = require('fs');
+const os = require('os');
 const {validateLaunchSettings} = require('../common/launch-settings');
 const {consoleId} = require('../common/console-id');
 const {readStartupFiles} = require('./media/guest-media');
 const {waitForChildExit} = require('./engines/child-exit');
+const {memoryWarning} = require('./config-warnings');
 
 function createLifecycle(ctx) {
   const {requireSessionEngine, imageById, allocateName, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath} = ctx.catalog;
@@ -72,6 +74,10 @@ function createLifecycle(ctx) {
     ctx.events.emit('serial-reset', {nodeId: node.id});
     ctx.events.emit('serial-reset', {nodeId: consoleId(node.id, 1)});
     appendLog(node, `${options.reset ? '# Reset from base image' : resume ? '# Resuming from current disk' : '# Starting'} · ${selectedEngine} · ${image.label}`);
+    // The memory reserved by every running host of this runner (all its sessions) plus this one.
+    const runningMb = ctx.hostNodes().reduce((sum, other) => sum + (other !== node && other.kind === 'host' && other.machine ? other.launchSettings?.memory || 0 : 0), 0);
+    const warning = memoryWarning({runningMb, hostMb: launchSettings.memory, totalBytes: os.totalmem()});
+    if (warning) appendLog(node, `# Warning: ${warning}`);
     node.engine = selectedEngine;
     node.qemuAcceleration = acceleration;
     node.selectedImage = image;

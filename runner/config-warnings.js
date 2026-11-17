@@ -39,4 +39,17 @@ function configWarnings({catalog, root, engines, kvm = true, cpus, memoryBytes})
   return warnings.slice(0, MAX_WARNINGS);
 }
 
-module.exports = {configWarnings};
+// Start-time check: the memory reserved by the hosts running on this runner, with the host being
+// started, above 90 % of the machine's RAM. runningMb: the memory (MB) of the other hosts of
+// this runner that are running; hostMb: the host being started. Returns a sentence for the
+// host's Log, or null. It never blocks the start.
+const MEMORY_WARNING_RATIO = 0.9;
+function memoryWarning({runningMb, hostMb, totalBytes}) {
+  if (!Number.isFinite(runningMb) || !Number.isFinite(hostMb) || !Number.isFinite(totalBytes) || totalBytes <= 0) return null;
+  const reservedMb = runningMb + hostMb;
+  const totalMb = Math.round(totalBytes / 1024 / 1024);
+  if (reservedMb <= totalMb * MEMORY_WARNING_RATIO) return null;
+  return `hosts of this runner reserve ${reservedMb} MB of the ${totalMb} MB of this machine; it may swap or an emulator may be killed.`;
+}
+
+module.exports = {configWarnings, memoryWarning};

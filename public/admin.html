@@ -37,6 +37,19 @@
         </table>
       </div>
     </section>
+    <section aria-labelledby="runners-title">
+      <div class="admin-section-head">
+        <h2 id="runners-title">Runners</h2>
+        <span class="admin-updated" id="runners-updated" role="status"></span>
+      </div>
+      <p class="admin-runners-hint" id="runners-hint" hidden></p>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Runner</th><th>Mode</th><th>State</th><th>Engines</th><th>Machine</th><th>Systems</th><th>Sessions</th><th>Warnings</th></tr></thead>
+          <tbody id="runners-body"></tbody>
+        </table>
+      </div>
+    </section>
     <section aria-labelledby="accounts-title">
       <div class="admin-section-head"><h2 id="accounts-title">Accounts</h2></div>
       <div class="admin-toolbar"><button id="show-create-account" class="admin-tool act-green" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>Create account</button></div>
@@ -93,7 +106,7 @@
       <div class="create-actions"><button id="password-cancel" type="button">Cancel</button><button type="submit">Set password</button></div>
     </form>
   </dialog>
-  <!-- Inline Lucide icons: House, LogOut, Trash2, UserPlus here; Eye, Power, Trash2, KeyRound, UserX, UserCheck, UserMinus in admin.js. License: /icons/LICENSE-lucide.txt -->
+  <!-- Inline Lucide icons: House, LogOut, Trash2, UserPlus here; Eye, Power, Trash2, KeyRound, UserX, UserCheck, UserMinus in admin.js, TriangleAlert in admin-runners.js. License: /icons/LICENSE-lucide.txt -->
   <script type="module" src="/admin.js"></script>
 </body>
 </html>

@@ -7,7 +7,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {readCatalog} = require('../../common/system-config');
-const {configWarnings} = require('../../runner/config-warnings');
+const {configWarnings, memoryWarning} = require('../../runner/config-warnings');
 
 const catalog = readCatalog(path.join(__dirname, '..', '..', 'config.json'));
 const systems = Object.keys(catalog.systems).filter(id => id !== 'default');
@@ -64,4 +64,16 @@ test('QEMU without a usable /dev/kvm, and a runner without any engine, are warni
       'a VirtualBox-only runner does not need KVM');
     assert.ok(configWarnings({catalog, root, ...roomy, engines: []}).some(text => /no virtualization engine/.test(text)));
   } finally { fs.rmSync(root, {recursive: true, force: true}); }
+});
+
+test('the start-time memory warning appears above 90 % of the RAM and never before', () => {
+  const total = 8192 * 1024 * 1024;
+  assert.equal(memoryWarning({runningMb: 4096, hostMb: 3000, totalBytes: total}), null, '7096 of 8192 MB');
+  assert.equal(memoryWarning({runningMb: 0, hostMb: 7372, totalBytes: total}), null, 'exactly 90 %');
+  const text = memoryWarning({runningMb: 6000, hostMb: 1500, totalBytes: total});
+  assert.match(text, /^hosts of this runner reserve 7500 MB of the 8192 MB of this machine/);
+  assert.match(memoryWarning({runningMb: 0, hostMb: 9000, totalBytes: total}), /reserve 9000 MB/);
+  for (const bad of [{runningMb: NaN, hostMb: 1, totalBytes: total}, {runningMb: 1, hostMb: undefined, totalBytes: total}, {runningMb: 1, hostMb: 1, totalBytes: 0}]) {
+    assert.equal(memoryWarning(bad), null);
+  }
 });
