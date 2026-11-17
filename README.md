@@ -387,7 +387,7 @@ Options
   Runner socket    /home/me/qemuweb/runtime/runner-3002.sock  (derived)
 
 Checking dependencies…
-  - none: the server runs no external program
+  ✓ Node.js  /usr/bin/node  (v24.22.0, requires ^24.0.0)
 
 Checking configuration…
   ✓ config.json  9 systems
@@ -420,7 +420,8 @@ The runner is an ordinary unprivileged process; every path is a parameter.
 
 The `Checking dependencies…` block shows, for each external program, the path found and the variable that
 named it with its source (for example `QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env`). The server runs no
-external program, so its block is one `-` line. After the checks the runner prints the state of its
+external program, but it runs on Node.js: its block shows the Node.js in use and checks its version
+against the range of `package.json`. After the checks the runner prints the state of its
 connection (`Waiting for the server…`, `Connected to the server.`, `Connection to the server lost, reconnecting…`).
 
 ```text

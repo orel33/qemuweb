@@ -72,7 +72,7 @@ There is one way to start it, in every environment:
 The runner runs under a normal account, never root (`scripts/runner.sh` refuses
 root); it needs the `kvm` group for `/dev/kvm`. Both programs print, in this order, a
 banner (`QemuWeb <version> server|runner`), their `Options` (value and source of every
-option), "Checking dependencies…" (the server runs no external program: one `-` line) and
+option), "Checking dependencies…" (the server shows the Node.js it runs on and checks its version, since it runs no external program) and
 "Checking configuration…"; the runner then prints the state of the connection (waiting for the
 server, connected, refused, lost). A refused option ends either program with status 2 and a
 `<program>: <message>` line; a failed check ends it with status 1 ("Startup aborted"). Under

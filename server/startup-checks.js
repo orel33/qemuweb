@@ -13,6 +13,28 @@ const {createUsersStore} = require('./auth/users-store');
 
 const octal = mode => (mode & 0o777).toString(8).padStart(4, '0');
 
+// Whether `version` ("v24.1.0") satisfies a caret range of package.json ("^24.0.0").
+function satisfiesCaret(version, range) {
+  const wanted = /^\^(\d+)\.(\d+)\.(\d+)$/.exec(range);
+  const actual = /^v?(\d+)\.(\d+)\.(\d+)/.exec(version);
+  if (!wanted || !actual) throw new Error(`unsupported Node.js version range ${range}`);
+  const [wMajor, wMinor, wPatch] = wanted.slice(1).map(Number);
+  const [aMajor, aMinor, aPatch] = actual.slice(1).map(Number);
+  return aMajor === wMajor && (aMinor > wMinor || (aMinor === wMinor && aPatch >= wPatch));
+}
+
+// The block "Checking dependencies…": the server runs no external program, but it runs on
+// Node.js, of the version package.json asks for ("engines"). Returns false on a ✗.
+function checkDependencies({packageInfo, nodeVersion = process.version, nodePath = process.execPath}) {
+  const range = packageInfo.engines?.node;
+  if (range && !satisfiesCaret(nodeVersion, range)) {
+    cli.failure(`Node.js  ${nodePath}  (${nodeVersion} found, ${range} required)`);
+    return false;
+  }
+  cli.pass(`Node.js  ${nodePath}  (${nodeVersion}${range ? `, requires ${range}` : ''})`);
+  return true;
+}
+
 function checkCatalog(root) {
   const catalog = readCatalog(path.join(root, 'config.json'));
   cli.pass(`config.json  ${Object.keys(catalog.systems).filter(system => system !== 'default').length} systems`);
@@ -55,4 +77,4 @@ function checkStartup({root, settings}) {
   return ok;
 }
 
-module.exports = {checkStartup};
+module.exports = {checkStartup, checkDependencies, satisfiesCaret};
