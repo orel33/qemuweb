@@ -342,7 +342,7 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
   const nodes = new Map([[sw, {}], [host, {}]]);
   assert.deepEqual([paneCount('single'), paneCount('columns-2'), paneCount('rows-2'), paneCount('grid-4'), paneCount('grid-9'), paneCount('toString')],
     [1, 2, 2, 4, 0, 0]);
-  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'log'], switches: false, active: sw};
+  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'console'], switches: false, active: sw};
   assert.deepEqual(normalizeView({...view, page: 2, expanded: 1, extra: 1}, nodes), view, 'extra keys (page, a former expanded) are dropped');
   assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
