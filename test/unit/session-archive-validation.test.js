@@ -10,7 +10,7 @@ const test = require('node:test');
 const {createSessionRunner} = require('../../runner/session-runner');
 const {Session} = require('../../runner/session');
 const {createSessionSnapshot} = require('../../runner/archive-snapshot');
-const {selectedProfile, profileHash} = require('../../common/system-config');
+const {selectedProfile, readCatalog} = require('../../common/system-config');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage'};
@@ -31,7 +31,7 @@ function setup(t) {
   const stage = path.join(dir, 'stage');
   fs.mkdirSync(path.join(stage, HOST), {recursive: true});
   const host = (extra = {}) => ({schemaVersion: 3, id: HOST, name: 'h1', system: 'debian13-legacy', engine: 'qemu',
-    profileHash: profileHash(profile), config: profile.startupDiskEnabled === false ? {} : {startupDiskEnabled: false},
+    config: profile.startupDiskEnabled === false ? {} : {startupDiskEnabled: false},
     network: {interfaces: []}, disk: false, ...extra});
   const archive = (hosts, extra = {}) => {
     const files = ['session.json', `${HOST}/host.json`, ...(hosts.some(item => item.disk) ? [`${HOST}/disk.qcow2`] : [])];
@@ -44,6 +44,13 @@ function setup(t) {
 test('hosts without a working disk need no base image identity', async t => {
   const {snapshot, host, archive, stage} = setup(t);
   assert.deepEqual(await snapshot.validateArchiveSession(archive([host()]), stage), []);
+});
+
+test('a profileHash key is an unknown host keyword, and an override equal to the profile default is accepted', async t => {
+  const {snapshot, host, archive, stage} = setup(t);
+  await assert.rejects(snapshot.validateArchiveSession(archive([host({profileHash: ZERO})]), stage), /Unknown host configuration keyword/);
+  const profile = selectedProfile(readCatalog(path.join(root, 'config.json')), 'debian13-legacy', 'qemu');
+  assert.deepEqual(await snapshot.validateArchiveSession(archive([host({config: {memory: profile.memory, startupDiskEnabled: false}})]), stage), []);
 });
 
 test('a working disk whose base image changed is refused, or discarded on request', async t => {

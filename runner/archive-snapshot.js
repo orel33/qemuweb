@@ -9,7 +9,7 @@ const path = require('path');
 const {execFileSync} = require('child_process');
 const {entityKind} = require('../common/node-id');
 const {validateLaunchSettings} = require('../common/launch-settings');
-const {selectedProfile, profileHash, validateOverrides, profileSerialPorts} = require('../common/system-config');
+const {selectedProfile, validateOverrides, profileSerialPorts} = require('../common/system-config');
 
 // session: runner/session.js Session; runner: runner/session-runner.js; commands: resolved executables;
 // emit(event, payload): send to every browser of this session.
@@ -81,7 +81,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
     }
     for (const host of snapshot.hosts) {
       if (!host || typeof host !== 'object') throw new Error('Invalid host entry.');
-      if (Object.keys(host).some(key => !['schemaVersion', 'id', 'name', 'system', 'engine', 'profileHash', 'config', 'network', 'disk', 'baseImage'].includes(key)) ||
+      if (Object.keys(host).some(key => !['schemaVersion', 'id', 'name', 'system', 'engine', 'config', 'network', 'disk', 'baseImage'].includes(key)) ||
           !host.network || Object.keys(host.network).some(key => key !== 'interfaces')) throw new Error('Unknown host configuration keyword.');
       entityKind(host.id, 'host');
       if (ids.has(host.id) || typeof host.name !== 'string' || !host.name.trim() || host.name.length > 64 || /[\x00-\x1f\x7f]/.test(host.name) || names.has(host.name.toLowerCase())) throw new Error('Invalid or duplicate host identity.');
@@ -89,10 +89,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
       expectedFiles.add(`${host.id}/host.json`);
       if (host.schemaVersion !== 3 || host.engine !== snapshot.engine || !imageById(host.system)) throw new Error(`Unknown system or engine for ${host.name}.`);
       const profile = selectedProfile(readConfig(), host.system, host.engine);
-      if (host.profileHash !== profileHash(profile)) throw new Error(`System profile changed for ${host.name}; restore its original config.json or recreate the host.`);
       validateOverrides(host.config, profile);
-      const defaults = {...profile, serialPorts: profileSerialPorts(profile)};
-      if (Object.keys(host.config).some(key => JSON.stringify(host.config[key]) === JSON.stringify(defaults[key]))) throw new Error(`Redundant host override for ${host.name}.`);
       validateLaunchSettings({memory: host.config.memory ?? profile.memory,
         cpus: host.config.cpus ?? profile.cpus, clock: host.config.clock ?? profile.clock,
         serialPorts: host.config.serialPorts ?? profileSerialPorts(profile)});
@@ -204,7 +201,6 @@ function createSessionSnapshot({session, runner, commands, emit}) {
       for (const entry of snapshot.hosts) {
         const item = createNode(entry.id, 'host', {existingDir: true}); created.push(item);
         item.selectedImage = imageById(entry.system); item.engine = snapshot.engine;
-        item.profileHash = entry.profileHash;
         const profile = selectedProfile(readConfig(), entry.system, entry.engine);
         item.launchSettings = validateLaunchSettings({memory: entry.config.memory ?? profile.memory,
           cpus: entry.config.cpus ?? profile.cpus, clock: entry.config.clock ?? profile.clock,

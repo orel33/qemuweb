@@ -1,25 +1,16 @@
 'use strict';
 
-// serialPorts: profile capability, host override, validation, and its exclusion from profileHash.
+// serialPorts: profile capability, host override, validation.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const {readCatalog, selectedProfile, profileHash, validateOverrides, sparseOverrides, profileSerialPorts} = require('../../common/system-config');
+const {readCatalog, selectedProfile, validateOverrides, sparseOverrides, profileSerialPorts} = require('../../common/system-config');
 const {validateLaunchSettings, launchSettingFields} = require('../../common/launch-settings');
 
 const catalog = readCatalog(path.join(__dirname, '..', '..', 'config.json'));
 const debian = selectedProfile(catalog, 'debian13-legacy', 'qemu');
 const alpine = selectedProfile(catalog, 'alpine', 'qemu');
 const badLists = [['ttyS1'], ['ttyS0', 'ttyS0'], ['ttyS0', 'ttyS2'], ['ttyS1', 'ttyS0'], ['ttyS0', 'ttyS1', 'ttyS2'], [], 'ttyS0', 2, null, [0]];
-
-test('profile hashes ignore serialPorts, so archives saved before the key still load', () => {
-  // These hashes were recorded before serialPorts existed in config.json.
-  assert.equal(profileHash(catalog.systems.default.qemu), 'aa4aabbae085fecd9bf5d8973dee7f7024c08d4bae3aca9ae4c3b13cbadaf7d1');
-  assert.equal(profileHash(debian), 'cf88d97a8e670257d4af622a610c18f021d9b7ecebafc309b68757c7933aae90');
-  assert.equal(profileHash({...debian, serialPorts: ['ttyS0']}), profileHash(debian));
-  const {serialPorts, ...without} = debian;
-  assert.equal(profileHash(without), profileHash(debian));
-});
 
 test('only the Debian QEMU profiles expose ttyS0 and ttyS1', () => {
   for (const id of ['debian13-legacy', 'debian13-cloud']) {

@@ -1,7 +1,6 @@
 'use strict';
 
 const fs = require('fs');
-const crypto = require('crypto');
 const {validatePorts} = require('./console-id');
 
 const engines = ['qemu', 'vbox'];
@@ -104,13 +103,6 @@ function selectedProfile(catalog, system, engine) {
   return profiles[engine];
 }
 
-// serialPorts is a capability of the system, not hardware identity: it is left out of the
-// hash so that hosts and archives saved before the key existed keep matching their profile.
-function profileHash(profile) {
-  const ordered = Object.fromEntries(Object.keys(profile).filter(key => key !== 'serialPorts').sort().map(key => [key, profile[key]]));
-  return crypto.createHash('sha256').update(JSON.stringify(ordered), 'utf8').digest('hex');
-}
-
 function sparseOverrides(profile, values) {
   validateOverrides(values, profile);
   const defaults = {...profile, serialPorts: profileSerialPorts(profile)};
@@ -119,4 +111,4 @@ function sparseOverrides(profile, values) {
     .map(key => [key, values[key]]));
 }
 
-module.exports = {readCatalog, selectedProfile, profileHash, validateOverrides, sparseOverrides, profileSerialPorts, editableKeys};
+module.exports = {readCatalog, selectedProfile, validateOverrides, sparseOverrides, profileSerialPorts, editableKeys};

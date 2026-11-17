@@ -3,13 +3,12 @@
 // Host lifecycle: start, stop, reboot, reset, deletion.
 const fs = require('fs');
 const {validateLaunchSettings} = require('../common/launch-settings');
-const {selectedProfile, profileHash} = require('../common/system-config');
 const {consoleId} = require('../common/console-id');
 const {readStartupFiles} = require('./media/guest-media');
 const {waitForChildExit} = require('./engines/child-exit');
 
 function createLifecycle(ctx) {
-  const {requireSessionEngine, imageById, allocateName, readConfig, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath} = ctx.catalog;
+  const {requireSessionEngine, imageById, allocateName, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath} = ctx.catalog;
   const {tempFile, startupDirectory, getNode, setNodeHostname, removeHostnameAlias, activeConfiguration, publishState, appendLog, removeConsoleSockets} = ctx.runtime;
   const {buildGuestIso, cleanupGuestIsoFiles} = ctx.guestIso;
   const {cleanupRunFiles} = ctx.disks;
@@ -38,9 +37,6 @@ function createLifecycle(ctx) {
     }
     const image = resume ? node.selectedImage : imageById(imageId);
     if (!image) throw new Error('Unknown system in config.json.');
-    if (node.profileHash && node.profileHash !== profileHash(selectedProfile(readConfig(), image.id, selectedEngine))) {
-      throw new Error(`System profile changed for ${node.hostname}; restore its original config.json or recreate the host.`);
-    }
     if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
     if (selectedEngine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
     node.guestMedia = readStartupFiles(startupDirectory(node));
