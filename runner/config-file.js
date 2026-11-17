@@ -1,7 +1,7 @@
 'use strict';
 
 // The runner file of a remote runner, written by `register` and read by `run`:
-// $XDG_CONFIG_HOME/qemuweb-runner/runner.json, else ~/.config/qemuweb-runner/runner.json
+// ~/.config/qemuweb-runner/runner.json by default (--runner-config FILE)
 // (--runner-config). The directory is 0700 and the file 0600: it holds the authentication token.
 //   {"url": "https://qemuweb.example.org", "runnerId": "r-1a2b3c4d", "authToken": "...", "name": "salle-12",
 //    "runtime": "/home/me/qemuweb/runtime", "ca": "/home/me/ca.pem",

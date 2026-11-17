@@ -1,6 +1,6 @@
 // Remote runner scenario (milestone 5c), no VM image needed (VDE switch only): the server alone
 // (standalone), an administrator creates a registration token through the API, `runner.sh
-// register` and `run` (node runner/main.js register|run, with a temporary XDG_CONFIG_HOME so that no
+// register` and `run` (node runner/main.js register|run, with a temporary HOME so that no
 // file of the user is touched) connect a runner over ws://127.0.0.1 through a small TCP proxy. A
 // user session is placed on it and its switch terminal answers. The proxy then cuts the network:
 // the switch survives, the session answers 503 and its page is told, then everything works again
@@ -116,9 +116,9 @@ async function run() {
   scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-rr-'));
   const logDir = path.join(scratch, 'logs');
   const runnersFile = path.join(scratch, 'runners.json');
-  const xdg = path.join(scratch, 'xdg');
+  const home = path.join(scratch, 'home');
   const runtime = path.join(scratch, 'rt');
-  const env = {XDG_CONFIG_HOME: xdg, HOME: path.join(scratch, 'home')};
+  const env = {HOME: home};
   const output = new Map();
   testUsers = await createTestUsers([{login: 'carol'}, {login: 'dave'}, {login: 'boss', role: 'admin'}]);
   const credentials = Object.fromEntries(testUsers.users.map(user => [user.login, user]));
@@ -145,14 +145,14 @@ async function run() {
   const register = runner(['register', '--url', remoteUrl, '--token', created.token, '--name', 'test remote', '--runtime', runtime], env, 'register', output);
   assert.equal((await register.exited).code, 0, output.get('register'));
   assert.doesNotMatch(output.get('register'), new RegExp(created.token), 'the registration token is never printed');
-  const runnerFile = path.join(xdg, 'qemuweb-runner', 'runner.json');
+  const runnerFile = path.join(home, '.config', 'qemuweb-runner', 'runner.json');
   assert.equal(fs.statSync(runnerFile).mode & 0o777, 0o600);
   assert.equal(fs.statSync(path.dirname(runnerFile)).mode & 0o777, 0o700);
   const identity = JSON.parse(fs.readFileSync(runnerFile, 'utf8'));
   assert.match(identity.runnerId, /^r-[0-9a-f]{8}$/);
   assert.equal(fs.statSync(runnersFile).mode & 0o777, 0o600);
   assert.doesNotMatch(fs.readFileSync(runnersFile, 'utf8'), new RegExp(identity.authToken), 'the server stores only a hash');
-  const again = runner(['register', '--url', remoteUrl, '--token', created.token], {...env, XDG_CONFIG_HOME: path.join(scratch, 'xdg2')}, 'again', output);
+  const again = runner(['register', '--url', remoteUrl, '--token', created.token, '--runner-config', path.join(scratch, 'second', 'runner.json')], env, 'again', output);
   assert.notEqual((await again.exited).code, 0, 'a registration token is single use');
   console.log(`Remote: registered ${identity.runnerId} with a one-time token (runner.json 0600, hash only on the server)`);
 

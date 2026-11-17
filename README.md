@@ -465,8 +465,8 @@ inbound port. Setup, nginx and systemd are in [docs/deployment.md](docs/deployme
 1. An administrator opens **Runners** in `/admin` and creates a **registration token** (single use,
    valid 15 minutes, 1 hour or 24 hours); the page shows the command **once**.
 2. On the runner machine: `./scripts/runner.sh register --url https://qemuweb.example.org --token TOKEN [--name NAME] [--ca FILE]`.
-   The runner file (`$XDG_CONFIG_HOME/qemuweb-runner/runner.json`, else
-   `~/.config/qemuweb-runner/runner.json`; directory 0700, file 0600) receives the server URL, the
+   The runner file (`~/.config/qemuweb-runner/runner.json`, or the file of `--runner-config`;
+   directory 0700, file 0600) receives the server URL, the
    runner ID, the runner's own token, its name and optional limits
    (`"limits": {"maxSessions": 4, "memoryBytes": 17179869184, "cpus": 8}`, edited by hand).
 3. `./scripts/runner.sh run` opens an outbound WebSocket (`/runner/connect`) and keeps it. A network cut
@@ -490,7 +490,7 @@ only for this machine unless `--insecure` is given (with a warning).
 | `--url URL` | `the runner file` | server URL (https://host); default: the one that register wrote in the runner file |
 | `--ca FILE` | `none` | PEM file of the certificate authority that signed the server certificate (self-signed); default: the one of the runner file, else the system ones |
 | `--insecure` | `off` | accepts a plain http:// or ws:// server URL that is not on this machine (the token and the traffic are then readable on the network) |
-| `--runner-config FILE` | `qemuweb-runner/runner.json in $XDG_CONFIG_HOME, else ~/.config` | runner file written by register: server URL, runner ID, token, name, limits |
+| `--runner-config FILE` | `~/.config/qemuweb-runner/runner.json` | runner file written by register: server URL, runner ID, token, name, limits |
 | `-h`, `--help` | | this text |
 
 `./scripts/runner.sh register [options]` (it also takes `--help`):
@@ -503,7 +503,7 @@ only for this machine unless `--insecure` is given (with a warning).
 | `--ca FILE` | `none` | PEM file of the certificate authority that signed the server certificate (self-signed); kept in the runner file |
 | `--insecure` | `off` | accepts a plain http:// or ws:// server URL that is not on this machine (the token and the traffic are then readable on the network) |
 | `--runtime DIR` | `runtime/ of the repository` | sessions directory the runner will use, kept in the runner file; default: runtime/ of the repository where it runs |
-| `--runner-config FILE` | `qemuweb-runner/runner.json in $XDG_CONFIG_HOME, else ~/.config` | where to write the runner file (directory 0700, file 0600) |
+| `--runner-config FILE` | `~/.config/qemuweb-runner/runner.json` | where to write the runner file (directory 0700, file 0600) |
 | `-h`, `--help` | | this text |
 
 The environment variables are those of the local runner above. The tokens are never printed: the

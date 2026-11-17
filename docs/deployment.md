@@ -240,7 +240,7 @@ the `kvm` group for `/dev/kvm`):
 ./scripts/runner.sh run
 ```
 
-`register` writes `$XDG_CONFIG_HOME/qemuweb-runner/runner.json` (else `~/.config/qemuweb-runner/runner.json`,
+`register` writes `~/.config/qemuweb-runner/runner.json` (or the file given with `--runner-config`,
 directory 0700, file 0600): the server URL, the runner ID, the runner's own token, its name, and optionally
 the `runtime` and `ca` given to `register` and hand-written `limits` (`maxSessions`, `memoryBytes`, `cpus`). A
 registration token is single use and expires (15 minutes, 1 hour or 24 hours, chosen in `/admin`). Sessions live in

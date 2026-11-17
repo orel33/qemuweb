@@ -272,7 +272,7 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 1. L'admin crée un jeton d'enregistrement dans `/admin/runners` (usage unique, durée limitée).
 2. Sur la machine runner : `qemuweb-runner register --url https://qemuweb.example --token <jeton>`.
-3. Le plan de contrôle renvoie un jeton d'authentification propre au runner, stocké dans `~/.config/qemuweb-runner/runner.json` (`$XDG_CONFIG_HOME`, JSON plutôt que TOML pour éviter une dépendance) avec ses limites (RAM, vCPU, sessions max).
+3. Le plan de contrôle renvoie un jeton d'authentification propre au runner, stocké dans `~/.config/qemuweb-runner/runner.json` (`--runner-config` choisit un autre fichier ; JSON plutôt que TOML pour éviter une dépendance) avec ses limites (RAM, vCPU, sessions max).
 4. `qemuweb-runner run` (en terminal ou en unité `systemd --user`) ouvre une connexion WebSocket TLS **sortante** et la maintient. Aucun port entrant n'est nécessaire côté runner, ce qui marche derrière un NAT ou un pare-feu de salle de TP.
 5. Le runner annonce sa capacité : RAM, vCPU, moteurs (`qemu`, `vbox`), images disponibles avec leur empreinte.
 
@@ -288,7 +288,7 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 **Administration des runners** : liste avec état (en ligne, vu pour la dernière fois), capacité et charge ; mettre en pause (drain : plus de nouvelles sessions) ; révoquer le jeton.
 
-**Mode utilisateur (user-land)** : un runner est un processus ordinaire, lancé sous un compte sans privilège, jamais root. Il n'écrit ni dans `/etc` ni dans `/var` : sa configuration, son socket et ses sessions sont dans le répertoire de l'utilisateur (`~/.config`, `$XDG_RUNTIME_DIR`, `~/.local/share`) et tout est configurable. QEMU et VDE fonctionnent sans privilège (switch VDE en espace utilisateur) ; seul `/dev/kvm` exige l'appartenance au groupe `kvm`. Cela permet de lancer un runner sur n'importe quelle machine de TP, y compris le poste d'un étudiant.
+**Mode utilisateur (user-land)** : un runner est un processus ordinaire, lancé sous un compte sans privilège, jamais root. Il n'écrit ni dans `/etc` ni dans `/var` : sa configuration, son socket et ses sessions sont dans le répertoire de l'utilisateur (`~/.config/qemuweb-runner/runner.json` et `--runtime`) et tout est configurable. QEMU et VDE fonctionnent sans privilège (switch VDE en espace utilisateur) ; seul `/dev/kvm` exige l'appartenance au groupe `kvm`. Cela permet de lancer un runner sur n'importe quelle machine de TP, y compris le poste d'un étudiant.
 
 **Plusieurs runners** : le plan de contrôle tient un registre des runners (identifiant, état, capacité, propriétaire éventuel). Une session est liée à un runner pour toute sa vie, choisi parmi les runners en ligne par une fonction de placement unique. La perte d'un runner ne touche que ses sessions. Piste ultérieure : un runner par étudiant, sur son poste de TP. Le runner d'un étudiant n'est alors **pas de confiance** : le plan de contrôle valide tout ce qu'il reçoit (événements limités à ses sessions, tailles bornées, aucune identité ni autorisation fournie par le runner) et ne lui envoie des commandes que pour ses sessions.
 

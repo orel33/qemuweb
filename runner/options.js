@@ -16,10 +16,10 @@ const {parseArguments} = require('../common/cli');
 const DEFAULT_PORT = 3002;
 const RECONNECT_MS = 2000;
 
-// $XDG_CONFIG_HOME/qemuweb-runner/runner.json, else ~/.config/qemuweb-runner/runner.json.
+// ~/.config/qemuweb-runner/runner.json of the account that runs the runner (no environment variable:
+// --runner-config FILE chooses another file).
 function defaultRunnerConfig() {
-  const xdg = process.env.XDG_CONFIG_HOME;
-  return path.join(xdg && path.isAbsolute(xdg) ? xdg : path.join(os.homedir(), '.config'), 'qemuweb-runner', 'runner.json');
+  return path.join(os.homedir(), '.config', 'qemuweb-runner', 'runner.json');
 }
 
 const ENVIRONMENT = [{
@@ -40,7 +40,7 @@ const caOption = description => ({flag: '--ca', metavar: 'FILE', kind: 'path', k
 const insecureOption = {flag: '--insecure', metavar: null, key: 'insecure', default: false, value: true, fallback: 'off',
   description: 'accepts a plain http:// or ws:// server URL that is not on this machine (the token and the traffic are then readable on the network)'};
 const runnerConfigOption = description => ({flag: '--runner-config', metavar: 'FILE', kind: 'path', key: 'runnerConfig', default: defaultRunnerConfig(),
-  fallback: 'qemuweb-runner/runner.json in $XDG_CONFIG_HOME, else ~/.config', description});
+  fallback: '~/.config/qemuweb-runner/runner.json', description});
 
 function runnerSpec(root) {
   return {
