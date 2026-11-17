@@ -106,6 +106,7 @@ test('a lost runner drops its sessions like deleted ones, and no session opens w
   assert.deepEqual(removed, [['toto', null, 'runner lost']]);
   assert.equal(manager.get('toto'), null);
   assert.equal(fs.existsSync(path.join(runtimeRoot, 'users', 'toto')), false);
+  assert.equal(fs.existsSync(toto.session.runtimeDir), false, 'a runner sharing runtime/ is gone: its session directory is removed');
   assert.throws(() => manager.open('toto'), error => error.status === 503);
   await assert.rejects(toto.runner.request('nodes.list'), error => error.status === 503);
 });
@@ -204,13 +205,15 @@ test('empty runtime sessions left by a stopped server are pruned, with their met
   const vacant = make('00000000000000a5', {});
   const recent = path.join(sessions, '00000000000000a6');
   fs.mkdirSync(recent);
+  const reported = make('00000000000000a7', {});
   const log = console.log;
   console.log = () => {};
-  try { instance.pruneEmptyRuntimeSessions(); } finally { console.log = log; }
+  try { instance.pruneEmptyRuntimeSessions({keep: ['00000000000000a7', 5]}); } finally { console.log = log; }
   assert.equal(fs.existsSync(empty), false);
   assert.equal(fs.existsSync(emptyLegacy), false);
   assert.equal(fs.existsSync(withNodes), true);
   assert.equal(fs.existsSync(unexpected), true);
   assert.equal(fs.existsSync(vacant), false, 'a directory with nothing in it is pruned');
   assert.equal(fs.existsSync(recent), true, 'a directory created less than 30 s ago may belong to a starting server');
+  assert.equal(fs.existsSync(reported), true, 'a session the runner reports in its hello is kept');
 });
