@@ -350,7 +350,7 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
     'unknown nodes become null (their pane shows the console), a node is kept in its first pane');
   assert.deepEqual(normalizeView({...view, panes: ['x', null, null, null]}, null).panes, ['x', null, null, null], 'shape check only');
   for (const [layout, panes] of [['single', [sw]], ['columns-2', [sw, host]], ['rows-2', [null, null]]]) {
-    assert.deepEqual(normalizeView({...view, layout, panes}, nodes).panes, panes);
+    assert.deepEqual(normalizeView({...view, layout, panes, views: panes.map(() => 'console')}, nodes).panes, panes);
   }
   const invalid = [null, undefined, 'x', 42, [], [view], {...view, mode: 'list'}, {...view, mode: undefined},
     {...view, layout: 4}, {...view, layout: 'grid-9'}, {...view, layout: 'toString'}, {...view, layout: '__proto__'},

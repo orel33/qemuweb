@@ -54,7 +54,7 @@ test('Log is read-only and exposes Monitor only when the selected machine suppor
   assert.match(ui, /else if \(isConsoleView\(pane\.view\)\) \{[\s\S]*?if \(input\) pane\.socket\.emit\('input', input\)/);
   assert.match(ui, /if \(usablePaneView\(pane, view\) !== view\) return/);
   assert.match(ui, /view === 'monitor'\) return MonitorTerminal\.isSupported\(machine\) && !observing \? view : 'console'/);
-  assert.match(ui, /button\.dataset\.view === 'monitor'\) button\.hidden = !monitorSupported/);
+  assert.match(ui, /button\.dataset\.view === 'monitor'\) \{[\s\S]*?button\.hidden = !monitorSupported/);
   assert.match(ui, /pane\.view === 'log'\) renderLogView\(pane\)/);
   assert.match(ui, /SessionLog\.reset\(machine\);\s*refreshLogViews\(machine\)/);
 });
