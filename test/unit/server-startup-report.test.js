@@ -110,5 +110,6 @@ test('README: the tables of both programs match --help on options, defaults and 
     for (const {names, description} of spec.environment || []) assert.ok(readme.includes(`| ${names} | names in .env | ${description}`), `README ${spec.program} variables`);
   }
   assert.ok(readme.includes('| -h, --help | | this text |'), 'README help row');
-  assert.doesNotMatch(readme, /QEMUWEB_[A-Z_]+/);
+  // QEMUWEB_PASSWORD (scripts/user.sh, never the command line) is the only QEMUWEB_ variable left.
+  assert.doesNotMatch(readme.replace(/QEMUWEB_PASSWORD/g, ''), /QEMUWEB_[A-Z_]+/);
 });

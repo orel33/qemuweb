@@ -186,5 +186,5 @@ function failure(text) { console.error(`  ${RED}✗${RESET} ${text}`); }
 function skipped(text) { console.log(`  - ${text}`); }
 function end() { console.log(''); }
 
-module.exports = {UsageError, parseArguments, commandLine, usageError, abort, formatHelp, formatOptions, startupRows, banner,
+module.exports = {UsageError, parseArguments, defaultSettings, commandLine, usageError, abort, formatHelp, formatOptions, startupRows, banner,
   printBanner, printOptions, heading, pass, warning, failure, skipped, end, invalid};
