@@ -102,9 +102,9 @@ async function run() {
   // Two processes under start.sh, each leading its own process group; the runner has its checks'
   // flag and listens on a 0600 socket.
   const runner = childOf(child.pid, 'runner/main.js');
-  const server = childOf(child.pid, 'server.js');
+  const server = childOf(child.pid, 'server/main.js');
   assert.ok(runner, 'no runner/main.js process under start.sh');
-  assert.ok(server, 'no server.js process under start.sh');
+  assert.ok(server, 'no server/main.js process under start.sh');
   assert.equal(runner.pgrp, runner.pid, 'the runner does not lead its own process group');
   assert.equal(server.pgrp, server.pid, 'the server does not lead its own process group');
   assert.notEqual(runner.pgrp, server.pgrp);
@@ -155,7 +155,7 @@ async function run() {
   await new QemuWebClient(baseUrl).waitForServer(30000, child);
   const again = await new QemuWebClient(baseUrl).signIn(user.login, user.password);
   const next = childOf(child.pid, 'runner/main.js');
-  const nextServer = childOf(child.pid, 'server.js');
+  const nextServer = childOf(child.pid, 'server/main.js');
   assert.ok(next && next.pid !== runner.pid, 'no new runner under the second start.sh');
   const second = await startSwitch(again, 'sw2');
   assert.equal(emulators(next.pid).length, 1);

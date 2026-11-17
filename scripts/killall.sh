@@ -34,7 +34,7 @@ matching_pids() {
       cwd="$(readlink -f -- "$proc/cwd" 2>/dev/null || true)"
       matched=0
       for arg in "${args[@]:1}"; do
-        if [[ "$arg" == "$ROOT/server.js" || ( "$arg" == server.js && "$cwd" == "$ROOT" ) ]]; then
+        if [[ "$arg" == "$ROOT/server/main.js" || ( "$arg" == server/main.js && "$cwd" == "$ROOT" ) ]]; then
           matched=1
         fi
       done
@@ -69,7 +69,7 @@ signal_pids() {
   done < <(matching_pids "$kind")
 }
 
-# SIGTERM triggers the shutdown of the nodes (VMs and switches) managed by server.js.
+# SIGTERM triggers the shutdown of the nodes (VMs and switches) managed by server/main.js.
 signal_pids TERM server
 if (( ! DRY_RUN )); then
   for _ in {1..12}; do

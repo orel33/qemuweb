@@ -1,6 +1,6 @@
 'use strict';
 
-// The manual mode: the server run alone (`node server.js`) spawns nothing and answers 503 until a
+// The manual mode: the server run alone (`node server/main.js`) spawns nothing and answers 503 until a
 // runner, started by hand (runner/main.js --port), dials runtime/runner-<port>.sock. A session
 // runs on that runner (VDE switch); the runner and its switch SURVIVE a SIGKILL of the server;
 // a new server on the same port is joined again by the runner, and the user finds the SAME

@@ -27,13 +27,13 @@ async function createTestUsers(entries) {
 
 // Starts QemuWeb on the given port with the users file (password authentication), through the
 // real launch sequence: scripts/start.sh, the server and a runner as two processes. With
-// `standalone` it starts only `node server.js` (a runner is started by the test). The returned
+// `standalone` it starts only `node server/main.js` (a runner is started by the test). The returned
 // ChildProcess keeps the tail of its output in `output`.
 function spawnServer({port, usersFile, env = {}, standalone = false}) {
   const serverEnv = {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1', QEMUWEB_USERS_FILE: usersFile, ...env};
   delete serverEnv.QEMUWEB_AUTH;
   const child = standalone
-    ? spawn(process.execPath, ['server.js'], {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']})
+    ? spawn(process.execPath, ['server/main.js'], {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']})
     : spawn(path.join(root, 'scripts', 'start.sh'), {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']});
   child.output = '';
   child.standalone = standalone;
