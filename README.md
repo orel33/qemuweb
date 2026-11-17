@@ -283,6 +283,7 @@ record the owner, so any user can load them.
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
 | `scripts/stop.sh` | Stop the server started on `PORT` (default 3002). |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, and VirtualBox VMs, including orphans. |
+| `scripts/tree.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
 | `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads. |
 
 ## Development

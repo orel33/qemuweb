@@ -141,7 +141,7 @@ server.js                démarrage et câblage
 - `common/` contient aussi `launch-settings.js`, `node-id.js`, `shell-quote.js` et `json-file.js` : ces helpers servent au plan de contrôle comme au runner.
 - `runner/` contient des modules en plus de ceux listés (`context.js`, `catalog.js`, `host-config.js`, `launch-preview.js`, `resources.js`, `node-lifecycle.js`, `engines/child-exit.js`, `media/guest-iso.js`, `media/image-hash.js`). Le contexte du runner était à l'origine un singleton de module : il est remplacé au jalon 3 par une instance par session (`createContext()`).
 - `runner/network/vde-switch.js` requiert `node-pty` (paquet, pas module natif de Node), inhérent à `vdeterm`.
-- `lib/session-snapshot.js` porte la logique d'archive côté plan de contrôle, à côté de `lib/session-archive.js`.
+- La logique d'archive (`runner/archive-snapshot.js` et `runner/archive-zip.js`) appartient au runner depuis le jalon 5, comme l'analyse des topologies (`common/topology.js`).
 - Interface web : modules ajoutés à ceux prévus (`app.js`, `state.js`, `workspace.js`, `node-dialogs.js`, `startup-media.js`, `general-settings.js`). Les modules ont des imports circulaires, sans effet à l'exécution tant qu'ils ne font que déclarer au chargement.
 - Les commits intermédiaires du découpage serveur ne sont pas exécutables isolément (les modules sont arrivés avant le basculement de `server.js`).
 
@@ -347,7 +347,7 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 
 À la sortie de 0.9.0, les formats de fichiers repartent à zéro : plus aucun numéro de version hérité des bêtas. Pendant les bêtas, aucun `schemaVersion` n'est incrémenté : les formats changent librement. La compatibilité avec un ancien format n'est pas conservée non plus (voir `AGENTS.md`).
 
-- Remettre `schemaVersion` à **1** partout : `session.json` (4 aujourd'hui), `host.json` (3), `switch.json` (2) et `config.json` (4). `meta.json` et `users.json` sont déjà à 1. Cela touche le code (`lib/session.js`, `runner/host-config.js`, `runner/session-runtime.js`, `lib/session-snapshot.js`, `lib/server-instance.js`, `common/system-config.js`), les tests, `config.json` et la documentation.
+- Remettre `schemaVersion` à **1** partout : `session.json` (4 aujourd'hui), `host.json` (3), `switch.json` (2) et `config.json` (4). `meta.json` et `users.json` sont déjà à 1. Cela touche le code (`runner/session.js`, `runner/host-config.js`, `runner/session-runtime.js`, `runner/archive-snapshot.js`, `lib/server-instance.js`, `common/system-config.js`), les tests, `config.json` et la documentation.
 - Réécrire les 5 archives de `demo/` avec ces valeurs (elles contiennent `session.json`, `host.json` et `switch.json`).
 - Renommer le fichier téléchargé `qemuweb-session-v4.zip` en `qemuweb-session.zip` (`routes/archives.js`, `public/archive.js`).
 - À partir de 0.9.0, tout changement de format incrémente le numéro et s'accompagne d'une décision explicite sur la compatibilité.
