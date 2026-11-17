@@ -1,6 +1,6 @@
 'use strict';
 
-// The manual mode: the server started WITHOUT --local spawns nothing and answers 503 until a
+// The manual mode: the server run alone (`node server.js`) spawns nothing and answers 503 until a
 // runner, started by hand (runner/main.js --port), dials runtime/runner-<port>.sock. A session
 // runs on that runner (VDE switch); the runner and its switch SURVIVE a SIGKILL of the server;
 // a new server on the same port is joined again by the runner, and the user finds the SAME
@@ -73,7 +73,7 @@ function switchesOf(pid) {
 
 function startServer(port, logDir) {
   serverOutput = '';
-  const child = spawnServer({port, usersFile: testUsers.file, local: false, env: {QEMUWEB_LOG_DIR: logDir}});
+  const child = spawnServer({port, usersFile: testUsers.file, standalone: true, env: {QEMUWEB_LOG_DIR: logDir}});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   return child;
 }
@@ -132,7 +132,6 @@ async function run() {
   assert.match(runnerOutput.get('runner'), /Checking configuration/);
   assert.match(serverOutput, /Runner connected/);
   const [info] = (await adminRunners(boss)).runners;
-  assert.equal(info.mode, 'manual');
   assert.equal((await adminRunners(boss)).connectHint, null);
   console.log(`Manual: runner ${runner.pid} connected (${info.engines.join(', ')}), checks printed by the runner itself`);
 

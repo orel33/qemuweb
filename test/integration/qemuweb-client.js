@@ -25,12 +25,20 @@ async function createTestUsers(entries) {
   return {file, users, cleanup: () => fs.rmSync(dir, {recursive: true, force: true})};
 }
 
-// Starts server.js on the given port with the users file (password authentication), with its own
-// local runner (--local) unless `local` is false (the manual mode: a runner is started by the test).
-function spawnServer({port, usersFile, env = {}, local = true}) {
+// Starts QemuWeb on the given port with the users file (password authentication), through the
+// real launch sequence: scripts/start.sh, the server and a runner as two processes. With
+// `standalone` it starts only `node server.js` (a runner is started by the test). The returned
+// ChildProcess keeps the tail of its output in `output`.
+function spawnServer({port, usersFile, env = {}, standalone = false}) {
   const serverEnv = {...process.env, PORT: String(port), QEMUWEB_TEST_SERVER: '1', QEMUWEB_USERS_FILE: usersFile, ...env};
   delete serverEnv.QEMUWEB_AUTH;
-  return spawn(process.execPath, ['server.js', ...(local ? ['--local'] : [])], {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']});
+  const child = standalone
+    ? spawn(process.execPath, ['server.js'], {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']})
+    : spawn(path.join(root, 'scripts', 'start.sh'), {cwd: root, env: serverEnv, stdio: ['ignore', 'pipe', 'pipe']});
+  child.output = '';
+  child.standalone = standalone;
+  for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { child.output = (child.output + data).slice(-12000); });
+  return child;
 }
 
 class QemuWebClient {
@@ -81,14 +89,24 @@ class QemuWebClient {
     return payload;
   }
 
-  async waitForServer(timeoutMs = 30000, isAlive = () => true) {
+  // Waits until the server answers over HTTP. Given a process from spawnServer, also waits until
+  // its runner has connected (HTTP opens first, and session routes answer 503 until then); given a
+  // function, only until the server answers; the function tells whether the server is still alive.
+  async waitForServer(timeoutMs = 30000, subject = () => true) {
+    const child = typeof subject === 'function' ? null : subject;
+    const isAlive = child ? () => child.exitCode === null && child.signalCode === null : subject;
+    const runnerNeeded = child && !child.standalone;
     const deadline = Date.now() + timeoutMs;
+    let listening = false;
     while (Date.now() < deadline) {
       if (!isAlive()) throw new Error('QemuWeb exited during startup.');
-      try {
-        const response = await fetch(`${this.baseUrl}/auth/me`);
-        if (response.status === 200 || response.status === 401) return;
-      } catch (_) { /* Not listening yet. */ }
+      if (!listening) {
+        try {
+          const response = await fetch(`${this.baseUrl}/auth/me`);
+          listening = response.status === 200 || response.status === 401;
+        } catch (_) { /* Not listening yet. */ }
+      }
+      if (listening && (!runnerNeeded || /Runner connected/.test(child.output))) return;
       await new Promise(resolve => setTimeout(resolve, 200));
     }
     throw new Error(`QemuWeb did not start within ${timeoutMs} ms.`);

@@ -1,8 +1,8 @@
 // Static dependency rules of the runner (see docs/architecture.md):
 // runner/ depends only on common/, Node built-ins and node-pty (the VDE switch
 // management terminal), and the control plane reaches the runner only through
-// the protocol (lib/runner-client.js): it never requires runner/ (the local
-// runner is a separate process, runner/main.js, see lib/local-runner.js).
+// the protocol (lib/runner-client.js): it never requires runner/ (the runner is a
+// separate process, runner/main.js, started by scripts/runner.sh).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');

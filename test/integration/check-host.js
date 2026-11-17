@@ -25,7 +25,7 @@ process.on('exit', () => testUsers?.cleanup());
 // Waits for the server, then logs in as the scenario's temporary user.
 async function signInTestUser() {
   client = new QemuWebClient(baseUrl);
-  await client.waitForServer(30000, () => child.exitCode === null);
+  await client.waitForServer(30000, child);
   const [user] = testUsers.users;
   await client.signIn(user.login, user.password);
 }

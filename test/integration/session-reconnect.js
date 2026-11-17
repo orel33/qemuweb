@@ -85,7 +85,7 @@ async function run() {
   child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   client = new QemuWebClient(baseUrl);
-  await client.waitForServer(30000, () => child.exitCode === null);
+  await client.waitForServer(30000, child);
   await client.signIn(user.login, user.password);
   const {sessionId} = await client.request('/api/general-settings');
   const withHost = hostAvailable();

@@ -217,7 +217,7 @@ async function run() {
   child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', value => { serverOutput = (serverOutput + value).slice(-12000); });
   const [topo, importer, reimporter] = testUsers.users;
-  await new QemuWebClient(baseUrl).waitForServer(30000, () => child.exitCode === null);
+  await new QemuWebClient(baseUrl).waitForServer(30000, child);
   for (const user of [topo, importer, reimporter]) clients.push(await new QemuWebClient(baseUrl).signIn(user.login, user.password));
   const sessions = new Set(await Promise.all(clients.map(async client => (await client.request('/api/general-settings')).sessionId)));
   assert.equal(sessions.size, 3, 'The three users must have three sessions.');

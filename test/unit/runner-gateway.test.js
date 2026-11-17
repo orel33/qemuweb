@@ -38,7 +38,7 @@ test('the socket is private (0600)', async t => {
   assert.equal(fs.statSync(gateway.socketPath).mode & 0o777, 0o600);
 });
 
-test('manual mode accepts one runner, trusted, and refuses a second while it lives', async t => {
+test('the gateway accepts one runner, trusted, and refuses a second while it lives', async t => {
   const {registry, dial} = await setup(t);
   const first = await dial();
   await new Promise(resolve => setTimeout(resolve, 50));
@@ -72,24 +72,6 @@ test('the place is free again once the runner is lost', async t => {
   assert.equal(registry.get('local').state, 'starting');
 });
 
-test('a custom claim decides: refusal, and the accepted hook (the --local launcher)', async t => {
-  const {registry, gateway, dial} = await setup(t);
-  gateway.claim = () => null;
-  await (await dial()).closed;
-  assert.equal(registry.get('local'), null);
-  const accepted = [];
-  const lostCalls = [];
-  gateway.claim = () => ({accepted: client => accepted.push(client), onLost: entry => lostCalls.push(entry.id)});
-  const runner = await dial();
-  await new Promise(resolve => setTimeout(resolve, 50));
-  assert.equal(accepted.length, 1);
-  assert.equal(accepted[0], registry.get('local').client);
-  const lost = once(registry, 'lost');
-  runner.socket.destroy();
-  await lost;
-  assert.deepEqual(lostCalls, ['local']);
-});
-
 test('the registry keeps only checked fields of a hello', async t => {
   const {registry, dial} = await setup(t);
   const runner = await dial();
@@ -118,12 +100,4 @@ test('the registry keeps only checked fields of a hello', async t => {
 test('pickRunner says whether a runner is connected', () => {
   const registry = new RunnerRegistry();
   assert.throws(() => registry.pickRunner('toto'), error => error.status === 503 && /No runner is connected/.test(error.message));
-});
-
-test('with --local, the launcher takes no connection before it has started a runner', () => {
-  const {createLocalRunner} = require('../../lib/local-runner');
-  const gateway = {socketPath: '/tmp/unused.sock', claim: null};
-  createLocalRunner({root: '/tmp', runtimeRoot: '/tmp', configPath: '/tmp/config.json', gateway, boundSessions: () => [], onFatal: () => {}});
-  assert.equal(typeof gateway.claim, 'function');
-  assert.equal(gateway.claim(), null, 'a hand-started runner is refused while no launch is in progress');
 });

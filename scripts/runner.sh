@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Starts a runner by hand: it dials the QemuWeb server of this project (PORT, default 3002)
+# Starts a runner: it dials the QemuWeb server of this project (PORT, default 3002)
 # on runtime/runner-<port>.sock, keeps its VMs if the server restarts and reconnects.
 #   ./scripts/runner.sh [--exit-on-disconnect]
 # Run it as your normal user, never as root. Stop it with Ctrl+C: it stops its VMs first.

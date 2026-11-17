@@ -11,8 +11,8 @@ Available tests:
   unit                           Unit tests: topology, UI helpers, guest media, metrics, auth, admin and sessions
   two-users-isolation            Two logged-in users: no shared nodes, events or controls (VDE only)
   session-reconnect              Log out and back in: running nodes, consoles and logs restored
-  check-runner                   Local runner process (--local): session through it, SIGKILL recovery, clean shutdown (VDE only)
-  check-runner-manual            Manual mode: runner started by hand, survives a SIGKILL of the server, session adopted (VDE only)
+  check-runner                   start.sh sequence: server and runner, session through it, runner SIGKILL, clean stop (VDE only)
+  check-runner-manual            Manual mode: server alone and a runner started by hand, survives a SIGKILL of the server, session adopted (VDE only)
   admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
   check-load                     Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)
   check-load-start               Load demo/lan.zip with automatic start like the Load session button: switch and 4 hosts running
@@ -45,8 +45,8 @@ case "${1:-}" in
   unit) run_test 'Unit tests: topology, UI helpers, guest media, metrics, auth, admin and sessions' npm test ;;
   two-users-isolation) run_test 'Two logged-in users: isolation of nodes, consoles and events' npm run test:two-users-isolation ;;
   session-reconnect) run_test 'Reconnection: running nodes, consoles and logs restored' npm run test:session-reconnect ;;
-  check-runner) run_test 'Local runner process (--local): session, SIGKILL recovery and shutdown' npm run test:check-runner ;;
-  check-runner-manual) run_test 'Manual runner: server without --local, runner survives a server SIGKILL, session adopted' npm run test:check-runner-manual ;;
+  check-runner) run_test 'start.sh sequence: session, runner SIGKILL and clean stop' npm run test:check-runner ;;
+  check-runner-manual) run_test 'Manual runner: server alone, runner survives a server SIGKILL, session adopted' npm run test:check-runner-manual ;;
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
   check-load) run_test 'Load demo/*.topo and demo/lan.zip, export and re-import, refuse corrupted files (no VM)' npm run test:check-load ;;
   check-load-start) run_test 'Load demo/lan.zip with automatic start like the Load session button: switch and 4 hosts running' npm run test:check-load-start ;;

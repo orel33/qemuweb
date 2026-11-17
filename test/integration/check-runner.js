@@ -1,11 +1,13 @@
 'use strict';
 
-// The local runner process: the server starts runner/main.js in its own process group, reached
-// over runtime/runner-<port>.sock; a session works through it (VDE switch start, terminal
-// output, stop); a runner killed with SIGKILL takes its processes with it, its sessions are
-// dropped (browsers get session-deleted, the runtime directory goes) and a new runner starts;
-// server shutdown leaves no runner, vde_switch or qemu-system process, no runtime/sessions/<id>
-// and no socket. VDE only: no system image or KVM is needed.
+// The launch sequence scripts/start.sh: the server and a runner, two processes under start.sh,
+// each leader of its own process group; the runner reaches the server over
+// runtime/runner-<port>.sock; a session works through it (VDE switch start, terminal output,
+// stop). A runner killed with SIGKILL takes its group with it (nothing is restarted): start.sh
+// stops the server and exits with an error, browsers get session-deleted, no process, session
+// directory or socket is left. SIGTERM on start.sh (the harness's stop) stops the runner and the
+// server cleanly: exit code 0, no runner, vde_switch or qemu-system process, no
+// runtime/sessions/<id> and no socket. VDE only: no system image or KVM is needed.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -59,7 +61,7 @@ function processes() {
   return list;
 }
 
-const runnerOf = serverPid => processes().find(item => item.ppid === serverPid && item.cmdline.includes('runner/main.js')) || null;
+const childOf = (parentPid, script) => processes().find(item => item.ppid === parentPid && item.cmdline.includes(script)) || null;
 const groupMembers = pgrp => processes().filter(item => item.pgrp === pgrp);
 const emulators = pgrp => groupMembers(pgrp).filter(item => /^(vde_switch|qemu-system)/.test(item.comm));
 
@@ -95,17 +97,25 @@ async function run() {
   child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   const anonymous = new QemuWebClient(baseUrl);
-  await anonymous.waitForServer(30000, () => child.exitCode === null);
+  await anonymous.waitForServer(30000, child);
 
-  // The runner process: a child of the server, leader of its own process group, on a 0600 socket.
-  const runner = runnerOf(child.pid);
-  assert.ok(runner, 'no runner/main.js process under the server');
+  // Two processes under start.sh, each leading its own process group; the runner has its checks'
+  // flag and listens on a 0600 socket.
+  const runner = childOf(child.pid, 'runner/main.js');
+  const server = childOf(child.pid, 'server.js');
+  assert.ok(runner, 'no runner/main.js process under start.sh');
+  assert.ok(server, 'no server.js process under start.sh');
   assert.equal(runner.pgrp, runner.pid, 'the runner does not lead its own process group');
+  assert.equal(server.pgrp, server.pid, 'the server does not lead its own process group');
+  assert.notEqual(runner.pgrp, server.pgrp);
   assert.match(runner.cmdline, /--exit-on-disconnect/);
+  assert.match(child.output, /\[server\] /);
+  assert.match(child.output, /\[runner\] /);
+  assert.match(child.output, /QemuWeb is ready\./);
   const socketStat = fs.statSync(socketPath);
   assert.ok(socketStat.isSocket(), `${socketPath} is not a socket`);
   assert.equal(socketStat.mode & 0o777, 0o600, 'the runner socket is not 0600');
-  console.log(`Runner: process ${runner.pid} started by the server on ${path.relative(root, socketPath)}`);
+  console.log(`Runner: process ${runner.pid} and server ${server.pid} started by start.sh on ${path.relative(root, socketPath)}`);
 
   // A session works through the runner: switch start, terminal output, stop.
   const [user] = testUsers.users;
@@ -127,37 +137,44 @@ async function run() {
   assert.ok(fs.existsSync(sessionDir), 'no runtime/sessions/<id> for the session');
   console.log('Runner: switch started, terminal output received, switch stopped and restarted through the runner');
 
-  // SIGKILL on the runner: its group dies, the session is dropped, a new runner starts.
+  // SIGKILL on the runner: its group dies, the session is dropped, start.sh stops everything.
+  const exitedAfterKill = new Promise(resolve => child.once('exit', (code, signal) => resolve({code, signal})));
   process.kill(runner.pid, 'SIGKILL');
   await waitFor('session-deleted after the runner loss', () => session.events.some(item => item.event === 'session-deleted'));
   await waitFor('no process left in the killed runner group', () => !groupMembers(runner.pid).length);
   await waitFor('runtime directory of the dropped session removed', () => !fs.existsSync(sessionDir));
-  assert.equal(child.exitCode, null, 'the server exited after the runner loss');
-  const restarted = await waitFor('a new runner process', () => {
-    const next = runnerOf(child.pid);
-    return next && next.pid !== runner.pid ? next : null;
-  });
-  const fresh = await waitFor('a new session on the new runner', async () => {
-    const response = await carol.fetch('/api/general-settings');
-    return response.status === 200 ? response.json() : null;
-  });
-  assert.notEqual(fresh.sessionId, sessionId, 'the dropped session came back');
-  assert.deepEqual(await carol.request('/api/nodes'), []);
-  const second = await startSwitch(carol, 'sw2');
-  assert.equal(emulators(restarted.pid).length, 1);
-  console.log(`Runner: SIGKILL ended its group and its session; runner ${restarted.pid} took over (switch ${second} running)`);
+  const failure = await Promise.race([exitedAfterKill, delay(20000).then(() => ({code: 'timeout'}))]);
+  assert.ok(failure.code !== 0 && failure.code !== 'timeout', `start.sh did not fail after the runner loss (${failure.signal || failure.code})`);
+  await waitFor('no process left under the server group', () => !groupMembers(server.pid).length, 5000);
+  assert.equal(fs.existsSync(socketPath), false, 'runner socket left after the runner loss');
+  assert.match(child.output, /The runner exited/);
+  console.log(`Runner: SIGKILL ended its group and its session; start.sh stopped the server and exited (${failure.code}); nothing restarted`);
 
-  // Server shutdown: no runner, no emulator, no session directory, no socket.
-  const freshDir = path.join(runtime, 'sessions', fresh.sessionId);
+  // A second launch, then the stop: SIGTERM on start.sh leaves no process, session directory or socket.
+  child = spawnServer({port, usersFile: testUsers.file});
+  await new QemuWebClient(baseUrl).waitForServer(30000, child);
+  const again = await new QemuWebClient(baseUrl).signIn(user.login, user.password);
+  const next = childOf(child.pid, 'runner/main.js');
+  const nextServer = childOf(child.pid, 'server.js');
+  assert.ok(next && next.pid !== runner.pid, 'no new runner under the second start.sh');
+  const second = await startSwitch(again, 'sw2');
+  assert.equal(emulators(next.pid).length, 1);
+  const {sessionId: freshId} = await again.request('/api/general-settings');
+  assert.notEqual(freshId, sessionId);
+  const freshDir = path.join(runtime, 'sessions', freshId);
+  assert.ok(fs.existsSync(freshDir));
+  console.log(`Runner: start.sh launched again, runner ${next.pid} runs switch ${second}`);
+
   for (const socket of sockets) socket.close();
   const exited = new Promise(resolve => child.once('exit', (code, signal) => resolve({code, signal})));
   child.kill('SIGTERM');
-  const {code, signal} = await Promise.race([exited, delay(15000).then(() => ({code: 'timeout'}))]);
-  assert.equal(code, 0, `the server stopped with ${signal || code}`);
-  await waitFor('runner group gone after shutdown', () => !groupMembers(restarted.pid).length, 5000);
-  assert.equal(fs.existsSync(freshDir), false, 'runtime/sessions/<id> left after shutdown');
-  assert.equal(fs.existsSync(socketPath), false, 'runner socket left after shutdown');
-  console.log('Runner: server shutdown left no process, session directory or socket');
+  const {code, signal} = await Promise.race([exited, delay(30000).then(() => ({code: 'timeout'}))]);
+  assert.equal(code, 0, `start.sh stopped with ${signal || code}`);
+  await waitFor('runner group gone after the stop', () => !groupMembers(next.pid).length, 5000);
+  await waitFor('server group gone after the stop', () => !groupMembers(nextServer.pid).length, 5000);
+  assert.equal(fs.existsSync(freshDir), false, 'runtime/sessions/<id> left after the stop');
+  assert.equal(fs.existsSync(socketPath), false, 'runner socket left after the stop');
+  console.log('Runner: SIGTERM on start.sh stopped the runner and the server (exit 0), leaving no process, session directory or socket');
 }
 
 async function cleanup() {

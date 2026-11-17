@@ -30,7 +30,7 @@ flowchart TB
     Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt;, console:&lt;id&gt;:&lt;consoleId&gt; · sockets.js"]
     Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log and users.log · lib/audit.js"]
     Session["Session record · lib/session.js (ID, owner, runner ID)"]
-    Client["Runner client and registry · lib/runner-client.js, lib/runner-registry.js, lib/runner-gateway.js, lib/local-runner.js"]
+    Client["Runner client and registry · lib/runner-client.js, lib/runner-registry.js, lib/runner-gateway.js"]
   end
 
   subgraph RunnerProcess["Runner process · runner/main.js (own process group)"]
@@ -228,8 +228,8 @@ The server is split into layers with one-way dependencies:
   created as factories (`createCatalog(ctx)`, ...) in dependency order, and a
   resource sampling timer.
 - **`lib/`** is the control plane: `session-manager.js` (one session per user,
-  bound to a runner), `runner-client.js`, `runner-registry.js`,
-  `runner-gateway.js` and `local-runner.js` (the runners and their connections), `server-instance.js`
+  bound to a runner), `runner-client.js`, `runner-registry.js`
+  and `runner-gateway.js` (the runners and their connections), `server-instance.js`
   (server records used by the scripts) and `auth/` (authentication).
 - **`routes/`** and **`sockets.js`** form the web layer: HTTP routes by area and
   Socket.IO wiring. `server.js` only starts and wires everything.
@@ -238,7 +238,7 @@ The server is split into layers with one-way dependencies:
 
 | Module | Role |
 | --- | --- |
-| `server.js` | Startup and wiring: `--local` or manual mode, runner gateway, HTTP server (at once, or once the local runner said hello), Socket.IO, authentication, session manager and routes. |
+| `server.js` | Startup and wiring: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
 | `sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
 | `routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
@@ -253,9 +253,8 @@ The server is split into layers with one-way dependencies:
 | `lib/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
 | `lib/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
 | `lib/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities and client; `pickRunner(login)`. |
-| `lib/runner-gateway.js` | The runner socket `runtime/runner-<port>.sock`: stale-socket check, mode 0600, the rule that decides which connection is taken (one runner, registered as the trusted `local`). |
-| `lib/local-runner.js` | `--local` only: spawn the runner, `hello` timeout, process group kill, restart, stop; it makes the gateway accept only the runner it started. |
-| `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
+| `lib/runner-gateway.js` | The runner socket `runtime/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
+| `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `runtime/` connects). |
 | `lib/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
 | `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `lib/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
@@ -473,10 +472,9 @@ Order is kept since nothing is dropped.
 with its own client (`lib/runner-client.js`, one instance per connection,
 never a global): `id`, `state` (`starting`, `online`, `lost`), the
 capabilities from `hello` (engines, images, capacity, warnings), its
-`runtimeRoot`, `trusted`, `ownerLogin` (null for a shared runner; reserved for
-a runner owned by one student, unused) and a per-runner `lost` handler set by
-whoever started it. It holds one entry, `local`: a runner started by the
-server (`--local`) or by hand, which dialled the gateway. `trusted` is set only
+`runtimeRoot`, `trusted` and `ownerLogin` (null for a shared runner; reserved for
+a runner owned by one student, unused). It holds one entry, `local`: the
+runner of this machine, which dialled the gateway. `trusted` is set only
 for that entry; a `hello` is untrusted input, so later runners (5c) will not
 be trusted by default.
 
@@ -489,26 +487,20 @@ evaluated by each runner over its own sessions.
 
 ### Connection lifecycle
 
-A runner always dials the server; the server never connects out. Two modes:
-
-- **`node server.js --local`**: the server starts the runner itself (steps 1-2).
-- **`node server.js`** (manual, the default): the server only listens; a runner
-  started by hand (`./scripts/runner.sh`, `runner/main.js --port <n>`) dials
-  in at any time, and the server serves browsers without waiting for it.
-  Session routes answer 503 until one is online.
+A runner always dials the server; the server never connects out, and never
+starts or supervises a runner. A runner is a process of its own, started by
+`./scripts/runner.sh` (`runner/main.js --port <n>`): by `./scripts/start.sh`,
+which runs the server and a runner as two commands (development, tests, demo),
+by hand, or as a systemd service. The server only listens; a runner dials in at
+any time, and the server serves browsers without waiting for it. Session
+routes answer 503 until one is online.
 
 1. The server (`lib/runner-gateway.js`) listens on `runtime/runner-<port>.sock`
-   (mode 0600). With `--local`, `lib/local-runner.js` spawns `node runner/main.js
-   --connect <socket path> --runtime runtime --exit-on-disconnect` in its own
-   process group (`detached`, so a terminal Ctrl+C reaches the server only) and
-   the gateway accepts only that runner. In manual mode the gateway accepts one
-   connection when no runner is registered or the registered one is lost, and
-   closes any other at once.
+   (mode 0600). It accepts one connection when no runner is registered or the
+   registered one is lost, and closes any other at once.
 2. The runner resolves its executables (`runner/preflight.js`), prints its
-   configuration warnings, connects and sends `hello`. With `--local` the server
-   waits up to 10 s for `hello` and only then listens for browsers; a runner
-   that cannot start (an executable missing) is fatal there: its message is
-   printed and the server exits. A manual runner that cannot start just exits.
+   configuration warnings, connects and sends `hello`. A runner that cannot
+   start (an executable missing) prints its message and exits.
 3. On `hello`, the control plane resynchronises (`SessionManager.resync`): a
    session bound to that runner but absent from `hello` is dropped (as below).
    A session reported by the runner that the control plane does not know is
@@ -522,41 +514,50 @@ A runner always dials the server; the server never connects out. Two modes:
    the `lastActivity` of an adopted session is unknown, so it counts from its
    creation date. Untrusted runners (5c) never choose an owner: adoption is
    gated by `entry.trusted`.
-4. Server stop (SIGINT, SIGTERM, `./scripts/stop.sh`): with `--local`,
-   `lib/local-runner.js` sends `runner.shutdown`, which destroys every node of
-   every session and removes `runtime/sessions/<id>/`, then closes the
-   connection; the runner exits and anything left in its process group is
-   killed. In manual mode the server only closes the socket: the runner keeps
-   its machines. The server removes the socket and exits. A runner lost during
-   the stop is not restarted.
+4. Server stop (SIGINT, SIGTERM, `./scripts/stop.sh`): the server only closes
+   the socket and exits; it removes the socket. What happens to the machines
+   is the runner's choice (next point). `scripts/start.sh` stops its runner
+   first (SIGTERM: the runner destroys every node of every session and removes
+   `runtime/sessions/<id>/`), kills what is left of its process group, then
+   stops the server.
 5. `--exit-on-disconnect` is a choice of whoever starts the runner, not part
-   of the protocol: the local runner, a child of the server, treats the loss
-   of its control connection as the end of its life (it destroys every node,
+   of the protocol. `scripts/start.sh` uses it: the loss of the control
+   connection is then the end of the runner's life (it destroys every node,
    removes its session directories and exits), so a server killed with
-   SIGKILL leaves no VM behind. A runner started by hand runs without it: it
-   keeps its VMs, retries every 2 s and resynchronises with `hello`
+   SIGKILL leaves no VM behind. A runner started without it (the systemd
+   service) keeps its VMs, retries every 2 s and resynchronises with `hello`
    (adoption above). Its console shows "Waiting for the server", "Connected",
    "The server refused the connection" (a runner is already connected) and
    "Connection to the server lost".
 6. The server touches the runner's filesystem only when they share
-   `runtime/`: `pruneEmptyRuntimeSessions` runs only with `--local`, and the
-   `runtime/users/<login>` aliases are created only when `hello.runtimeRoot`
-   equals the server's `runtime/`.
+   `runtime/`, that is when `hello.runtimeRoot` equals the server's
+   `runtime/`: it then runs `pruneEmptyRuntimeSessions` when the runner
+   connects (sparing the sessions of that `hello` and those of other live
+   servers), creates the `runtime/users/<login>` aliases, and removes the
+   session directories of a lost runner.
+
+**Process groups in `scripts/start.sh`.** The script starts the server and the
+runner each with `setsid`, so a terminal Ctrl+C reaches the script only. When the
+runner ends for any reason, including SIGKILL, the script sends SIGKILL to
+what is left of its group (QEMU, `vde_switch`) and stops the server. On Ctrl+C
+or SIGTERM it stops the runner (bounded wait), then its group, then the server,
+and exits 0; when the server or the runner dies by itself it exits with its
+status. It never restarts anything: restarts are systemd's job
+(`docs/deployment.md`).
 
 **Runner loss.** The server never exits because a runner died. When a
-runner's connection drops or its process exits, the registry marks it `lost`
-and calls its `lost` handler. For a runner started by `--local`, `server.js`:
+runner's connection drops or its process exits, the registry marks it `lost`:
 
-1. kills the runner's process group with SIGKILL (QEMU and `vde_switch` are
-   in it; `vdeterm` ends with its pseudo-terminal) and removes the runtime
-   directories of its sessions;
-2. drops every session bound to it like a deleted session (users.log
-   `session-deleted` with the reason `runner lost`; browsers get
+1. the control plane drops every session bound to it like a deleted session
+   (users.log `session-deleted` with the reason `runner lost`; browsers get
    `session-deleted` and reload into a new, empty session): the VMs died with
-   the runner, so there is nothing to keep;
-3. respawns the local runner, with a short backoff (1, 2, 4 s); after three
-   failed respawns in a row the server exits with status 1 and a clear
-   message. Requests reaching a session while no runner is online answer 503.
+   the runner, so there is nothing to keep. When the runner shared `runtime/`,
+   the server removes the runtime directories of those sessions;
+2. nothing restarts the runner. Under `scripts/start.sh` the script kills the
+   runner's process group (QEMU and `vde_switch` are in it; `vdeterm` ends with
+   its pseudo-terminal) and stops the server; in a deployment systemd restarts
+   the runner service. Requests reaching a session while no runner is online
+   answer 503.
 
 In manual mode the sessions are dropped the same way, but nothing is killed or
 respawned: the runner is the user's to restart, and machines of a dead runner
@@ -576,8 +577,7 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
   default `$XDG_DATA_HOME/qemuweb-runner`, else
   `~/.local/share/qemuweb-runner`), `--config <file>` (system catalog,
   default the project's `config.json`). `--port <n>` is `--connect <this
-  project>/runtime/runner-<n>.sock`. The local runner spawned by
-  `server.js --local` and `scripts/runner.sh` get `--runtime runtime/`, so the files on disk do not change.
+  project>/runtime/runner-<n>.sock`. `scripts/runner.sh` gets `--runtime runtime/`, so the files on disk do not change.
   The 5c configuration (`~/.config/qemuweb-runner/config.toml`, systemd
   `--user` unit) is out of scope here.
 - The control socket is created by the control plane with mode 0600 in
@@ -592,8 +592,8 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
   `warnings`: sentences from `runner/config-warnings.js` about `config.json`
   on this machine (a system whose base image is missing, default memory or
   processors above what the machine has). The runner prints them itself at
-  startup, under "Checking configuration…", with a warning icon (on the
-  server's console with `--local`); the registry keeps them in the runner's
+  startup, under "Checking configuration…", with a warning icon (with a `[runner]`
+  prefix under `scripts/start.sh`); the registry keeps them in the runner's
   capabilities and `/admin` shows them. Starting a host adds a `# Warning:`
   line to its Log when the hosts of the runner would reserve more than 90 % of
   the RAM (`memoryWarning`, never blocking).
@@ -632,10 +632,11 @@ the trust model of the local runner: the control plane must not trust it.
 - Boundaries: `runner/` requires only `runner/`, `common/`, built-ins and
   `node-pty`; the control plane reaches the runner only through the client
   (`lib/runner-client.js`) and never requires `runner/`.
-- Integration: every existing scenario passes unchanged through the runner
-  process. `check-runner` (VDE only) checks the runner process of `--local`, a switch
-  session through it, the effect of SIGKILL on the runner, and that no
-  `vde_switch`/`qemu-system` process nor `runtime/sessions/<id>` remains.
-  `check-runner-manual` checks the manual mode: a runner started by hand
-  survives a SIGKILL of the server, reconnects to a new one and its session is
+- Integration: every scenario starts QemuWeb through `scripts/start.sh`, the real
+  launch sequence. `check-runner` (VDE only) checks that sequence: the server and
+  runner processes under `start.sh`, a switch session through it, the effect of
+  SIGKILL on the runner, and that no `vde_switch`/`qemu-system` process nor
+  `runtime/sessions/<id>` remains after a stop.
+  `check-runner-manual` runs the server alone (`node server.js`): a runner started
+  by hand survives a SIGKILL of the server, reconnects to a new one and its session is
   adopted.
