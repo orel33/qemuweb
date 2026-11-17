@@ -59,6 +59,33 @@ VirtualBox is optional: install it separately to provide `VBoxManage`. The
 VirtualBox engine is disabled in the Web interface when `VBoxManage` is
 unavailable.
 
+### Starting the server and the runner by hand
+
+`./start.sh` is the same as these two commands, run in two terminals from the
+repository root (`PORT` defaults to 3002 for both):
+
+```sh
+node server/main.js                          # terminal 1: the server (web interface, accounts, sessions)
+./scripts/runner.sh                          # terminal 2: the runner (QEMU and VDE processes)
+PORT=3003 node server/main.js                # another port: give the runner the same PORT
+PORT=3003 ./scripts/runner.sh
+```
+
+The runner connects to the server of its `PORT` and reconnects by itself, so
+the two can start in either order. Run it as your normal user, never as root.
+`./scripts/runner.sh --exit-on-disconnect` makes it stop its machines and exit
+when the server goes away, which is what `./start.sh` does.
+
+| To | Command |
+|---|---|
+| Stop the server only; the runner keeps the machines and waits for a new server | `Ctrl+C` in terminal 1, or `./scripts/stop.sh` (with `PORT=…` if needed) |
+| Stop the runner and all its machines | `Ctrl+C` in terminal 2 |
+| See the servers, runners and machines of this project | `./scripts/tree.sh` (`-w` to refresh, `--all` for other projects) |
+| Stop everything, including leftovers after a crash | `./scripts/killall.sh` |
+
+After a server restart, the runner's sessions are adopted again: users find
+their machines still running.
+
 ## Users and sessions
 
 Each user logs in with a login and a password and always finds the same
