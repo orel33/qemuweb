@@ -3,7 +3,7 @@
 // Process tree of QemuWeb servers: each server, its local runner (when the version has one) and
 // the QEMU, vde_switch and vdeterm processes below it, grouped by session and labelled with the
 // account, the node name and its system. Read-only: it only looks at /proc, ps and runtime/.
-//   scripts/tree.sh                  servers recorded in this project's runtime/server-<port>.pid
+//   scripts/tree.sh                  servers recorded in this project's runtime/server-<port>.pid, else those started elsewhere
 //   scripts/tree.sh --all            every QemuWeb server of the current user, in any directory
 //   scripts/tree.sh --pid PID        one server by PID (also --server-pid)
 //   scripts/tree.sh --watch [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
@@ -74,17 +74,20 @@ function findServers(table, options) {
     } catch (_) { /* No record. */ }
     return null;
   };
+  const scanAll = () => {
+    for (const entry of table.values()) {
+      if (entry.uid !== process.getuid() || !isServer(entry)) continue;
+      const root = serverRoot(entry);
+      if (root && fs.existsSync(path.join(root, 'lib', 'session-manager.js'))) add(entry, root, recordedPort(root, entry.pid));
+    }
+  };
   if (options.pid) {
     const entry = table.get(options.pid);
     if (!entry || !isServer(entry)) { console.error(`PID ${options.pid} is not a QemuWeb server.`); process.exit(1); }
     const root = serverRoot(entry);
     add(entry, root, recordedPort(root, entry.pid));
   } else if (options.all) {
-    for (const entry of table.values()) {
-      if (entry.uid !== process.getuid() || !isServer(entry)) continue;
-      const root = serverRoot(entry);
-      if (root && fs.existsSync(path.join(root, 'lib', 'session-manager.js'))) add(entry, root, recordedPort(root, entry.pid));
-    }
+    scanAll();
   } else {
     let names = [];
     try { names = fs.readdirSync(path.join(ROOT, 'runtime')); } catch (_) { /* No runtime directory. */ }
@@ -95,6 +98,8 @@ function findServers(table, options) {
       const entry = table.get(pid);
       if (entry && isServer(entry) && readLink(`/proc/${pid}/cwd`) === ROOT) add(entry, ROOT, Number(match[1]));
     }
+    // Nothing recorded for this project: show the servers started from other directories.
+    if (!found.size) { scanAll(); options.fellBack = found.size > 0; }
   }
   return [...found.values()].sort((a, b) => a.entry.pid - b.entry.pid);
 }
@@ -291,6 +296,7 @@ function report(options) {
   const servers = findServers(table, options);
   measureCpu(table, servers);
   const lines = [`${style.bold('QemuWeb processes')} of ${process.env.USER || process.getuid()} at ${new Date().toTimeString().slice(0, 8)}`];
+  if (options.fellBack) lines.push('', style.dim(`No server is recorded in ${path.join(ROOT, 'runtime')}: showing the QemuWeb servers of this user started elsewhere.`));
   for (const server of servers) lines.push('', ...serverReport(server, table, style, options.details));
   // A runner whose server is gone keeps nothing running by itself, but its machines may.
   const known = new Set(servers.map(server => server.entry.pid));
