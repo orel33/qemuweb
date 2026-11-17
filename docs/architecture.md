@@ -53,7 +53,7 @@ flowchart TB
   Manager -->|"req.workspace"| Routes
   Manager -->|"creates"| Session
   Manager -->|"session.create on the runner chosen by pickRunner"| Client
-  Client <-->|"runner protocol · runtime/runner-&lt;port&gt;.sock"| Runner
+  Client <-->|"runner protocol · &lt;runtime&gt;/runner-&lt;port&gt;.sock"| Runner
   Routes --> Session
   Routes -->|"one command per request, archive streams"| Client
   Sockets -->|"console input, snapshots"| Client
@@ -251,6 +251,7 @@ The server is split into layers with one-way dependencies:
 | Module | Role |
 | --- | --- |
 | `server/main.js` | Startup and wiring: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
+| `server/options.js` | The server's command line: `--listen <port>` (default 3002) and `--runtime <dir>` (default `runtime/`), anything else refused with exit status 2. |
 | `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
 | `server/routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
@@ -265,8 +266,8 @@ The server is split into layers with one-way dependencies:
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
 | `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities and client; `pickRunner(login)`. |
-| `server/runner-gateway.js` | The runner socket `runtime/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
-| `server/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `runtime/` connects). |
+| `server/runner-gateway.js` | The runner socket `<runtime>/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
+| `server/server-instance.js` | `<runtime>/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `runtime/` connects). |
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
 | `server/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
@@ -586,8 +587,7 @@ student's lab machine (roadmap, milestone 5, "Mode utilisateur").
 - It assumes no root, no capability, no dedicated system account, and writes
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
   `--connect <socket>` (control connection), `--runtime <dir>` (sessions,
-  default `$XDG_DATA_HOME/qemuweb-runner`, else
-  `~/.local/share/qemuweb-runner`), `--config <file>` (system catalog,
+  default the project's `runtime/`, shared with the server), `--config <file>` (system catalog,
   default the project's `config.json`). `--port <n>` is `--connect <this
   project>/runtime/runner-<n>.sock`. `scripts/runner.sh` gets `--runtime runtime/`, so the files on disk do not change.
   The 5c configuration (`~/.config/qemuweb-runner/config.toml`, systemd

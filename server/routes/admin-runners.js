@@ -21,15 +21,17 @@ function runnerSummaries({registry, manager}) {
   });
 }
 
-function connectHint({runners, port}) {
+// `runtime`: the --runtime of the server when it was given, else null (the runner's default is the same).
+function connectHint({runners, port, runtime = null}) {
   if (runners.some(runner => runner.state === 'online')) return null;
-  return `${port === DEFAULT_PORT ? '' : `PORT=${port} `}./scripts/runner.sh`;
+  const options = [port === DEFAULT_PORT ? '' : `--port ${port}`, runtime ? `--runtime ${runtime}` : ''].filter(Boolean);
+  return ['./scripts/runner.sh', ...options].join(' ');
 }
 
-function runnersHandler({manager, port}) {
+function runnersHandler({manager, port, runtime = null}) {
   return (_req, res) => {
     const runners = runnerSummaries({registry: manager.registry, manager});
-    res.json({runners, connectHint: connectHint({runners, port})});
+    res.json({runners, connectHint: connectHint({runners, port, runtime})});
   };
 }
 

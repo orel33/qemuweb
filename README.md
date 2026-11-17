@@ -45,7 +45,7 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    ```
 
 Open <http://127.0.0.1:3002> and log in. Press `Ctrl+C` to stop the server, or
-use `PORT=3003 ./start.sh` to choose another port. `./start.sh` starts two processes, the server and a
+use `./start.sh --listen 3003` to choose another port. `./start.sh` starts two processes, the server and a
 runner (the process that runs the machines), each as its own command, with output lines prefixed
 `[server]` and `[runner]`; stopping it stops both, and if one of them dies the other is stopped. To keep the machines running when the server
 restarts, run `./scripts/server.sh` in one terminal and `./scripts/runner.sh` in another (see
@@ -62,23 +62,23 @@ unavailable.
 ### Starting the server and the runner by hand
 
 `./start.sh` is the same as these two commands, run in two terminals from the
-repository root (`PORT` defaults to 3002 for both):
+repository root (port 3002 and `runtime/` of the repository by default, for both):
 
 ```sh
 ./scripts/server.sh                          # terminal 1: the server (web interface, accounts, sessions)
 ./scripts/runner.sh                          # terminal 2: the runner (QEMU and VDE processes)
-PORT=3003 ./scripts/server.sh                # another port: give the runner the same PORT
-PORT=3003 ./scripts/runner.sh
+./scripts/server.sh --listen 3003            # another port: the runner names the same one
+./scripts/runner.sh --port 3003
 ```
 
-The runner connects to the server of its `PORT` and reconnects by itself, so
+The runner connects to the server of its `--port` and reconnects by itself, so
 the two can start in either order. Run it as your normal user, never as root.
 `./scripts/runner.sh --exit-on-disconnect` makes it stop its machines and exit
 when the server goes away, which is what `./start.sh` does.
 
 | To | Command |
 |---|---|
-| Stop the server only; the runner keeps the machines and waits for a new server | `Ctrl+C` in terminal 1, or `./scripts/stop.sh` (with `PORT=…` if needed) |
+| Stop the server only; the runner keeps the machines and waits for a new server | `Ctrl+C` in terminal 1, or `./scripts/stop.sh` (with `--listen N` if needed) |
 | Stop the runner and all its machines | `Ctrl+C` in terminal 2 |
 | See the servers, runners and machines of this project | `./scripts/status.sh` (`-w` to refresh, `--all` for other projects) |
 | Stop everything, including leftovers after a crash | `./scripts/killall.sh` |
@@ -328,20 +328,27 @@ record the owner, so any user can load them.
 ## Server and runner command line
 
 `scripts/server.sh` and `scripts/runner.sh` are thin front ends to `node server/main.js` and
-`node runner/main.js`: they check `PORT`, refuse to run as root, move to the repository root and
-`exec` Node.js, so the process is the Node.js one (`./scripts/status.sh`, `stop.sh` and `killall.sh`
-recognise it). Both read `PORT` (default 3002), which ties a runner to its server.
+`node runner/main.js`: they refuse to run as root, move to the repository root and `exec` Node.js
+with their arguments, so the process is the Node.js one (`./scripts/status.sh`, `stop.sh` and
+`killall.sh` recognise it). The port and the runtime directory are options. The server and the runner share the runtime directory
+(`runtime/` of the repository by default), where the server creates `runner-<port>.sock` and the
+runner looks for it.
 
 ### Server: `./scripts/server.sh`
 
-The server takes **no option** except `-h`/`--help` (any other argument is refused with exit
-status 2); it is configured by environment variables, set in front of the command or in a systemd
-unit. `./scripts/server.sh --help` prints the same list. The values in effect, with where each
-comes from (`default`, `environment`, `derived`), are printed when the server starts.
+The server takes the two options below and `-h`/`--help` (any other argument is refused with exit
+status 2); the other settings are environment variables, set in front of the command or in a systemd
+unit. `./scripts/server.sh --help` prints the same lists. The values in effect, with where each
+comes from (`default`, `option`, `environment`, `derived`), are printed when the server starts.
+
+| Option | Default | Effect |
+| --- | --- | --- |
+| `--listen PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `<runtime>/runner-<PORT>.sock`, the socket its runner dials. |
+| `--runtime DIR` | `runtime/` of the repository | Runtime directory: sessions, user aliases, pid files and the runner socket. |
+| `-h`, `--help` | | Print the options and variables. |
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `runtime/runner-<PORT>.sock`, the socket its runner dials. |
 | `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
 | `QEMUWEB_USERS_FILE` | `users.json` | Users file (mode 0600). |
 | `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime in hours (0 to 2160), renewed while the user is active. |
@@ -351,36 +358,25 @@ comes from (`default`, `environment`, `derived`), are printed when the server st
 
 ### Runner: `./scripts/runner.sh [options]`
 
-The script runs `node runner/main.js --port $PORT --runtime <repository>/runtime` and passes any
-further option on. The runner is an ordinary unprivileged process; every path is a parameter.
+The script runs `node runner/main.js` and passes its options on. The runner is an ordinary unprivileged process; every path is a parameter.
 `--help` prints the lists below.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--port N` | `$PORT` | Reach the server of port N on `runtime/runner-N.sock` of the project. Set by `runner.sh`. |
-| `--connect SOCKET` | none | Unix socket of the server, instead of `--port`; use it by running `node runner/main.js` directly (`runner.sh` already passes `--port`, and the two are exclusive). |
-| `--runtime DIR` | `<repository>/runtime` with `runner.sh`; `$XDG_DATA_HOME/qemuweb-runner` otherwise | Where the runner keeps the sessions (`DIR/sessions/<id>/`). |
+| `--port N` | `3002` | Port of the server to reach: the runner dials `<runtime>/runner-N.sock`, where `<runtime>` is its `--runtime`. |
+| `--connect SOCKET` | none | Unix socket of the server, instead of `--port` (the two are exclusive). |
+| `--runtime DIR` | `runtime/` of the repository | Where the runner keeps the sessions (`DIR/sessions/<id>/`) and, with `--port`, looks for the server socket. The server shares it by default and cleans the empty sessions it leaves there. |
 | `--config FILE` | `config.json` of the project | System catalog (images, memory, QEMU options). |
 | `--exit-on-disconnect` | off | Losing the connection to the server stops every machine and ends the runner (what `start.sh` uses). Without it, the runner keeps its sessions and reconnects every 2 seconds. |
 | `-h`, `--help` | | Print the options and variables. |
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `PORT` | `3002` | With `runner.sh` only: the server to reach, as `--port`. |
-| `XDG_DATA_HOME` | `~/.local/share` | Standard variable. Base of the default `--runtime` of `node runner/main.js` (`$XDG_DATA_HOME/qemuweb-runner`); `runner.sh` always passes `--runtime`, so it has no effect there. |
 | `QEMU_SYSTEM_X86_64`, `QEMU_IMG`, `VDE_SWITCH`, `VDETERM`, `GENISOIMAGE`, `NODE`, `PYTHON3`, `VBOXMANAGE` | names in `.env` | Names or paths of the external programs: `.env.local` (absolute paths for this machine) wins over the environment, which wins over the default of `.env`. The runner disables an engine whose programs are missing. |
 
-`PORT` and `XDG_DATA_HOME` are different on purpose. `PORT` is a QemuWeb variable that identifies
-**which server instance** a runner belongs to: the same value on both sides, which is why
-`start.sh` and `runner.sh` read it. `XDG_DATA_HOME` is the system-wide standard for where a user
-program keeps its data: a runner is a user-land process that may run on a machine without this
-repository (a remote one, later), so by default it keeps its sessions in the user's data
-directory; `runner.sh` overrides that to keep the sessions under the project's `runtime/`.
-The server has no equivalent: it always lives in its repository and uses its `runtime/`.
-
 At startup each process prints what controls its behaviour, with the value and where it comes from
-(`default`, `environment` or the option or file that set it), also when it is the default. The server
-prints its `Settings` (the variables above and the paths derived from them); it runs no external
+(`default`, `option`, `environment` or the file that set it), also when it is the default. The server
+prints its `Settings` (the options and variables above and the runner socket derived from them); it runs no external
 program, so it has no dependency check. The runner prints its `Options`, then `Checking dependencies…`
 with, for each external program, the path found and the variable that named it (for example
 `QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env`).
@@ -393,14 +389,14 @@ At startup the runner prints its dependency and configuration checks and the sta
 | Command | Effect |
 | --- | --- |
 | `scripts/user.sh <command>` | Manage user accounts in `users.json`. |
-| `scripts/start.sh` | Start the server and a runner as two processes (`PORT`, default 3002; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
-| `scripts/server.sh` | Start the server alone on `PORT` (default 3002), the counterpart of `runner.sh`: a front end to `node server/main.js`. It takes no option; environment variables configure it (see [Server and runner command line](#server-and-runner-command-line)). Ctrl+C stops it. |
-| `scripts/runner.sh [--exit-on-disconnect]` | Start a runner for the server of `PORT` (default 3002), for example one started alone with `node server/main.js`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
-| `scripts/stop.sh` | Stop the server started on `PORT` (default 3002); a runner started alone keeps running. |
+| `scripts/start.sh` | Start the server and a runner as two processes (`[--listen N] [--runtime DIR]`, defaults 3002 and `runtime/`; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
+| `scripts/server.sh` | Start the server alone (`[--listen N] [--runtime DIR]`, defaults 3002 and `runtime/`), the counterpart of `runner.sh`: a front end to `node server/main.js`; other settings are environment variables (see [Server and runner command line](#server-and-runner-command-line)). Ctrl+C stops it. |
+| `scripts/runner.sh [options]` | Start a runner (`--port N` for the server to reach, default 3002; `--runtime DIR`; `--exit-on-disconnect`), for example one started alone with `node server/main.js`. It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
+| `scripts/stop.sh [--listen N] [--runtime DIR]` | Stop the server started on that port (default 3002); a runner started alone keeps running. |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
 | `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
 | `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove `runtime/` files and optionally images or downloads; `logs/` is always kept. |
-| `scripts/demo.sh` | Start the application on `PORT` (default 3003) with a temporary users file (`admin`, `toto`, `tutu`, passwords equal to logins) and `demo/lan.zip` loaded and started for `toto` and `tutu`. Ctrl+C stops it. See [test/TESTS.md](test/TESTS.md#manual-tests-of-the-web-interface). |
+| `scripts/demo.sh [--listen N]` | Start the application on port N (default 3003) with a temporary users file (`admin`, `toto`, `tutu`, passwords equal to logins) and `demo/lan.zip` loaded and started for `toto` and `tutu`. Ctrl+C stops it. See [test/TESTS.md](test/TESTS.md#manual-tests-of-the-web-interface). |
 
 ## Development
 
@@ -451,4 +447,4 @@ lists `vde`, then run `./start.sh` again.
 ### Port already in use
 
 Another QemuWeb server is probably running. Stop it with `scripts/stop.sh`, or
-start on another port with `PORT=3003 ./start.sh`.
+start on another port with `./start.sh --listen 3003`.

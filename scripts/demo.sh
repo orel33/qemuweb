@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
-# Demo of the Web interface on PORT (default 3003): a separate, temporary users file (never the
+# Demo of the Web interface on port 3003 or --listen N: a separate, temporary users file (never the
 # repository's users.json) with admin/admin (admin), toto/toto and tutu/tutu (students), and
 # demo/lan.zip loaded and started in the sessions of toto and tutu. Passwords equal to logins
-# exist only in this mode. Stop with Ctrl+C; scripts/stop.sh and scripts/status.sh also find the server.
+# exist only in this mode.
+#   ./scripts/demo.sh [--listen N]
+# Stop with Ctrl+C; scripts/stop.sh and scripts/status.sh also find the server.
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
 cd -- "$ROOT"
-PORT="${PORT:-3003}"
-if [[ ! "$PORT" =~ ^[0-9]+$ ]]; then
-  echo "Invalid PORT: $PORT" >&2
+port=3003
+case "${1:-}" in
+  '') ;;
+  -h|--help) echo "Usage: $0 [--listen N]"; exit 0 ;;
+  --listen) [[ $# -eq 2 ]] || { echo "Usage: $0 [--listen N]" >&2; exit 2; }; port="$2" ;;
+  *) echo "Usage: $0 [--listen N]" >&2; exit 2 ;;
+esac
+if [[ ! "$port" =~ ^[0-9]+$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
+  echo "Invalid port: $port (1 to 65535)" >&2
   exit 2
 fi
 
@@ -28,16 +36,16 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT TERM
 
-printf '\n== QemuWeb demo on port %s ==\n' "$PORT"
+printf '\n== QemuWeb demo on port %s ==\n' "$port"
 node scripts/demo.js prepare "$demo_dir/users.json"
 # The same two commands as scripts/start.sh (server and runner), with the temporary users file.
-PORT="$PORT" QEMUWEB_USERS_FILE="$demo_dir/users.json" ./scripts/start.sh &
+QEMUWEB_USERS_FILE="$demo_dir/users.json" ./scripts/start.sh --listen "$port" &
 demo_server_pid=$!
-node scripts/demo.js load "http://127.0.0.1:$PORT"
+node scripts/demo.js load "http://127.0.0.1:$port"
 
 cat <<EOT
 
-QemuWeb demo: http://127.0.0.1:$PORT
+QemuWeb demo: http://127.0.0.1:$port
   admin / admin   (admin)
   toto  / toto    (student, demo/lan.zip loaded and started)
   tutu  / tutu    (student, demo/lan.zip loaded and started)

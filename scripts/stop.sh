@@ -2,13 +2,29 @@
 set -euo pipefail
 
 root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-port="${PORT:-3002}"
-if [[ ! "$port" =~ ^[0-9]+$ ]]; then
-  echo "Invalid PORT: $port" >&2
-  exit 2
-fi
-pid_file="$root/runtime/server-$port.pid"
-session_file="$root/runtime/server-$port.session"
+# Stops the QemuWeb server of this project: ./scripts/stop.sh [--listen N] [--runtime DIR]
+usage() {
+  echo "Usage: $0 [--listen N] [--runtime DIR]"
+}
+parse_options() {
+  port=3002
+  runtime="$root/runtime"
+  while (( $# )); do
+    case "$1" in
+      -h|--help) usage; exit 0 ;;
+      --listen) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; port="$2"; shift 2 ;;
+      --runtime) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; runtime="$(realpath -m -- "$2")"; shift 2 ;;
+      *) usage >&2; exit 2 ;;
+    esac
+  done
+  if [[ ! "$port" =~ ^[0-9]+$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
+    echo "Invalid port: $port (1 to 65535)" >&2
+    exit 2
+  fi
+}
+parse_options "$@"
+pid_file="$runtime/server-$port.pid"
+session_file="$runtime/server-$port.session"
 
 if [[ ! -f "$pid_file" ]]; then
   rm -f -- "$session_file"
@@ -20,7 +36,7 @@ read -r pid < "$pid_file"
 if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
   rm -f -- "$pid_file"
   rm -f -- "$session_file"
-  rm -f -- "$root/runtime/runner-$port.sock"
+  rm -f -- "$runtime/runner-$port.sock"
   echo "No QemuWeb server running on port $port (stale PID removed)."
   exit 0
 fi
@@ -48,12 +64,16 @@ for _ in {1..60}; do
     # one started by start.sh (--exit-on-disconnect) stops them and exits by itself.
     while IFS= read -r runner; do
       [[ "$(readlink -f -- "/proc/$runner/cwd" 2>/dev/null || true)" == "$root" ]] || continue
-      if [[ "$(tr '\0' ' ' < "/proc/$runner/cmdline" 2>/dev/null || true)" == *--exit-on-disconnect* ]]; then
-        echo "The runner of start.sh (PID $runner) stops its machines and exits by itself."
-      else
-        echo "A runner (PID $runner) is still running on port $port: its VMs keep running. Stop it with Ctrl+C in its terminal, or ./scripts/killall.sh."
+      cmdline=" $(tr '\0' ' ' < "/proc/$runner/cmdline" 2>/dev/null || true)"
+      # The runner of this server: --port N, or no --port at all when the port is the default 3002.
+      if [[ "$cmdline" == *" --port $port "* ]] || { [[ "$cmdline" != *" --port "* ]] && (( port == 3002 )); }; then
+        if [[ "$cmdline" == *--exit-on-disconnect* ]]; then
+          echo "The runner of start.sh (PID $runner) stops its machines and exits by itself."
+        else
+          echo "A runner (PID $runner) is still running on port $port: its VMs keep running. Stop it with Ctrl+C in its terminal, or ./scripts/killall.sh."
+        fi
       fi
-    done < <(pgrep -u "$(id -u)" -f "runner/main.js --port $port( |\$)" 2>/dev/null || true)
+    done < <(pgrep -u "$(id -u)" -f "runner/main.js" 2>/dev/null || true)
     exit 0
   fi
   sleep 0.2
