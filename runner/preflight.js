@@ -72,8 +72,10 @@ function resolveCommands(root) {
   for (const key of [...requiredKeys, ...optionalKeys]) {
     const defaultCommand = base[key];
     const label = commandLabels[key].padEnd(labelWidth);
+    const configured = local[key] || process.env[key] || defaultCommand;
+    const source = local[key] ? '.env.local' : process.env[key] ? 'environment' : '.env';
+    const setting = `${key}=${configured ?? ""}, ${source}`;
     try {
-      const configured = local[key] || process.env[key] || defaultCommand;
       const resolved = findCommand(configured);
       // vdeterm treats its first argument as a management socket and has no version flag.
       if (key !== 'VDETERM') {
@@ -89,15 +91,15 @@ function resolveCommands(root) {
         }
       }
       commands[key] = resolved;
-      console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}`);
+      console.log(`  \x1b[32m✓\x1b[0m ${label}  ${resolved}  (${setting})`);
     } catch (error) {
       if (requiredKeys.includes(key)) {
         failures.push(key);
-        console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}`);
+        console.error(`  \x1b[31m✗\x1b[0m ${label}  ${error.message}  (${setting})`);
       } else {
         commands[key] = null;
         const engine = Object.keys(engineKeys).find(name => engineKeys[name].includes(key));
-        console.log(`  - ${label}  unavailable (${error.message}); ${engineNames[engine]} hosts disabled`);
+        console.log(`  - ${label}  unavailable (${error.message}); ${engineNames[engine]} hosts disabled  (${setting})`);
       }
     }
   }

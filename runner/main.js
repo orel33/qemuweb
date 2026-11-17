@@ -26,9 +26,10 @@ const RECONNECT_MS = 2000;
 const REFUSED_MS = 500;
 
 function parseArguments(argv) {
-  const options = {port: null, connect: null, runtime: null, config: path.join(root, 'config.json'), exitOnDisconnect: false};
+  const options = {port: null, connect: null, runtime: null, config: path.join(root, 'config.json'), exitOnDisconnect: false, given: new Set()};
   for (let index = 0; index < argv.length; index++) {
     const name = argv[index];
+    options.given.add(name);
     if (name === '--exit-on-disconnect') { options.exitOnDisconnect = true; continue; }
     if (name === '--port' && index + 1 < argv.length) {
       const port = argv[++index];
@@ -47,9 +48,22 @@ function parseArguments(argv) {
   return options;
 }
 
+// The options and where each value comes from, printed before the dependency check.
+function printOptions() {
+  const rows = [
+    ['Server', options.port ? `${options.connect}  (--port ${options.port})` : `${options.connect}  (--connect)`],
+    ['Runtime directory', `${options.runtime}  (${options.given.has('--runtime') ? '--runtime' : 'default'})`],
+    ['System catalog', `${options.config}  (${options.given.has('--config') ? '--config' : 'default'})`],
+    ['On disconnect', options.exitOnDisconnect ? 'stop every machine and exit  (--exit-on-disconnect)' : `keep the sessions and reconnect every ${RECONNECT_MS / 1000} s  (default)`]
+  ];
+  const width = Math.max(...rows.map(([name]) => name.length));
+  console.log(`Options\n${rows.map(([name, value]) => `  ${name.padEnd(width)}  ${value}`).join('\n')}\n`);
+}
+
 let options, commands;
 try {
   options = parseArguments(process.argv.slice(2));
+  printOptions();
   commands = resolveCommands(root);
   fs.mkdirSync(path.join(options.runtime, 'sessions'), {recursive: true});
 } catch (error) {

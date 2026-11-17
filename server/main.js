@@ -18,6 +18,7 @@ const {readCatalog} = require('../common/system-config');
 const {createAuth} = require('./auth');
 const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
+const {startupReport} = require('./startup-report');
 const packageInfo = require('../package.json');
 
 const RUNNER_HINT = './scripts/runner.sh';
@@ -28,9 +29,10 @@ if (args.length) {
   console.error(`Unknown argument: ${args[0]}. Usage: node server/main.js`);
   process.exit(2);
 }
-console.log(`QemuWeb ${packageInfo.version}\n`);
 const runtime = path.join(root, 'runtime');
 const port = Number(process.env.PORT || 3002);
+console.log(`QemuWeb ${packageInfo.version}\n`);
+console.log(`${startupReport({root, runtimeDir: runtime, port}).join('\n')}\n`);
 const configPath = path.join(root, 'config.json');
 fs.mkdirSync(path.join(runtime, 'sessions'), {recursive: true});
 const instance = new ServerInstance({runtimeRoot: runtime, port, ephemeral: process.env.QEMUWEB_TEST_SERVER === '1'});

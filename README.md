@@ -366,6 +366,13 @@ further option on. The runner is an ordinary unprivileged process; every path is
 | `XDG_DATA_HOME` | Base of the default `--runtime` when `node runner/main.js` is run directly. |
 | `VBOXMANAGE`, `GENISOIMAGE`, `NODE`, `PYTHON3`, `QEMU_IMG`, `QEMU_SYSTEM_X86_64`, `VDE_SWITCH`, `VDETERM` | Executable names: `.env.local` (absolute paths for this machine) wins over the environment, which wins over the default of `.env`. The runner checks them at startup and disables an engine whose commands are missing. |
 
+At startup each process prints what controls its behaviour, with the value and where it comes from
+(`default`, `environment` or the option or file that set it), also when it is the default. The server
+prints its `Settings` (the variables above and the paths derived from them); it runs no external
+program, so it has no dependency check. The runner prints its `Options`, then `Checking dependencies…`
+with, for each external program, the path found and the variable that named it (for example
+`QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env`).
+
 At startup the runner prints its dependency and configuration checks and the state of its connection
 (`Waiting for the server…`, `Connected to the server.`, `Connection to the server lost, reconnecting…`).
 
