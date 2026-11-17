@@ -1,7 +1,8 @@
 // Static dependency rules of the runner (see docs/architecture.md):
 // runner/ depends only on common/, Node built-ins and node-pty (the VDE switch
-// management terminal), and the rest of the server reaches the runner only
-// through runner/index.js.
+// management terminal), and the control plane reaches the runner only through
+// the protocol (lib/runner-client.js): it never requires runner/ (the local
+// runner is a separate process, runner/main.js, see lib/local-runner.js).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -37,12 +38,12 @@ test('runner/ requires only runner/, common/, Node built-ins and node-pty', () =
   }
 });
 
-test('the server reaches the runner only through its facade', () => {
+test('the control plane never requires runner/', () => {
   const files = ['server.js', 'sockets.js', ...sources('routes'), ...sources('lib'), ...sources('common')];
   for (const file of files) {
     for (const request of requires(file).filter(item => item.startsWith('.'))) {
       const target = path.relative(root, path.resolve(root, path.dirname(file), request));
-      if (target.startsWith('runner')) assert.match(target, /^runner(\/index(\.js)?)?$/, `${file} requires ${request}`);
+      assert.ok(!/^runner(\/|$)/.test(target), `${file} requires ${request}`);
     }
   }
 });

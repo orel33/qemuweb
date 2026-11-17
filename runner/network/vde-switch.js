@@ -34,6 +34,7 @@ function createVdeSwitch(ctx) {
       env: {...process.env, TERM: 'xterm-256color'}
     });
     node.switchTerminal = terminal;
+    if (ctx.flow.paused) terminal.pause();
     terminal.onData(data => {
       node.serialBuffer = (node.serialBuffer + data).slice(-262144);
       ctx.events.emit('serial', {nodeId: node.id, data});

@@ -1,12 +1,12 @@
-// Runner unit tests: the runner is driven through its facade with an injected
-// in-memory session and a temporary runtime directory. No HTTP server is
+// Runner unit tests: the runtime of one session (runner/session-runner.js) is driven with an
+// injected in-memory session and a temporary runtime directory. No HTTP server is
 // started and no emulator process is spawned.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const {createRunner} = require('../../runner');
+const {createSessionRunner} = require('../../runner/session-runner');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage'};
@@ -20,7 +20,7 @@ function setup(options = {}) {
   const runtimeDir = path.join(runtimeRoot, 'sessions', 'test');
   fs.mkdirSync(runtimeDir, {recursive: true});
   const session = {nodes: new Map(), engine: options.engine || 'qemu', runtimeDir, saveMetadata() {}};
-  const runner = createRunner({session, commands: {...commands, ...options.commands}, root, runtimeRoot,
+  const runner = createSessionRunner({session, commands: {...commands, ...options.commands}, root, runtimeRoot,
     configPath: path.join(root, 'config.json')});
   const cleanup = () => fs.rmSync(runtimeRoot, {recursive: true, force: true});
   return {runner, session, runtimeRoot, runtimeDir, cleanup};
@@ -32,7 +32,7 @@ function addSwitch(runner, id, name) {
   return node;
 }
 
-test('the facade reports available engines from the resolved commands', t => {
+test('the session runner reports available engines from the resolved commands', t => {
   const qemuOnly = setup();
   t.after(qemuOnly.cleanup);
   assert.deepEqual(qemuOnly.runner.availableEngines, ['qemu']);

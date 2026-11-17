@@ -11,22 +11,16 @@ const express = require('express');
 const {LOG_NAMES, readLogTail} = require('../lib/audit');
 const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisabled, removeAccount} = require('../lib/auth/users-store');
 
-// Summary of one session for the supervision table.
+// Summary of one session for the supervision table: the control plane's own fields, and the
+// counts the session's runner reports (runner/commands/consoles.js session.summary).
 // browsers: the owner's connected browser tabs (sockets.js).
-function sessionSummary({owner, session, runner}, adminLogin, browsers = 0) {
-  const nodes = [...session.nodes.values()];
-  const hosts = nodes.filter(node => node.kind === 'host');
-  const runningHosts = hosts.filter(node => node.machine);
-  const runningSwitches = nodes.filter(node => node.kind === 'switch' && node.machine);
-  const metrics = runner.metricsSnapshot();
-  const cpu = runningHosts.map(node => metrics[node.id]?.cpuPercent).filter(Number.isFinite);
+async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0) {
+  const counts = await runner.request('session.summary');
   return {
     login: owner, own: owner === adminLogin, browsers, sessionId: session.id, createdAt: session.createdAt,
-    lastActivity: session.lastActivityAt, nodes: nodes.length, hosts: hosts.length, switches: nodes.length - hosts.length,
-    runningHosts: runningHosts.length, runningSwitches: runningSwitches.length,
-    reservedRamMb: runningHosts.reduce((sum, node) => sum + (node.launchSettings?.memory || 0), 0),
-    cpuPercent: cpu.length ? Math.round(cpu.reduce((sum, value) => sum + value, 0) * 10) / 10 : null,
-    active: runningHosts.length + runningSwitches.length > 0
+    lastActivity: session.lastActivityAt, nodes: counts.nodes, hosts: counts.hosts, switches: counts.switches,
+    runningHosts: counts.runningHosts, runningSwitches: counts.runningSwitches, reservedRamMb: counts.reservedRamMb,
+    cpuPercent: counts.cpuPercent, active: counts.active
   };
 }
 
@@ -103,9 +97,11 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
     return {deleted, failed};
   }
 
-  router.get('/sessions', (req, res) => {
-    res.json(manager.list().map(workspace => sessionSummary(workspace, req.user.login, browsers(workspace.owner)))
-      .sort((a, b) => a.login.localeCompare(b.login)));
+  router.get('/sessions', async (req, res) => {
+    try {
+      const summaries = await Promise.all(manager.list().map(workspace => sessionSummary(workspace, req.user.login, browsers(workspace.owner))));
+      res.json(summaries.sort((a, b) => a.login.localeCompare(b.login)));
+    } catch (error) { res.status(error.status || 500).json({error: error.message}); }
   });
 
   router.post('/sessions/delete', (req, res) => {
@@ -127,7 +123,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
 
   router.post('/sessions/:login/stop', (req, res) => {
     const {login} = req.params;
-    audited(req, res, 'stop-all', {login}, async () => ({stopped: await workspaceOf(login).runner.stopAllNodes()}), () => 409);
+    audited(req, res, 'stop-all', {login}, async () => workspaceOf(login).runner.request('nodes.stopAll'), () => 409);
   });
 
   router.delete('/sessions/:login', (req, res) => {

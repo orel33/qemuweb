@@ -6,9 +6,9 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const {createRunner} = require('../../runner');
-const {Session} = require('../../lib/session');
-const {createSessionSnapshot} = require('../../lib/session-snapshot');
+const {createSessionRunner} = require('../../runner/session-runner');
+const {Session} = require('../../runner/session');
+const {createSessionSnapshot} = require('../../runner/archive-snapshot');
 const {selectedProfile, profileHash} = require('../../common/system-config');
 
 const root = path.join(__dirname, '..', '..');
@@ -20,8 +20,8 @@ function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-archive-'));
   const image = path.join(dir, 'base.raw');
   fs.writeFileSync(image, 'base image content');
-  const session = new Session({runtimeRoot: dir});
-  const runner = createRunner({session, commands, root, runtimeRoot: dir, configPath: path.join(root, 'config.json')});
+  const session = new Session({runtimeRoot: dir, id: '0000000000000001'});
+  const runner = createSessionRunner({session, commands, root, runtimeRoot: dir, configPath: path.join(root, 'config.json')});
   t.after(() => { runner.stopResourceSampling(); fs.rmSync(dir, {recursive: true, force: true}); });
   // The base image of every system is a small temporary file, so that no real image is read.
   const stub = {...runner, imageById: id => ({...runner.imageById(id), images: {raw: image, vdi: `${image}.vdi`}}), imagePath: file => file};

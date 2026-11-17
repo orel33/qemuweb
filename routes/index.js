@@ -1,8 +1,10 @@
 'use strict';
 
 // HTTP API of one session. Each session gets its own router, built when the session is
-// created, whose handlers close over that session and its runner only: a request reaches
-// the router of its user's session (req.workspace) and can never name a node of another one.
+// created, whose handlers close over that session and its runner handle only
+// (lib/runner-client.js session()): a request reaches the router of its user's session
+// (req.workspace) and can never name a node of another one. Node routes send one runner
+// command each; the runner answers 404 for a node ID that is not in the session.
 const express = require('express');
 
 const ROUTE_MODULES = ['settings', 'nodes', 'hosts', 'topology', 'archives', 'metrics'];
@@ -31,10 +33,10 @@ function userEvent(req) {
   }
 }
 
-// emit(event, payload) sends a per-session event to every browser of this session; userLog
-// (lib/audit.js createUserLog) receives the owner's node and archive actions, written once the
-// response is sent, with "ok" or the HTTP error status.
-function createSessionRouter({session, runner, commands, emit, userLog = {record() {}}}) {
+// runner: the session's runner handle. userLog (lib/audit.js createUserLog) receives the
+// owner's node and archive actions, written once the response is sent, with "ok" or the HTTP
+// error status.
+function createSessionRouter({session, runner, userLog = {record() {}}}) {
   const router = express.Router();
   router.use((req, res, next) => {
     const logged = !req.observed && userEvent(req);
@@ -45,13 +47,16 @@ function createSessionRouter({session, runner, commands, emit, userLog = {record
     if (session.archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
     next();
   });
-  // A well-formed node ID that is not in this session is unknown (404). The launch preview
-  // also describes host drafts that do not exist yet, so it is the only exception.
-  router.param('nodeId', (req, res, next, nodeId) => {
-    if (!NODE_ID.test(nodeId) || session.nodes.has(nodeId) || /^\/api\/nodes\/[^/]+\/options$/.test(req.path)) return next();
-    res.status(404).json({error: 'Unknown host or switch.'});
-  });
-  const context = {app: router, session, runner, commands, emit};
+  // A route that sends one runner command: args(req) builds its arguments; the result is the
+  // JSON response, an error answers with the runner's status or `status`.
+  const handle = (command, args, status = 400, {noStore = false} = {}) => async (req, res) => {
+    try {
+      const result = await runner.request(command, args(req));
+      if (noStore) res.set('Cache-Control', 'no-store');
+      res.json(result);
+    } catch (error) { res.status(error.status || status).json({error: error.message}); }
+  };
+  const context = {app: router, session, runner, handle};
   for (const name of ROUTE_MODULES) require(`./${name}`).register(context);
   return router;
 }

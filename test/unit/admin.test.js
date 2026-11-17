@@ -187,22 +187,26 @@ test('the observation gate admits admins reading another session only', () => {
   assert.equal(check({user: admin, method: 'DELETE', headers: {'X-Observe': 'boss'}}, null).observed, undefined, 'observing yourself is your own session');
 });
 
-test('the session summary counts nodes, running VMs, reserved RAM and CPU', () => {
-  const session = new Session({runtimeRoot: '/nonexistent', owner: 'toto', createdAt: '2026-01-01T00:00:00.000Z'});
-  const nodes = [
+test('the session summary counts nodes, running VMs, reserved RAM and CPU', async () => {
+  // The runner counts its nodes (session.summary)...
+  const {commands} = require('../../runner/commands/consoles');
+  const nodes = new Map([
     {id: 'h-1', kind: 'host', machine: {}, launchSettings: {memory: 1024}},
     {id: 'h-2', kind: 'host', machine: {}, launchSettings: {memory: 512}},
     {id: 'h-3', kind: 'host', machine: null, launchSettings: {memory: 4096}},
     {id: 's-1', kind: 'switch', machine: {}}
-  ];
-  for (const node of nodes) session.nodes.set(node.id, node);
-  const runner = {metricsSnapshot: () => ({'h-1': {cpuPercent: 12.5}, 'h-2': {cpuPercent: null}, 'h-3': {cpuPercent: null}})};
-  const summary = sessionSummary({owner: 'toto', session, runner}, 'boss', 2);
+  ].map(node => [node.id, node]));
+  const counts = commands['session.summary']({session: {nodes},
+    runner: {metricsSnapshot: () => ({'h-1': {cpuPercent: 12.5}, 'h-2': {cpuPercent: null}, 'h-3': {cpuPercent: null}})}});
+  // ...and the control plane adds what it owns.
+  const session = new Session({runtimeRoot: '/nonexistent', runnerId: 'local', owner: 'toto', createdAt: '2026-01-01T00:00:00.000Z'});
+  const runner = {request: async command => { assert.equal(command, 'session.summary'); return counts; }};
+  const summary = await sessionSummary({owner: 'toto', session, runner}, 'boss', 2);
   assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, sessionId: session.id, createdAt: '2026-01-01T00:00:00.000Z',
     lastActivity: '2026-01-01T00:00:00.000Z', nodes: 4, hosts: 3, switches: 1, runningHosts: 2, runningSwitches: 1,
     reservedRamMb: 1536, cpuPercent: 12.5, active: true});
-  assert.equal(sessionSummary({owner: 'boss', session, runner}, 'boss').own, true);
-  assert.equal(sessionSummary({owner: 'boss', session, runner}, 'boss').browsers, 0);
+  assert.equal((await sessionSummary({owner: 'boss', session, runner}, 'boss')).own, true);
+  assert.equal((await sessionSummary({owner: 'boss', session, runner}, 'boss')).browsers, 0);
 });
 
 test('session control is exclusive per session, renewed by input and released once', t => {

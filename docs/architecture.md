@@ -1,8 +1,9 @@
 # QemuWeb architecture
 
-QemuWeb separates the Web interface, the Node.js server, and local virtualization
-processes. The browser communicates with the server, which creates the machines
-and relays their consoles.
+QemuWeb separates the Web interface, the Node.js server (the control plane), and
+the runner, a separate process that creates the machines. The browser
+communicates with the server, which sends commands to the runner and relays the
+consoles.
 
 ## Glossary
 
@@ -28,8 +29,12 @@ flowchart TB
     Routes["HTTP API · one router per session · routes/"]
     Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt; · sockets.js"]
     Admin["Admin API /api/admin/* and /admin · routes/admin.js, logs/admin.log and users.log · lib/audit.js"]
-    Session["Session · lib/session.js, archives, topology"]
-    Runner["Runner instance per session · runner/index.js"]
+    Session["Session record · lib/session.js (ID, owner, runner ID)"]
+    Client["Runner client and registry · lib/runner-client.js, lib/runner-registry.js, lib/local-runner.js"]
+  end
+
+  subgraph RunnerProcess["Runner process · runner/main.js (own process group)"]
+    Runner["Runner service · runner/service.js, commands, every session of the machine"]
   end
 
   subgraph Local["Local processes"]
@@ -47,12 +52,13 @@ flowchart TB
   Auth -->|"socket.data.user"| Sockets
   Manager -->|"req.workspace"| Routes
   Manager -->|"creates"| Session
-  Manager -->|"createRunner per session"| Runner
+  Manager -->|"session.create on the runner chosen by pickRunner"| Client
+  Client <-->|"runner protocol · runtime/runner-&lt;port&gt;.sock"| Runner
   Routes --> Session
-  Routes -->|"actions, configuration, monitor"| Runner
-  Sockets -->|"console input"| Runner
-  Runner -.->|"events: state, log, serial, ..."| Sockets
-  Session -->|"injected at creation"| Runner
+  Routes -->|"one command per request, archive streams"| Client
+  Sockets -->|"console input, snapshots"| Client
+  Client -.->|"events: state, log, serial, ..."| Sockets
+  Manager --> Session
   Runner -->|"launch and control"| QEMU
   Runner -->|"VBoxManage"| VBox
   Runner -->|"launch"| VDE
@@ -74,15 +80,16 @@ flowchart TB
   separate VDE data socket.
 - **QEMU monitor:** the Monitor view sends HTTP commands to the server; the
   runner queries QEMU's HMP socket. This controls the emulator, not the guest shell.
-- **Actions and status:** the HTTP API asks the runner to start and stop
-  processes. The runner reports state, logs and serial output as events, which
+- **Actions and status:** each HTTP request of a session becomes one command
+  to the runner over the runner protocol (see [Runner interface](#runner-interface)).
+  The runner reports state, logs and serial output as events, which
   `sockets.js` forwards over Socket.IO to the relevant browser tabs.
 - **Users and sessions:** `lib/auth/` checks the signed cookie of every request
   and of the Socket.IO handshake (Origin checks are planned for milestone 6).
   `lib/session-manager.js` maps the login to its workspace `{session, runner}`,
   creating it at first use; it survives logouts and closed tabs until the user
   deletes it or the server stops. Each HTTP request goes to the router of the
-  user's own session, so a node ID is looked up only there (404 otherwise).
+  user's own session, whose runner looks a node ID up only there (404 otherwise).
   Per-session events go to the room `session:<id>`, per-node events to
   `node:<id>:<nodeId>`, which a socket joins only for a node of its own (or
   observed) session.
@@ -172,45 +179,54 @@ list is loaded.
 
 The server is split into layers with one-way dependencies:
 
-- **`runner/`** manages node processes. It depends only on `common/`, Node
-  built-ins and `node-pty`. The rest of the server requires only its facade
-  `runner/index.js` (`createRunner`), called once per session: each runner
-  receives its session by injection, has its own context (no module-level
-  state), its own resource sampling timer, and reports `state`, `log`,
-  `logs-reset`, `serial`, `serial-reset` and `nodes-removed` events through its
-  own `EventEmitter`. Its modules are factories (`createCatalog(ctx)`, ...)
-  attached to that context in dependency order.
-- **`lib/`** is the control plane: `session-manager.js` (one session and one
-  runner per user), `server-instance.js` (server records used by the scripts),
-  `auth/` (authentication), and the session and what describes it:
-  `session.js`, `session-snapshot.js` and `session-archive.js` (ZIP
-  export/import), `topology.js` (`.topo` files).
+- **`runner/`** is the runner: a separate process (`runner/main.js`) that
+  executes every session of the machine. It depends only on `common/`, Node
+  built-ins and `node-pty`, and the control plane never requires it: they
+  talk through the runner protocol (see [Runner interface](#runner-interface)).
+  `runner/service.js` holds the sessions and dispatches the commands of
+  `runner/commands/`; each session has its own runtime
+  (`runner/session-runner.js`): a context (no module-level state), modules
+  created as factories (`createCatalog(ctx)`, ...) in dependency order, and a
+  resource sampling timer.
+- **`lib/`** is the control plane: `session-manager.js` (one session per user,
+  bound to a runner), `runner-client.js`, `runner-registry.js` and
+  `local-runner.js` (the runners and their connections), `server-instance.js`
+  (server records used by the scripts) and `auth/` (authentication).
 - **`routes/`** and **`sockets.js`** form the web layer: HTTP routes by area and
   Socket.IO wiring. `server.js` only starts and wires everything.
-- **`common/`** holds code shared by the runner and the server.
+- **`common/`** holds code shared by the runner and the server, including the
+  protocol framing.
 
 | Module | Role |
 | --- | --- |
-| `server.js` | Startup and wiring: HTTP server, Socket.IO, authentication, session manager and routes. |
+| `server.js` | Startup and wiring: local runner, HTTP server (once the runner said hello), Socket.IO, authentication, session manager and routes. |
 | `sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
-| `routes/index.js` | Builds the router of one session from the route modules; 404 for a node ID outside the session. |
+| `routes/index.js` | Builds the router of one session from the route modules, and `handle(command, args, status)`: a route that sends one runner command. |
 | `routes/settings.js` | General settings, system catalog and startup CD-ROM capability. |
 | `routes/nodes.js` | Node listing, switches, start, stop, Resume all, Stop all, reboot, reset, monitor, rename and deletion. |
 | `routes/hosts.js` | Host creation, configuration and startup CD-ROM. |
 | `routes/topology.js` | Topology (`.topo`) preview, creation and export. |
-| `routes/archives.js` | Session ZIP size estimate, export, base image check and import. |
+| `routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream. |
 | `routes/metrics.js` | Per-host CPU and memory metrics. |
-| `lib/session-manager.js` | Login → `{session, runner}`; creation at first use, deletion, shutdown, `runtime/users/<login>` links. |
+| `lib/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`, `runtime/users/<login>` links. |
+| `lib/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
+| `lib/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
+| `lib/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities and client; `pickRunner(login)`. |
+| `lib/local-runner.js` | The local runner process: socket, spawn, `hello` timeout, process group kill, restart, stop. |
 | `lib/server-instance.js` | `runtime/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers. |
 | `lib/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie). |
 | `lib/audit.js` | Log directory (`logs/` or `QEMUWEB_LOG_DIR`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `lib/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
-| `lib/session.js` | One session: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date), and the last activity (memory only). |
-| `lib/session-snapshot.js`, `lib/session-archive.js` | What a session ZIP contains, and the ZIP format itself. |
-| `lib/topology.js` | `.topo` parsing and formatting. |
-| `runner/index.js` | Runner facade and event list; `stopAllNodes` stops every host then every switch and keeps the nodes; `startAllNodes` starts every stopped switch then every stopped host (Resume all and the automatic start of a loaded session); both skip nodes with an action in progress. |
-| `runner/context.js` | Per-runner context created by `createRunner`: session, commands, paths, `hostNodes()` of every session, events. |
+| `runner/main.js` | Runner process entry point: options (`--connect`, `--runtime`, `--config`, `--exit-on-disconnect`), preflight, connection. |
+| `runner/index.js` | Runner facade: `createRunnerService`, `serveConnection`, `resolveCommands`. |
+| `runner/service.js` | Every session of the runner: `session.create`/`session.delete`, command dispatch (404 for an unknown session or node), console input, `hello` with the capabilities, shutdown. |
+| `runner/endpoint.js` | The runner side of a connection: requests in arrival order, events, console output coalescing and backpressure. |
+| `runner/commands/` | Commands by area (nodes, hosts, settings, topology, archives, consoles); their results are the JSON bodies of the HTTP API. |
+| `runner/session.js` | One session as the runner holds it: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date). |
+| `runner/session-runner.js` | The runtime of one session; `stopAllNodes` stops every host then every switch and keeps the nodes; `startAllNodes` starts every stopped switch then every stopped host (Resume all and the automatic start of a loaded session); both skip nodes with an action in progress. |
+| `runner/context.js` | Per-session context: session, commands, paths, `hostNodes()` of every session of the runner, console flow, events. |
+| `runner/archive-snapshot.js`, `runner/archive-zip.js` | What a session ZIP contains, and the ZIP format itself. |
 | `runner/session-runtime.js` | Node records, runtime directories, hostname aliases, state and log publishing. |
 | `runner/node-lifecycle.js` | Host start, stop, reboot, reset and deletion. |
 | `runner/catalog.js`, `runner/host-config.js` | System catalog and `host.json`. |
@@ -220,7 +236,7 @@ The server is split into layers with one-way dependencies:
 | `runner/console/` | Guest serial console and startup hook marker filtering. |
 | `runner/media/` | Working disks, startup ISO, startup files and base image hashes. |
 | `runner/preflight.js`, `runner/resources.js`, `runner/metrics.js` | Executable checks; CPU and memory sampling. |
-| `common/` | IDs, launch settings, `config.json` validation, JSON writes, shell quoting. |
+| `common/` | Runner protocol framing (`runner-protocol.js`), `.topo` parsing (`topology.js`), IDs, launch settings, `config.json` validation, JSON writes, shell quoting. |
 
 ### Web interface
 
@@ -268,3 +284,266 @@ Stopping a host keeps its working disk for a later start. Resetting recreates
 the disk from the base image. Removing a node or stopping the server cleans
 up its temporary files. A ZIP export can preserve a session explicitly; a
 `.topo` file describes only hosts, switches, and their connections.
+
+## Runner interface
+
+The runner executes sessions; the control plane (web server) never touches a
+node process, a node record or a runtime file. They talk through one
+connection carrying a small message protocol, the same for the local runner
+(a separate process on a Unix socket) and for remote runners (WebSocket over
+TLS, milestone 5c). Unit tests run the same protocol over an in-memory stream
+pair (`test/unit/runner-pair.js`).
+
+### Ownership
+
+| Data | Owner |
+| --- | --- |
+| Node records (configuration, runtime state, run log, serial buffer, disks, startup files, launch settings, NIC assignment) | Runner (source of truth) |
+| `runtime/sessions/<id>/`: `session.json`, `meta.json`, `host.json`, `switch.json`, `startup/`, working disks, sockets, hostname aliases | Runner |
+| Session engine (`qemu`/`vbox`) | Runner (in `session.json`) |
+| System catalog (`config.json`), executables, `/dev/kvm`, resource sampling | Runner |
+| Login → session ID, owner, creation date, last activity, archive lock, HTTP routers, Socket.IO rooms, console control, view states, audit logs | Control plane |
+| `runtime/users/<login>` alias, `runtime/server-<port>.*` records | Control plane (local filesystem only) |
+
+The control plane keeps no copy of node records. Everything that reads or
+changes a node (validation of a host configuration, topology loading, archive
+installation, start/stop ordering) runs in the runner, as one command. A route
+of `routes/` becomes: parse the HTTP request, send one command, map the result
+or the error to the HTTP response. The runner's answers are exactly the JSON
+bodies the routes return today.
+
+### Transport and framing
+
+One bidirectional byte stream: a Unix stream socket for the local runner. The
+control plane listens on `runtime/runner-<port>.sock` (mode 0600) and the
+runner connects to it, the same direction as a remote runner dialling out in
+5c. Frames are length-prefixed:
+
+```text
+uint32 BE  length of what follows (1 + payload), at most 16 MiB
+uint8      type: 0x4a 'J' = JSON message (UTF-8), 0x42 'B' = binary stream chunk
+payload    J: one JSON object
+           B: uint32 BE stream ID, then raw bytes (at most 1 MiB)
+```
+
+Length prefixes instead of newline-delimited JSON, because archives carry
+binary data (QCOW2 disks up to 64 GiB): base64 in JSON would cost a third
+more and a JSON parse per chunk. Each frame maps one-to-one to a WebSocket
+text or binary message, so 5c changes the transport, not the protocol. No new
+dependency: the codec is about 60 lines over `net`.
+
+Console data stays JSON text: the runner already decodes serial and `vdeterm`
+output as UTF-8 (`StringDecoder`), and browsers receive strings.
+
+### Messages
+
+```text
+hello     runner -> CP, first message of every connection
+          {type:'hello', protocol:1, pid, engines:['qemu'|'vbox'...], kvm,
+           cpus, memoryBytes, images:{<system>:{raw?, vdi?}} (each {size, sha256|null}),
+           sessions:[{sessionId, engine, nodes:[<listNodes entry>...]}]}
+request   CP -> runner  {type:'request', id, command, sessionId?, args}
+response  runner -> CP  {type:'response', id, result}
+                        {type:'response', id, error:{message, status?}}
+event     runner -> CP  {type:'event', sessionId, event, payload}
+input     CP -> runner  {type:'input', sessionId, nodeId, data}   no response
+stream    either way    {type:'stream', id, op:'end'|'error'|'credit', message?, bytes?}
+```
+
+- `id` is a positive integer chosen by the sender of the request, unique on the
+  connection; responses may arrive in any order. A request pending when the
+  connection closes fails with "Runner connection lost.".
+- `error.message` is the user-facing message the API returns today; `status`
+  is the HTTP status when the runner decided it (unknown node 404, busy or
+  non-empty session 409, start error 400/500); otherwise the route's default
+  status applies.
+- Every per-session command and event carries `sessionId`: one runner process
+  serves every session of the machine (resource rules such as "no
+  VirtualBox next to QEMU/KVM" and the 5c capacity limits span sessions).
+- `input` (console keystrokes, at most 4096 characters, already checked by
+  `sockets.js`) has no response, to keep typing latency at one write. Messages
+  on one connection are handled in order, so input, resize and clear keep
+  their order, and so do the events of a node.
+
+### Commands
+
+Session: `session.create {sessionId, owner, createdAt}` (directory,
+`session.json`, `meta.json`), `session.delete` (destroy every node, remove the
+directory), `session.settings` / `session.setEngine {engine}`,
+`session.summary` (counts, running nodes, reserved RAM and CPU, for `/admin`),
+`runner.shutdown` (every session, used at server stop).
+
+Nodes (args mirror the HTTP bodies and queries): `nodes.list`,
+`nodes.metrics`, `nodes.stopAll`, `nodes.startAll`, `nodes.deleteAll`,
+`node.preview`, `node.start {nodeId, engine?, imageId?}`, `node.stop`,
+`node.reboot`, `node.reset`, `node.monitor {command}`, `node.rename {name}`,
+`node.delete`, `switch.create {id, name, autostart}`, `host.create {...}`,
+`host.config` / `host.configure {...}`, `host.guestMedia` /
+`host.setGuestMedia`, `host.buildGuestCdrom`, `host.attachGuestCdrom`.
+
+Catalog and files: `catalog.systems`, `topology.preview {text, engine}`,
+`topology.load {text, engine, autostart, closePrevious}`, `topology.export`,
+`archive.estimate {includeDisks}`, `archive.check {engine, baseImages}`,
+`archive.export {includeDisks}` (result `{stream, size}`, then the ZIP on that
+stream), `archive.import {stream, query, contentType, declaredBytes}`
+(the CP sends the uploaded ZIP on that stream as it arrives, with the HTTP
+query options, type and declared size; the result is the import response).
+Commands whose HTTP route takes a JSON body receive it as `body`
+(`host.create`, `host.configure`, `session.setEngine`, `topology.*`, ...).
+
+Consoles: `console.attach {nodeId}` (the `node-snapshot` content: state, logs,
+serial buffer), `console.resize {nodeId, cols, rows}`, `console.clear {nodeId,
+line, column}`, and `input` messages.
+
+### Events
+
+`state`, `log`, `logs-reset`, `serial`, `serial-reset`, `nodes-removed`,
+`nodes-changed`, `node-renamed` and `general-settings-changed`, with today's
+Socket.IO payloads; `sockets.js` forwards them to the rooms of `sessionId`
+(the last three were emitted by routes, they now come from the runner like the
+others).
+
+### Streams and backpressure
+
+Archive transfers use binary frames on a stream ID allocated by the sender of
+the request (`archive.import`) or by the runner (`archive.export`). Credit
+flow control: a sender keeps at most 4 MiB unacknowledged per stream, the
+receiver returns `credit` messages as it writes the bytes to disk or to the
+HTTP response; `end` closes the stream, `error` aborts it, and so does the
+connection loss. A receiver that gives up sends `cancel`: the sender's stream
+ends with that error and no answer; late frames for a finished stream are
+ignored, and no stream ever raises an unhandled `error` event. A transfer therefore never buffers more than 4 MiB in memory,
+whatever the archive size.
+
+Console output is coalesced per node and flushed once per event-loop turn. If
+the connection's write buffer exceeds 8 MiB (a guest flooding its console),
+the runner pauses the serial sockets and `vdeterm` terminals until the buffer
+drains: the guest blocks on its UART instead of growing the server's memory.
+Order is kept since nothing is dropped.
+
+### Runners in the control plane
+
+`lib/runner-registry.js` holds every runner the control plane knows, each
+with its own client (`lib/runner-client.js`, one instance per connection,
+never a global): `id`, `state` (`starting`, `online`, `lost`), the
+capabilities from `hello` (engines, later images and capacity), `ownerLogin`
+(null for a shared runner; reserved for a runner owned by one student, unused
+in 5a/5b) and a per-runner `lost` handler set by whoever started it. In 5a/5b
+it holds one entry, `local`, started by `server.js`.
+
+The session manager binds each session ID to a runner ID. The control plane
+assigns session IDs (the runner never invents one) and chooses the runner in
+one place, `pickRunner(login)`, called once when a session is created; it
+returns the local runner until placement arrives in 5c. Resource rules that
+span sessions (QEMU/KVM next to VirtualBox, metrics, later capacity) are
+evaluated by each runner over its own sessions.
+
+### Connection lifecycle (local runner, 5b)
+
+1. `server.js` listens on `runtime/runner-<port>.sock`, then spawns
+   `node runner/main.js --connect <socket path> --runtime runtime
+   --exit-on-disconnect` in its
+   own process group (`detached`, so a terminal Ctrl+C reaches the server
+   only).
+2. The runner resolves its executables (`runner/preflight.js`), connects and
+   sends `hello`. The server accepts one connection per spawned runner, waits
+   up to 10 s for `hello`, marks the runner `online`, and only then listens
+   for browsers. At startup, a runner that cannot start (an executable
+   missing) is fatal: its message is printed and the server exits.
+3. On `hello`, the control plane resynchronises: a session bound to that
+   runner but absent from `hello` is dropped (as below), a session reported by
+   the runner but unknown to the control plane is deleted with
+   `session.delete`. On a fresh local runner both lists are empty; the same
+   step serves the reconnection of remote runners in 5c.
+4. Server stop (SIGINT, SIGTERM, `./scripts/stop.sh`): `lib/local-runner.js`
+   sends `runner.shutdown`, which destroys every node of every session and
+   removes `runtime/sessions/<id>/`, then closes the connection; the runner
+   exits, anything left in its process group is killed, and the server
+   removes the socket and exits. A runner lost during the stop is not
+   restarted.
+5. `--exit-on-disconnect` is a choice of whoever starts the runner, not part
+   of the protocol: the local runner, a child of the server, treats the loss
+   of its control connection as the end of its life (it destroys every node,
+   removes its session directories and exits), so a server killed with
+   SIGKILL leaves no VM behind. A remote runner (5c) runs without it: it
+   keeps its VMs, reconnects and resynchronises with `hello`.
+
+**Runner loss.** The server never exits because a runner died. When a
+runner's connection drops or its process exits, the registry marks it `lost`
+and calls its `lost` handler. For the local runner, `server.js`:
+
+1. kills the runner's process group with SIGKILL (QEMU and `vde_switch` are
+   in it; `vdeterm` ends with its pseudo-terminal) and removes the runtime
+   directories of its sessions;
+2. drops every session bound to it like a deleted session (users.log
+   `session-deleted` with the reason `runner lost`; browsers get
+   `session-deleted` and reload into a new, empty session): the VMs died with
+   the runner, so there is nothing to keep;
+3. respawns the local runner, with a short backoff (1, 2, 4 s); after three
+   failed respawns in a row the server exits with status 1 and a clear
+   message. Requests reaching a session while no runner is online answer 503.
+
+VirtualBox VMs run under VBoxSVC, outside the process group: after a runner
+crash they stay registered, as after a server crash today.
+
+### User-land runners
+
+A runner is an ordinary unprivileged process, never root, possibly on a
+student's lab machine (roadmap, milestone 5, "Mode utilisateur").
+
+- It assumes no root, no capability, no dedicated system account, and writes
+  nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
+  `--connect <socket>` (control connection), `--runtime <dir>` (sessions,
+  default `$XDG_DATA_HOME/qemuweb-runner`, else
+  `~/.local/share/qemuweb-runner`), `--config <file>` (system catalog,
+  default the project's `config.json`). The local runner spawned by
+  `server.js` gets `--runtime runtime/`, so the files on disk do not change.
+  The 5c configuration (`~/.config/qemuweb-runner/config.toml`, systemd
+  `--user` unit) is out of scope here.
+- The control socket is created by the control plane with mode 0600 in
+  `runtime/`, a directory the same user owns.
+- QEMU and VDE run unprivileged; only `/dev/kvm` needs the `kvm` group. The
+  runner announces what it can do in `hello` instead of failing late:
+  `engines`, `kvm` (true when `/dev/kvm` is readable and writable),
+  `cpus`, `memoryBytes`, and `images` (per system of its catalog: the RAW
+  and VDI images present, with size and SHA-256 when known from
+  `<image>.sha256` or the cache, never computed at connection time).
+- Nothing in the protocol relies on a shared user, uid or filesystem: paths
+  never cross the connection as data the other side opens (archives travel as
+  streams, the launch preview shows paths for display only), and a session
+  is named by its ID only.
+
+### Multiple runners and untrusted runners
+
+The 5a/5b choices hold for N runners: one client per runner, sessions bound
+to a runner, `pickRunner` as the single placement point, per-runner
+accounting. A runner on a student's own machine (owned by that student) flips
+the trust model of the local runner: the control plane must not trust it.
+
+- Everything from a runner is checked: an event or a response is accepted
+  only for a session ID bound to that runner, frames and payloads have size
+  limits, and payloads are validated before they reach a browser (console data
+  is untrusted text, as it already is for guests).
+- A runner provides no identity or authorization: logins, roles, console
+  control and audit stay in the control plane, and a runner only ever receives
+  commands for its own sessions.
+- Later (5c/6, no code now): runner tokens bound to a user (`ownerLogin`),
+  placement restricted to the owner's runners, quotas enforced by the control
+  plane as well as by the runner, and archive streams size-limited on both
+  sides.
+
+### Testing
+
+- Unit: the frame codec (split and merged chunks, size limits, binary
+  frames), the client (request/response matching, errors with status,
+  connection loss failing pending requests, events), the dispatcher (unknown
+  command, unknown session or node), stream credit; client and dispatcher
+  connected through an in-memory duplex pair, no process. The existing runner
+  unit tests drive the runner service directly.
+- Boundaries: `runner/` requires only `runner/`, `common/`, built-ins and
+  `node-pty`; the control plane reaches the runner only through the client
+  (`lib/runner-client.js`) and never requires `runner/`.
+- Integration: every existing scenario passes unchanged through the runner
+  process. `check-runner` (VDE only) checks the runner process, a switch
+  session through it, the effect of SIGKILL on the runner, and that no
+  `vde_switch`/`qemu-system` process nor `runtime/sessions/<id>` remains.

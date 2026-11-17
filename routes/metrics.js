@@ -1,15 +1,9 @@
 'use strict';
 
-// Per-host CPU and memory metrics.
+// Per-host CPU and memory metrics (runner command nodes.metrics).
 
-
-function register({app, session, runner, emit}) {
-
-
-  app.get('/api/metrics', (_req, res) => {
-    res.set('Cache-Control', 'no-store');
-    res.json(runner.metricsSnapshot());
-  });
+function register({app, handle}) {
+  app.get('/api/metrics', handle('nodes.metrics', () => ({}), 500, {noStore: true}));
 }
 
 module.exports = {register};

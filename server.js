@@ -6,10 +6,11 @@ const http = require('http');
 const path = require('path');
 const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
-const {createRunner, resolveCommands} = require('./runner');
+const {RunnerRegistry} = require('./lib/runner-registry');
+const {createLocalRunner} = require('./lib/local-runner');
 const {ServerInstance} = require('./lib/server-instance');
 const {SessionManager} = require('./lib/session-manager');
-const {attachSockets, sessionRoom} = require('./sockets');
+const {attachSockets} = require('./sockets');
 const {createSessionRouter} = require('./routes');
 const {readCatalog} = require('./common/system-config');
 const {createAuth} = require('./lib/auth');
@@ -19,9 +20,6 @@ const packageInfo = require('./package.json');
 
 const root = __dirname;
 console.log(`QemuWeb ${packageInfo.version}\n`);
-let commands;
-try { commands = resolveCommands(root); }
-catch (error) { console.error(error.message); process.exit(1); }
 const runtime = path.join(root, 'runtime');
 const port = Number(process.env.PORT || 3002);
 const configPath = path.join(root, 'config.json');
@@ -39,23 +37,25 @@ catch (error) { console.error(`Cannot create the log directory: ${error.message}
 const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
 
-// One session and one runner per user, each with its own HTTP router.
-const manager = new SessionManager({
-  runtimeRoot: runtime,
-  createRunner: (session, hostNodes) => createRunner({session, commands, root, runtimeRoot: runtime, configPath, hostNodes})
-});
+// One session per user, each with its own HTTP router, executed by a runner: here the local
+// runner, a child process reached over runtime/runner-<port>.sock (lib/local-runner.js).
+const registry = new RunnerRegistry();
+const manager = new SessionManager({runtimeRoot: runtime, registry});
+const localRunner = createLocalRunner({root, runtimeRoot: runtime, configPath, port, registry,
+  boundSessions: () => manager.list().filter(workspace => workspace.session.runnerId === 'local').map(workspace => workspace.session.id),
+  onFatal: error => { console.error(error.message); localRunner.kill(); process.exit(1); }});
 manager.on('created', workspace => {
   const {session, runner} = workspace;
-  workspace.router = createSessionRouter({session, runner, commands, userLog,
-    emit: (event, payload) => io.to(sessionRoom(session)).emit(event, payload)});
+  workspace.router = createSessionRouter({session, runner, userLog});
   userLog.record(workspace.owner, 'session-created', {sessionId: session.id});
   console.log(`Session ${session.id} opened for ${workspace.owner}.`);
 });
-manager.on('removed', (workspace, by) => userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by}));
+manager.on('removed', (workspace, by, reason) => {
+  userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by, ...(reason ? {reason} : {})});
+  if (reason) console.log(`Session ${workspace.session.id} of ${workspace.owner} dropped: ${reason}.`);
+});
 for (const event of ['created', 'removed']) manager.on(event, () => { if (server.listening) instance.updateSessions(manager.sessionIds()); });
 readCatalog(configPath);
-try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
-catch (_) { console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.'); }
 
 let auth;
 try { auth = createAuth({root, userLog}); }
@@ -112,13 +112,22 @@ app.use((req, res, next) => {
 server.on('error', error => {
   if (error.code === 'EADDRINUSE') {
     console.error(`Port ${port} is already in use. Stop the existing server or run PORT=${port + 1} npm start.`);
-    process.exitCode = 1;
+    localRunner.stop().finally(() => process.exit(1));
     return;
   }
   console.error('Server error:', error);
   process.exitCode = 1;
 });
-server.listen(port, '127.0.0.1', () => {
+// Browsers are served once the local runner said hello; a runner that cannot start stops the server.
+localRunner.start().then(hello => {
+  if (!hello.kvm) console.warn('QEMU/KVM unavailable: /dev/kvm is missing or inaccessible.');
+  server.listen(port, '127.0.0.1', onListening);
+}, error => {
+  console.error(`Cannot start the local runner: ${error.message}`);
+  localRunner.kill();
+  process.exit(1);
+});
+function onListening() {
   instance.pruneEmptyRuntimeSessions();
   manager.pruneUserAliases();
   instance.writeRecords(manager.sessionIds());
@@ -126,11 +135,12 @@ server.listen(port, '127.0.0.1', () => {
   console.log(`  Web interface      http://127.0.0.1:${port}`);
   console.log(`  Sessions           ${path.join(runtime, 'sessions')} (runtime/users/<login> links)`);
   console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
-});
+}
 
 process.on('exit', () => {
+  localRunner.kill();
   instance.removeRecords();
-  manager.removeEmptyRuntimeSessions();
+  manager.pruneUserAliases();
 });
 
 let shuttingDown = false;
@@ -138,7 +148,7 @@ async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   const forceExit = setTimeout(() => process.exit(1), 10000);
-  await manager.shutdown();
+  await localRunner.stop();
   io.close(() => {
     clearTimeout(forceExit);
     process.exit(0);

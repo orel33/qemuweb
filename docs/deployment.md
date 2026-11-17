@@ -53,6 +53,7 @@ Environment=PORT=3002
 Environment=QEMUWEB_TRUST_PROXY=loopback
 ExecStart=/usr/bin/node server.js
 KillSignal=SIGTERM
+KillMode=mixed
 TimeoutStopSec=30
 
 [Install]
@@ -61,6 +62,36 @@ WantedBy=multi-user.target
 
 Stopping the service stops every machine of every user and empties
 `runtime/sessions/`; tell users to save a session ZIP first.
+
+`KillMode=mixed` sends SIGTERM to the server only: the server then stops its
+runner, which stops the machines in order. SIGKILL goes to every remaining
+process of the unit only after `TimeoutStopSec`.
+
+## The runner process
+
+The server does not run the machines itself. At startup it creates the socket
+`runtime/runner-<port>.sock` (mode 0600), starts `node runner/main.js`
+(the local runner) as its child, and serves browsers only once the runner has
+connected and announced itself. The runner runs under the same account as the
+server, never root, in its own process group with every QEMU and `vde_switch`
+it starts; it needs the `kvm` group for `/dev/kvm`.
+
+- **Startup failure:** a missing executable or a runner that does not connect
+  within 10 seconds stops the server with the runner's message on its output.
+  Another server already using the socket of the same port is refused.
+- **Runner crash:** the server keeps running. It kills the runner's process
+  group, closes the sessions that ran on it (their machines are gone; users'
+  pages reload into a new, empty session, recorded as `session-deleted` with
+  the reason `runner lost` in `users.log`) and starts a new runner after 1, 2,
+  then 4 seconds. After three failed restarts in a row it exits with status 1,
+  and systemd's `Restart=` policy, if any, takes over.
+- **Server crash:** the runner notices the closed connection, stops every
+  machine, removes the session directories and exits.
+- **What to check:** `ps -o pid,pgid,args -C node` shows the server and its
+  runner (`runner/main.js --connect .../runner-3002.sock ...`); the machines
+  share the runner's process group. `scripts/killall.sh` also stops runner
+  processes. VirtualBox VMs run under VBoxSVC, outside that group: after a
+  runner crash, `scripts/killall.sh` cleans them up.
 
 ## Server logs
 
@@ -107,7 +138,7 @@ never written; reading the session list or the logs is not logged.
 | `login`, `logout` | none. |
 | `login-failed` | none; `user` is the login name that was tried (control characters removed, at most 64 characters), whether or not the account exists. |
 | `session-created` | `sessionId`. |
-| `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it). |
+| `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it; `null` when the session was dropped), and `reason` when it was dropped: `runner lost` (its runner died) or `creation failed`. |
 | `node-created` | `nodeId`, `kind` (`host` or `switch`). |
 | `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Resume all**, **Stop all** and the removal of every node: `all`). |
 | `archive-loaded`, `archive-saved` | `kind`: `session` (ZIP) or `topology`. |
