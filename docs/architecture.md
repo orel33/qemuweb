@@ -161,7 +161,7 @@ The serial ports of a host are the `serialPorts` key of a system profile in
 `debian13-legacy` and `debian13-cloud` replace it on QEMU with `["ttyS0",
 "ttyS1"]` through `serialPorts:qemu` (VirtualBox keeps `["ttyS0"]`; a profile
 without a valid list is refused). The list drives the QEMU command line: the
-runner adds one `-serial unix:<node dir>/serial.sock,server=on,wait=off` for
+runner adds one `-serial unix:<node dir>/serial0.sock,server=on,wait=off` for
 `ttyS0` and one `serial1.sock` for `ttyS1`, in list order, so a port that is not
 listed gets no `-serial` option. `common/console-id.js` holds the allowed names
 (`PORTS`) and `validatePorts`: a list must start with `ttyS0` and be a
@@ -299,7 +299,7 @@ order. State that several modules reassign lives on the `store` object of
 | `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401, `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |
 | `terminal.js` | Console panes, menus, font size and Console (ttyS0)/Console (ttyS1)/Monitor/Log views. |
-| `host-console-settings.js` | Console tab of Host Settings: number of serial consoles and the read-only console sockets. |
+| `host-console-settings.js` | Console tab of Host Settings: read-only console (`serial0.sock`, `serial1.sock`) and monitor sockets. |
 | `workspace.js` | Pane layout, paging, node tabs, state badges and metrics. |
 | `nodes.js` | Node model, server synchronization and lifecycle actions. |
 | `node-dialogs.js` | Add switch and Clone dialogs. |

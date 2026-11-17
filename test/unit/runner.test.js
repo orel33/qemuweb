@@ -49,7 +49,7 @@ test('createNode builds the runtime directory layout of a host and a switch', t 
   assert.equal(host.kind, 'host');
   assert.equal(host.runtimeDir, path.join(runtimeDir, HOST_1));
   assert.ok(fs.statSync(path.join(runtimeDir, HOST_1, 'startup')).isDirectory());
-  assert.equal(host.socketPath, path.join(runtimeDir, HOST_1, 'serial.sock'));
+  assert.equal(host.socketPath, path.join(runtimeDir, HOST_1, 'serial0.sock'));
   assert.equal(host.socketPath1, path.join(runtimeDir, HOST_1, 'serial1.sock'));
   assert.equal(host.monitorPath, path.join(runtimeDir, HOST_1, 'mon.sock'));
   assert.equal(host.socketDir, null);
@@ -228,7 +228,7 @@ test('launch preview builds QEMU commands for a new host without creating it', t
   assert.ok(preview.commands[1].includes(`unix:${path.join(runtimeDir, HOST_1, 'mon.sock')},server=on,wait=off`));
   assert.deepEqual(preview.storage.map(item => item.label), ['Base image (RAW)', 'Working disk (QCOW2 overlay)', 'Startup disk (cd-rom)']);
   assert.equal(preview.storage[2].path, 'Not created');
-  assert.equal(preview.console.socket, path.join('runtime', 'sessions', 'test', HOST_1, 'serial.sock'));
+  assert.equal(preview.console.socket, path.join('runtime', 'sessions', 'test', HOST_1, 'serial0.sock'));
 
   const withIso = runner.previewLaunch(HOST_1, {system, engine: 'qemu', startupDiskEnabled: 'true'});
   assert.match(withIso.commands[0], /^genisoimage -quiet -R -J -V /);

@@ -30,7 +30,7 @@ test('QEMU gets a second -serial only when ttyS1 is configured', t => {
   const two = preview('debian13-legacy', {});
   assert.deepEqual(two.settings.serialPorts, ['ttyS0', 'ttyS1']);
   const line = two.commands.at(-1);
-  assert.ok(line.indexOf(`unix:${path.join(runtimeDir, HOST, 'serial.sock')}`) < line.indexOf(`unix:${path.join(runtimeDir, HOST, 'serial1.sock')}`));
+  assert.ok(line.indexOf(`unix:${path.join(runtimeDir, HOST, 'serial0.sock')}`) < line.indexOf(`unix:${path.join(runtimeDir, HOST, 'serial1.sock')}`));
   assert.equal((line.match(/-serial/g) || []).length, 2);
   assert.equal(two.console2.guest, 'ttyS1 · 115200 baud');
   const one = preview('debian13-legacy', {serialPorts: ['ttyS0']});

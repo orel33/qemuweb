@@ -18,7 +18,7 @@ function createSessionRuntime(ctx) {
       // Node IDs are unique within a session only (an archive keeps them), so the
       // VirtualBox VM name, global to the machine, also carries the session ID.
       vmName: ctx.session.id ? `qemuweb-${process.pid}-${ctx.session.id}-${id}` : `qemuweb-${process.pid}-${id}`,
-      socketPath: path.join(runtimeDir, 'serial.sock'),
+      socketPath: path.join(runtimeDir, 'serial0.sock'),
       socketPath1: path.join(runtimeDir, 'serial1.sock'),
       monitorPath: path.join(runtimeDir, 'mon.sock'),
       socketDir: kind === 'switch' ? path.join(runtimeDir, 'vde') : null,

@@ -270,10 +270,9 @@ Debian hosts have two serial ports (`ttyS0` and `ttyS1`) so that two
 commands can run at once, for example `ping` on the first and `tcpdump` on the
 second. Choose what a pane shows with its view selector: **Console (ttyS0)**,
 **Console (ttyS1)** (only for hosts that have it), **Monitor** or **Log**;
-the program running on the other console keeps running. The serial ports
-(`ttyS0` is always on, `ttyS1` is a checkbox) are set in **Host Settings →
-Console**, which also lists the console and monitor sockets, and applies after
-a restart. Alpine, OpenWrt and
+the program running on the other console keeps running. **Host Settings →
+Console** lists the console sockets (`serial0.sock`, `serial1.sock`) and the
+monitor socket. Alpine, OpenWrt and
 VirtualBox hosts have a single console. Debian images prepared before this
 feature have no login on `ttyS1`: run `scripts/prepare.sh` again.
 

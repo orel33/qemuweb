@@ -51,7 +51,7 @@ test('the browser selects consoles by console ID and keeps one buffer per channe
   assert.match(socket, /machine\.serial2/);
   assert.match(moduleSource('host-settings'), /renderConsoleSettings/);
   assert.match(terminal, /Console \(\$\{ConsoleId\.portName\(1\)\}\)/);
-  assert.match(moduleSource('host-console-settings'), /main console, always on/);
+  assert.match(moduleSource('host-console-settings'), /Console socket \(\${second}\)/);
   const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
   assert.equal(html.match(/aria-label="Console \(ttyS1\)" title="Console \(ttyS1\)"/g).length, 4);
   assert.doesNotMatch(html, /Console 2/);

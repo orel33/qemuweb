@@ -37,7 +37,6 @@ const settingsStartupIso = document.getElementById('settings-startup-iso');
 const settingsExtraOptions = document.getElementById('settings-extra-options');
 
 const settingsNetworkProfile = document.getElementById('settings-network-profile');
-const settingsConsoleEditable = document.getElementById('settings-console-editable');
 const settingsConsole = document.getElementById('settings-console');
 const optionsCommands = document.getElementById('options-commands');
 
@@ -161,7 +160,6 @@ export async function renderQemuOptions() {
   settingsStartupProfile.replaceChildren();
   settingsStartupIso.replaceChildren();
   settingsNetworkProfile.replaceChildren();
-  settingsConsoleEditable.replaceChildren();
   settingsConsole.replaceChildren();
   settingsExtraOptions.textContent = '';
   optionsCommands.textContent = '';
@@ -247,11 +245,7 @@ export async function renderQemuOptions() {
     addSettingRow(settingsStartupProfile, 'CD-ROM interface', body.fixed?.cdromInterface);
     settingsExtraOptions.textContent = body.fixed?.extraOptions?.length ? body.fixed.extraOptions.join(' ') : 'None';
     renderStorageSettings(body.storage, body.fixed?.diskInterface);
-    renderConsoleSettings(settingsConsoleEditable, settingsConsole, {body, ports: settings.serialPorts ?? ['ttyS0'], limit: image?.serialPorts ?? ['ttyS0'], locked,
-      onChange: ports => {
-        saveMachineSettings(machine, {...getMachineSettings(machine), serialPorts: ports});
-        refreshLaunchPreview(machine);
-      }});
+    renderConsoleSettings(settingsConsole, {body});
     optionsCommands.textContent = body.commands.map(command => `$ ${command}`).join('\n\n');
     showIsoPreviewStatus(machine);
   } catch (error) {
