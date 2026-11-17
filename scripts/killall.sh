@@ -23,8 +23,7 @@ matching_pids() {
     mapfile -d '' -t args < "$proc/cmdline" 2>/dev/null || continue
     (( ${#args[@]} )) || continue
     if [[ "$kind" == runner ]]; then
-      # A runner of this project: started by server.js --local (absolute path of runner/main.js)
-      # or by hand with ./scripts/runner.sh (runner/main.js from the project directory).
+      # A runner of this project (./scripts/runner.sh: runner/main.js from the project directory).
       [[ "${exe##*/}" == node ]] || continue
       cwd="$(readlink -f -- "$proc/cwd" 2>/dev/null || true)"
       for arg in "${args[@]:1}"; do
@@ -80,7 +79,7 @@ if (( ! DRY_RUN )); then
   signal_pids KILL server
 fi
 
-# A runner started by server.js --local ends on its own without its server; a runner started by hand keeps its nodes, SIGTERM stops them.
+# A runner keeps its nodes when its server stops (unless it was started with --exit-on-disconnect); SIGTERM stops them.
 signal_pids TERM runner
 if (( ! DRY_RUN )); then
   for _ in {1..12}; do

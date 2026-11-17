@@ -1,7 +1,7 @@
 'use strict';
 
-// Process tree of QemuWeb servers: each server, its runner (a child with --local, else started by hand and
-// shown on its own, waiting for a server when none is connected) and
+// Process tree of QemuWeb servers: each server, each runner (a process of its own, started by
+// scripts/start.sh, scripts/runner.sh or a unit; "waiting for a server" when none runs on its port) and
 // the QEMU, vde_switch and vdeterm processes below it, grouped by session and labelled with the
 // account, the node name and its system. Read-only: it only looks at /proc, ps and runtime/.
 //   scripts/tree.sh                  servers recorded in this project's runtime/server-<port>.pid, else those started elsewhere
@@ -141,7 +141,10 @@ function sampleTicks(pids) {
 
 function measureCpu(table, servers) {
   const pids = new Set();
-  for (const {entry} of servers) for (const item of [entry, ...descendants(entry)]) pids.add(item.pid);
+  for (const {entry} of servers) pids.add(entry.pid);
+  for (const entry of table.values()) {
+    if (entry.uid === process.getuid() && isRunner(entry)) for (const item of [entry, ...descendants(entry)]) pids.add(item.pid);
+  }
   let now = sampleTicks(pids);
   if (!previousSample) {
     previousSample = now;
@@ -283,36 +286,25 @@ function runnerLine(runner, machines, style, label = 'Runner') {
   return `${style.runner(label)} ${style.bold(`pid ${runner.pid}`)} · ${parts.join(' · ')}`;
 }
 
-function serverReport({entry, root, port}, table, style, details) {
+function serverReport({entry, root, port}, style) {
   const serverParts = [port ? `port ${port}` : null, `up ${duration(entry.seconds)}`, percent(entry.cpu)].filter(Boolean);
   const lines = [`${style.server('Server')} ${style.bold(`pid ${entry.pid}`)} · ${serverParts.join(' · ')} · ${style.dim(root)}`];
-  const below = descendants(entry);
-  // With --local the runner is a child of the server; a runner started by hand is shown on its own.
-  const runner = below.find(isRunner);
-  const machines = (runner ? descendants(runner) : below).filter(item => !isRunner(item));
-  const sessions = sessionItems(machines, path.join(root, 'runtime', 'sessions'), style, details);
-  if (runner) {
-    lines.push(...render([{text: runnerLine(runner, machines, style), children: sessions}]));
-  } else {
-    lines.push(...render(sessions));
-    if (!sessions.length) lines.push(style.dim('   (no machine running)'));
-  }
   return lines;
 }
 
-// The server port a runner started by hand dials: --port N, or runner-N.sock in --connect.
+// The server port a runner dials: --port N, or runner-N.sock in --connect.
 function runnerPort(entry) {
   const match = / --port (\d+)( |$)/.exec(entry.args) || /runner-(\d+)\.sock/.exec(entry.args);
   return match ? Number(match[1]) : null;
 }
 
-// A runner that is not a child of a server: started by hand (scripts/runner.sh). It keeps its
-// sessions while the server is away, so it is not an orphan: it waits for a server.
+// A runner is a process of its own, never a child of the server. It keeps its sessions while the
+// server is away, so it is not an orphan: it waits for a server.
 function standaloneRunnerReport(entry, servers, style, details) {
   const port = runnerPort(entry);
   const connected = port !== null && servers.some(server => server.port === port);
   const machines = descendants(entry);
-  const label = connected ? 'Runner (started by hand)' : 'Runner (waiting for a server)';
+  const label = connected ? 'Runner' : 'Runner (waiting for a server)';
   return [`${runnerLine(entry, machines, style, label)}${port ? style.dim(` · port ${port}`) : ''}`,
     ...render(sessionItems(machines, path.join(ROOT, 'runtime', 'sessions'), style, details))];
 }
@@ -324,11 +316,9 @@ function report(options) {
   measureCpu(table, servers);
   const lines = [`${style.bold('QemuWeb processes')} of ${process.env.USER || process.getuid()} at ${new Date().toTimeString().slice(0, 8)}`];
   if (options.fellBack) lines.push('', style.dim(`No server is recorded in ${path.join(ROOT, 'runtime')}: showing the QemuWeb servers of this user started elsewhere.`));
-  for (const server of servers) lines.push('', ...serverReport(server, table, style, options.details));
+  for (const server of servers) lines.push('', ...serverReport(server, style));
   for (const entry of table.values()) {
     if (entry.uid !== process.getuid() || !isRunner(entry)) continue;
-    const parent = table.get(entry.ppid);
-    if (parent && isServer(parent)) continue;
     lines.push('', ...standaloneRunnerReport(entry, servers, style, options.details));
   }
   if (!servers.length && !lines.some(line => line.includes('Runner ('))) {

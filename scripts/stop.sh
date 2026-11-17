@@ -38,9 +38,9 @@ for _ in {1..60}; do
     rm -f -- "$pid_file"
     rm -f -- "$session_file"
     echo 'QemuWeb stopped.'
-    # A runner started by hand (./scripts/runner.sh) keeps its VMs and waits for a server again.
+    # A runner (./scripts/runner.sh) keeps its VMs and waits for a server again.
     if pgrep -u "$(id -u)" -f "runner/main.js --port $port( |\$)" >/dev/null 2>&1; then
-      echo "A runner started by hand is still running on port $port: its VMs keep running. Stop it with Ctrl+C in its terminal, or ./scripts/killall.sh."
+      echo "A runner is still running on port $port: its VMs keep running. Stop it with Ctrl+C in its terminal, or ./scripts/killall.sh."
     fi
     exit 0
   fi
