@@ -102,7 +102,7 @@ test('state and log events carry the payloads forwarded to browsers', t => {
   runner.appendLog(host, 'QEMU started  \n');
   runner.appendLog(host, '   ');
   assert.deepEqual(events, [
-    ['state', {nodeId: HOST_1, running: false, hasLaunched: false, pendingRestart: false, message: 'Stopped'}],
+    ['state', {nodeId: HOST_1, running: false, hasLaunched: false, pendingRestart: false, serialConsoles: 1, message: 'Stopped'}],
     ['log', {nodeId: HOST_1, line: 'QEMU started'}]
   ]);
   assert.equal(runner.stateMessage(host), 'Stopped');
