@@ -6,6 +6,22 @@
 const fs = require('fs');
 const http = require('http');
 const path = require('path');
+const root = path.join(__dirname, '..');
+const packageInfo = require('../package.json');
+
+// First, before the server loads its packages: a missing one is reported with its fix.
+if (process.argv.length > 2) {
+  console.error(`Unknown argument: ${process.argv[2]}. Usage: node server/main.js`);
+  process.exit(2);
+}
+console.log(`QemuWeb ${packageInfo.version}\n`);
+const missing = require('./preflight').checkDependencies({root, packageInfo});
+if (missing.length) {
+  console.error(`Startup aborted: unavailable dependencies: ${missing.join(', ')}`);
+  process.exit(1);
+}
+console.log('');
+
 const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
 const {RunnerRegistry} = require('./runner-registry');
@@ -18,17 +34,9 @@ const {readCatalog} = require('../common/system-config');
 const {createAuth} = require('./auth');
 const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
-const packageInfo = require('../package.json');
 
 const RUNNER_HINT = './scripts/runner.sh';
 
-const root = path.join(__dirname, '..');
-const args = process.argv.slice(2);
-if (args.length) {
-  console.error(`Unknown argument: ${args[0]}. Usage: node server/main.js`);
-  process.exit(2);
-}
-console.log(`QemuWeb ${packageInfo.version}\n`);
 const runtime = path.join(root, 'runtime');
 const port = Number(process.env.PORT || 3002);
 const configPath = path.join(root, 'config.json');
