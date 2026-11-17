@@ -153,8 +153,8 @@ function measureCpu(table, servers) {
 
 const percent = cpu => (cpu === undefined ? null : `${cpu < 10 ? cpu.toFixed(1) : Math.round(cpu)}% CPU`);
 
-// "N QEMU, M switches" for a list of processes.
-const machineCount = items => `${items.filter(item => /qemu-system/.test(item.args)).length} QEMU, ` +
+// "N hosts, M switches" for a list of processes.
+const machineCount = items => `${plural(items.filter(item => /qemu-system/.test(item.args)).length, 'host')}, ` +
   plural(items.filter(item => /(^|\/)vde_switch /.test(item.args)).length, 'switch', 'switches');
 
 // Memory in use over memory given to the QEMU machines of a list of processes.
@@ -242,7 +242,7 @@ function render(items, prefix = '') {
   return lines;
 }
 
-// "Session 88686978 (toto) · 4 QEMU, 1 switch · 1456 MB / 4096 MB · 12% CPU · up 00:36:27".
+// "Session 88686978 (toto) · 4 hosts, 1 switch · 1456 MB / 4096 MB · 12% CPU · up 00:36:27".
 function sessionLine(id, login, items, sessionsDir, style) {
   const age = sessionAge(sessionsDir, id);
   const cpu = items.some(item => item.cpu !== undefined) ? items.reduce((sum, item) => sum + (item.cpu || 0), 0) : undefined;
