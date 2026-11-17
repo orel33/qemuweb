@@ -342,26 +342,38 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
   const nodes = new Map([[sw, {}], [host, {}]]);
   assert.deepEqual([paneCount('single'), paneCount('columns-2'), paneCount('rows-2'), paneCount('grid-4'), paneCount('grid-9'), paneCount('toString')],
     [1, 2, 2, 4, 0, 0]);
-  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], switches: false, active: sw};
+  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'console'], switches: false, active: sw};
   assert.deepEqual(normalizeView({...view, page: 2, expanded: 1, extra: 1}, nodes), view, 'extra keys (page, a former expanded) are dropped');
   assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
-    {...view, panes: [null, sw, null, host], active: null}, 'unknown nodes become null, a node is kept in its first pane');
+    {...view, panes: [null, sw, null, host], views: ['console', 'console', 'console', 'console'], active: null},
+    'unknown nodes become null (their pane shows the console), a node is kept in its first pane');
   assert.deepEqual(normalizeView({...view, panes: ['x', null, null, null]}, null).panes, ['x', null, null, null], 'shape check only');
   for (const [layout, panes] of [['single', [sw]], ['columns-2', [sw, host]], ['rows-2', [null, null]]]) {
-    assert.deepEqual(normalizeView({...view, layout, panes}, nodes).panes, panes);
+    assert.deepEqual(normalizeView({...view, layout, panes, views: panes.map(() => 'console')}, nodes).panes, panes);
   }
   const invalid = [null, undefined, 'x', 42, [], [view], {...view, mode: 'list'}, {...view, mode: undefined},
     {...view, layout: 4}, {...view, layout: 'grid-9'}, {...view, layout: 'toString'}, {...view, layout: '__proto__'},
     {...view, panes: undefined}, {...view, panes: 'sw'}, {...view, panes: [sw]}, {...view, panes: [sw, null, null, 7]},
+    {...view, views: undefined}, {...view, views: ['console']}, {...view, views: ['console', 'console', 'console', 'console', 'console']},
+    {...view, views: ['console', 'console', 'console', 'tty']}, {...view, views: ['console', 'console', 'console', null]}, {...view, views: 'console'},
     {...view, layout: 'columns-2'}, {...view, layout: 'single'}, {...view, layout: 'rows-2', panes: [null]},
     {...view, switches: 1}, {...view, switches: undefined}, {...view, active: 7}, {...view, active: undefined}];
   for (const raw of invalid) assert.equal(normalizeView(raw, nodes), null, JSON.stringify(raw));
 });
 
+test('the view of an empty pane or of a node dropped by normalisation is console', () => {
+  const host = 'h-0123456789abcdef';
+  const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host};
+  assert.deepEqual(normalizeView(view, [host]).views, ['log', 'console'], 'null pane');
+  assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', null]}, [host]).views, ['console', 'console'], 'unknown node');
+  assert.deepEqual(normalizeView({...view, panes: [host, host]}, [host]).views, ['log', 'console'], 'node shown twice');
+});
+
 test('two view states are compared field by field', () => {
-  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], switches: true, active: 'a'};
-  assert.equal(sameView(view, {...view, panes: ['a', null]}), true);
+  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], views: ['console', 'console'], switches: true, active: 'a'};
+  assert.equal(sameView(view, {...view, panes: ['a', null], views: ['console', 'console']}), true);
+  assert.equal(sameView(view, {...view, views: ['console2', 'console']}), false);
   for (const change of [{mode: 'graphic'}, {layout: 'rows-2'}, {panes: [null, 'a']}, {switches: false}, {active: null}]) {
     assert.equal(sameView(view, {...view, ...change}), false, JSON.stringify(change));
   }

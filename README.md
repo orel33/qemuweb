@@ -123,7 +123,8 @@ request and kept after logging out or closing the browser. From there an admin
 can:
 
 - **Observe** a session: `/?observe=<login>` opens the normal interface on the
-  student's session, read-only, with the admin's own layout. A banner of
+  student's session, read-only: the same buttons as the student's page, the
+  write actions greyed out instead of hidden. A banner of
   distinct colour shows the observed user, previous/next active session, a
   session list, **Follow**, **Take control** and **My session**; **Supervision**
   stays in the header.
@@ -132,7 +133,7 @@ can:
   offline. With **Follow** on (the default), the view follows what the student
   shows: the selected node, Terminals or Graphic, and the console layout (1
   terminal, 2 side by side or stacked, or 4; which node each pane shows, switch
-  consoles, a pane shown alone), and the admin's own view controls are
+  consoles, the view of each pane: Console ttyS0/ttyS1, Monitor or Log (an observer sees a followed Monitor as the console)), and the admin's own view controls are
   disabled (one driver at a time); off, the admin navigates freely from the
   view shown. An observation tab never saves its layout in the admin's
   view settings. The target belongs to the tab: another tab can stay on the admin's
@@ -140,11 +141,12 @@ can:
   or deleted) shows a message and a link back to **Supervision**. The server refuses every change from an observer, including
   console input, Clear and resizing.
 - **Take control** of the student's session: an exclusive lock on the whole
-  session. The student's keyboard is blocked on every console and a banner
+  session (Follow is forced on and the student's current view applied first; the
+  Follow box stays checked and disabled while control is held). The student's keyboard is blocked on every console and a banner
   tells them who controls it; they still see the commands and their output.
   The admin types into whatever console they display. While the admin holds
   control, the student's page follows the admin's view and layout (the reverse
-  of **Follow**) and its view and layout buttons are disabled. Control ends
+  of **Follow**, pane views included) and its view, layout and pane view buttons are disabled. Control ends
   with **Release control**, when the admin's last page on that session closes
   (changing the layout keeps it), or after 10 minutes without input; the student's page then keeps what it shows and is free
   again.

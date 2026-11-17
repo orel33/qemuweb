@@ -57,17 +57,54 @@ test('the browser selects consoles by console ID and keeps one buffer per channe
   assert.doesNotMatch(html, /Console 2/);
 });
 
-test('the pane button switches to the 1 terminal layout in the pane\'s view; no expanded state remains', () => {
-  const {functionSource} = require('./web-ui-source');
+test('the pane "Show only this terminal" button is gone; no expanded state remains', () => {
   const workspace = moduleSource('workspace');
-  const solo = functionSource(workspace, 'showOnlyPane');
-  assert.match(solo, /setLayout\('single'\)/);
-  assert.match(solo, /const view = pane\.view;[\s\S]*setPaneView\(panes\[0\], view\)/);
-  assert.match(workspace, /pane\.soloButton\.hidden = !machine \|\| store\.layoutSize === 1/);
+  for (const name of ['workspace', 'terminal']) assert.doesNotMatch(moduleSource(name), /solo|showOnlyPane|Show only this terminal/i, name);
+  assert.doesNotMatch(fs.readFileSync(path.join(publicDir, 'css', 'app.css'), 'utf8'), /pane-solo/);
   assert.match(workspace, /toggleConsoleColumns\.title = `Layout: \$\{current\.label\}`/);
-  assert.match(moduleSource('terminal'), /soloButton\.title = 'Show only this terminal'/);
   assert.doesNotMatch(workspace, /toggleConsoleColumns\.disabled/);
   for (const name of ['workspace', 'terminal', 'state', 'view-state', 'observe', 'socket']) {
     assert.doesNotMatch(moduleSource(name), /expanded(?!['"])|expandedPaneIndex|expandButton|Restore the layout/, name);
   }
+});
+
+test('the pane view menu is a view-control; the pane views are carried by the view state', () => {
+  const {functionSource} = require('./web-ui-source');
+  const terminal = moduleSource('terminal');
+  const workspace = moduleSource('workspace');
+  assert.match(terminal, /pane\.viewMenu\.className = 'pane-view-menu view-control'/);
+  assert.match(moduleSource('observe'), /pane\.viewMenu\.open = false/, 'a driven page closes the open view menus');
+  assert.match(functionSource(workspace, 'captureView'), /views: panes\.slice\(0, store\.layoutSize\)\.map\(pane => \(pane\.machineId \? pane\.view : 'console'\)\)/);
+  const apply = functionSource(workspace, 'applyView');
+  assert.ok(apply.indexOf('setPaneSessions(') < apply.indexOf('view.views.forEach'), 'views are applied after the panes\' nodes');
+  assert.match(apply, /usablePaneView\(pane, wanted\)/);
+  assert.match(terminal, /MonitorTerminal\.isSupported\(machine\) && !observing \? view : 'console'/, 'an observer is never shown the monitor');
+  assert.match(terminal, /button\.hidden = !monitorSupported;\s*button\.disabled = observing;/, 'the monitor entry is disabled, not hidden, for an observer');
+  assert.match(apply, /setPaneView\(pane, shown\)/);
+  assert.match(functionSource(terminal, 'setPaneView'), /viewChanged\(\)/);
+  assert.match(terminal, /if \(view === 'console2'\) return hasSecondConsole\(machine\) \? view : 'console'/);
+  assert.match(moduleSource('view-state'), /views: \('console' \| 'console2' \| 'monitor' \| 'log'\)\[\]/);
+});
+
+test('observation disables the write actions instead of hiding them; the view controls follow the driver', () => {
+  const css = fs.readFileSync(path.join(publicDir, 'css', 'app.css'), 'utf8');
+  assert.match(css, /body\.observing \.write-action \{ pointer-events: none; opacity: \.45; \}/);
+  assert.doesNotMatch(css, /body\.observing[^{]*\{[^}]*display: none/, 'nothing is hidden in an observation tab');
+  const observe = moduleSource('observe');
+  assert.match(observe, /\(observing && !!element\.closest\?\.\('\.write-action'\)\)/);
+  assert.match(observe, /for \(const type of \['click', 'keydown', 'keyup'\]\) document\.addEventListener\(type, blockDisabledControls, true\)/);
+  assert.match(observe, /setAttribute\('aria-disabled', 'true'\)/);
+  assert.match(moduleSource('workspace'), /renderGraphic\(\);\s*markDisabledControls\(\);/, 'tabs created later are marked too');
+  const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+  for (const id of ['previous-page', 'next-page', 'toggle-console-columns', 'toggle-switch-consoles', 'toggle-graphic-view']) {
+    assert.match(html, new RegExp(`id="${id}" class="[^"]*\\bview-control\\b`), `${id} is a view control`);
+  }
+});
+
+test('taking control forces Follow on and applies the owner\'s view first; Follow is disabled while control is held', () => {
+  const {functionSource} = require('./web-ui-source');
+  const observe = moduleSource('observe');
+  const toggle = functionSource(observe, 'toggleControl');
+  assert.match(toggle, /observe-follow'\)\.checked = true;\s*followView\('owner', true\);\s*taking = true;/);
+  assert.match(observe, /if \(mine\) follow\.checked = true;\s*follow\.disabled = mine;/);
 });

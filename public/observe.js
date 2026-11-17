@@ -70,6 +70,10 @@ function renderControl() {
       button.title = mine ? 'Give the keyboard back to the user' : 'Take exclusive control of every console of this session';
     }
     button.disabled = taking || (!mine && !!control);
+    // Holding control: the view is the admin's own and Follow is meaningless, so it shows checked.
+    const follow = document.getElementById('observe-follow');
+    if (mine) follow.checked = true;
+    follow.disabled = mine;
     status.textContent = mine ? `You control the session of ${observedLogin}`
       : control ? `${control.admin} controls this session` : `read-only${following() ? `; the view follows ${observedLogin} (uncheck Follow to change it)` : ''}`;
     banner.dataset.control = String(mine);
@@ -94,13 +98,28 @@ export function viewDriver() {
 function renderViewDriver() {
   const reason = viewDriver();
   document.body.dataset.viewDriven = String(!!reason);
-  if (reason) closeLayoutMenu();
+  if (reason) { closeLayoutMenu(); for (const pane of panes) pane.viewMenu.open = false; }
+  markDisabledControls();
 }
 
-// Keyboard and programmatic clicks on a disabled view control are ignored too.
-function blockDrivenControls(event) {
-  if (document.body.dataset.viewDriven !== 'true' || !event.target.closest?.('.view-control')) return;
-  if (event.type === 'keydown' && !['Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+// What this page must not use: the view controls while the view is driven by the other side,
+// and in an observation tab every write action (their CSS greys them out and ignores the mouse).
+const isDisabled = element => (document.body.dataset.viewDriven === 'true' && !!element.closest?.('.view-control'))
+  || (observing && !!element.closest?.('.write-action'));
+
+// aria-disabled on those controls; also called when controls are created (renderTabs).
+export function markDisabledControls() {
+  const driven = document.body.dataset.viewDriven === 'true';
+  for (const element of document.querySelectorAll('.view-control, .write-action')) {
+    const disabled = element.classList.contains('view-control') && driven || observing && element.classList.contains('write-action');
+    if (disabled) element.setAttribute('aria-disabled', 'true'); else element.removeAttribute('aria-disabled');
+  }
+}
+
+// Keyboard and programmatic clicks on a disabled control are ignored too.
+function blockDisabledControls(event) {
+  if (!isDisabled(event.target)) return;
+  if (event.type !== 'click' && !['Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
 }
@@ -184,6 +203,10 @@ export function controlChanged() { renderControl(); }
 function toggleControl() {
   if (heldByMe()) { emitOnSession('release-control', () => {}); return; }
   if (taking) return;
+  // Control starts from the owner's exact view: Follow is forced on and that view applied first,
+  // then this page drives (controller-view, published once control is granted).
+  document.getElementById('observe-follow').checked = true;
+  followView('owner', true);
   taking = true;
   renderControl();
   emitOnSession('take-control', result => {
@@ -225,7 +248,7 @@ async function renderSessionNavigation() {
 
 // Builds the banner. The server audits the observation when the console sockets connect.
 export function initObserve() {
-  for (const type of ['click', 'keydown']) document.addEventListener(type, blockDrivenControls, true);
+  for (const type of ['click', 'keydown', 'keyup']) document.addEventListener(type, blockDisabledControls, true);
   if (!observing) return;
   document.title = `QemuWeb · observing ${observedLogin}`;
   banner.hidden = false;

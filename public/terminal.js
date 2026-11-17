@@ -1,7 +1,7 @@
 // Console panes: xterm instances, menus, font size and Console/Monitor/Log views.
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
-import {focusPane, renderPaneSessionOptions, showStatusError, showOnlyPane, updateControls, workspace} from './workspace.js';
+import {focusPane, renderPaneSessionOptions, showStatusError, updateControls, viewChanged, workspace} from './workspace.js';
 import {rebootActiveMachine, removeActiveMachine, resetActiveMachine, startActiveMachine, stopActiveMachine} from './nodes.js';
 import {openHostSettings} from './host-settings.js';
 import {canType, observing, socketOptions} from './observe.js';
@@ -156,11 +156,20 @@ function showPaneConsole(pane) {
   pane.terminal.reset();
   selectPaneConsole(pane, result => { if (result?.error) showStatusError(result.error); });
 }
+// The view a pane can really show for `view`: a monitor or a ttyS1 console its node lacks, or
+// an unknown view, falls back to 'console'.
+export function usablePaneView(pane, view) {
+  const machine = pane.machineId && machines.get(pane.machineId);
+  if (!machine) return 'console';
+  if (view === 'log') return view;
+  if (view === 'monitor') return MonitorTerminal.isSupported(machine) && !observing ? view : 'console';
+  if (view === 'console2') return hasSecondConsole(machine) ? view : 'console';
+  return 'console';
+}
 export function setPaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
   if (!['console', 'console2', 'monitor', 'log'].includes(view) || !machine) return;
-  if (view === 'monitor' && !MonitorTerminal.isSupported(machine)) return;
-  if (view === 'console2' && !hasSecondConsole(machine)) return;
+  if (usablePaneView(pane, view) !== view) return;
   pane.viewMenu.open = false;
   if (pane.view === view) { pane.terminal.focus(); return; }
   pane.view = view;
@@ -171,6 +180,7 @@ export function setPaneView(pane, view) {
   else if (view === 'log') renderLogView(pane);
   else showPaneConsole(pane);
   pane.clearButton.disabled = !isConsoleView(view);
+  viewChanged();
   if (pane.index === store.activePaneIndex) updateControls();
   requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
 }
@@ -187,6 +197,7 @@ function updatePaneViewMenuIcon(pane) {
   pane.viewMenuToggle.setAttribute('aria-label', pane.viewMenuToggle.title);
 }
 export function updatePaneViewControls() {
+  let fellBack = false;
   for (const pane of panes) {
     const machine = pane.machineId && machines.get(pane.machineId);
     const supported = !!machine;
@@ -195,7 +206,12 @@ export function updatePaneViewControls() {
     pane.viewMenu.hidden = !supported;
     if (!supported) pane.viewMenu.open = false;
     pane.viewButtons.forEach(button => {
-      if (button.dataset.view === 'monitor') button.hidden = !monitorSupported;
+      if (button.dataset.view === 'monitor') {
+        // Shown to an observer too, but disabled: sending monitor commands is a write action.
+        button.hidden = !monitorSupported;
+        button.disabled = observing;
+        if (observing) button.setAttribute('aria-disabled', 'true'); else button.removeAttribute('aria-disabled');
+      }
       if (button.dataset.view === 'console2') button.hidden = !hasSecondConsole(machine);
       if (isConsoleView(button.dataset.view)) {
         const label = consoleViewLabel(button.dataset.view, machine);
@@ -211,6 +227,7 @@ export function updatePaneViewControls() {
     if ((pane.view === 'monitor' && !monitorSupported) || (pane.view === 'console2' && !hasSecondConsole(machine))) {
       pane.view = 'console';
       pane.monitorInput = '';
+      fellBack = true;
       showPaneConsole(pane);
     }
     pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === pane.view)));
@@ -218,6 +235,7 @@ export function updatePaneViewControls() {
     if (pane.view === 'monitor' && pane.monitorAvailable !== available) renderMonitorView(pane);
     pane.monitorAvailable = available;
   }
+  if (fellBack) viewChanged();
 }
 async function sendPaneMonitorCommand(pane, machine, command) {
   machine.monitorBusy = true;
@@ -321,7 +339,7 @@ export function initTerminals() {
       fontSizeOverride: null
     };
     pane.viewMenu = document.createElement('details');
-    pane.viewMenu.className = 'pane-view-menu';
+    pane.viewMenu.className = 'pane-view-menu view-control';
     pane.viewMenu.hidden = true;
     pane.viewMenuToggle = document.createElement('summary');
     pane.viewToggle.hidden = false;
@@ -439,15 +457,6 @@ export function initTerminals() {
     pane.clearButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-clear-icon"></use></svg>';
     pane.clearButton.addEventListener('click', () => clearPaneConsole(pane));
     pane.settingsButton.after(pane.clearButton);
-    pane.soloButton = document.createElement('button');
-    pane.soloButton.type = 'button';
-    pane.soloButton.className = 'pane-solo-button view-control';
-    pane.soloButton.hidden = true;
-    pane.soloButton.title = 'Show only this terminal';
-    pane.soloButton.setAttribute('aria-label', 'Show only this terminal');
-    pane.soloButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3"/></svg>';
-    pane.soloButton.addEventListener('click', () => showOnlyPane(pane));
-    pane.clearButton.after(pane.soloButton);
     pane.fontButtons = [-1, 1].map(change => {
       const button = document.createElement('button');
       button.type = 'button';
@@ -463,7 +472,7 @@ export function initTerminals() {
     pane.fontSizeLabel = document.createElement('span');
     pane.fontSizeLabel.className = 'pane-font-size';
     pane.fontSizeLabel.hidden = true;
-    pane.soloButton.after(pane.fontButtons[0], pane.fontSizeLabel, pane.fontButtons[1]);
+    pane.clearButton.after(pane.fontButtons[0], pane.fontSizeLabel, pane.fontButtons[1]);
     terminal.onScroll(() => syncConsoleScroll(pane));
     terminal.onData(data => {
       if (pane.replaying || !pane.machineId) return;
