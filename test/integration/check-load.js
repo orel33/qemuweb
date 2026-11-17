@@ -105,7 +105,7 @@ function sessionView({nodes}) {
 }
 
 async function importArchive(client, data) {
-  return client.request('/api/session-archive/import?autoStart=false&discardStaleDisks=false', {
+  return client.request('/api/session-archive/import?autoStart=false&discardDisks=false', {
     method: 'POST', body: data, headers: {'content-type': 'application/zip'}
   });
 }
