@@ -74,6 +74,8 @@ async function stop(code) {
   const forceExit = setTimeout(() => process.exit(1), 30000);
   forceExit.unref();
   await service.shutdown();
+  // Empty once this runner's sessions are gone (a server that ended earlier left it to us).
+  try { fs.rmdirSync(path.join(options.runtime, 'sessions')); } catch (_) {}
   process.exit(code);
 }
 

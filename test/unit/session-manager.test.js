@@ -131,6 +131,15 @@ test('exit cleanup removes the aliases of sessions whose directory is gone', asy
   assert.equal(fs.existsSync(path.join(runtimeRoot, 'users')), false, 'dangling aliases are pruned');
 });
 
+test('the server removes every alias at exit, even those of live sessions (the next server links them again)', async t => {
+  const {runtimeRoot, manager} = await setup(t);
+  const toto = await opened(manager, 'toto');
+  assert.equal(fs.existsSync(manager.userAliasPath('toto')), true, 'the alias exists while the session lives');
+  manager.removeUserAliases();
+  assert.equal(fs.existsSync(path.join(runtimeRoot, 'users')), false, 'aliases and their directory are gone');
+  assert.equal(fs.existsSync(toto.session.runtimeDir), true, 'the session itself is not touched');
+});
+
 test('user aliases encode the login like hostname aliases', () => {
   assert.equal(userAliasName('jean@example.org'), 'jean%40example.org');
   assert.equal(userAliasName('a.b'), 'a.b');

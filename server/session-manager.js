@@ -188,7 +188,20 @@ class SessionManager extends EventEmitter {
     try { fs.rmdirSync(this.usersDir); } catch (_) {}
   }
 
-  // Startup and exit: removes runtime/users aliases whose session directory no longer exists.
+  // Server exit: the aliases belong to this server (a runner that outlives it keeps its sessions,
+  // and the next server links them again when it adopts them): removes them all, then the directory.
+  removeUserAliases() {
+    let names;
+    try { names = fs.readdirSync(this.usersDir); } catch (_) { return; }
+    for (const name of names) {
+      const alias = path.join(this.usersDir, name);
+      try { if (fs.lstatSync(alias).isSymbolicLink()) fs.unlinkSync(alias); } catch (_) {}
+    }
+    try { fs.rmdirSync(this.usersDir); } catch (_) {}
+  }
+
+  // Startup: removes runtime/users aliases whose session directory no longer exists (a server killed
+  // before its exit).
   pruneUserAliases() {
     let names;
     try { names = fs.readdirSync(this.usersDir); } catch (_) { return; }

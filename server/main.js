@@ -159,7 +159,9 @@ function onListening() {
 
 process.on('exit', () => {
   instance.removeRecords();
-  manager.pruneUserAliases();
+  manager.removeUserAliases();
+  // Empty only when the runner has removed its sessions (whichever of the two ends last tidies up).
+  try { fs.rmdirSync(path.join(runtime, 'sessions')); } catch (_) {}
 });
 
 let shuttingDown = false;
