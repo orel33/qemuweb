@@ -28,6 +28,17 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 - **start.sh message**: when the server refuses its options and exits at once, it prints "The server
   exited (status 2); stopping the runner." although no runner was started.
 
+- **Remote runner sessions after a server restart**: a restart deletes every session of a remote runner,
+  because the hello of an untrusted runner is never adopted. Persisting the session-to-runner binding
+  (and the VMs surviving) would fix it; it also conflicts with the roadmap line saying the VMs keep running.
+- **Forcing the loss of a runner's sessions**: a revoked or lost runner keeps its sessions until the grace
+  period (`--runner-grace`) ends; the admin has no way to delete them at once.
+- **Local runner pause**: the paused state of the local runner is memory only (a remote runner's is in
+  `runners.json`).
+- **`register --runtime`**: only needed when the runner's directory differs from `runtime/` of the repository.
+- **`runner-state` in the browser**: the re-selection of the console after a runner comes back is only tested
+  through the socket events of `check-runner-remote`, not in a real browser.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
