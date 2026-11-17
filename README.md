@@ -101,7 +101,7 @@ host and switch; the nodes and their disks are kept) and **Remove all hosts and
 switches**. Both skip a node whose start, stop or reboot is in progress.
 
 Accounts live in `users.json` at the repository root (mode 0600, ignored by
-Git; `QEMUWEB_USERS_FILE` selects another file, and
+Git; `--users FILE` of the server (and of `scripts/user.sh`) selects another file, and
 [`users.example.json`](users.example.json) shows the layout). Passwords are
 stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 
@@ -128,7 +128,7 @@ stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 | `list` | Prints one `login<TAB>role` line per account, followed by `<TAB>disabled` for a disabled one. |
 | `import-csv <file>` | Reads `login,password[,role]` lines (an optional header line is accepted). New logins are added, existing ones get the new password and role. |
 
-For scripts, the password can come from `QEMUWEB_PASSWORD` or from the first
+For scripts, the password can come from the variable `QEMUWEB_PASSWORD` (never the command line) or from the first
 line of standard input; otherwise the script prompts for it. Logins use letters, digits, `.`, `_`, `-` and `@` (up to
 64 characters). Changes apply without restarting the server.
 
@@ -193,7 +193,7 @@ can:
 Every administration action is written to `logs/admin.log`, an audit log of
 administrator actions; user events (logins, sessions, nodes started or
 stopped, archives) go to `logs/users.log` (see
-[docs/deployment.md](docs/deployment.md#server-logs)). With `QEMUWEB_AUTH=off`,
+[docs/deployment.md](docs/deployment.md#server-logs)). With `--no-auth`,
 the implicit local user is admin, so `/admin` is open to anyone reaching the
 server.
 
@@ -202,15 +202,15 @@ exist (milestone 6), give accounts only to trusted users: any user can run any
 single-line QEMU monitor command on their own hosts. Log out only clears the
 browser's cookie; see [docs/deployment.md](docs/deployment.md#known-limits).
 
-| Variable | Default | Effect |
+| Server option | Default | Effect |
 | --- | --- | --- |
-| `QEMUWEB_USERS_FILE` | `users.json` | Users file. |
-| `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime, renewed while the user is active. |
-| `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
-| `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
-| `QEMUWEB_LOG_DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions, and `users.log`, the user events (JSON lines, mode 0600). |
+| `--users FILE` | `users.json` | Users file. |
+| `--session-hours N` | `12` | Login lifetime, renewed while the user is active. |
+| `--trust-proxy VALUE` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
+| `--no-auth` | authentication on | Disables authentication: one shared local session, for single-user local work only. |
+| `--logs DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions, and `users.log`, the user events (JSON lines, mode 0600). |
 
-With `QEMUWEB_AUTH=off`, the server prints a warning at startup and the
+With `--no-auth`, the server prints a warning at startup and the
 interface shows **Authentication disabled**. It is never the default.
 
 ## Using QemuWeb
@@ -338,25 +338,25 @@ aliases only of a runner whose `hello` announces the same runtime directory; a r
 
 ### Server: `./scripts/server.sh`
 
-The server takes the two options below and `-h`/`--help` (any other argument is refused with exit
-status 2); the other settings are environment variables, set in front of the command or in a systemd
-unit. `./scripts/server.sh --help` prints the same lists. The values in effect, with where each
-comes from (`default`, `option`, `environment`, `derived`), are printed when the server starts.
+The server is configured by options only: it reads **no environment variable**. Any unknown option,
+missing value or invalid value is refused with exit status 2. `./scripts/server.sh --help` prints the
+same list. The values in effect, with where each comes from (`default`, `option`, `derived`), are
+printed when the server starts.
 
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--listen PORT` | `3002` | TCP port of the web interface on `127.0.0.1`; also names `<runtime>/runner-<PORT>.sock`, the socket its runner dials. |
 | `--runtime DIR` | `runtime/` of the repository | Runtime directory: sessions of a local runner, `users/` aliases, `server-<port>.pid` and `.session`, and the socket `DIR/runner-<port>.sock`. |
-| `-h`, `--help` | | Print the options and variables. |
+| `--users FILE` | `users.json` of the repository | Users file (mode 0600). |
+| `--logs DIR` | `logs/` of the repository | Directory of `admin.log` and `users.log` (mode 0700). |
+| `--session-hours N` | `12` | Login lifetime in hours (more than 0, at most 2160), renewed while the user is active. |
+| `--trust-proxy VALUE` | unset | Express `trust proxy` value behind a reverse proxy (`loopback`, `true`, a hop count or addresses), so that cookies get `Secure` over HTTPS. |
+| `--no-auth` | authentication on | Disables authentication: one shared local session, for single-user local work only. |
+| `--ephemeral` | off | Marks an ephemeral server of the test scenarios; for tests only. |
+| `-h`, `--help` | | Print the options. |
 
-| Variable | Default | Effect |
-| --- | --- | --- |
-| `QEMUWEB_AUTH` | `password` | `off` disables authentication: one shared local session, for single-user local work only. |
-| `QEMUWEB_USERS_FILE` | `users.json` | Users file (mode 0600). |
-| `QEMUWEB_SESSION_HOURS` | `12` | Login lifetime in hours (0 to 2160), renewed while the user is active. |
-| `QEMUWEB_TRUST_PROXY` | unset | Express `trust proxy` value behind a reverse proxy (`loopback`, `true`, a hop count or addresses), so that cookies get `Secure` over HTTPS. |
-| `QEMUWEB_LOG_DIR` | `logs` | Directory of `admin.log` and `users.log` (mode 0700). |
-| `QEMUWEB_TEST_SERVER` | unset | `1` marks an ephemeral server of the test scenarios; for tests only. |
+`scripts/start.sh` accepts these server options and passes them on to the server (only `--listen` and `--runtime` also
+go to the runner). `scripts/user.sh [--users FILE] <command>` manages the accounts of another users file.
 
 ### Runner: `./scripts/runner.sh [options]`
 

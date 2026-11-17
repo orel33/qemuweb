@@ -7,11 +7,13 @@ const path = require('node:path');
 const test = require('node:test');
 const {spawnSync} = require('node:child_process');
 const {hashPassword, verifyPassword, isPasswordHash} = require('../../server/auth/passwords');
-const {validateLogin, readUsers, writeUsers, parseUsers, usersFilePath, createUsersStore} = require('../../server/auth/users-store');
+const {validateLogin, readUsers, writeUsers, parseUsers, createUsersStore} = require('../../server/auth/users-store');
 const {COOKIE_NAME, newSecret, signSession, verifySession, parseCookies, sessionCookie} = require('../../server/auth/cookie');
 const {createAuth} = require('../../server/auth');
+const {defaultSettings, parseServerArguments} = require('../../server/options');
 
 const root = path.join(__dirname, '..', '..');
+const settingsFor = (usersFile, extra = {}) => ({...defaultSettings(root), usersFile, ...extra});
 const FAST = {N: 1024};
 
 function tempDir(t) {
@@ -54,8 +56,8 @@ test('the users file is validated, written with mode 0600 and sorted', async t =
   assert.throws(() => parseUsers(bad([{login: 'a', hash, role: 'student'}, {login: 'a', hash, role: 'admin'}])), /duplicate login/);
   assert.throws(() => parseUsers(bad([{login: 'a', hash, role: 'student', extra: 1}])), /invalid user entry/);
   assert.throws(() => parseUsers('{"users": []}'), /schemaVersion 1/);
-  assert.equal(usersFilePath('/srv/qemuweb', {}), '/srv/qemuweb/users.json');
-  assert.equal(usersFilePath('/srv/qemuweb', {QEMUWEB_USERS_FILE: '/etc/qemuweb/users.json'}), '/etc/qemuweb/users.json');
+  assert.equal(defaultSettings('/srv/qemuweb').usersFile, '/srv/qemuweb/users.json');
+  assert.equal(parseServerArguments(['--users', '/etc/qemuweb/users.json'], {root: '/srv/qemuweb'}).usersFile, '/etc/qemuweb/users.json');
 });
 
 test('the users store sees changes to the file without a restart', async t => {
@@ -113,7 +115,7 @@ test('the auth facade authenticates, identifies the cookie and guards pages and 
   writeUsers(usersFile, [{login: 'toto', hash: await hashPassword('toto', FAST), role: 'student'}]);
   let clock = 1000000;
   const secret = newSecret();
-  const auth = createAuth({root, env: {QEMUWEB_USERS_FILE: usersFile}, now: () => clock, secret});
+  const auth = createAuth({settings: settingsFor(usersFile), now: () => clock, secret});
   assert.equal(auth.mode, 'password');
   assert.deepEqual(await auth.authenticate('toto', 'toto'), {login: 'toto', role: 'student'});
   assert.equal(await auth.authenticate('toto', 'titi'), null);
@@ -161,22 +163,27 @@ test('the auth facade authenticates, identifies the cookie and guards pages and 
   assert.equal(req.user, undefined, 'a removed account loses access');
 });
 
-test('QEMUWEB_AUTH=off gives one implicit user and only accepts explicit values', t => {
+test('--no-auth gives one implicit user; session hours are validated', t => {
   const dir = tempDir(t);
-  const auth = createAuth({root, env: {QEMUWEB_AUTH: 'off', QEMUWEB_USERS_FILE: path.join(dir, 'users.json')}});
+  const auth = createAuth({settings: settingsFor(path.join(dir, 'users.json'), {authMode: 'off'})});
   assert.equal(auth.mode, 'off');
   const {req, res} = exchange({path: '/api/nodes'});
   run(auth.identify, req, res);
   assert.equal(req.user.login, 'local');
-  assert.throws(() => createAuth({root, env: {QEMUWEB_AUTH: 'no'}}), /Invalid QEMUWEB_AUTH/);
-  assert.throws(() => createAuth({root, env: {QEMUWEB_SESSION_HOURS: '-1'}}), /QEMUWEB_SESSION_HOURS/);
+  assert.equal(parseServerArguments(['--no-auth'], {root}).authMode, 'off');
+  assert.equal(parseServerArguments([], {root}).authMode, 'password');
+  for (const value of ['-1', '0', '2161', 'abc', '']) assert.throws(() => parseServerArguments(['--session-hours', value], {root}), /--session-hours/, value);
+  assert.equal(parseServerArguments(['--session-hours', '0.5'], {root}).sessionHours, 0.5);
+  assert.deepEqual(['true', '2', 'loopback'].map(value => parseServerArguments(['--trust-proxy', value], {root}).trustProxy), [true, 2, 'loopback']);
+  assert.equal(parseServerArguments([], {root}).trustProxy, null);
+  for (const bad of [['--users'], ['--logs'], ['--trust-proxy'], ['--ephemeral', 'x'], ['--auth', 'password']]) assert.throws(() => parseServerArguments(bad, {root}), Error, bad.join(' '));
 });
 
 function userScript(dir, args, {input, password} = {}) {
-  const env = {...process.env, QEMUWEB_USERS_FILE: path.join(dir, 'users.json')};
+  const env = {...process.env};
   delete env.QEMUWEB_PASSWORD;
   if (password !== undefined) env.QEMUWEB_PASSWORD = password;
-  return spawnSync(process.execPath, [path.join(root, 'scripts', 'user.js'), ...args], {env, input: input ?? '', encoding: 'utf8'});
+  return spawnSync(process.execPath, [path.join(root, 'scripts', 'user.js'), '--users', path.join(dir, 'users.json'), ...args], {env, input: input ?? '', encoding: 'utf8'});
 }
 
 test('scripts/user.js adds, lists, changes, imports and removes accounts', async t => {
@@ -212,16 +219,16 @@ test('a server restart logs everybody out: cookies of the previous run are refus
   const dir = tempDir(t);
   const usersFile = path.join(dir, 'users.json');
   writeUsers(usersFile, [{login: 'toto', hash: await hashPassword('toto', FAST), role: 'student'}]);
-  const env = {QEMUWEB_USERS_FILE: usersFile};
+  const settings = settingsFor(usersFile);
   const clock = 1000000;
   const firstRun = newSecret();
   const cookie = `${COOKIE_NAME}=${signSession(firstRun, {login: 'toto', issued: clock, expires: clock + 3600e3})}`;
-  const same = createAuth({root, env, now: () => clock, secret: firstRun});
+  const same = createAuth({settings, now: () => clock, secret: firstRun});
   let {req, res} = exchange({headers: {cookie}});
   run(same.identify, req, res);
   assert.deepEqual(req.user, {login: 'toto', role: 'student'});
   // Without an injected secret, every createAuth (every server start) draws a new one.
-  const restarted = createAuth({root, env, now: () => clock});
+  const restarted = createAuth({settings, now: () => clock});
   ({req, res} = exchange({headers: {cookie}}));
   run(restarted.identify, req, res);
   assert.equal(req.user, undefined);

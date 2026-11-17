@@ -2,7 +2,7 @@
 
 // The running server process, as seen by scripts and by other servers sharing runtime/:
 //   runtime/server-<port>.pid      the server PID (read by scripts/stop.sh)
-//   runtime/server-<port>.session  its kind ("regular", or "test" for QEMUWEB_TEST_SERVER=1),
+//   runtime/server-<port>.session  its kind ("regular", or "test" for --ephemeral),
 //                                  then one live session ID per line
 // Another server started on the same runtime/ never prunes a session listed in a live record.
 const fs = require('fs');

@@ -3,7 +3,8 @@
 # runner (the process that runs the machines), each as its own command. This is the only way to
 # start QemuWeb here, in development and in the tests. Output lines are prefixed [server] and
 # [runner].
-#   ./scripts/start.sh [--listen N] [--runtime DIR]     (defaults: port 3002, runtime/ of the project)
+#   ./scripts/start.sh [server options]   (--listen N, --runtime DIR, --users FILE, --logs DIR, --session-hours N,
+#                                          --trust-proxy VALUE, --no-auth, --ephemeral: see node server/main.js --help)
 # Each process leads its own process group (setsid): a terminal Ctrl+C reaches this script only.
 # Ctrl+C or SIGTERM stops the runner first (it stops every machine, within a bounded delay), kills
 # what is left of its group (QEMU, vde_switch), then stops the server, and exits 0. When the
@@ -19,25 +20,29 @@ script_path="$(readlink -f -- "${BASH_SOURCE[0]}")"
 root="$(cd -- "$(dirname -- "$script_path")/.." && pwd -P)"
 cd -- "$root"
 usage() {
-  echo "Usage: $0 [--listen N] [--runtime DIR]"
+  echo "Usage: $0 [server options]   (node server/main.js --help lists them; --listen and --runtime also go to the runner)"
 }
-parse_options() {
-  port=3002
-  runtime="$root/runtime"
-  while (( $# )); do
-    case "$1" in
-      -h|--help) usage; exit 0 ;;
-      --listen) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; port="$2"; shift 2 ;;
-      --runtime) [[ $# -ge 2 ]] || { usage >&2; exit 2; }; runtime="$(realpath -m -- "$2")"; shift 2 ;;
-      *) usage >&2; exit 2 ;;
-    esac
-  done
-  if [[ ! "$port" =~ ^[0-9]+$ ]] || (( 10#$port < 1 || 10#$port > 65535 )); then
-    echo "Invalid port: $port (1 to 65535)" >&2
-    exit 2
-  fi
-}
-parse_options "$@"
+# The options are the server's: it validates them and refuses what it does not know (this script
+# then ends with its status). Only --listen and --runtime are read here, for the runner and its socket.
+port=3002
+runtime="$root/runtime"
+server_args=()
+while (( $# )); do
+  case "$1" in
+    -h|--help) usage; exit 0 ;;
+    --listen|--runtime|--users|--logs|--session-hours|--trust-proxy)
+      server_args+=("$1")
+      shift
+      (( $# )) || break
+      case "${server_args[-1]}" in
+        --listen) port="$1" ;;
+        --runtime) runtime="$(realpath -m -- "$1")" ;;
+      esac
+      server_args+=("$1")
+      shift ;;
+    *) server_args+=("$1"); shift ;;
+  esac
+done
 
 server_pid=''
 runner_pid=''
@@ -81,7 +86,7 @@ trap stop_all EXIT
 # The server listens on <runtime>/runner-<port>.sock. A runner started with --exit-on-disconnect does
 # not retry a first connection that fails, so it starts once the socket exists (a dead server
 # takes its runner with it, and the script ends when either one exits).
-setsid ./scripts/server.sh --listen "$port" --runtime "$runtime" > >(sed -u 's/^/[server] /') 2>&1 &
+setsid ./scripts/server.sh "${server_args[@]}" > >(sed -u 's/^/[server] /') 2>&1 &
 server_pid=$!
 for _ in {1..150}; do
   [[ -S "$runtime/runner-$port.sock" ]] && break

@@ -26,22 +26,21 @@ Create the accounts before opening the service (see the README, section
 ```
 
 Keep `users.json` readable only by the account that runs QemuWeb (the script
-writes it with mode 0600). Do not set `QEMUWEB_AUTH=off` on an exposed server.
+writes it with mode 0600). Do not use `--no-auth` on an exposed server.
 
-## 2. Environment of the QemuWeb service
+## 2. Options of the QemuWeb service
 
-| Setting | Value behind nginx | Why |
+The server reads no environment variable: its options are on the command line of the systemd unit
+(see [The two services](#the-two-services)).
+
+| Option | Value behind nginx | Why |
 | --- | --- | --- |
-| `--listen` (option of `server/main.js`) | `3002` (default, or another local port) | Port nginx forwards to. |
-| `QEMUWEB_TRUST_PROXY` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
-| `QEMUWEB_SESSION_HOURS` | `12` (default) | Login lifetime, renewed while the user is active. |
-| `QEMUWEB_USERS_FILE` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
-| `QEMUWEB_LOG_DIR` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
-
-QemuWeb always runs as two processes: the server and a runner (the process that runs
-the machines). `./scripts/start.sh` (`npm start`) starts both for development and for tests; a
-deployment runs them as two systemd services of the same machine, so that restarting the
-server (an upgrade, a crash) leaves the machines running. See "The two services" below.
+| `--listen` | `3002` (default, or another local port) | Port nginx forwards to. |
+| `--trust-proxy` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
+| `--session-hours` | `12` (default) | Login lifetime, renewed while the user is active. |
+| `--users` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
+| `--logs` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
+| `--runtime` | optional | State directory outside the repository, e.g. `/var/lib/qemuweb` (give the runner the same one). |
 
 ## The runner process
 
@@ -147,8 +146,7 @@ After=network.target
 [Service]
 User=qemuweb
 WorkingDirectory=/srv/qemuweb
-Environment=QEMUWEB_TRUST_PROXY=loopback
-ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb
+ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb --users /etc/qemuweb/users.json --logs /var/log/qemuweb --trust-proxy loopback
 KillSignal=SIGTERM
 TimeoutStopSec=30
 Restart=on-failure
@@ -178,7 +176,7 @@ running, and the sessions are adopted again when the server is back.
 ## Server logs
 
 The server writes two logs, as JSON lines, in the log directory: `logs/` at the
-repository root (ignored by Git; `QEMUWEB_LOG_DIR` selects another directory),
+repository root (ignored by Git; `--logs` selects another directory),
 which the server creates at startup with mode 0700 if it is missing. Both files
 are created with mode 0600. The **Logs** panel of `/admin` shows their last 200
 entries and downloads them. `scripts/cleanall.sh` does not touch them. A write
@@ -299,7 +297,7 @@ Check the result:
 - Cross-site request checks (`Origin`/CSRF) and a revocable logout come with
   milestone 6; until then, keep QemuWeb on its own domain name (see above).
 - Log out only clears the cookie in the browser: a copied cookie stays valid
-  until it expires (`QEMUWEB_SESSION_HOURS`). Removing the account, or restarting
+  until it expires (`--session-hours`). Removing the account, or restarting
   the server (every start draws a new cookie signing key, which logs everybody out),
   revokes it.
 - A user removed with `scripts/user.sh remove` can no longer log in, but their

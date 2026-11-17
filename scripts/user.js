@@ -1,6 +1,7 @@
 'use strict';
 
 // User accounts in users.json (see server/auth/users-store.js); run through scripts/user.sh.
+//   [--users FILE] <command>   first, optionally: another users file (default users.json of the project)
 //   add <login> [--role student|admin]   create an account
 //   passwd <login>                       change a password
 //   role <login> student|admin           change a role
@@ -10,16 +11,16 @@
 //   enable <login>                       allow a disabled account again
 //   list                                 print logins, roles and disabled accounts
 //   import-csv <file>                    add or update accounts from "login,password[,role]" lines
-// Passwords come from QEMUWEB_PASSWORD, else from standard input when it is not a terminal
+// Passwords come from the variable QEMUWEB_PASSWORD (never the command line), else from standard input when it is not a terminal
 // (first line), else from a prompt without echo.
 const fs = require('fs');
 const path = require('path');
 const {hashPassword} = require('../server/auth/passwords');
-const {readUsers, writeUsers, usersFilePath, validateLogin, validateRole, validatePassword, createAccount, setPassword,
+const {readUsers, writeUsers, validateLogin, validateRole, validatePassword, createAccount, setPassword,
   setRole, setDisabled, removeAccount} = require('../server/auth/users-store');
 
 const root = path.join(__dirname, '..');
-const USAGE = `Usage: scripts/user.sh <command>
+const USAGE = `Usage: scripts/user.sh [--users FILE] <command>
   add <login> [--role student|admin]
   passwd <login>
   role <login> student|admin
@@ -29,7 +30,7 @@ const USAGE = `Usage: scripts/user.sh <command>
   list
   import-csv <file>          lines: login,password[,role]
 Password: QEMUWEB_PASSWORD, or the first line of standard input, or a prompt.
-Users file: ${path.relative(process.cwd(), usersFilePath(root)) || 'users.json'} (QEMUWEB_USERS_FILE overrides it).`;
+Users file: users.json of the project, or --users FILE (before the command).`;
 
 function fail(message, code = 1) {
   const error = new Error(message);
@@ -102,7 +103,12 @@ function parseCsv(text) {
 }
 
 async function main(args) {
-  const file = usersFilePath(root);
+  let file = path.join(root, 'users.json');
+  if (args[0] === '--users') {
+    if (!args[1]) fail(USAGE, 2);
+    file = path.resolve(args[1]);
+    args = args.slice(2);
+  }
   const [command, ...rest] = args;
   const users = () => readUsers(file);
   const find = (list, login) => list.find(user => user.login === login);

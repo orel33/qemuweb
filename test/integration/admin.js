@@ -89,7 +89,7 @@ async function run() {
   // A log directory the server must create itself, inside the temporary users directory.
   const logDir = path.join(path.dirname(testUsers.file), 'logs');
   const auditFile = path.join(logDir, 'admin.log');
-  child = spawnServer({port, usersFile: testUsers.file, env: {QEMUWEB_LOG_DIR: logDir}});
+  child = spawnServer({port, usersFile: testUsers.file, logDir});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   const account = Object.fromEntries(testUsers.users.map(user => [user.login, user]));
   const signIn = login => new QemuWebClient(baseUrl).signIn(login, account[login].password);

@@ -1,7 +1,7 @@
 'use strict';
 
 // Startup and wiring only: HTTP server, Socket.IO, sessions, runners and routes.
-//   node server/main.js [--listen PORT] [--runtime DIR]   the server only: it waits for a runner (./scripts/runner.sh), which keeps
+//   node server/main.js [options]   the server only (see --help): it waits for a runner (./scripts/runner.sh), which keeps
 //                    its VMs if the server restarts. ./scripts/start.sh (npm start) runs both.
 const fs = require('fs');
 const http = require('http');
@@ -16,7 +16,7 @@ const {attachSockets} = require('./sockets');
 const {createSessionRouter} = require('./routes');
 const {readCatalog} = require('../common/system-config');
 const {createAuth} = require('./auth');
-const {ADMIN_LOG, USERS_LOG, logDirPath, createLogDir, createAudit, createUserLog} = require('./audit');
+const {ADMIN_LOG, USERS_LOG, createLogDir, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
 const {startupReport, helpText} = require('./startup-report');
 const {parseServerArguments} = require('./options');
@@ -30,27 +30,26 @@ if (args.length === 1 && (args[0] === '--help' || args[0] === '-h')) {
   console.log(helpText({root}));
   process.exit(0);
 }
-let options;
-try { options = parseServerArguments(args, {root}); }
+let settings;
+try { settings = parseServerArguments(args, {root}); }
 catch (error) {
-  console.error(`${error.message}. Usage: node server/main.js [--listen PORT] [--runtime DIR] (--help lists the options)`);
+  console.error(`${error.message}. Usage: node server/main.js [options] (--help lists them)`);
   process.exit(2);
 }
-const runtime = options.runtime;
-const port = options.port;
+const {runtime, port} = settings;
 console.log(`QemuWeb ${packageInfo.version}\n`);
-console.log(`${startupReport({root, runtimeDir: runtime, port, given: options.given}).join('\n')}\n`);
+console.log(`${startupReport({root, settings}).join('\n')}\n`);
 const configPath = path.join(root, 'config.json');
 fs.mkdirSync(path.join(runtime, 'sessions'), {recursive: true});
-const instance = new ServerInstance({runtimeRoot: runtime, port, ephemeral: process.env.QEMUWEB_TEST_SERVER === '1'});
+const instance = new ServerInstance({runtimeRoot: runtime, port, ephemeral: settings.ephemeral});
 
 const app = express();
 const server = http.createServer(app);
 const io = new SocketIoServer(server);
 
-// logs/ (or QEMUWEB_LOG_DIR): admin.log (administrator actions) and users.log (user events).
+// --logs (default logs/): admin.log (administrator actions) and users.log (user events).
 let logDir;
-try { logDir = createLogDir(logDirPath(root)); }
+try { logDir = createLogDir(settings.logDir); }
 catch (error) { console.error(`Cannot create the log directory: ${error.message}`); process.exit(1); }
 const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
 const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
@@ -82,19 +81,16 @@ for (const event of ['created', 'removed']) manager.on(event, () => { if (server
 readCatalog(configPath);
 
 let auth;
-try { auth = createAuth({root, userLog}); }
+try { auth = createAuth({settings, userLog}); }
 catch (error) { console.error(error.message); process.exit(1); }
 if (auth.mode === 'off') {
-  console.warn('WARNING: authentication is disabled (QEMUWEB_AUTH=off). Every visitor uses one shared local session.');
+  console.warn('WARNING: authentication is disabled (--no-auth). Every visitor uses one shared local session.');
   console.warn('         Use it only for single-user local work, never on a shared or exposed server.');
 } else if (!auth.userCount()) {
   console.warn(`No user account in ${auth.usersFile}: nobody can log in. Add one with ./scripts/user.sh add <login>.`);
 }
 // Express trust proxy (e.g. "loopback" behind nginx), so that req.secure follows X-Forwarded-Proto.
-if (process.env.QEMUWEB_TRUST_PROXY) {
-  const value = process.env.QEMUWEB_TRUST_PROXY;
-  app.set('trust proxy', value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value);
-}
+if (settings.trustProxy !== null) app.set('trust proxy', settings.trustProxy);
 io.use(auth.socketMiddleware);
 const sockets = attachSockets(io, manager, {audit, currentUser: auth.currentUser});
 
@@ -115,7 +111,7 @@ app.use(express.static(path.join(root, 'public')));
 // X-Observe (admins, read-only) and the admin API come before anything that could open or
 // change the caller's own session.
 app.use('/api', observationGate(manager));
-app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, logDir, port, runtime: options.given.has('--runtime') ? runtime : null}));
+app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null}));
 // Self-service deletion: stops and removes every node, then the session; the next request
 // opens a new, empty session.
 app.delete('/api/session', async (req, res) => {

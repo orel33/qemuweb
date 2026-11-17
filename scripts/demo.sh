@@ -39,7 +39,7 @@ trap 'exit 130' INT TERM
 printf '\n== QemuWeb demo on port %s ==\n' "$port"
 node scripts/demo.js prepare "$demo_dir/users.json"
 # The same two commands as scripts/start.sh (server and runner), with the temporary users file.
-QEMUWEB_USERS_FILE="$demo_dir/users.json" ./scripts/start.sh --listen "$port" &
+./scripts/start.sh --listen "$port" --users "$demo_dir/users.json" &
 demo_server_pid=$!
 node scripts/demo.js load "http://127.0.0.1:$port"
 
