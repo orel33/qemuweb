@@ -1,106 +1,7 @@
-// Graphic network view and .topo topology load/save.
-import {generalSettings, graphicLayoutKey, machines, saveViewSettings, savedView, store} from './state.js';
+// .topo topology load/save; starts the saved view (Terminals or Graphic).
+import {generalSettings, savedView} from './state.js';
 import {jsonRequest, requestJson} from './api.js';
-import {fitTerminals} from './terminal.js';
-import {closeLayoutMenu, selectMachine, viewChanged, workspace} from './workspace.js';
-
-const graphicWorkspace = document.getElementById('graphic-workspace');
-const graphicCanvas = document.getElementById('graphic-canvas');
-const graphicSummary = document.getElementById('graphic-summary');
-const graphicToggle = document.getElementById('toggle-graphic-view');
-const GRAPHIC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>';
-const TERMINALS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>';
-const graphicZoomOut = document.getElementById('graphic-zoom-out');
-const graphicZoomIn = document.getElementById('graphic-zoom-in');
-const graphicZoomLevel = document.getElementById('graphic-zoom-level');
-
-let graphicGraph = null;
-let graphicDrag = null;
-let suppressGraphicClick = false;
-const graphicPositions = new Map();
-let graphicSessionId = null;
-export function loadGraphicPositions(sessionId) {
-  graphicSessionId = sessionId;
-  graphicPositions.clear();
-  try {
-    const saved = JSON.parse(localStorage.getItem(graphicLayoutKey) || '{}');
-    if (saved.sessionId !== sessionId || !saved.positions || typeof saved.positions !== 'object') return;
-    for (const [id, position] of Object.entries(saved.positions)) {
-      if (Number.isFinite(position?.x) && Number.isFinite(position?.y)) graphicPositions.set(id, position);
-    }
-  } catch (_) {}
-}
-function saveGraphicPositions() {
-  if (!graphicSessionId) return;
-  try {
-    localStorage.setItem(graphicLayoutKey, JSON.stringify({sessionId: graphicSessionId, positions: Object.fromEntries(graphicPositions)}));
-  } catch (_) {}
-}
-function applyGraphicZoom() {
-  const svg = graphicCanvas.querySelector('.topology-svg');
-  if (svg) {
-    svg.style.width = `${store.graphicZoom * 100}%`;
-    svg.style.minWidth = `${900 * store.graphicZoom}px`;
-  }
-  graphicZoomLevel.textContent = `${Math.round(store.graphicZoom * 100)}%`;
-  graphicZoomOut.disabled = store.graphicZoom <= 0.5;
-  graphicZoomIn.disabled = store.graphicZoom >= 2;
-}
-export function renderGraphic() {
-  if (!store.graphicVisible) return;
-  const scrollLeft = graphicCanvas.scrollLeft;
-  const scrollTop = graphicCanvas.scrollTop;
-  for (const id of graphicPositions.keys()) if (!machines.has(id)) graphicPositions.delete(id);
-  const graph = TopologyGraphic.draw(graphicCanvas, machines.values(), id => {
-    if (suppressGraphicClick) return;
-    setGraphicView(false);
-    selectMachine(id);
-  }, graphicPositions);
-  graphicGraph = graph;
-  graphicSummary.textContent = `${graph.hosts} host${graph.hosts === 1 ? '' : 's'} · ${graph.switches} switch${graph.switches === 1 ? '' : 'es'} · ${graph.links.length} link${graph.links.length === 1 ? '' : 's'}`;
-  applyGraphicZoom();
-  graphicCanvas.scrollLeft = scrollLeft;
-  graphicCanvas.scrollTop = scrollTop;
-}
-function graphicPointerPosition(event) {
-  const svg = graphicCanvas.querySelector('.topology-svg');
-  const matrix = svg?.getScreenCTM();
-  if (!matrix) return null;
-  const point = svg.createSVGPoint();
-  point.x = event.clientX;
-  point.y = event.clientY;
-  return point.matrixTransform(matrix.inverse());
-}
-
-function finishGraphicDrag(event) {
-  if (!graphicDrag || event.pointerId !== graphicDrag.pointerId) return;
-  if (graphicDrag.moved) {
-    suppressGraphicClick = true;
-    setTimeout(() => { suppressGraphicClick = false; }, 0);
-    saveGraphicPositions();
-  }
-  graphicDrag = null;
-  delete graphicCanvas.dataset.dragging;
-  if (graphicCanvas.hasPointerCapture(event.pointerId)) graphicCanvas.releasePointerCapture(event.pointerId);
-}
-
-export function setGraphicView(visible) {
-  closeLayoutMenu();
-  store.graphicVisible = visible;
-  document.body.dataset.view = visible ? 'graphic' : 'terminals';
-  workspace.hidden = visible;
-  graphicWorkspace.hidden = !visible;
-  // The icon shows the view the button switches to: Lucide Network, or SquareTerminal.
-  // The button names the view it switches to: Graphic (blue) or Terminals (green).
-  graphicToggle.innerHTML = visible ? `${TERMINALS_ICON}<span>Terminals</span>` : `${GRAPHIC_ICON}<span>Graphic</span>`;
-  graphicToggle.className = `nav-button view-control ${visible ? 'act-green' : 'act-blue'}`;
-  const label = visible ? 'Show Terminals view' : 'Show Graphic view';
-  graphicToggle.setAttribute('aria-label', label);
-  graphicToggle.title = label;
-  if (visible) renderGraphic();
-  else requestAnimationFrame(fitTerminals);
-  viewChanged();
-}
+import {setGraphicView} from './graphic-view.js';
 
 const topologyFile = document.getElementById('topology-file');
 const topologyDialog = document.getElementById('topology-dialog');
@@ -112,36 +13,6 @@ let topologyLoaded = false;
 let topologyText = '';
 
 export function initTopology() {
-  graphicCanvas.addEventListener('pointerdown', event => {
-    if (event.button !== 0) return;
-    const nodeElement = event.target.closest('.topology-node');
-    const node = graphicGraph?.nodes.find(item => item.id === nodeElement?.dataset.nodeId);
-    const pointer = graphicPointerPosition(event);
-    if (!node || !pointer) return;
-    graphicDrag = {pointerId: event.pointerId, id: node.id, x: node.x, y: node.y, startX: pointer.x, startY: pointer.y, moved: false};
-    graphicCanvas.setPointerCapture(event.pointerId);
-  });
-  graphicCanvas.addEventListener('pointermove', event => {
-    if (!graphicDrag || event.pointerId !== graphicDrag.pointerId) return;
-    const pointer = graphicPointerPosition(event);
-    if (!pointer) return;
-    const dx = pointer.x - graphicDrag.startX;
-    const dy = pointer.y - graphicDrag.startY;
-    if (!graphicDrag.moved && Math.hypot(dx, dy) < 5) return;
-    graphicDrag.moved = true;
-    graphicPositions.set(graphicDrag.id, {x: graphicDrag.x + dx, y: graphicDrag.y + dy});
-    graphicCanvas.dataset.dragging = 'true';
-    renderGraphic();
-  });
-  graphicCanvas.addEventListener('pointerup', finishGraphicDrag);
-  graphicCanvas.addEventListener('pointercancel', finishGraphicDrag);
-  graphicCanvas.addEventListener('click', event => {
-    if (suppressGraphicClick) { event.preventDefault(); event.stopPropagation(); }
-  }, true);
-  graphicToggle.addEventListener('click', () => setGraphicView(!store.graphicVisible));
-  graphicZoomOut.addEventListener('click', () => { store.graphicZoom = Math.max(0.5, store.graphicZoom - 0.25); applyGraphicZoom(); saveViewSettings(); });
-  graphicZoomIn.addEventListener('click', () => { store.graphicZoom = Math.min(2, store.graphicZoom + 0.25); applyGraphicZoom(); saveViewSettings(); });
-  applyGraphicZoom();
   setGraphicView(savedView?.mode === 'graphic');
   document.getElementById('load-topology').addEventListener('click', () => topologyFile.click());
   topologyCancel.addEventListener('click', () => topologyDialog.close());

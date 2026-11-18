@@ -6,7 +6,7 @@ import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedV
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
-import {loadGraphicPositions, renderGraphic} from './topology.js';
+import {loadGraphicPositions, renderGraphic} from './graphic-view.js';
 import {refollow} from './observe.js';
 
 const confirmDialog = document.getElementById('confirm-dialog');

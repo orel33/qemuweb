@@ -67,3 +67,12 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 - More `config.json` warnings at startup (beyond the engine, KVM and serial port checks).
 - A runner per student, on the student's machine (needs an untrusted runner model: the control plane
   validates everything it receives). See the roadmap, milestone 5.
+
+## Graphic view
+
+- **No IP address on the cards**: QemuWeb does not know a guest's address without a guest agent. Showing
+  it would need one (or a startup-script convention that reports it).
+- **Touch**: the Graphic view pans with one finger and zooms with the buttons only; there is no pinch zoom.
+- **Floating console position**: its place and size are not remembered (neither per user nor across reloads).
+- **Link editing and new interfaces**: a link is removed by disconnecting the interface (the interface
+  stays); removing the interface itself is only in Host Settings.

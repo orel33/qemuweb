@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const {parseTopology} = require('../../common/topology');
-const {buildGraph, stateOf} = require('../../public/topology-graphic');
+const {CARD_HEIGHT, CARD_WIDTH, buildGraph, stateOf} = require('../../public/topology-graphic');
 
 function nodesFromFixture(file) {
   const topology = parseTopology(fs.readFileSync(file, 'utf8'), ['debian13-legacy']);
@@ -45,8 +45,8 @@ test('parallel interfaces remain separate and disconnected interfaces have no li
   assert.equal(graph.links.length, 2);
   assert.deepEqual(graph.links.map(link => link.nicIndex), [0, 1]);
   assert.notEqual(graph.links[0].path, graph.links[1].path);
-  assert.notEqual(graph.links[0].y1, graph.links[1].y1);
-  assert.notEqual(graph.links[0].y2, graph.links[1].y2);
+  assert.notEqual(graph.links[0].x1, graph.links[1].x1);
+  assert.notEqual(graph.links[0].x2, graph.links[1].x2);
 });
 
 test('moving nodes updates their Bézier endpoints without changing network links', () => {
@@ -61,6 +61,28 @@ test('moving nodes updates their Bézier endpoints without changing network link
   assert.equal(moved.nodes.find(node => node.id === 'h1').x, 400);
   assert.equal(moved.nodes.find(node => node.id === 's1').y, 220);
   assert.notEqual(moved.links[0].path, original.links[0].path);
+});
+
+test('node positions are not clamped: the world has no edge, whatever the zoom', () => {
+  const nodes = [{id: 's1', kind: 'switch', hostname: 's1'}, {id: 'h1', kind: 'host', hostname: 'h1', interfaces: ['s1']}];
+  const graph = buildGraph(nodes, new Map([['h1', {x: -5000, y: 9000}]]));
+  const host = graph.nodes.find(node => node.id === 'h1');
+  assert.equal(host.x, -5000);
+  assert.equal(host.y, 9000);
+});
+
+test('the default placement keeps every card apart on the example topologies, and manual positions win', () => {
+  for (const file of ['demo/lan.topo', 'demo/gw.topo', 'demo/dmz.topo']) {
+    const nodes = nodesFromFixture(file);
+    const graph = buildGraph(nodes);
+    for (const [index, a] of graph.nodes.entries()) {
+      for (const b of graph.nodes.slice(index + 1)) {
+        assert.ok(Math.abs(a.x - b.x) >= CARD_WIDTH || Math.abs(a.y - b.y) >= CARD_HEIGHT, `${file}: ${a.id} overlaps ${b.id}`);
+      }
+    }
+    const moved = buildGraph(nodes, new Map([[nodes[0].id, {x: 1, y: 2}]]));
+    assert.deepEqual(moved.nodes.filter(node => node.manual).map(node => [node.x, node.y]), [[1, 2]]);
+  }
 });
 
 test('empty and changing node states are represented', () => {

@@ -5,7 +5,7 @@ import {activeMachine, renderTabs, selectMachine, showStatusError, updateControl
 import {addHost, chooseRestartTiming, nextMachineName, scheduleSessionSync, startActiveMachine} from './nodes.js';
 import {engineSelect} from './node-dialogs.js';
 import {clearStartupTemplateError, defaultStartScript, renderGuestMedia, renderStartupTemplateValues, showStartupTemplateError, validateStartScriptDraft} from './startup-media.js';
-import {renderGraphic} from './topology.js';
+import {renderGraphic} from './graphic-view.js';
 import {renderConsoleSettings} from './host-console-settings.js';
 
 let optionsRequest = 0;

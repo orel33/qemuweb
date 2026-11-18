@@ -164,6 +164,35 @@ start from fresh images. [`demo/`](../demo/) also contains DMZ and gateway sessi
   [`demo/lan.topo`](../demo/lan.topo), [`demo/dmz.topo`](../demo/dmz.topo),
   [`demo/gw.topo`](../demo/gw.topo).
 
+### Graphic view
+
+The **Graphic** button (bottom right) shows the network as a diagram; **Terminals** goes
+back. Each card shows the node name, its system, its state, and for a host its memory,
+vCPUs and how many interfaces are linked (for a switch, how many ports are in use). No IP
+address is shown: QemuWeb does not know the guests' addresses. Hovering a card lists
+everything, including each interface's switch and port.
+
+- **Move the view**: drag the background to pan, use the mouse wheel to zoom around the
+  pointer, or the zoom buttons (`+`, `-` and `0` on the keyboard). **Fit to view** shows the
+  whole network. The canvas has no edge: a node can be dragged anywhere you can see, at any
+  zoom level. Positions are saved in this browser; nodes you have not moved are placed
+  automatically (a layered layout that limits crossings), and a loaded topology gets a fresh
+  layout.
+- **Select**: a click selects a node, like its tab in the Terminals view (the selected node is
+  highlighted and is the one the toolbar actions apply to).
+- **Console**: a double click (or Enter on a focused card) opens the node's console as a
+  floating window over the graph. It is the normal console pane (views, actions, font size);
+  an administrator observing a session sees it read-only, and **Take control** applies to it
+  as in the Terminals view. Drag its title bar to move it, its bottom right corner to resize
+  it, and use the close button to dismiss it. Opening a console selects the node, which can
+  change the page shown in the Terminals view.
+- **Edit** (greyed out when observing): **Host** and **Switch** add a node where you click next
+  (the usual dialog opens first). **Connect** links a host interface to a switch: click a
+  host, choose its interface (or a new one), then click a switch; clicking a switch first
+  also works. Click a link to select it, then **Remove link** disconnects that interface
+  (the interface itself stays; remove it in Host Settings). A running host needs a restart
+  for the change to apply, as in Host Settings. `Esc` cancels an editing mode.
+
 ### Startup scripts
 
 Each host can run `start.sh` at boot from an automatically built startup disk.

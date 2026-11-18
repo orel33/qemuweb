@@ -5,7 +5,7 @@ import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setP
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
-import {renderGraphic, setGraphicView} from './topology.js';
+import {renderGraphic, setGraphicView} from './graphic-view.js';
 import {controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
 import {publishView} from './socket.js';
 
@@ -455,6 +455,11 @@ export function selectMachine(id) {
 
 export function initWorkspace() {
   for (const [id, type] of [['new-host', 'host'], ['new-switch', 'switch']]) {
+    const button = document.getElementById(id);
+    button.style.color = NetworkNodeIcons.styles[type].color;
+    NetworkNodeIcons.applyAdd(button.querySelector('svg'), type);
+  }
+  for (const [id, type] of [['graphic-add-host', 'host'], ['graphic-add-switch', 'switch']]) {
     const button = document.getElementById(id);
     button.style.color = NetworkNodeIcons.styles[type].color;
     NetworkNodeIcons.applyAdd(button.querySelector('svg'), type);
