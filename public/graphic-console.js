@@ -10,6 +10,7 @@ const bar = document.getElementById('floating-console-bar');
 const barTitle = document.getElementById('floating-console-title');
 const closeButton = document.getElementById('floating-console-close');
 let origin = null;
+let geometry = null;   // {width, height, left, top} of the window when it was closed, for the next opening
 let moving = null;
 
 const isFloating = () => workspace.dataset.floating === 'true';
@@ -21,12 +22,22 @@ function place(left, top) {
   workspace.style.top = `${Math.max(0, Math.min(top, maxTop))}px`;
 }
 
+// The window geometry is inline style on the console workspace: it must not outlive the window, or the
+// Terminals view would keep the size of the floating window.
+function clearGeometry() {
+  for (const property of ['width', 'height', 'left', 'top']) workspace.style.removeProperty(property);
+}
+
+function applyGeometry({width, height, left, top}) {
+  workspace.style.width = `${width}px`;
+  workspace.style.height = `${height}px`;
+  place(left, top);
+}
+
 function defaultGeometry() {
   const width = Math.min(780, window.innerWidth - 16);
   const height = Math.min(480, Math.round(window.innerHeight * 0.62));
-  workspace.style.width = `${width}px`;
-  workspace.style.height = `${height}px`;
-  place(window.innerWidth - width - 20, window.innerHeight - height - 84);
+  applyGeometry({width, height, left: window.innerWidth - width - 20, top: window.innerHeight - height - 84});
 }
 
 // Opens the floating console on the selected node (the caller selected it).
@@ -38,7 +49,7 @@ export function openFloatingConsole() {
     bar.hidden = false;
     workspace.setAttribute('role', 'group');
     workspace.setAttribute('aria-label', 'Floating console');
-    if (!workspace.style.width) defaultGeometry();
+    if (geometry) applyGeometry(geometry); else defaultGeometry();
   }
   refreshFloatingConsole();
   requestAnimationFrame(() => {
@@ -50,11 +61,14 @@ export function openFloatingConsole() {
 export function closeFloatingConsole(returnFocus = false) {
   if (!isFloating()) return;
   const id = store.activeId;
+  geometry = {width: workspace.offsetWidth, height: workspace.offsetHeight, left: workspace.offsetLeft, top: workspace.offsetTop};
   delete workspace.dataset.floating;
+  clearGeometry();
   workspace.removeAttribute('role');
   workspace.removeAttribute('aria-label');
   bar.hidden = true;
   workspace.hidden = store.graphicVisible;
+  requestAnimationFrame(() => fitTerminals());   // the panes get the whole workspace back
   if (returnFocus && id) document.querySelector(`.topology-node[data-node-id="${CSS.escape(id)}"]`)?.focus({preventScroll: true});
 }
 
