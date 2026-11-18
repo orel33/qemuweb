@@ -1,7 +1,7 @@
 # QemuWeb TODO
 
 Side tasks, features and bug fixes that are not milestones of the
-[0.9.0 roadmap](roadmap-v0.9.0.md). The roadmap is the plan; this list collects what comes up
+[roadmap](roadmap.md). The roadmap is the plan; this list collects what comes up
 along the way. Add an entry when something is noticed, remove it when it is done (the commit
 message says what changed). Keep each entry to a few lines: what, why, and an idea if there is one.
 
@@ -44,6 +44,11 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   through a proxy either. Idea: a proxy option for `prepare.sh` (used by the downloads and written into the preseed)
   and a mirror URL setting.
 
+- **Runtime path too long, reported late**: a `runtime/` directory of more than 49 characters (the sockets of a node
+  must fit in 107 bytes) only fails when the first node is created or a session is loaded, with "move the project to a
+  shorter directory". Check it at startup (`Checking configuration…`, with the `--runtime` hint), in the server and the
+  runner, or shorten the node socket paths (for example a short alias directory for the sockets).
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
@@ -54,6 +59,13 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   a unit test over many prompts; or let the guest announce its prompt (`PS1` in `prepare.sh`).
 - **Disabled view controls**: no tooltip tells why a control is greyed out (view driven by the
   owner or by the controlling admin).
+
+- **Several floating consoles in the Graphic view**: only one floating window exists (the selected node's pane, see
+  `public/graphic-console.js`); a double click on another node reuses it. Idea (task `GRA02`): up to 4 overlapping
+  windows, cascaded, a click brings one to the front, each movable, resizable and closable, built on the 4 existing
+  panes. Or a docked panel under the graph (side by side or stacked, no overlap). To decide: the maximum number of
+  windows; observer and Follow behaviour (disabled under Follow, as today); whether geometry is kept until a reload
+  or saved; whether the windows stay independent of the per-user Terminals layout (as today).
 
 ## Documentation
 
@@ -78,6 +90,6 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 - **No IP address on the cards**: QemuWeb does not know a guest's address without a guest agent. Showing
   it would need one (or a startup-script convention that reports it).
 - **Touch**: the Graphic view pans with one finger and zooms with the buttons only; there is no pinch zoom.
-- **Floating console position**: its place and size are not remembered (neither per user nor across reloads).
+- **Floating console position**: its place and size are kept only until the page is reloaded (not per user, not saved).
 - **Link editing and new interfaces**: a link is removed by disconnecting the interface (the interface
   stays); removing the interface itself is only in Host Settings.

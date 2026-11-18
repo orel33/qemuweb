@@ -34,7 +34,7 @@ images, QEMU with VDE, and usually KVM. See
 ## Documentation
 
 The documents are Markdown files: the `README.md` (overview and demo), every `docs/*.md` (`install.md`, `user-guide.md`, `reference.md`,
-`deployment.md`, `architecture.md`, `json-files.md`, `development.md`, `roadmap-v0.9.0.md`, `todo.md`, the test sheet `remote-runner-test.md`), `deploy/cremi/install-cremi.md` and
+`deployment.md`, `architecture.md`, `json-files.md`, `development.md`, `roadmap.md`, `todo.md`, the test sheet `remote-runner-test.md`), `deploy/cremi/install-cremi.md` and
 `test/tests.md` (`docs/bak/` is an archive). Their PDF versions are in `docs/pdf/`, built by
 `make docs` with one style (`docs/doc.css`: dark text on white, light grey code blocks and tables, nothing
 that prints badly on a black and white printer; `docs/doc.lua` turns a block quote that starts with

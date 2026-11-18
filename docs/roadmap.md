@@ -1,14 +1,14 @@
-# QemuWeb 0.9.0 — Roadmap multi-utilisateur
+# QemuWeb — Roadmap vers la 1.0.0
 
-15 novembre 2026
+19 novembre 2026
 
 ## Contexte et architecture cible
 
-QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les six jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, runners, puis durcissement applicatif et jail minimaliste.
+QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, runners (jalons 1 à 5, faits, version **0.9.0**), puis durcissement applicatif, mise en production et vue Graphic achevée (jalons 6 à 8, version **1.0.0**).
 
 Les tâches annexes (correctifs, idées, petites fonctions) hors jalons sont dans [todo.md](todo.md).
 
-Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est livré sous forme d'une bêta, et 0.9.0 sort une fois les critères du jalon 6 remplis.
+Version actuelle : 0.9.0-beta.5.2. Chaque jalon est livré sous forme d'une bêta. **0.9.0** stabilise ce qui existe (formats figés, runner distant testé de bout en bout) et reste réservée à des utilisateurs de confiance. **1.0.0** est la version de production : sécurité, runners distants en service, vue Graphic achevée (voir « Version 1.0.0 »).
 
 | Jalon | Version livrée |
 | --- | --- |
@@ -23,8 +23,12 @@ Cette roadmap vise la version **0.9.0** (actuelle : 0.8.1). Chaque jalon est liv
 | 5c — Runners distants (jeton d'enregistrement, WebSocket authentifié, placement, grâce et resynchronisation, administration), première livraison | 0.9.0-beta.5.1 |
 | Documentation : PDF générés depuis le Markdown (`make docs`), schémas SVG, `docs/json-files.md`, fiche de test d'un runner distant, `test/tests.md` | 0.9.0-beta.5.2 |
 | 5 — Runners local et distant (5c : runners distants) | 0.9.0-beta.5 |
-| 6 — Durcissement applicatif et jail minimaliste | 0.9.0-beta.6 |
-| Stabilisation | 0.9.0 |
+| Documentation (PDF depuis le Markdown, schémas, spécification des fichiers JSON, fiche de test du runner distant) | 0.9.0-beta.5.2 |
+| Stabilisation (formats à 1, runner distant testé de bout en bout) | 0.9.0 |
+| 6 — Durcissement applicatif et jail minimaliste | 1.0.0-beta.1 |
+| 7 — Mise en production (runners distants, persistance, charge) | 1.0.0-beta.2 |
+| 8 — Vue Graphic achevée | 1.0.0-beta.3 |
+| Version 1.0.0 | 1.0.0 |
 
 ```
 Navigateurs (étudiants, admin)
@@ -190,7 +194,7 @@ Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve 
 
 **Écarts par rapport au plan**
 
-- Le contexte du runner est une instance par session (`createContext()`), et `lib/session.js` ne porte plus que l'espace de travail : l'état du serveur (fichiers `server-<port>.pid` et `.session`, nettoyage) est dans `lib/server-instance.js`, et `lib/session-manager.js` fait le lien login → session + runner.
+- Le contexte du runner est une instance par session (`createContext()`), et `lib/session.js` ne porte plus que l'espace de travail : l'état du serveur (fichiers `server-<port>.pid` et `.session`, nettoyage) est dans `server/server-instance.js`, et `lib/session-manager.js` fait le lien login → session + runner.
 - `runtime/current` est supprimé, remplacé par `runtime/users/<login>`. Le fichier `server-<port>.session` liste désormais plusieurs identifiants de session (l'ancien format reste lu).
 - Les VM VirtualBox portent l'identifiant de session dans leur nom, et l'exclusion KVM / VirtualBox vaut pour toute la machine.
 - Un identifiant de node inconnu donne 404 (au lieu de 400 ou 500), sauf l'aperçu `GET /api/nodes/:id/options`.
@@ -307,7 +311,35 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 - [ ] Une session placée sur un runner distant se pilote comme une session locale.
 - [ ] Couper puis rétablir le réseau du runner ne tue aucune VM et l'interface se resynchronise.
 
-## Jalon 6 — Durcissement applicatif et jail minimaliste
+## Stabilisation (0.9.0)
+
+À la sortie de 0.9.0, les formats de fichiers repartent à zéro : plus aucun numéro de version hérité des bêtas. Pendant les bêtas, aucun `schemaVersion` n'est incrémenté : les formats changent librement. La compatibilité avec un ancien format n'est pas conservée non plus (voir `AGENTS.md`).
+
+- Remettre `schemaVersion` à **1** partout : `session.json` (4 aujourd'hui), `host.json` (3), `switch.json` (2) et `config.json` (4). `meta.json` et `users.json` sont déjà à 1. Cela touche le code (`runner/session.js`, `runner/host-config.js`, `runner/session-runtime.js`, `runner/archive-snapshot.js`, `server/server-instance.js`, `common/system-config.js`), les tests, `config.json` et la documentation.
+- Réécrire les 5 archives de `demo/` avec ces valeurs (elles contiennent `session.json`, `host.json` et `switch.json`).
+- Renommer le fichier téléchargé `qemuweb-session-v4.zip` en `qemuweb-session.zip` (`server/routes/archives.js`, `public/archive.js`).
+- À partir de 0.9.0, tout changement de format incrémente le numéro et s'accompagne d'une décision explicite sur la compatibilité.
+- Terminer le test du runner distant de bout en bout (fiche `docs/remote-runner-test.md`, au CREMI) et cocher les critères du jalon 5.
+
+**Critères de fin**
+
+- [ ] Les formats sont à 1, les démos réécrites, le ZIP renommé, les tests verts.
+- [ ] Un runner distant s'enregistre, reçoit une session, survit à une coupure réseau et se pilote comme un runner local (jalon 5 coché).
+- [ ] La version 0.9.0 est taguée ; elle reste réservée à des utilisateurs de confiance.
+
+## Version 1.0.0 — objectif
+
+**QemuWeb ouvert à une promo entière au CREMI, en production, sans faire confiance aux utilisateurs.** Une session par étudiant, environ **30 sessions simultanées** (un switch et de l'ordre de 5 nœuds chacune), réparties sur le serveur et des runners distants, derrière le frontend HTTPS du CREMI.
+
+| Axe | Critère de sortie | Jalon |
+| --- | --- | --- |
+| Sécurité | Liste blanche HMP, quotas (VM, session, serveur), mot de passe minimal, ralentissement des échecs de connexion, contrôle `Origin`, déconnexion révocable, runner sous un compte dédié avec `runtime/` en `0700` | 6 |
+| Production | Runner distant en service derrière le frontend (WebSocket, délais, en-têtes), sessions qui survivent au redémarrage du serveur, services systemd, images distribuées, documentation d'installation unique | 7 |
+| Charge | Environ 30 sessions simultanées tenues sans VM tuée ni interface qui se fige | 7 |
+| Vue Graphic | Plusieurs consoles flottantes, points restants de `docs/todo.md` traités | 8 |
+| Qualité | Tests unitaires et d'intégration verts, fiche de test manuelle déroulée sur le serveur de production, PDF et README à jour | tous |
+
+## Jalon 6 — Durcissement applicatif et jail minimaliste (1.0.0)
 
 Les protections applicatives et la jail du runner sont regroupées ici, après les runners, pour être appliquées par le runner lui-même : il ne fait pas confiance aveuglément au plan de contrôle, y compris quand il est distant. Avant ce jalon, QemuWeb ne doit être ouvert qu'à des utilisateurs de confiance.
 
@@ -351,16 +383,55 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 - [ ] Le runner local tourne sous le compte `qemuweb-runner`, `runtime/` est en `0700` et les images de base sont en lecture seule.
 - [ ] Une VM qui dépasse sa RAM est tuée par son scope sans affecter les autres sessions.
 
-## Stabilisation (0.9.0)
+## Jalon 7 — Mise en production
 
-À la sortie de 0.9.0, les formats de fichiers repartent à zéro : plus aucun numéro de version hérité des bêtas. Pendant les bêtas, aucun `schemaVersion` n'est incrémenté : les formats changent librement. La compatibilité avec un ancien format n'est pas conservée non plus (voir `AGENTS.md`).
+Ce qui sépare un runner distant qui marche en test d'un runner distant en service. Beaucoup de points viennent de `docs/todo.md` et du test au CREMI.
 
-- Remettre `schemaVersion` à **1** partout : `session.json` (4 aujourd'hui), `host.json` (3), `switch.json` (2) et `config.json` (4). `meta.json` et `users.json` sont déjà à 1. Cela touche le code (`runner/session.js`, `runner/host-config.js`, `runner/session-runtime.js`, `runner/archive-snapshot.js`, `lib/server-instance.js`, `common/system-config.js`), les tests, `config.json` et la documentation.
-- Réécrire les 5 archives de `demo/` avec ces valeurs (elles contiennent `session.json`, `host.json` et `switch.json`).
-- Renommer le fichier téléchargé `qemuweb-session-v4.zip` en `qemuweb-session.zip` (`routes/archives.js`, `public/archive.js`).
-- À partir de 0.9.0, tout changement de format incrémente le numéro et s'accompagne d'une décision explicite sur la compatibilité.
+**Frontend et exposition**
 
-## Après le jalon 6, et décisions prises
+- Le frontend HTTPS du CREMI transmet les WebSocket (`Upgrade`, délai d'au moins 3600 s, sans mise en tampon) et les en-têtes `X-Forwarded-For` et `X-Forwarded-Proto` ; `--trust-proxy` accepte l'adresse du frontend (et non seulement `loopback`). Restriction par adresse IP de `/runner/connect` et `/api/runner/register` si les runners sont connus.
+- Taille maximale d'envoi alignée entre le frontend, nginx et l'application (archives ZIP de fichiers creux).
+
+**Runners**
+
+- La liaison session-runner est persistée : les sessions d'un runner distant survivent à un redémarrage du serveur, et les VM n'ont pas cessé de tourner (comme pour le runner local).
+- L'admin peut forcer la perte des sessions d'un runner révoqué ou perdu, sans attendre `--runner-grace`.
+- La mise en pause d'un runner local est conservée (comme celle d'un runner distant dans `runners.json`).
+- `prepare.sh` fonctionne derrière un proxy HTTP (téléchargements et préconfiguration de l'installateur) et accepte un miroir ; les images d'un runner sont identifiables par leur empreinte.
+
+**Exploitation**
+
+- Services systemd du serveur, du runner local et du runner distant, rotation des journaux (`logrotate`), reprise après redémarrage de la machine.
+- Documentation d'installation unique : `docs/deployment.md` générique, recette du site (`deploy/cremi/`) courte qui y renvoie, fiche de test sans doublon.
+
+**Charge**
+
+- Un test de charge d'environ 30 sessions simultanées (un switch et 5 nœuds chacune) sur le serveur et les runners : mesure de la mémoire et du CPU, aucune VM tuée, interface réactive. Les quotas du jalon 6 en fixent les limites.
+
+**Critères de fin**
+
+- [ ] Un runner distant tourne en service derrière le frontend du CREMI et se pilote comme un runner local.
+- [ ] Un redémarrage du serveur laisse les sessions d'un runner distant en place.
+- [ ] L'admin peut forcer la perte des sessions d'un runner.
+- [ ] `prepare.sh` construit une image derrière le proxy du CREMI.
+- [ ] Le test de charge de 30 sessions passe sans VM tuée.
+- [ ] Un seul parcours d'installation documenté, sans copie à maintenir en double.
+
+## Jalon 8 — Vue Graphic achevée
+
+La vue Graphic, refaite en grande partie par la tâche `GRA01` (pas de sélection de texte, zone sans bord, console flottante, cartes détaillées, disposition automatique, édition des liens), est menée au bout.
+
+- **Plusieurs consoles flottantes** (`GRA02`) : jusqu'à 4 fenêtres superposées en cascade, premier plan au clic, déplaçables, redimensionnables, fermables, bâties sur les quatre panneaux existants. À trancher : observation et Follow, mémorisation de la géométrie, indépendance de la disposition de la vue Terminals.
+- Les points restants de `docs/todo.md` : pas d'adresse IP sur les cartes, pas de zoom au pincement, impossibilité de supprimer une interface depuis le graphe, infobulle des contrôles désactivés.
+- Un passage sur grands réseaux (DMZ, passerelles) et sur petit écran.
+
+**Critères de fin**
+
+- [ ] Plusieurs consoles flottantes s'affichent en même temps et se pilotent à la souris et au clavier.
+- [ ] Les contrôles manuels de la vue Graphic (liste de la tâche GRA01) passent tous, sur un navigateur de bureau et à largeur de téléphone.
+
+
+## Après la 1.0.0, et décisions prises
 
 **Pistes suivantes**
 
@@ -379,4 +450,6 @@ Les protections applicatives et la jail du runner sont regroupées ici, après l
 | Sessions par utilisateur | Une seule, définitivement |
 | Identifiant de session | Aléatoire, login dans `owner`, lien `runtime/users/<login>` |
 | Numéros `schemaVersion` | Jamais incrémentés pendant les bêtas ; remis à 1 à la sortie de 0.9.0 (section Stabilisation) |
-| Sécurité (mot de passe minimal, quotas, liste blanche HMP, jail du runner) | Jalon 6, après les runners ; jusque-là, utilisateurs de confiance uniquement |
+| Sécurité (mot de passe minimal, quotas, liste blanche HMP, jail du runner) | Jalon 6, version 1.0.0 ; jusque-là, utilisateurs de confiance uniquement |
+| Contenu de 0.9.0 et de 1.0.0 | 0.9.0 stabilise l'existant (formats à 1, runner distant testé), 1.0.0 ajoute la sécurité, la mise en production et la vue Graphic achevée |
+| Taille cible de la 1.0.0 | Environ 30 sessions simultanées (un switch et 5 nœuds chacune), sur le serveur et des runners distants |
