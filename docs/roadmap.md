@@ -8,7 +8,7 @@ QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contr
 
 Les tâches annexes (correctifs, idées, petites fonctions) hors jalons sont dans [todo.md](todo.md).
 
-Version actuelle : 0.9.0-beta.5.2. Chaque jalon est livré sous forme d'une bêta. **0.9.0** stabilise ce qui existe (formats figés, runner distant testé de bout en bout) et reste réservée à des utilisateurs de confiance. **1.0.0** est la version de production : sécurité, runners distants en service, vue Graphic achevée (voir « Version 1.0.0 »).
+Version actuelle : 0.9.0-beta.5.3. Chaque jalon est livré sous forme d'une bêta. **0.9.0** stabilise ce qui existe (formats figés, runner distant testé de bout en bout) et reste réservée à des utilisateurs de confiance. **1.0.0** est la version de production : sécurité, runners distants en service, vue Graphic achevée (voir « Version 1.0.0 »).
 
 | Jalon | Version livrée |
 | --- | --- |
@@ -23,7 +23,7 @@ Version actuelle : 0.9.0-beta.5.2. Chaque jalon est livré sous forme d'une bêt
 | 5c — Runners distants (jeton d'enregistrement, WebSocket authentifié, placement, grâce et resynchronisation, administration), première livraison | 0.9.0-beta.5.1 |
 | Documentation : PDF générés depuis le Markdown (`make docs`), schémas SVG, `docs/json-files.md`, fiche de test d'un runner distant, `test/tests.md` | 0.9.0-beta.5.2 |
 | 5 — Runners local et distant (5c : runners distants) | 0.9.0-beta.5 |
-| Documentation (PDF depuis le Markdown, schémas, spécification des fichiers JSON, fiche de test du runner distant) | 0.9.0-beta.5.2 |
+| Vue Graphic refaite (GRA01), README et documentation répartis dans `docs/`, déploiement CREMI (runner local et distant) | 0.9.0-beta.5.3 |
 | Stabilisation (formats à 1, runner distant testé de bout en bout) | 0.9.0 |
 | 6 — Durcissement applicatif et jail minimaliste | 1.0.0-beta.1 |
 | 7 — Mise en production (runners distants, persistance, charge) | 1.0.0-beta.2 |
