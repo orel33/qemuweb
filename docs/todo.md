@@ -55,6 +55,13 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 - The user manual (`docs/bak/manual.md`, archived) is out of date: serial ports, `start.sh`,
   runner commands, Follow. Decide where the current manual lives (README, `docs/`, PDF).
 
+- **Merge the deployment documents** (at the 0.9.0 stabilisation, once the CREMI frontend, the local or remote
+  runner choice and milestone 6 are settled): `docs/deployment.md` (generic reference), `deploy/cremi/install-cremi.md`
+  (site recipe) and `docs/remote-runner-test.md` (test sheet) repeat the systemd unit, the nginx site, the runner
+  `register`/`run` commands, the account and package steps. Keep two documents: `deployment.md` stays the generic
+  reference and points to the files of `deploy/` (unit, nginx) instead of copying them; `install-cremi.md` becomes a
+  short recipe that links to it; the test sheet no longer repeats the runner installation.
+
 ## Ideas
 
 - More `config.json` warnings at startup (beyond the engine, KVM and serial port checks).
