@@ -297,6 +297,7 @@ QEMU and VDI for VirtualBox. At runtime, each host gets its own working disk
 under `runtime/sessions/<id>/` without changing the base image. QEMU uses a QCOW2
 disk backed by RAW; VirtualBox uses a differential VDI. `session.json`,
 `host.json`, `switch.json`, startup scripts, and sockets also live in `runtime/`.
+The JSON files are specified in [json-files.md](json-files.md).
 `runtime/users/<login>` links to the user's session directory. The session ID
 stays random and never contains the login, which keeps socket paths short and
 logins out of archives.

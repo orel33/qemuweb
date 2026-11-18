@@ -558,7 +558,7 @@ images, QEMU with VDE, and usually KVM. See
 
 ### Documentation
 
-The documents are Markdown files: this README, `docs/architecture.md`, `docs/deployment.md`,
+The documents are Markdown files: this README, `docs/architecture.md`, `docs/deployment.md`, `docs/json-files.md` (specification of the JSON files),
 `docs/roadmap-v0.9.0.md`, `docs/todo.md`, the test sheet `docs/remote-runner-test.md` and
 `test/tests.md` (`docs/bak/` is an archive). Their PDF versions are in `docs/pdf/`, built by
 `make docs` with one style (`docs/doc.css`: dark text on white, light grey code blocks and tables, nothing
