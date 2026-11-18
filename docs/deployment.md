@@ -189,6 +189,9 @@ The frame protocol of the local runner runs unchanged over a WebSocket on the pa
 > runs the machines under the account that starts it with no confinement, and the server relies on
 > its answers. Never use a machine you do not control, and never root. A runner per student is a later idea.
 
+A step-by-step sheet for testing one remote runner (diagram, every option spelled out, expected results,
+troubleshooting) is in [remote-runner-test.pdf](remote-runner-test.pdf).
+
 ### On the server
 
 1. The server keeps the registered runners in `runners.json` (`--runners FILE`, mode 0600, only a hash of each token). The
