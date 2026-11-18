@@ -7,7 +7,7 @@
 # Needs pandoc and google-chrome: see scripts/md2pdf.sh.
 DOCS := README.md $(sort $(wildcard docs/*.md)) test/tests.md deploy/cremi/install-cremi.md
 PDFS := $(foreach f,$(DOCS),docs/pdf/$(basename $(notdir $(f))).pdf)
-SHARED := docs/doc.css docs/doc.lua scripts/md2pdf.sh $(wildcard docs/img/*.svg)
+SHARED := docs/doc.css docs/doc.lua scripts/md2pdf.sh $(wildcard docs/img/*.svg docs/img/*.png)
 
 .PHONY: docs clean-docs
 docs: $(PDFS)
