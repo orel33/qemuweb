@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Starts the QemuWeb server (the control plane: web interface, accounts, sessions) by hand, the
 # counterpart of scripts/runner.sh. A runner (./scripts/runner.sh --port PORT) dials it.
-#   ./scripts/server.sh [options]     (--help lists them; see also README.md, "Server and runner command line")
+#   ./scripts/server.sh [options]     (--help lists them; see also docs/reference.md, "Server and runner command line")
 # A front end to `node server/main.js`, which parses and validates its arguments. Run it as your
 # normal user, never as root. Stop it with Ctrl+C or ./scripts/stop.sh.
 set -euo pipefail

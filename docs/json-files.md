@@ -3,7 +3,7 @@
 Specification of the JSON files that QemuWeb reads and writes, and of the
 commands the runner builds from `config.json`. It describes the code of this
 version; the web interface, the HTTP API and the runner protocol are in the
-[README](../README.md) and [architecture](architecture.md), the installation of a
+[user guide](user-guide.md), [reference](reference.md) and [architecture](architecture.md), the installation of a
 server in [deployment](deployment.md).
 
 **Conventions.** Flags: **F** fixed once the host exists, **E** editable (host

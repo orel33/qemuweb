@@ -53,7 +53,7 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 ## Documentation
 
 - The user manual (`docs/bak/manual.md`, archived) is out of date: serial ports, `start.sh`,
-  runner commands, Follow. Decide where the current manual lives (README, `docs/`, PDF).
+  runner commands, Follow. The manual is now `docs/user-guide.md` (moved out of the README): bring it up to date.
 
 - **Merge the deployment documents** (at the 0.9.0 stabilisation, once the CREMI frontend, the local or remote
   runner choice and milestone 6 are settled): `docs/deployment.md` (generic reference), `deploy/cremi/install-cremi.md`

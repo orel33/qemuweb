@@ -123,7 +123,7 @@ function abort(program, message) {
   process.exit(1);
 }
 
-// The text of --help; README.md repeats the options, defaults and descriptions.
+// The text of --help; docs/reference.md repeats the options, defaults and descriptions.
 function formatHelp(spec) {
   const entries = spec.options.map(option => [option.metavar ? `${option.flag} ${option.metavar}` : option.flag, option.fallback, option.description]);
   const width = Math.max(...entries.map(([name]) => name.length), '-h, --help'.length);

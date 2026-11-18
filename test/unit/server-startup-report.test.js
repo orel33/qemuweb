@@ -1,6 +1,6 @@
 // What the server and the runner print at startup and accept on their command line: the option
 // tables (server/options.js, runner/options.js), the Options block with value and source, the
-// --help text, and the README tables that repeat them word for word.
+// --help text, and the reference tables that repeat them word for word.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -11,7 +11,7 @@ const {runnerSpec, runSpec, registerSpec, parseRunnerArguments, serverSocket} = 
 
 const root = path.join(path.sep, 'srv', 'qemuweb');
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-const readme = fs.readFileSync(path.join(__dirname, '..', '..', 'README.md'), 'utf8').replace(/`/g, '');
+const readme = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'reference.md'), 'utf8').replace(/`/g, '');
 const blockOf = (spec, settings, derived) => cli.formatOptions(cli.startupRows(spec, settings, derived)).join('\n');
 
 test('server: the defaults are listed, each marked as default, with the derived runner socket', () => {
@@ -125,15 +125,15 @@ test('both programs share the help layout, usage forms and errors', () => {
   for (const {text} of helps) assert.match(text.replace(/\s+/g, ' '), /Any unknown option, or a value that is missing or invalid, is refused \(exit status 2\)/);
 });
 
-test('README: the tables of both programs match --help on options, defaults and descriptions, word for word', () => {
+test('reference: the tables of both programs match --help on options, defaults and descriptions, word for word', () => {
   for (const spec of [serverSpec(root), runnerSpec(root), runSpec(root), registerSpec(root)]) {
     for (const option of spec.options) {
       const name = option.metavar ? `${option.flag} ${option.metavar}` : option.flag;
-      assert.ok(readme.includes(`| ${name} | ${option.fallback} | ${option.description} |`), `README ${spec.program} row of ${name}`);
+      assert.ok(readme.includes(`| ${name} | ${option.fallback} | ${option.description} |`), `reference ${spec.program} row of ${name}`);
     }
-    for (const {names, description} of spec.environment || []) assert.ok(readme.includes(`| ${names} | names in .env | ${description}`), `README ${spec.program} variables`);
+    for (const {names, description} of spec.environment || []) assert.ok(readme.includes(`| ${names} | names in .env | ${description}`), `reference ${spec.program} variables`);
   }
-  assert.ok(readme.includes('| -h, --help | | this text |'), 'README help row');
+  assert.ok(readme.includes('| -h, --help | | this text |'), 'reference help row');
   // QEMUWEB_PASSWORD (scripts/user.sh, never the command line) is the only QEMUWEB_ variable left.
   assert.doesNotMatch(readme.replace(/QEMUWEB_PASSWORD/g, ''), /QEMUWEB_[A-Z_]+/);
 });

@@ -88,7 +88,7 @@ function resolveCommands(root) {
         const result = spawnSync(resolved, ['-netdev', 'help'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
         if (result.error) throw result.error;
         if (!/(^|\s)vde(\s|$)/m.test(`${result.stdout}\n${result.stderr}`)) {
-          throw new Error('QEMU lacks VDE support. See README.md > Troubleshooting > Install QEMU.');
+          throw new Error('QEMU lacks VDE support. See docs/install.md > Troubleshooting > QEMU without VDE support.');
         }
       }
       commands[key] = resolved;

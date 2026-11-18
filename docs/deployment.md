@@ -17,7 +17,7 @@ pages of the same site.
 
 ## 1. Accounts
 
-Create the accounts before opening the service (see the README, section
+Create the accounts before opening the service (see the [user guide](user-guide.md#users-and-sessions), section
 *Users and sessions*):
 
 ```sh
@@ -77,7 +77,7 @@ option), "Checking dependencies…" (the server shows the Node.js it runs on and
 server, connected, refused, lost). A refused option ends either program with status 2 and a
 `<program>: <message>` line; a failed check ends it with status 1 ("Startup aborted"). Under
 `scripts/start.sh` the lines carry the `[server]` and `[runner]` prefixes. See
-[the command line](../README.md#server-and-runner-command-line).
+[the command line](reference.md#server-and-runner-command-line).
 
 - **Engines:** a runner needs VDE, `genisoimage`, Node.js and Python, and at
   least one engine. QEMU (with its disk tool) and VirtualBox are checked

@@ -4,7 +4,7 @@
 // the Options block): parsed once into a plain settings object that is passed down: {port,
 // runtime, usersFile, runnersFile, logDir, sessionHours, runnerGrace, trustProxy, authMode, ephemeral, given}. `given` is
 // the set of the flags present on the command line. The server reads no environment variable.
-// test/unit/server-startup-report.test.js checks that each option is documented in the README.
+// test/unit/server-startup-report.test.js checks that each option is documented in docs/reference.md.
 const path = require('path');
 const {parseArguments, defaultSettings: cliDefaults} = require('../common/cli');
 
