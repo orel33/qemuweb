@@ -16,59 +16,20 @@ consoles.
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
 | Switch | A node that is a VDE switch. |
 
-```mermaid
-flowchart TB
-  subgraph Browser["Browser · public/"]
-    UI["Interface · index.html, css/app.css, ES modules from app.js"]
-    Terminal["Terminals · xterm.js"]
-  end
+![Architecture: browser, server, local and remote runners, and the machines they run](img/architecture.svg)
 
-  subgraph Server["Node.js server · server/main.js"]
-    Auth["Authentication · server/auth/ (signed cookie)"]
-    Manager["Session manager · server/session-manager.js (login → session + runner)"]
-    Routes["HTTP API · one router per session · server/routes/"]
-    Sockets["Socket.IO · rooms session:&lt;id&gt;, observers:&lt;id&gt;, node:&lt;id&gt;:&lt;nodeId&gt;, console:&lt;id&gt;:&lt;consoleId&gt; · server/sockets.js"]
-    Admin["Admin API /api/admin/* and /admin · server/routes/admin.js, logs/admin.log and users.log · server/audit.js"]
-    Session["Session record · server/session.js (ID, owner, runner ID)"]
-    Client["Runner client and registry · server/runner-client.js, server/runner-registry.js, server/runner-gateway.js"]
-  end
+*Figure 1. The server never starts a virtual machine: a runner does, on this machine (Unix socket) or on another one (WebSocket opened by the runner).*
 
-  subgraph RunnerProcess["Runner process · runner/main.js (own process group)"]
-    Runner["Runner service · runner/service.js, commands, every session of the machine"]
-  end
+| Part | Files | Role |
+| --- | --- | --- |
+| Browser | `public/` | Web interface (`index.html`, `css/app.css`, ES modules started by `app.js`) and xterm.js terminals. |
+| Authentication | `server/auth/` | Signed cookie; sets `req.user` and `socket.data.user`; the role `admin` opens the admin API. |
+| Session manager | `server/session-manager.js`, `server/session.js` | Maps a login to its session (ID, owner, runner ID) and creates it on the runner chosen by `pickRunner`. |
+| HTTP API and Socket.IO | `server/routes/`, `server/sockets.js` | One router per session, one command per request and archive streams; Socket.IO rooms `session:<id>`, `observers:<id>`, `node:<id>:<nodeId>`, `console:<id>:<consoleId>`. |
+| Admin | `server/routes/admin.js`, `server/audit.js` | `/api/admin/*` and `/admin`: list, stop, delete, observe; `logs/admin.log` and `logs/users.log`. |
+| Runner registry and gateways | `server/runner-client.js`, `server/runner-registry.js`, `server/runner-gateway.js`, `server/remote-gateway.js` | Every runner with its client; the local runner over `<runtime>/runner-<port>.sock`, a remote one over the WebSocket `/runner/connect`. |
+| Runner | `runner/main.js`, `runner/service.js` | Serves every session of its machine over the runner protocol and launches QEMU, VirtualBox, `vde_switch` and `vdeterm`. |
 
-  subgraph Local["Local processes"]
-    QEMU["QEMU · VM, UART, and HMP monitor"]
-    VBox["VirtualBox · VM and UART"]
-    VDE["vde_switch · virtual Ethernet network"]
-    VDeterm["vdeterm · switch console"]
-  end
-
-  UI -->|"HTTP / JSON + cookie"| Auth
-  Terminal <-->|"Socket.IO + cookie"| Auth
-  Auth -->|"req.user"| Manager
-  Auth -->|"role admin"| Admin
-  Admin -->|"list, stop, delete"| Manager
-  Auth -->|"socket.data.user"| Sockets
-  Manager -->|"req.workspace"| Routes
-  Manager -->|"creates"| Session
-  Manager -->|"session.create on the runner chosen by pickRunner"| Client
-  Client <-->|"runner protocol · &lt;runtime&gt;/runner-&lt;port&gt;.sock"| Runner
-  Routes --> Session
-  Routes -->|"one command per request, archive streams"| Client
-  Sockets -->|"console input, snapshots"| Client
-  Client -.->|"events: state, log, serial, ..."| Sockets
-  Manager --> Session
-  Runner -->|"launch and control"| QEMU
-  Runner -->|"VBoxManage"| VBox
-  Runner -->|"launch"| VDE
-  Runner <-->|"Unix serial sockets, HMP socket"| QEMU
-  Runner <-->|"Unix serial socket"| VBox
-  Runner <-->|"pseudo-terminal · node-pty"| VDeterm
-  VDeterm <-->|"management socket"| VDE
-  QEMU <-->|"VDE NICs · Ethernet frames"| VDE
-  VBox <-->|"VDE adapters · Ethernet frames"| VDE
-```
 
 ## Main paths
 

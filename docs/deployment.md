@@ -190,7 +190,7 @@ The frame protocol of the local runner runs unchanged over a WebSocket on the pa
 > its answers. Never use a machine you do not control, and never root. A runner per student is a later idea.
 
 A step-by-step sheet for testing one remote runner (diagram, every option spelled out, expected results,
-troubleshooting) is in [remote-runner-test.pdf](remote-runner-test.pdf).
+troubleshooting) is in [remote-runner-test.md](remote-runner-test.md) (PDF: [pdf/remote-runner-test.pdf](pdf/remote-runner-test.pdf)).
 
 ### On the server
 

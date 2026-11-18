@@ -5,6 +5,7 @@
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
     "start": "bash scripts/start.sh",
+    "docs": "make docs",
     "test": "node --test test/unit/*.test.js",
     "test:two-hosts-stop-resume": "node test/integration/two-hosts-stop-resume.js",
     "test:four-hosts-startup": "node test/integration/four-hosts-startup.js",

@@ -1,0 +1,57 @@
+/* One style for every PDF built from the Markdown documents (README.md, docs/*.md, test/TESTS.md):
+   see scripts/md2pdf.sh and the Makefile. Print-friendly on a black and white printer: no dark
+   background anywhere, dark text on white or very light grey, boxes distinguished by their border. */
+@page {
+  size: A4 portrait;
+  margin: 16mm 15mm 18mm 15mm;
+  @bottom-right { content: counter(page) " / " counter(pages); font: 8pt "DejaVu Sans", Arial, sans-serif; color: #55606e; }
+}
+html { font-family: "DejaVu Sans", Arial, Helvetica, sans-serif; color: #1c2430; background: #ffffff; }
+body { font-size: 9.6pt; line-height: 1.4; max-width: none; margin: 0; padding: 0; }
+
+header#title-block-header { margin-bottom: 5mm; }
+h1.title { margin: 0 0 1mm; color: #1d365a; font-size: 20pt; line-height: 1.15; }
+.subtitle { margin: 0; color: #526783; font-size: 10pt; }
+
+h1 { color: #1d365a; font-size: 19pt; line-height: 1.15; margin: 0 0 3mm; }
+h2 { color: #1d365a; font-size: 13pt; line-height: 1.2; margin: 7mm 0 2.5mm; padding-bottom: 1mm; border-bottom: 1.4px solid #1d365a; break-after: avoid; }
+h3 { color: #28476f; font-size: 11pt; line-height: 1.2; margin: 5mm 0 2mm; break-after: avoid; }
+h4 { color: #28476f; font-size: 10pt; margin: 4mm 0 1.5mm; break-after: avoid; }
+p { margin: 0 0 2.6mm; }
+a { color: #1d365a; text-decoration: underline; }
+strong { color: #14284a; }
+ul, ol { margin: 0 0 3mm 5mm; padding: 0 0 0 3mm; }
+li { margin: 0.6mm 0; }
+hr { border: 0; border-top: 1px solid #b9c3d0; margin: 4mm 0; }
+
+code { font-family: "DejaVu Sans Mono", Consolas, monospace; font-size: 0.9em; color: #14284a; background: #eef1f5; padding: 0 0.8mm; border-radius: 2px; overflow-wrap: anywhere; }
+pre { margin: 2mm 0 3.5mm; padding: 2.2mm 3mm; background: #f4f6f9; border: 1px solid #b9c3d0; border-left: 3px solid #1d365a; color: #14284a;
+  white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.35; break-inside: avoid; }
+pre code { background: none; padding: 0; font-size: 7.9pt; color: inherit; }
+
+table { width: 100%; border-collapse: collapse; margin: 2mm 0 4mm; font-size: 8.5pt; line-height: 1.28; }
+thead { display: table-header-group; }
+tr { break-inside: avoid; }
+th { padding: 1.4mm 2mm; background: #e4e9f0; color: #14284a; text-align: left; font-weight: 700; border-top: 1.2px solid #1d365a; border-bottom: 1.2px solid #1d365a; }
+td { padding: 1.2mm 2mm; border-bottom: 1px solid #c6cfda; vertical-align: top; }
+tbody tr:nth-child(even) td { background: #f7f8fa; }
+td code, th code { font-size: 0.92em; }
+
+blockquote { margin: 2mm 0 3.5mm; padding: 1.5mm 3mm; border-left: 3px solid #8c98a8; background: #f7f8fa; color: #2a3646; break-inside: avoid; }
+blockquote p:last-child { margin-bottom: 0; }
+/* callouts built from > **Expect:** / **Note:** / **Warning:** by docs/doc.lua; borders differ so that they stay apart in black and white */
+.expect { margin: 2mm 0 3.5mm; padding: 1.5mm 3mm; border: 1px solid #1d365a; border-left: 4px solid #1d365a; background: #f7f8fa; break-inside: avoid; }
+.note   { margin: 2mm 0 3.5mm; padding: 1.5mm 3mm; border: 1px dashed #55606e; border-left: 4px dashed #55606e; background: #ffffff; break-inside: avoid; }
+.warn   { margin: 2mm 0 3.5mm; padding: 1.5mm 3mm; border: 2px solid #14284a; background: #ffffff; break-inside: avoid; }
+.expect p:last-child, .note p:last-child, .warn p:last-child { margin-bottom: 0; }
+.expect > p:first-child > strong:first-child { color: #14284a; text-transform: uppercase; font-size: 0.9em; letter-spacing: .02em; }
+
+/* where a step runs: an outlined label, readable without colour */
+.where { display: inline-block; font-size: 7.6pt; font-weight: 700; letter-spacing: .04em; padding: 0.2mm 2mm; border: 1.2px solid #1d365a; border-radius: 9px; color: #14284a; background: #ffffff; vertical-align: 1px; margin-left: 1.5mm; }
+.where.rem { border-style: dashed; }
+.where.bro { border-style: dotted; border-width: 1.6px; }
+
+figure { margin: 3mm 0 4mm; text-align: center; break-inside: avoid; }
+figure img, p > img { max-width: 100%; height: auto; }
+figcaption { font-size: 8pt; color: #4a5565; margin-top: 1.2mm; text-align: left; }
+img[src$="favicon.svg"] { height: 7mm; width: 7mm; vertical-align: -1.5mm; }
