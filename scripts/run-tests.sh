@@ -30,7 +30,7 @@ Available tests:
   check-network-openwrt          Two OpenWrt hosts on one VDE switch: eth0, hostname, ping, tcpdump
 
 Use --list or --help to show this list. Nothing runs without a test name.
-See test/TESTS.md for the purpose and prerequisites of each test.
+See test/tests.md for the purpose and prerequisites of each test.
 To keep a live log: ./scripts/run-tests.sh two-hosts-stop-resume 2>&1 | tee two-hosts-stop-resume.log
 EOF
 }

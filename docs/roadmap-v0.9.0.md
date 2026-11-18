@@ -78,7 +78,7 @@ Regrouper l'état global dans un objet `Session` (engine, nodes, runtimeDir, arc
 
 - `README.md` : chemin `runtime/sessions/<id>/` dans la section Configuration. Le reste emploie déjà « session » au bon sens (Save session, Load session ZIP).
 - `docs/architecture.md` : la boîte « Sessions · processes and temporary files » du schéma devient « Session · nodes », et un glossaire Session / Node / Host / Switch ouvre la page.
-- `AGENTS.md`, `CLAUDE.md`, `test/TESTS.md` : même vocabulaire.
+- `AGENTS.md`, `CLAUDE.md`, `test/tests.md` : même vocabulaire.
 
 **Critères de fin**
 

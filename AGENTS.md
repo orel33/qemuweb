@@ -132,7 +132,7 @@ The same goes for any release tag: a tag is pushed only after step 3.
 Before running unit or integration tests, ask the user and wait for explicit
 approval. This applies to the orchestrator and to any implementation agent. At
 the end of a development task, propose the specific test commands (see
-`test/TESTS.md` and `./scripts/run-tests.sh --list`) and let the user choose
+`test/tests.md` and `./scripts/run-tests.sh --list`) and let the user choose
 whether the agent runs them or the user validates the Web interface manually.
 A request to implement, review, commit, push, or integrate is not permission to
 run tests. If tests are declined or not yet approved, report that they were not

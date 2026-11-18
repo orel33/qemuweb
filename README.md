@@ -522,8 +522,8 @@ The environment variables are those of the local runner above. The tokens are ne
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans. |
 | `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show (default `runtime/` only) the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. `--watch` refreshes it. |
 | `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove the default `runtime/` files and optionally images or downloads; `logs/` is always kept. |
-| `scripts/demo.sh [--listen PORT]` | Start the application on port N (default 3003) with a temporary users file (`admin`, `toto`, `tutu`, passwords equal to logins) and `demo/lan.zip` loaded and started for `toto` and `tutu`. Ctrl+C stops it. See [test/TESTS.md](test/TESTS.md#manual-tests-of-the-web-interface). |
-| `make docs` | Build the PDF of every Markdown document (`README.md`, `docs/*.md`, `test/TESTS.md`) in `docs/pdf/`; only those whose source, style or diagrams changed (`npm run docs` is the same). |
+| `scripts/demo.sh [--listen PORT]` | Start the application on port N (default 3003) with a temporary users file (`admin`, `toto`, `tutu`, passwords equal to logins) and `demo/lan.zip` loaded and started for `toto` and `tutu`. Ctrl+C stops it. See [test/tests.md](test/tests.md#manual-tests-of-the-web-interface). |
+| `make docs` | Build the PDF of every Markdown document (`README.md`, `docs/*.md`, `test/tests.md`) in `docs/pdf/`; only those whose source, style or diagrams changed (`npm run docs` is the same). |
 | `scripts/md2pdf.sh IN.md OUT.pdf` | Build one PDF: pandoc turns the Markdown into HTML with the style `docs/doc.css`, headless Chrome prints it. |
 
 ## Development
@@ -554,13 +554,13 @@ npm test                          # unit tests only
 
 Integration tests log in with a temporary users file; most need prepared
 images, QEMU with VDE, and usually KVM. See
-[test/TESTS.md](test/TESTS.md) for each scenario and its prerequisites.
+[test/tests.md](test/tests.md) for each scenario and its prerequisites.
 
 ### Documentation
 
 The documents are Markdown files: this README, `docs/architecture.md`, `docs/deployment.md`,
 `docs/roadmap-v0.9.0.md`, `docs/todo.md`, the test sheet `docs/remote-runner-test.md` and
-`test/TESTS.md` (`docs/bak/` is an archive). Their PDF versions are in `docs/pdf/`, built by
+`test/tests.md` (`docs/bak/` is an archive). Their PDF versions are in `docs/pdf/`, built by
 `make docs` with one style (`docs/doc.css`: dark text on white, light grey code blocks and tables, nothing
 that prints badly on a black and white printer; `docs/doc.lua` turns a block quote that starts with
 **Expect:**, **Note:** or **Warning:** into a boxed callout). The diagrams are SVG files in

@@ -1,4 +1,4 @@
-/* One style for every PDF built from the Markdown documents (README.md, docs/*.md, test/TESTS.md):
+/* One style for every PDF built from the Markdown documents (README.md, docs/*.md, test/tests.md):
    see scripts/md2pdf.sh and the Makefile. Print-friendly on a black and white printer: no dark
    background anywhere, dark text on white or very light grey, boxes distinguished by their border. */
 @page {
