@@ -5,7 +5,7 @@ export const machines = new Map();
 
 const viewSettingsKey = 'qemuweb.view-settings';
 export const graphicLayoutKey = 'qemuweb.graphic-layout';
-// View settings saved in this browser: {view: a view state (public/view-state.js), graphicZoom}.
+// View settings saved in this browser: {view: a view state (public/view-state.js)}.
 // savedView is the last saved view state (node IDs unchecked), or null; anything unreadable
 // gives the defaults.
 let savedSettings = {};
@@ -38,18 +38,17 @@ export const store = {
   pageIndex: 0,
   selectionToken: 0,
   graphicVisible: false,
-  graphicZoom: [0.5, 0.75, 1, 1.25, 1.5, 1.75, 2].includes(savedSettings.graphicZoom) ? savedSettings.graphicZoom : 1,
   startupTemplatePreview: [],
   autoCdromSupported: false,
   isoPreviewSupported: false
 };
 
-// Saves the view state (the last one when not given) and the graphic zoom. An observation tab
+// Saves the view state (the last one when not given). An observation tab
 // never saves: the admin's own layout belongs to their own session's tabs.
 export function saveViewSettings(view = savedView) {
   if (observing) return;
   savedView = view;
-  try { localStorage.setItem(viewSettingsKey, JSON.stringify({view, graphicZoom: store.graphicZoom})); } catch (_) {}
+  try { localStorage.setItem(viewSettingsKey, JSON.stringify({view})); } catch (_) {}
 }
 
 export function saveGeneralSettings() {

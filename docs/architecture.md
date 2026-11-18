@@ -179,7 +179,7 @@ second console, else `console`; an observer is never shown the Monitor, a
 followed `monitor` shows the console). `viewChanged()`, at
 the end of `setPaneSessions` (so `showPage`), `focusPane` and
 `setGraphicView`, publishes the view (deduplicated with `sameView`) and saves
-it as `{view, graphicZoom}` in the browser; applying a received view does
+it as `{view}` in the browser; applying a received view does
 neither. The owner's page publishes `owner-view`, except while an admin
 controls its session; the controlling admin's page publishes
 `controller-view`. A page follows a received view by `normalizeView` against
@@ -265,7 +265,7 @@ holds the styles. The script is split into native ES modules (no framework or
 bundler) loaded from `public/app.js`, which runs their initialization in a fixed
 order. State that several modules reassign lives on the `store` object of
 `state.js`. `monitor-terminal.js`, `session-log.js`, `network-node-icons.js`, `view-state.js` and
-`topology-graphic.js` remain classic scripts, also loaded by unit tests.
+`topology-graphic.js` (layout, link routing and SVG drawing of the Graphic view) remain classic scripts, also loaded by unit tests.
 `login.html` and its module `login.js` form the separate login page;
 `admin.html` and `admin.js` the supervision page `/admin`, served to admins only.
 
@@ -284,7 +284,10 @@ order. State that several modules reassign lives on the `store` object of
 | `host-settings.js` | Host Settings dialog, also used to add a host. |
 | `startup-media.js` | Startup tab: `start.sh` template, startup disk and extra files. |
 | `general-settings.js` | General Settings dialog. |
-| `topology.js` | Graphic network view and `.topo` load/save. |
+| `topology.js` | `.topo` load/save, and the start of the saved view. |
+| `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
+| `graphic-console.js` | Floating console of the Graphic view: the console workspace shown as a movable, resizable window over the graph, with the selected node's pane only. |
+| `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
 | `archive.js` | Session ZIP save and load dialogs. |
 | `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
 | `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |

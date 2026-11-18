@@ -182,7 +182,6 @@ async function loadArchive(file, {autoStart, discardDisks}) {
       percent => setLoadStep('upload', 'running', `${percent}%`),
       () => { setLoadStep('upload', 'done'); activeStep = 'restore'; setLoadStep('restore', 'running'); });
     archiveLoadImported = true;
-    store.graphicZoom = 1;
     saveViewSettings();
     localStorage.removeItem(graphicLayoutKey);
     if (result.startErrors?.length) {
