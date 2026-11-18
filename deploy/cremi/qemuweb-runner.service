@@ -1,0 +1,17 @@
+[Unit]
+Description=QemuWeb runner (local, runs the machines of this server)
+After=qemuweb.service
+
+[Service]
+User=qemuweb
+SupplementaryGroups=kvm
+WorkingDirectory=/srv/qemuweb
+ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --runtime /var/lib/qemuweb
+# SIGTERM goes to the runner only, which stops its machines in order; SIGKILL goes to what is left
+# (QEMU, vde_switch) after the stop timeout.
+KillMode=mixed
+TimeoutStopSec=60
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

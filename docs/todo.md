@@ -39,6 +39,11 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 - **`runner-state` in the browser**: the re-selection of the console after a runner comes back is only tested
   through the socket events of `check-runner-remote`, not in a real browser.
 
+- **`prepare.sh` behind an HTTP proxy**: the ISO URL is fixed (`cdimage.debian.org`, which squid at the CREMI answers 503 for)
+  and the preseed of the installer has an empty `mirror/http/proxy`, so the installer VM cannot reach the network
+  through a proxy either. Idea: a proxy option for `prepare.sh` (used by the downloads and written into the preseed)
+  and a mirror URL setting.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that

@@ -1,13 +1,15 @@
 # QemuWeb on qemuweb.emi.u-bordeaux.fr (CREMI)
 
 Debian or Ubuntu (TODO: confirm with `cat /etc/os-release`). Files to copy are in this directory
-(`deploy/cremi/`): `qemuweb.service` (systemd unit), `nginx-qemuweb.conf` (nginx site), and `nginx-hello.conf` with `hello.html` (static test page). Two parts:
-A as root (`ssh qemuweb`), B as `qemuweb` (`ssh qemuweb-app`, which forwards your SSH agent to reach the git
-mirror; `qemuweb` is a sudoer). The two aliases are in the workstation's `~/.ssh/config`: `qemuweb` (root) and
+(`deploy/cremi/`): `qemuweb.service` and `qemuweb-runner.service` (systemd units), `nginx-qemuweb.conf` (nginx
+site), and `nginx-hello.conf` with `hello.html` (static test page). The server is installed in two parts: part 1
+as root (`ssh qemuweb`), part 2 as `qemuweb` (`ssh qemuweb-app`, which forwards your SSH agent to reach the git
+mirror; `qemuweb` is a sudoer). Then the runner that runs the machines: **A** on this same machine (local
+runner), **B** on another machine (remote runner). The two aliases are in the workstation's `~/.ssh/config`: `qemuweb` (root) and
 `qemuweb-app` (user `qemuweb`, `ForwardAgent yes`), both through the CREMI jump host. The server runs as
 `qemuweb`, never root. See `docs/deployment.md` and `docs/remote-runner-test.md` (variant B).
 
-## Part A: root (`ssh qemuweb`)
+## Server, part 1: root (`ssh qemuweb`)
 
 ```sh
 # prompt: standard Debian (user@host:dir#), now and at every login
@@ -47,7 +49,7 @@ chmod 440 /etc/sudoers.d/qemuweb && visudo -c
 > `/etc/sudoers.d/qemuweb` (or restrict it to `systemctl restart qemuweb`) and keep `authorized_keys` to the
 > administrators.
 
-## Part B: `qemuweb` (`ssh qemuweb-app`)
+## Server, part 2: `qemuweb` (`ssh qemuweb-app`)
 
 ```sh
 ssh-add -l                                        # on the server: your identity must be listed
@@ -103,10 +105,54 @@ curl -s -o /dev/null -w '%{http_code}\n' https://qemuweb.emi.u-bordeaux.fr/auth/
 cd /srv/qemuweb && git pull && npm ci && sudo systemctl restart qemuweb
 ```
 
-## Remote runner (another machine)
+## Runner A: local, on this machine (`ssh qemuweb-app`)
+
+The server starts no machine: this runner does, under the `qemuweb` account, on the same machine. It dials
+the server on the Unix socket `/var/lib/qemuweb/runner-3002.sock`, so both services use the same `--runtime`.
+Each host of `demo/lan.zip` takes 1 GiB of memory (`free -g`, `nproc` tell what this machine has).
 
 ```sh
-# 11. as root on REMOTE (proxy first if needed)
+# 11. packages of the runner, and /dev/kvm for qemuweb
+sudo apt install -y qemu-system-x86 qemu-utils genisoimage vde2
+qemu-system-x86_64 -netdev help | grep vde          # must list vde; else docs/install.md#qemu-without-vde-support (.env.local in /srv/qemuweb)
+sudo usermod -aG kvm qemuweb
+sudo -u qemuweb sh -c 'test -w /dev/kvm && echo kvm-ok'
+
+# 12. base images. Building on this machine does not work behind the CREMI proxy (cdimage.debian.org answers 503
+#     from squid, and the Debian installer that runs in the VM gets no proxy): build on the workstation, then
+#     copy (-a keeps the dates: the server ignores a hash file older than its image, -S keeps the file sparse).
+#     (on the workstation, in the repository)
+#       bash scripts/prepare.sh --system debian13-legacy
+#       rsync -aS --progress images/debian13-legacy.raw images/debian13-legacy.raw.sha256 qemuweb-app:/srv/qemuweb/images/
+cd /srv/qemuweb
+bash scripts/prepare.sh --list
+
+# 13. the runner service
+sudo install -m 0644 deploy/cremi/qemuweb-runner.service /etc/systemd/system/qemuweb-runner.service
+sudo systemctl daemon-reload
+sudo systemctl enable --now qemuweb-runner
+sudo journalctl -u qemuweb-runner -n 30 --no-pager -o cat   # "Connected to the server."
+sudo journalctl -u qemuweb -n 10 --no-pager -o cat          # the server sees its runner
+
+# 14. try it without the CREMI frontend: an SSH tunnel from the workstation (keep it open), then
+#     http://127.0.0.1:3012 in a browser, log in as toto, "Load session ZIP" demo/lan.zip, start, open a console
+#     (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app
+
+# 15. on the server: the machines run here, under the runner's account
+ps -eo pid,user,args | grep -E "[q]emu-system|[v]de_switch" | cut -c1-110
+sudo journalctl -u qemuweb-runner -n 20 --no-pager -o cat
+```
+
+To stop the runner and its machines: `sudo systemctl stop qemuweb-runner` (tell users to save a session ZIP
+first). Restarting only the server keeps the machines: the runner reconnects and the server adopts its sessions.
+
+## Runner B: remote, on another machine
+
+A runner that dials the server over the network with its own token. Until the CREMI frontend is configured
+(WebSocket), test it with the SSH tunnel of variant A of `docs/remote-runner-test.md`.
+
+```sh
+# 16. as root on REMOTE (proxy first if needed)
 apt update
 apt install -y bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2 ca-certificates gnupg
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
@@ -114,16 +160,16 @@ apt install -y nodejs
 adduser --disabled-password --gecos '' runner
 usermod -aG kvm runner                            # effective at next login
 
-# 12. as runner on REMOTE
+# 17. as runner on REMOTE
 git clone git@gitub.u-bordeaux.fr:info/qemuweb.git ~/qemuweb && cd ~/qemuweb && npm ci   # needs read access to the mirror (own key or deploy key)
 id -nG | grep -w kvm
 qemu-system-x86_64 -netdev help | grep vde
 bash scripts/prepare.sh --system alpine           # or copy images/ from another machine
 curl -s -o /dev/null -w '%{http_code}\n' https://qemuweb.emi.u-bordeaux.fr/auth/me     # 401
 
-# 13. browser: admin, /admin -> Runners, create a registration token (shown once)
+# 18. browser: admin, /admin -> Runners, create a registration token (shown once)
 
-# 14. register once, then run (--ca FILE only for a private authority)
+# 19. register once, then run (--ca FILE only for a private authority)
 ./scripts/runner.sh register --url https://qemuweb.emi.u-bordeaux.fr --token TOKEN --name salle-test \
   --runtime ~/qemuweb/runtime --runner-config ~/.config/qemuweb-runner/runner.json
 ./scripts/runner.sh run --runner-config ~/.config/qemuweb-runner/runner.json \
