@@ -1,7 +1,7 @@
 # QemuWeb on qemuweb.emi.u-bordeaux.fr (CREMI)
 
 Debian or Ubuntu (TODO: confirm with `cat /etc/os-release`). Files to copy are in this directory
-(`deploy/cremi/`): `qemuweb.service` (systemd unit) and `nginx-qemuweb.conf` (nginx site). Two parts:
+(`deploy/cremi/`): `qemuweb.service` (systemd unit), `nginx-qemuweb.conf` (nginx site), and `nginx-hello.conf` with `hello.html` (static test page). Two parts:
 A as root (`ssh qemuweb`), B as `qemuweb` (`ssh qemuweb-app`, which forwards your SSH agent to reach the git
 mirror; `qemuweb` is a sudoer). The two aliases are in the workstation's `~/.ssh/config`: `qemuweb` (root) and
 `qemuweb-app` (user `qemuweb`, `ForwardAgent yes`), both through the CREMI jump host. The server runs as
@@ -15,8 +15,8 @@ PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
 echo "PS1='\${debian_chroot:+(\$debian_chroot)}\\u@\\h:\\w\\\$ '" >> ~/.bashrc
 
 # 0. proxy (3128); /etc/profile.d is read by the login shells of qemuweb
-export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1
-echo 'export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1' > /etc/profile.d/proxy.sh
+export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1,qemuweb.emi.u-bordeaux.fr
+echo 'export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1,qemuweb.emi.u-bordeaux.fr' > /etc/profile.d/proxy.sh
 
 # 1. packages (build-essential, python3: node-pty is compiled by npm ci)
 apt update && apt full-upgrade -y
@@ -57,41 +57,56 @@ git clone git@gitub.u-bordeaux.fr:info/qemuweb.git /srv/qemuweb
 cd /srv/qemuweb && git checkout main && npm ci
 git describe --tags
 
-# 5. application accounts (asks for a password; users.json is 0600)
+# 5. test of the web path with a static page, before QemuWeb (check the certificate first: annex A)
+sudo ss -ltnp | grep -E ':(80|443)\s'            # who holds 80 and 443 now (apache2?)
+sudo systemctl disable --now apache2              # frees 80 and 443 for nginx (error if not installed: ignore)
+sudo apt install -y nginx
+sudo chmod 700 /srv/cert && sudo chmod 600 /srv/cert/key.pem
+sudo install -d /var/www/qemuweb-test
+sudo install -m 0644 deploy/cremi/hello.html /var/www/qemuweb-test/hello.html
+sudo rm -f /etc/nginx/sites-enabled/default
+sudo install -m 0644 deploy/cremi/nginx-hello.conf /etc/nginx/sites-available/qemuweb
+sudo ln -sf /etc/nginx/sites-available/qemuweb /etc/nginx/sites-enabled/qemuweb
+sudo nginx -t && sudo systemctl reload nginx
+# 5a. on the server, nginx alone (should print the page)
+curl --noproxy '*' -sk --resolve qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://qemuweb.emi.u-bordeaux.fr/hello.html
+# 5b. from the CREMI jump host, straight to this machine (IP = hostname -I here)
+#     ssh cremi 'curl -sk --resolve qemuweb.emi.u-bordeaux.fr:443:IP https://qemuweb.emi.u-bordeaux.fr/hello.html'
+# 5c. from the workstation, through the CREMI https frontend (qemuweb.emi.u-bordeaux.fr is an alias of httpsproxy)
+#     curl -sv https://qemuweb.emi.u-bordeaux.fr/hello.html 2>&1 | grep -E '^< HTTP|hello'
+#     403 here but the page in 5a and 5b: the frontend must be configured by the CREMI (WebSocket, 3600 s, 4 GiB,
+#     X-Forwarded-*, TLS termination); and open https://qemuweb.emi.u-bordeaux.fr/hello.html in a browser
+
+# 6. application accounts (asks for a password; users.json is 0600)
 U='./scripts/user.sh --users /etc/qemuweb/users.json'
 $U add admin --role admin
 $U add toto
 $U list
 
-# 6. nginx, with the prepared certificate files in /srv/cert (check them first: annex A)
-sudo ss -ltnp | grep -E ':(80|443)\s'            # who holds 80 and 443 now (apache2?)
-sudo systemctl disable --now apache2              # frees 80 and 443 for nginx (error if not installed: ignore)
-sudo apt install -y nginx
-sudo chmod 700 /srv/cert && sudo chmod 600 /srv/cert/key.pem
-sudo rm -f /etc/nginx/sites-enabled/default
+# 7. nginx, the real site (replaces the test site of step 5)
 sudo install -m 0644 deploy/cremi/nginx-qemuweb.conf /etc/nginx/sites-available/qemuweb
 sudo ln -sf /etc/nginx/sites-available/qemuweb /etc/nginx/sites-enabled/qemuweb
 sudo nginx -t && sudo systemctl reload nginx
 # firewall: 80 and 443 only, never 3002. TODO: restrict access until milestone 6
 
-# 7. service
+# 8. service
 sudo install -m 0644 deploy/cremi/qemuweb.service /etc/systemd/system/qemuweb.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now qemuweb
 sudo journalctl -u qemuweb -n 30 --no-pager -o cat    # "QemuWeb is ready." "No runner connected."
 
-# 8. checks (401 twice)
+# 9. checks (401 twice)
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me
 curl -s -o /dev/null -w '%{http_code}\n' https://qemuweb.emi.u-bordeaux.fr/auth/me
 
-# 9. update later (a restart deletes the sessions of remote runners)
+# 10. update later (a restart deletes the sessions of remote runners)
 cd /srv/qemuweb && git pull && npm ci && sudo systemctl restart qemuweb
 ```
 
 ## Remote runner (another machine)
 
 ```sh
-# 10. as root on REMOTE (proxy first if needed)
+# 11. as root on REMOTE (proxy first if needed)
 apt update
 apt install -y bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2 ca-certificates gnupg
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
@@ -99,16 +114,16 @@ apt install -y nodejs
 adduser --disabled-password --gecos '' runner
 usermod -aG kvm runner                            # effective at next login
 
-# 11. as runner on REMOTE
+# 12. as runner on REMOTE
 git clone git@gitub.u-bordeaux.fr:info/qemuweb.git ~/qemuweb && cd ~/qemuweb && npm ci   # needs read access to the mirror (own key or deploy key)
 id -nG | grep -w kvm
 qemu-system-x86_64 -netdev help | grep vde
 bash scripts/prepare.sh --system alpine           # or copy images/ from another machine
 curl -s -o /dev/null -w '%{http_code}\n' https://qemuweb.emi.u-bordeaux.fr/auth/me     # 401
 
-# 12. browser: admin, /admin -> Runners, create a registration token (shown once)
+# 13. browser: admin, /admin -> Runners, create a registration token (shown once)
 
-# 13. register once, then run (--ca FILE only for a private authority)
+# 14. register once, then run (--ca FILE only for a private authority)
 ./scripts/runner.sh register --url https://qemuweb.emi.u-bordeaux.fr --token TOKEN --name salle-test \
   --runtime ~/qemuweb/runtime --runner-config ~/.config/qemuweb-runner/runner.json
 ./scripts/runner.sh run --runner-config ~/.config/qemuweb-runner/runner.json \
