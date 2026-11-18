@@ -148,3 +148,12 @@ lists `vde`, then run `./start.sh` again.
 
 Another QemuWeb server is probably running. Stop it with `scripts/stop.sh`, or
 start on another port with `./start.sh --listen 3003`.
+
+### Runtime socket path is too long
+
+`Runtime socket path is too long; move the project to a shorter directory.` The sockets of a node live in
+`<runtime>/sessions/<session id>/<node id>/` and a Unix socket path is limited to 107 bytes, which leaves 49
+characters for the runtime directory itself. A project kept in a deep directory (for example
+`/home/me/Documents/projects/qemuweb/runtime`, 51 characters) fails when a session is loaded. Start with a short
+runtime directory, for the server and the runner alike: `./scripts/start.sh --runtime /tmp/qemuweb-rt`
+(`scripts/demo.sh` already does).

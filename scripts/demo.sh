@@ -2,7 +2,7 @@
 # Demo of the Web interface on port 3003 or --listen PORT: a separate, temporary users file (never the
 # repository's users.json) with admin/admin (admin), toto/toto and tutu/tutu (students), and
 # demo/lan.zip loaded and started in the sessions of toto and tutu. Passwords equal to logins
-# exist only in this mode.
+# exist only in this mode. Its sessions live in a temporary directory, so `scripts/status.sh` needs --all to see it.
 #   ./scripts/demo.sh [--listen PORT]
 # Stop with Ctrl+C; scripts/stop.sh and scripts/status.sh also find the server.
 set -euo pipefail
@@ -38,8 +38,11 @@ trap 'exit 130' INT TERM
 
 printf '\n== QemuWeb demo on port %s ==\n' "$port"
 node scripts/demo.js prepare "$demo_dir/users.json"
-# The same two commands as scripts/start.sh (server and runner), with the temporary users file.
-./scripts/start.sh --listen "$port" --users "$demo_dir/users.json" &
+# The same two commands as scripts/start.sh (server and runner), with the temporary users file and a
+# temporary runtime directory: the sockets of a node must fit in 107 bytes, which the runtime/ of a
+# project kept in a deep directory does not allow. The directory is deleted when the demo stops.
+mkdir -p "$demo_dir/runtime"
+./scripts/start.sh --listen "$port" --runtime "$demo_dir/runtime" --users "$demo_dir/users.json" &
 demo_server_pid=$!
 node scripts/demo.js load "http://127.0.0.1:$port"
 
