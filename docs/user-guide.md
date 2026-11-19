@@ -36,6 +36,9 @@ sessions (one session per login, whatever the way in):
   tunnel to `127.0.0.1:3002` (or a local browser) reaches QemuWeb without the key: the QemuWeb login page, and the password
   of an account that has one (`scripts/user.sh add admin --role admin`) apply.
 
+Logging out of the front end (here OpenID) does not delete the QemuWeb session: the machines keep running, and the next
+login finds the same session (**Delete session** is the only way to remove it, apart from an admin).
+
 `--auth proxy` means that the identity is given by an authenticating front end (here Apache with mod_auth_openidc; it could be SAML, CAS, LDAP...) through `X-Remote-User`, trusted only with the shared `X-Proxy-Key`; the mode accepts only that identity (no login page, no password). A `disabled` account of `users.json` is refused
 through the front end too, and an account added with `--no-password` that is `disabled` is the way to refuse one student.
 

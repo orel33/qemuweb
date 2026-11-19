@@ -412,6 +412,22 @@ Check the result:
 - consoles connect over `wss://` (the Network tab shows a `101 Switching
   Protocols` response for `/socket.io/`).
 
+## Other single sign-on systems
+
+`--auth proxy` (or `both`) is not tied to OpenID: the front end does the login, and QemuWeb only reads `X-Remote-User`,
+guarded by `X-Proxy-Key` (see `deploy/cremi/deploy-cremi.md` for the Apache and OpenID example). QemuWeb needs no change
+for another system; only `--logout-url` differs: the logout address of the front end.
+
+| System | Front end | `--logout-url` |
+| --- | --- | --- |
+| OpenID | Apache `mod_auth_openidc` | `https://HOST/.openid?logout=https://HOST/goodbye` |
+| SAML | Apache `mod_shib` | the Shibboleth logout handler (`/Shibboleth.sso/Logout`) |
+| CAS | Apache `mod_auth_cas` | the logout URL of the CAS server |
+| OpenID, OAuth2 and similar | `oauth2-proxy` with nginx | `/oauth2/sign_out` |
+
+The front end must remove any `X-Remote-User` sent by a browser and add `X-Proxy-Key` to every request it forwards,
+WebSocket upgrades included.
+
 ## Known limits
 
 - Cross-site request checks (`Origin`/CSRF) and a revocable logout come with
