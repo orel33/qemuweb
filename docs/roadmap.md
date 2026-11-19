@@ -308,9 +308,9 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 **Critères de fin**
 
-- [ ] Un runner distant s'enregistre avec un jeton admin et apparaît en ligne.
-- [ ] Une session placée sur un runner distant se pilote comme une session locale.
-- [ ] Couper puis rétablir le réseau du runner ne tue aucune VM et l'interface se resynchronise.
+- [x] Un runner distant s'enregistre avec un jeton admin et apparaît en ligne.
+- [x] Une session placée sur un runner distant se pilote comme une session locale.
+- [x] Couper puis rétablir le réseau du runner ne tue aucune VM et l'interface se resynchronise.
 
 ## Stabilisation (0.9.0)
 
@@ -325,7 +325,7 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 **Critères de fin**
 
 - [x] Les formats sont à 1, les démos réécrites, le ZIP renommé, les tests verts.
-- [ ] Un runner distant s'enregistre, reçoit une session, survit à une coupure réseau et se pilote comme un runner local (jalon 5 coché). **Reporté** : le runner local et le déploiement CREMI (Apache, OpenID, WebSocket) sont validés ; le test du runner distant (Runner B) reste à faire.
+- [x] Un runner distant s'enregistre, reçoit une session, survit à une coupure réseau et se pilote comme un runner local (jalon 5 coché). Validé au CREMI le 19 novembre 2026 (runner `salle-test` sur un poste distant, par le frontal HTTPS et `--auth proxy`).
 - [x] La version 0.9.0 est taguée ; elle reste réservée à des utilisateurs de confiance.
 
 ## Version 1.0.0 — objectif
