@@ -40,10 +40,6 @@ of the previous file (see "Rolling back one stage"). This is easier to follow th
 ## Server, part 1: root (`ssh qemuweb`)
 
 ```sh
-# prompt: standard Debian (user@host:dir#), now and at every login
-PS1='${debian_chroot:+($debian_chroot)}\u@\h:\w\$ '
-echo "PS1='\${debian_chroot:+(\$debian_chroot)}\\u@\\h:\\w\\\$ '" >> ~/.bashrc
-
 # 0. proxy (3128); /etc/profile.d is read by the login shells of qemuweb
 export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1,qemuweb.emi.u-bordeaux.fr,v0-qemuweb.emi.u-bordeaux.fr
 echo 'export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1,qemuweb.emi.u-bordeaux.fr,v0-qemuweb.emi.u-bordeaux.fr' > /etc/profile.d/proxy.sh
@@ -129,7 +125,7 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code} %{redirect_url}\n' --resolve
 ```
 
 **Expect (stage 1)**: 7a prints `HTTP/2 200` (or `HTTP/1.1 200 OK`), then `hello from v0-qemuweb` in the page, then
-`302 https://qemuweb.emi.u-bordeaux.fr/hello.html`. 7b and 7c print the same page, and the browser shows the padlock
+`302 https://v0-qemuweb.emi.u-bordeaux.fr/hello.html`. 7b and 7c print the same page, and the browser shows the padlock
 with no warning.
 
 If 7a works but 7b does not: the machine's firewall (443). If 7a and 7b work but 7c does not (403, 502, certificate
