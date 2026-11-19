@@ -243,6 +243,7 @@ function createLifecycle(ctx) {
     node.action = 'destroy';
     node.stopping = true;
     node.generation += 1;
+    ctx.capture.nodeRemoved(node);
     closeSerial(node);
     const current = node.machine;
     const image = node.selectedImage || {};
