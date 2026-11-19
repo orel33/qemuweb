@@ -225,7 +225,7 @@ function renderAccounts(users) {
     });
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
-    actions.append(iconButton('keyRound', 'Reset password', () => resetPassword(user.login)));
+    if (user.password) actions.append(iconButton('keyRound', 'Reset password', () => resetPassword(user.login)));
     const toggle = iconButton(user.disabled ? 'userCheck' : 'userX', user.disabled ? 'Enable' : 'Disable', () => runAction('accounts-error',
       () => api(`/users/${encodeURIComponent(user.login)}`, {method: 'PATCH', body: {disabled: !user.disabled}})),
     user.disabled ? 'Enable: allow this account to log in again' : 'Disable: refuse its logins and cookies at once; its session is kept');
@@ -237,7 +237,7 @@ function renderAccounts(users) {
     }, 'Remove account: remove it from users.json and delete its session');
     remove.disabled = own;
     actions.append(toggle, remove);
-    row.append(cell(loginLabel(user.login, own)), cell(role), cell(user.disabled ? 'disabled' : 'enabled'), cell(actions));
+    row.append(cell(loginLabel(user.login, own)), cell(role), cell(`${user.disabled ? 'disabled' : 'enabled'}${user.password ? '' : ', no password'}`), cell(actions));
     if (user.disabled) row.dataset.disabled = 'true';
     return row;
   }));
@@ -297,13 +297,14 @@ function init() {
   fetch('/auth/me', {cache: 'no-store'}).then(async response => {
     if (!response.ok) return;
     me = await response.json();
-    $('account-name').textContent = me.login;
+    $('account-name').textContent = me.displayName ? `${me.displayName} (${me.login})` : me.login;
     $('auth-off-warning').hidden = me.authMode !== 'off';
-    $('logout').hidden = me.authMode === 'off';
+    // An identity given by the OpenID front end logs out there (--logout-url); without that URL there is no button.
+    $('logout').hidden = me.authMode === 'off' || (me.via === 'openid' && !me.logoutUrl);
     refreshAccounts();
   });
   $('logout').addEventListener('click', async () => {
-    try { await fetch('/auth/logout', {method: 'POST'}); } finally { location.assign('/login.html'); }
+    try { await fetch('/auth/logout', {method: 'POST'}); } finally { location.assign(me?.via === 'openid' && me.logoutUrl ? me.logoutUrl : '/login.html'); }
   });
   $('select-all').addEventListener('change', event => {
     for (const box of $('sessions-body').querySelectorAll('input[type=checkbox]:not(:disabled)')) {
@@ -314,15 +315,23 @@ function init() {
   $('delete-selected').addEventListener('click', () => deleteSessions([...selected].sort()));
   $('show-create-account').addEventListener('click', () => {
     $('create-account').reset();
+    $('new-password').disabled = false;
+    $('new-password').required = true;
     showError('create-account-error', null);
     $('create-account-dialog').showModal();
+  });
+  // An account without a password is only recognised through the OpenID front end (users.json has no hash for it).
+  $('new-no-password').addEventListener('change', event => {
+    $('new-password').disabled = event.target.checked;
+    $('new-password').required = !event.target.checked;
   });
   $('create-account-cancel').addEventListener('click', () => $('create-account-dialog').close());
   $('create-account').addEventListener('submit', async event => {
     event.preventDefault();
     const login = $('new-login').value.trim();
     try {
-      await api('/users', {method: 'POST', body: {login, password: $('new-password').value, role: $('new-role').value}});
+      const noPassword = $('new-no-password').checked;
+      await api('/users', {method: 'POST', body: {login, role: $('new-role').value, ...(noPassword ? {noPassword: true} : {password: $('new-password').value})}});
       $('create-account').reset();
       $('create-account-dialog').close();
       await refreshAccounts();

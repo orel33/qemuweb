@@ -10,6 +10,7 @@ const cli = require('../common/cli');
 const {readCatalog} = require('../common/system-config');
 const {createLogDir} = require('./audit');
 const {createUsersStore} = require('./auth/users-store');
+const {readProxyKey} = require('./auth/proxy');
 const {readRunners} = require('./runner-store');
 
 const octal = mode => (mode & 0o777).toString(8).padStart(4, '0');
@@ -46,8 +47,14 @@ function checkUsers(settings) {
     cli.warning('authentication is disabled (--no-auth): every visitor uses one shared local session; use it only for single-user local work, never on a shared or exposed server.');
     return;
   }
+  if (settings.authMode !== 'password') {
+    readProxyKey(settings.proxyKeyFile);
+    cli.pass(`proxy key  ${settings.proxyKeyFile}  (read; mode ${octal(fs.statSync(settings.proxyKeyFile).mode)})`);
+    if (!settings.logoutUrl) cli.warning('no --logout-url: users identified by the OpenID front end get no Log out button.');
+  }
   const count = createUsersStore(settings.usersFile).count();
   if (count) cli.pass(`${path.basename(settings.usersFile)}  ${count} ${count === 1 ? 'account' : 'accounts'}`);
+  else if (settings.authMode === 'openid') cli.pass(`${path.basename(settings.usersFile)}  no account: every identity from the OpenID front end is a student`);
   else cli.warning(`No user account in ${settings.usersFile}: nobody can log in. Add one with ./scripts/user.sh add <login>.`);
 }
 

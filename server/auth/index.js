@@ -1,26 +1,30 @@
 'use strict';
 
-// Authentication facade. The rest of the server only uses this interface, so that the
-// password store can later be replaced (OpenID Connect) without touching it:
-//   mode                     'password', or 'off' (--no-auth: one implicit local user)
-//   authenticate(login, pw)  -> {login, role} or null
+// Authentication facade, and the one place where the identity of a request is resolved: the rest of
+// the server only uses this interface (HTTP routes, /admin, X-Observe, Socket.IO and console control all read
+// req.user or socket.data.user, {login, role}, plus via: 'openid', displayName? and mail? for an identity from the OpenID front end.
+//   mode                     'password', 'openid', 'both' (--auth) or 'off' (--no-auth: one implicit local user)
+//   authenticate(login, pw)  -> {login, role} or null (a user from the proxy also has via: 'openid', displayName?, mail?)
 //   register(app)            /auth/login, /auth/logout and /auth/me
-//   identify                 Express middleware setting req.user from the session cookie
-//   requireUser              Express middleware: 401 JSON for the API, login redirect for pages
+//   identify                 Express middleware setting req.user: the identity given by the OpenID front end
+//                            (server/auth/proxy.js, only with the right X-Proxy-Key; it wins), else the session cookie
+//   requireUser              Express middleware: 401 JSON for the API, login redirect for pages (401 for all in openid mode)
 //   requireAdmin             Express middleware: 403 unless req.user has the role admin
-//   socketMiddleware         io.use() handler setting socket.data.user from the cookie
-//   currentUser(login)       {login, role} of an existing, enabled account, else null
+//   socketMiddleware         io.use() handler setting socket.data.user the same way
+//   currentUser(login, via)  {login, role} of an account allowed now (via 'openid': any login that is not disabled), else null
 // Cross-site request (Origin/CSRF) checks are deferred to milestone 6: until then the
 // SameSite=Lax cookie is the only protection, so QemuWeb needs its own domain name.
-// Settings (server/options.js): authMode ('password' or 'off'), usersFile, sessionHours (the
-// sliding cookie lifetime).
+// Settings (server/options.js): authMode, usersFile, sessionHours (the sliding cookie lifetime), proxyKeyFile,
+// logoutUrl.
 const path = require('path');
 const express = require('express');
 const {hashPassword, verifyPassword} = require('./passwords');
 const {createUsersStore, LOGIN_PATTERN} = require('./users-store');
+const {readProxyKey, createProxyIdentity} = require('./proxy');
 const {COOKIE_NAME, newSecret, signSession, verifySession, parseCookies, sessionCookie} = require('./cookie');
 
 const LOCAL_USER = Object.freeze({login: 'local', role: 'admin'});
+const REFUSED = {403: 'Forbidden.'};
 // Public without a session: the login page, its assets and the /auth routes.
 const PUBLIC_PATHS = new Set(['/login.html', '/login.js', '/css/app.css', '/favicon.svg']);
 // The cookie is renewed at most once a minute while the user is active.
@@ -31,21 +35,50 @@ function attemptedLogin(login) {
   return typeof login === 'string' ? login.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 64) : '';
 }
 
-// `secret` signs the login cookies: a new one per server start (injected only by tests).
-// userLog (server/audit.js createUserLog) receives login, login-failed and logout events.
-function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {record() {}}}) {
+// `secret` signs the login cookies: a new one per server start (injected only by tests); `proxyKey` is
+// the shared key read from --proxy-key-file (also injected by tests).
+// userLog (server/audit.js createUserLog) receives login, login-failed, logout and proxy-refused events.
+function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {record() {}}, proxyKey}) {
   const mode = settings.authMode;
+  const usesProxy = mode === 'openid' || mode === 'both';
+  const usesPassword = mode === 'password' || mode === 'both';
   const lifetimeMs = Math.round(settings.sessionHours * 3600 * 1000);
   const store = createUsersStore(settings.usersFile);
   // Unknown logins still cost one scrypt verification, like known ones.
   const dummyHash = hashPassword('qemuweb-unknown-user');
+  const proxy = usesProxy ? createProxyIdentity({key: proxyKey ?? readProxyKey(settings.proxyKeyFile), store, userLog, now}) : null;
+
+  // A proxy identity has no login request: its first request, and the first one after as long a pause as the
+  // cookie lifetime, is logged as a login (users.log), like a password login.
+  const lastProxySeen = new Map();
+  function noteProxyLogin(user) {
+    const time = now();
+    const previous = lastProxySeen.get(user.login);
+    lastProxySeen.set(user.login, time);
+    if (previous === undefined || time - previous >= lifetimeMs) userLog.record(user.login, 'login', {via: 'openid'});
+  }
+
+  // The identity of a request or handshake from its headers: {user} (the proxy's, else the cookie's), {refused: code}
+  // for a wrong key or a refused account, or {} for nobody.
+  function identityOf(headers) {
+    if (mode === 'off') return {user: LOCAL_USER};
+    if (proxy) {
+      const found = proxy.resolve(headers);
+      if (found.status === 'refused') return {refused: found.code};
+      if (found.status === 'ok') { noteProxyLogin(found.user); return {user: found.user}; }
+    }
+    if (!usesPassword) return {};
+    const session = sessionFromCookies(headers.cookie);
+    return session ? {user: session.user, session: session.payload} : {};
+  }
 
   async function authenticate(login, password) {
     if (mode === 'off') return LOCAL_USER;
-    if (typeof login !== 'string' || typeof password !== 'string' || password.length > 1024) return null;
+    if (!usesPassword || typeof login !== 'string' || typeof password !== 'string' || password.length > 1024) return null;
     const user = LOGIN_PATTERN.test(login) ? store.get(login) : null;
-    const valid = await verifyPassword(password, user ? user.hash : await dummyHash);
-    return user && valid && !user.disabled ? {login: user.login, role: user.role} : null;
+    // An account without a password still costs one verification, like an unknown login.
+    const valid = await verifyPassword(password, user?.hash || await dummyHash);
+    return user && user.hash && valid && !user.disabled ? {login: user.login, role: user.role} : null;
   }
 
   // The cookie's user, provided the account still exists and is not disabled. The role is
@@ -57,9 +90,10 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
   }
 
   // Same lookup as the cookie check, for connections opened earlier (server/sockets.js).
-  function currentUser(login) {
+  function currentUser(login, via = 'password') {
     if (mode === 'off') return login === LOCAL_USER.login ? LOCAL_USER : null;
-    const user = store.get(login);
+    if (via === 'openid') return proxy ? proxy.current(login) : null;
+    const user = usesPassword ? store.get(login) : null;
     return user && !user.disabled ? {login: user.login, role: user.role} : null;
   }
 
@@ -74,19 +108,20 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
   }
 
   function identify(req, res, next) {
-    if (mode === 'off') { req.user = LOCAL_USER; return next(); }
     let found;
-    try { found = sessionFromCookies(req.headers.cookie); }
+    try { found = identityOf(req.headers); }
     catch (error) { return next(error); }
-    if (found) {
+    if (found.refused) return res.status(found.refused).json({error: REFUSED[found.refused]});
+    if (found.user) {
       req.user = found.user;
-      if (now() - found.payload.issued >= RENEW_AFTER_MS) setSessionCookie(req, res, found.user.login);
+      if (found.session && now() - found.session.issued >= RENEW_AFTER_MS) setSessionCookie(req, res, found.user.login);
     }
     next();
   }
 
   function requireUser(req, res, next) {
-    if (req.user || PUBLIC_PATHS.has(req.path) || req.path.startsWith('/auth/')) return next();
+    if (req.user || (mode !== 'openid' && (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/auth/'))) || (mode === 'openid' && req.path === '/auth/me')) return next();
+    if (mode === 'openid') return res.status(401).json({error: 'Authentication required.'});
     if (req.path.startsWith('/api/') || req.path === '/api' || !['GET', 'HEAD'].includes(req.method)) {
       return res.status(401).json({error: 'Authentication required.'});
     }
@@ -101,6 +136,7 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
   function register(app) {
     const json = express.json({limit: '16kb'});
     app.post('/auth/login', json, async (req, res) => {
+      if (!usesPassword) return res.status(404).json({error: 'Password login is not enabled (--auth openid).'});
       try {
         const {login, password} = req.body || {};
         const user = await authenticate(login, password);
@@ -108,7 +144,7 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
           userLog.record(attemptedLogin(login), 'login-failed');
           return res.status(401).json({error: 'Invalid login or password.'});
         }
-        userLog.record(user.login, 'login');
+        userLog.record(user.login, 'login', {via: 'password'});
         if (mode === 'password') setSessionCookie(req, res, user.login);
         res.set('Cache-Control', 'no-store');
         res.json({login: user.login, role: user.role});
@@ -118,24 +154,26 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
       }
     });
     app.post('/auth/logout', (req, res) => {
-      if (req.user) userLog.record(req.user.login, 'logout');
+      if (req.user) userLog.record(req.user.login, 'logout', mode === 'off' ? undefined : {via: req.user.via || 'password'});
       clearSessionCookie(req, res);
       res.json({ok: true});
     });
     app.get('/auth/me', (req, res) => {
       res.set('Cache-Control', 'no-store');
       if (!req.user) return res.status(401).json({error: 'Authentication required.', authMode: mode});
-      res.json({login: req.user.login, role: req.user.role, authMode: mode});
+      const {login, role, via, displayName, mail} = req.user;
+      // The logout URL is the front end's: it only applies to an identity that came from it.
+      res.json({login, role, authMode: mode, ...(mode !== 'off' ? {via: via || 'password'} : {}), ...(displayName ? {displayName} : {}), ...(mail ? {mail} : {}),
+        ...(via === 'openid' && settings.logoutUrl ? {logoutUrl: settings.logoutUrl} : {})});
     });
   }
 
   function socketMiddleware(socket, next) {
-    const {headers} = socket.request;
-    if (mode === 'off') { socket.data.user = LOCAL_USER; return next(); }
     let found;
-    try { found = sessionFromCookies(headers.cookie); }
+    try { found = identityOf(socket.request.headers); }
     catch (error) { return next(error); }
-    if (!found) return next(new Error('Authentication required.'));
+    if (found.refused) return next(new Error(REFUSED[found.refused]));
+    if (!found.user) return next(new Error('Authentication required.'));
     socket.data.user = found.user;
     next();
   }

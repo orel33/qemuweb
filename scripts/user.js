@@ -2,14 +2,17 @@
 
 // User accounts in users.json (see server/auth/users-store.js); run through scripts/user.sh.
 //   [--users FILE] <command>   first, optionally: another users file (default users.json of the project)
-//   add <login> [--role student|admin]   create an account
-//   passwd <login>                       change a password
+//   add <login> [--role student|admin] [--no-password]
+//                                        create an account; --no-password: an account that cannot log in with a password,
+//                                        recognised only for its role and its disabled flag when the OpenID front end
+//                                        gives its identity (server --auth openid|both), e.g. an administrator
+//   passwd <login>                       change a password (refused for an account without password)
 //   role <login> student|admin           change a role
 //   remove <login>                       delete an account; a live server keeps its session (and its
 //                                        machines) until deleted from /admin or the server restarts
 //   disable <login>                      refuse the account's logins and cookies (its session is kept)
 //   enable <login>                       allow a disabled account again
-//   list                                 print logins, roles and disabled accounts
+//   list                                 print logins, roles, disabled accounts and accounts without password
 //   import-csv <file>                    add or update accounts from "login,password[,role]" lines
 // Passwords come from the variable QEMUWEB_PASSWORD (never the command line), else from standard input when it is not a terminal
 // (first line), else from a prompt without echo.
@@ -17,11 +20,13 @@ const fs = require('fs');
 const path = require('path');
 const {hashPassword} = require('../server/auth/passwords');
 const {readUsers, writeUsers, validateLogin, validateRole, validatePassword, createAccount, setPassword,
-  setRole, setDisabled, removeAccount} = require('../server/auth/users-store');
+  setRole, setDisabled, removeAccount, NO_PASSWORD} = require('../server/auth/users-store');
 
 const root = path.join(__dirname, '..');
 const USAGE = `Usage: scripts/user.sh [--users FILE] <command>
-  add <login> [--role student|admin]
+  add <login> [--role student|admin] [--no-password]
+                             --no-password: no password login, the account is only recognised
+                             (role, disabled) for an identity given by the OpenID front end
   passwd <login>
   role <login> student|admin
   remove <login>             a live server keeps its session; delete it from /admin
@@ -29,7 +34,7 @@ const USAGE = `Usage: scripts/user.sh [--users FILE] <command>
   enable <login>
   list
   import-csv <file>          lines: login,password[,role]
-Password: QEMUWEB_PASSWORD, or the first line of standard input, or a prompt.
+Password (not with --no-password): QEMUWEB_PASSWORD, or the first line of standard input, or a prompt.
 Users file: users.json of the project, or --users FILE (before the command).`;
 
 function fail(message, code = 1) {
@@ -116,21 +121,24 @@ async function main(args) {
     case 'add': {
       const [login, ...options] = rest;
       validateLogin(login);
-      let role = 'student';
-      if (options.length) {
-        if (options.length !== 2 || options[0] !== '--role') fail(USAGE, 2);
-        role = validateRole(options[1]);
+      let role = 'student', noPassword = false;
+      for (let index = 0; index < options.length; index++) {
+        if (options[index] === '--role' && index + 1 < options.length && !options.includes('--role', index + 2)) role = validateRole(options[++index]);
+        else if (options[index] === '--no-password' && !noPassword) noPassword = true;
+        else fail(USAGE, 2);
       }
       if (find(users(), login)) fail(`User ${login} already exists; use passwd to change the password.`);
-      await createAccount(file, {login, role, password: await readPassword(login)});
-      console.log(`Added ${login} (${role}) to ${file}.`);
+      await createAccount(file, {login, role, noPassword, password: noPassword ? undefined : await readPassword(login)});
+      console.log(`Added ${login} (${role}${noPassword ? ', no password' : ''}) to ${file}.`);
       return;
     }
     case 'passwd': {
       const [login] = rest;
       if (rest.length !== 1) fail(USAGE, 2);
       validateLogin(login);
-      if (!find(users(), login)) fail(`Unknown user ${login}.`);
+      const account = find(users(), login);
+      if (!account) fail(`Unknown user ${login}.`);
+      if (!account.hash) fail(NO_PASSWORD(login));
       await setPassword(file, login, await readPassword(login));
       console.log(`Password changed for ${login}.`);
       return;
@@ -160,7 +168,7 @@ async function main(args) {
     }
     case 'list': {
       if (rest.length) fail(USAGE, 2);
-      for (const user of users()) console.log(`${user.login}\t${user.role}${user.disabled ? '\tdisabled' : ''}`);
+      for (const user of users()) console.log(`${user.login}\t${user.role}${user.disabled ? '\tdisabled' : ''}${user.hash ? '' : '\tno password'}`);
       return;
     }
     case 'import-csv': {
@@ -174,7 +182,7 @@ async function main(args) {
       for (const entry of entries) {
         const hash = await hashPassword(entry.password);
         const user = find(list, entry.login);
-        if (user) { Object.assign(user, {hash, role: entry.role}); updated++; }
+        if (user) { Object.assign(user, {hash, role: entry.role}); updated++; }  // gives a password to an account without one
         else { list.push({login: entry.login, hash, role: entry.role}); added++; }
       }
       writeUsers(file, list);

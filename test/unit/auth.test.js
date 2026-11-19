@@ -176,7 +176,8 @@ test('--no-auth gives one implicit user; session hours are validated', t => {
   assert.equal(parseServerArguments(['--session-hours', '0.5'], {root}).sessionHours, 0.5);
   assert.deepEqual(['true', '2', 'loopback'].map(value => parseServerArguments(['--trust-proxy', value], {root}).trustProxy), [true, 2, 'loopback']);
   assert.equal(parseServerArguments([], {root}).trustProxy, null);
-  for (const bad of [['--users'], ['--logs'], ['--trust-proxy'], ['--ephemeral', 'x'], ['--auth', 'password']]) assert.throws(() => parseServerArguments(bad, {root}), Error, bad.join(' '));
+  for (const bad of [['--users'], ['--logs'], ['--trust-proxy'], ['--ephemeral', 'x'], ['--auth'], ['--auth', 'ldap'], ['--auth', 'password', '--no-auth'], ['--no-auth', '--auth', 'both'], ['--auth', 'openid'], ['--auth', 'both'],
+    ['--proxy-key-file'], ['--logout-url'], ['--logout-url', 'ftp://x'], ['--logout-url', 'goodbye']]) assert.throws(() => parseServerArguments(bad, {root}), Error, bad.join(' '));
 });
 
 function userScript(dir, args, {input, password} = {}) {

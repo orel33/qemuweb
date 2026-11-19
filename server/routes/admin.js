@@ -140,12 +140,13 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
   });
 
   router.get('/users', (_req, res) => {
-    res.json(readUsers(usersFile).map(user => ({login: user.login, role: user.role, disabled: !!user.disabled})));
+    res.json(readUsers(usersFile).map(user => ({login: user.login, role: user.role, disabled: !!user.disabled, password: !!user.hash})));
   });
 
   router.post('/users', (req, res) => {
-    const {login, password, role = 'student'} = req.body || {};
-    audited(req, res, 'create-account', {login, role}, () => createAccount(usersFile, {login, password, role}), accountErrorStatus);
+    const {login, password, role = 'student', noPassword = false} = req.body || {};
+    audited(req, res, 'create-account', {login, role, ...(noPassword === true ? {noPassword: true} : {})},
+      () => createAccount(usersFile, {login, password, role, noPassword: noPassword === true}), accountErrorStatus);
   });
 
   router.post('/users/:login/password', (req, res) => {

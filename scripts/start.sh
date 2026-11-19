@@ -4,7 +4,7 @@
 # start QemuWeb here, in development and in the tests. Output lines are prefixed [server] and
 # [runner].
 #   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --users FILE, --runners FILE, --logs DIR, --session-hours N, --runner-grace SECONDS,
-#                                          --trust-proxy VALUE, --no-auth, --ephemeral: see node server/main.js --help)
+#                                          --trust-proxy VALUE, --auth MODE, --proxy-key-file FILE, --logout-url URL, --no-auth, --ephemeral: see node server/main.js --help)
 # The server gets all of them; the runner gets --port PORT (the server's --listen), --runtime DIR and
 # --exit-on-disconnect. A refused option is reported by the server (exit status 2, nothing started).
 # Each process leads its own process group (setsid): a terminal Ctrl+C reaches this script only.

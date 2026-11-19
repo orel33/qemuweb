@@ -2,17 +2,18 @@
 
 // The command line of the server, as a table for common/cli.js (which parses it, prints --help and
 // the Options block): parsed once into a plain settings object that is passed down: {port,
-// runtime, usersFile, runnersFile, logDir, sessionHours, runnerGrace, trustProxy, authMode, ephemeral, given}. `given` is
+// runtime, usersFile, runnersFile, logDir, sessionHours, runnerGrace, trustProxy, authMode, proxyKeyFile, logoutUrl, ephemeral, given}. `given` is
 // the set of the flags present on the command line. The server reads no environment variable.
 // test/unit/server-startup-report.test.js checks that each option is documented in docs/reference.md.
 const path = require('path');
-const {parseArguments, defaultSettings: cliDefaults} = require('../common/cli');
+const {parseArguments, defaultSettings: cliDefaults, UsageError, invalid} = require('../common/cli');
 
 const DEFAULT_PORT = 3002;
 const DEFAULT_SESSION_HOURS = 12;
 const MAX_SESSION_HOURS = 24 * 90;
 const DEFAULT_RUNNER_GRACE = 300;
 const MAX_RUNNER_GRACE = 86400;
+const AUTH_MODES = ['password', 'openid', 'both'];
 
 function serverSpec(root) {
   return {
@@ -46,11 +47,26 @@ function serverSpec(root) {
       {flag: '--trust-proxy', metavar: 'VALUE', kind: 'text', key: 'trustProxy', default: null, fallback: 'unset',
         convert: value => (value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value),
         description: 'Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS'},
-      {flag: '--no-auth', metavar: null, key: 'authMode', default: 'password', value: 'off', fallback: 'off',
+      {flag: '--auth', metavar: 'MODE', kind: 'choice', key: 'authMode', default: 'password', choices: AUTH_MODES, fallback: 'password', exclusive: ['--no-auth'],
+        description: 'how users are identified: password (QemuWeb login), openid (identity given by the OpenID front end, Apache mod_auth_openidc, through X-Remote-User, trusted only with the shared key) or both'},
+      {flag: '--proxy-key-file', metavar: 'FILE', kind: 'path', key: 'proxyKeyFile', default: null, fallback: 'unset',
+        description: 'the key shared with the OpenID front end, one line (mode 0600), sent by it as X-Proxy-Key; required by --auth openid and --auth both'},
+      {flag: '--logout-url', metavar: 'URL', kind: 'text', key: 'logoutUrl', default: null, fallback: 'unset',
+        convert: value => {
+          if (!/^https?:\/\/[^\s]+$/.test(value)) throw invalid('--logout-url', value, 'an http:// or https:// URL');
+          return value;
+        },
+        description: 'where the Log out button goes when the identity comes from the OpenID front end (no button without it)'},
+      {flag: '--no-auth', metavar: null, key: 'authMode', default: 'password', value: 'off', fallback: 'off', exclusive: ['--auth'],
         description: 'disables authentication: one shared local session, for single-user local work only (default: authentication on)'},
       {flag: '--ephemeral', metavar: null, key: 'ephemeral', default: false, value: true, fallback: 'off',
         description: 'marks an ephemeral server of the test scenarios (tests only)'}
-    ]
+    ],
+    validate(settings) {
+      if (['openid', 'both'].includes(settings.authMode) && !settings.proxyKeyFile) {
+        throw new UsageError(`--auth ${settings.authMode} requires --proxy-key-file FILE`);
+      }
+    }
   };
 }
 

@@ -3,6 +3,8 @@
 // users.json: the accounts allowed to log in (repository root by default, or
 // the --users option). Mode 0600, never committed. Layout:
 //   {"schemaVersion": 1, "users": [{"login": "alice", "hash": "scrypt$...", "role": "student"}]}
+// An account without "hash" cannot log in with a password: it is only recognised, by the identity
+// the OpenID front end gives (server/auth/proxy.js), for its role and its "disabled" flag.
 // The role is 'student' or 'admin' (the /admin page and API). "disabled": true, written only
 // when set, refuses the account's logins and cookies.
 // The account operations at the end are shared by scripts/user.js and the admin API.
@@ -47,7 +49,7 @@ function parseUsers(text, file = 'users.json') {
     }
     validateLogin(user.login);
     validateRole(user.role);
-    if (!isPasswordHash(user.hash)) throw new Error(`${file}: invalid password hash for ${user.login}.`);
+    if (user.hash !== undefined && !isPasswordHash(user.hash)) throw new Error(`${file}: invalid password hash for ${user.login}.`);
     if (user.disabled !== undefined && typeof user.disabled !== 'boolean') throw new Error(`${file}: "disabled" must be true or false for ${user.login}.`);
     if (logins.has(user.login)) throw new Error(`${file}: duplicate login ${user.login}.`);
     logins.add(user.login);
@@ -66,7 +68,7 @@ function readUsers(file) {
 // Atomic write with mode 0600.
 function writeUsers(file, users) {
   const sorted = [...users].sort((a, b) => a.login.localeCompare(b.login))
-    .map(({login, hash, role, disabled}) => ({login, hash, role, ...(disabled ? {disabled: true} : {})}));
+    .map(({login, hash, role, disabled}) => ({login, ...(hash ? {hash} : {}), role, ...(disabled ? {disabled: true} : {})}));
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
   fs.writeFileSync(temporary, `${JSON.stringify({schemaVersion: 1, users: sorted}, null, 2)}\n`, {mode: 0o600});
   fs.chmodSync(temporary, 0o600);
@@ -109,21 +111,28 @@ function changeUser(file, login, change) {
   return {login: user.login, role: user.role, disabled: !!user.disabled};
 }
 
-async function createAccount(file, {login, password, role = 'student'}, hashOptions) {
+const NO_PASSWORD = login => `${login} has no password (added with --no-password): remove the account and add it again to give it one.`;
+
+// noPassword: an account that cannot log in with a password (no password is given then).
+async function createAccount(file, {login, password, role = 'student', noPassword = false}, hashOptions) {
   validateLogin(login);
   validateRole(role);
-  validatePassword(password);
+  if (noPassword && password !== undefined && password !== null) throw new Error('An account without a password takes no password.');
+  if (!noPassword) validatePassword(password);
   if (readUsers(file).some(user => user.login === login)) throw new Error(`User ${login} already exists.`);
-  const hash = await hashPassword(password, hashOptions);
+  const hash = noPassword ? null : await hashPassword(password, hashOptions);
   const users = readUsers(file);
   if (users.some(user => user.login === login)) throw new Error(`User ${login} already exists.`);
-  writeUsers(file, [...users, {login, hash, role}]);
+  writeUsers(file, [...users, {login, ...(hash ? {hash} : {}), role}]);
   return {login, role, disabled: false};
 }
 
 async function setPassword(file, login, password, hashOptions) {
   validateLogin(login);
-  const hash = await hashPassword(validatePassword(password), hashOptions);
+  validatePassword(password);
+  const existing = readUsers(file).find(user => user.login === login);
+  if (existing && !existing.hash) throw new Error(NO_PASSWORD(login));
+  const hash = await hashPassword(password, hashOptions);
   return changeUser(file, login, user => { user.hash = hash; });
 }
 
@@ -144,5 +153,5 @@ function removeAccount(file, login) {
   writeUsers(file, users.filter(user => user.login !== login));
 }
 
-module.exports = {ROLES, LOGIN_PATTERN, validateLogin, validateRole, validatePassword, parseUsers, readUsers,
+module.exports = {ROLES, NO_PASSWORD, LOGIN_PATTERN, validateLogin, validateRole, validatePassword, parseUsers, readUsers,
   writeUsers, createUsersStore, createAccount, setPassword, setRole, setDisabled, removeAccount};

@@ -335,7 +335,7 @@ test('the login routes write login, login-failed and logout to users.log, never 
   await call('POST /auth/login', {body: {login: 42, password: 'pw'}});
   await call('POST /auth/logout', {user: {login: 'toto', role: 'student'}});
   await call('POST /auth/logout', {});
-  assert.deepEqual(lines, [['toto', 'login'], ['toto', 'login-failed'], [`x${'y'.repeat(63)}`, 'login-failed'], ['', 'login-failed'], ['toto', 'logout']]);
+  assert.deepEqual(lines, [['toto', 'login', {via: 'password'}], ['toto', 'login-failed'], [`x${'y'.repeat(63)}`, 'login-failed'], ['', 'login-failed'], ['toto', 'logout', {via: 'password'}]]);
   assert.doesNotMatch(JSON.stringify(lines), /pw/);
 });
 
