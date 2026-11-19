@@ -62,6 +62,10 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   (1 GiB) must match what the relay accepts; the OpenID provider must be reachable from Apache without the proxy.
 - **`docs/pdf/install-cremi.pdf`** is the PDF of the old nginx tutorial: regenerate it (`make docs`).
 
+- **CREMI wildcard certificate renewal**: `/etc/apache2/certs/star_emi_u-bordeaux_fr.crt` and `.key` are links the CREMI
+  repoints every year (the current certificate ends on 2 December 2026). Apache must be reloaded
+  (`sudo systemctl reload apache2`) after a renewal: say it in the tutorial, or add a hook.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that

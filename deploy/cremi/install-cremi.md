@@ -106,6 +106,9 @@ sudo openssl pkey -in /etc/apache2/certs/star_emi_u-bordeaux_fr.key -pubout | op
 sudo a2enmod ssl                                  # TLS
 # the Debian default site answers unknown names (and the bare IP) with its "It works" page: off
 sudo a2dissite 000-default
+# the global name of the server (otherwise apache2ctl warns AH00558)
+echo 'ServerName v0-qemuweb.emi.u-bordeaux.fr' | sudo tee /etc/apache2/conf-available/servername.conf
+sudo a2enconf servername
 sudo install -d /var/www/qemuweb
 sudo install -m 0644 deploy/cremi/hello.html /var/www/qemuweb/hello.html
 sudo install -m 0644 deploy/cremi/qemuweb-1-hello.conf /etc/apache2/sites-available/qemuweb.conf
