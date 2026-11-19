@@ -257,6 +257,12 @@ cd /srv/qemuweb && git pull && npm ci && sudo systemctl restart qemuweb
 sudo apache2ctl configtest && sudo systemctl reload apache2
 ```
 
+**Before copying a site file or the service file after a `git pull`**, read what changed in `deploy/cremi/`:
+`git log --stat -5 -- deploy/cremi docs`. A new version of a site file may need a file that exists only on the server
+(for example `qemuweb-proxykey.inc`, step 10, or `qemuweb-oidc.inc`): create it first, otherwise `apache2ctl configtest`
+fails with `Could not open configuration file` (Apache keeps running with the old configuration, as long as you
+do not restart it). Always run `configtest` before `reload`, and do not restart Apache until it says `Syntax OK`.
+
 ## Runner A: local, on this machine (`ssh qemuweb-app`)
 
 Runs the machines on this machine, under `qemuweb`, and dials the server on the Unix socket
