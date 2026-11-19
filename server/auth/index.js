@@ -12,7 +12,7 @@
 //   requireAdmin             Express middleware: 403 unless req.user has the role admin
 //   socketMiddleware         io.use() handler setting socket.data.user the same way
 //   currentUser(login, via)  {login, role} of an account allowed now (via 'proxy': any login that is not disabled), else null
-// Cross-site request (Origin/CSRF) checks are deferred to milestone 6: until then the
+// Cross-site request (Origin/CSRF) checks are deferred to milestone 8: until then the
 // SameSite=Lax cookie is the only protection, so QemuWeb needs its own domain name.
 // Settings (server/options.js): authMode, usersFile, sessionHours (the sliding cookie lifetime), proxyKeyFile,
 // logoutUrl.

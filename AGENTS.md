@@ -3,14 +3,6 @@
 These rules apply to every coding agent working on this project, including
 Codex and Claude Code. Claude Code loads them through `CLAUDE.md`.
 
-## Documentation archive
-
-`docs/bak/` contains superseded Markdown files kept only for reference. Ignore
-these files when searching for current instructions or project documentation,
-and do not use them as task context unless the user explicitly asks to consult
-the archive. Use `README.md` and `docs/architecture.md` for current
-documentation.
-
 ## Vocabulary
 
 - **Session**: a user's workspace (nodes, engine, `runtime/sessions/<id>/`).
@@ -63,7 +55,7 @@ Name a new task `qemuweb - task XXXYY`, replacing `XXXYY` with its stable TODO
 code (for example, `qemuweb - task GTS16`). Reuse the named existing task if
 the user specifies one.
 
-Give the task the TODO code, concrete acceptance criteria, the target branch or
+Give the task its roadmap code, concrete acceptance criteria, the target branch or
 worktree, and the integration boundary. Verify that the new task is visible to
 the user, then report its title and status. If a visible task cannot be
 created, say so instead of silently starting a hidden sub-agent.

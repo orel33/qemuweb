@@ -1,5 +1,5 @@
-# PDF versions of the Markdown documents, in docs/pdf/ (README.md, docs/*.md, test/tests.md and deploy/cremi/deploy-cremi.md;
-# docs/bak is an archive and is not built). The style is docs/doc.css, the diagrams are the SVG
+# PDF versions of the Markdown documents, in docs/pdf/ (README.md, docs/*.md, test/tests.md and deploy/cremi/deploy-cremi.md).
+# The style is docs/doc.css, the diagrams are the SVG
 # files of docs/img/ referenced by the Markdown.
 #   make docs                 rebuild the PDFs whose source, style or images changed
 #   make docs/pdf/README.pdf  one document

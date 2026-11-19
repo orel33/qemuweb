@@ -158,7 +158,7 @@ Connected to the server.
 ### Remote runner: `./scripts/runner.sh register` and `run`
 
 A runner on **another machine or account** connects to the server over the network, with its own
-token, instead of the local Unix socket. It is for **trusted machines** until milestone 6 (jail and
+token, instead of the local Unix socket. It is for **trusted machines** until milestone 8 (jail and
 quotas): it runs the machines of the sessions the server places on it under the account that starts
 it, never root. The machine needs this repository (or a copy of `runner/`, `common/`, `scripts/` and
 `config.json`), Node.js, QEMU, VDE and the images prepared there by `scripts/prepare.sh`; it needs no

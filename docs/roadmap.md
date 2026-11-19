@@ -1,464 +1,281 @@
-# QemuWeb — Roadmap vers la 1.0.0
+# Roadmap to 1.0.0
 
-19 novembre 2026
+The single plan of the project: the milestones to 1.0.0, their tasks and the side notes that used to live in a
+separate TODO list. Each task has a stable code (used for its branch and its delegated session); tick it when it is
+delivered and delete its notes when they no longer help. Something noticed along the way goes to the **Backlog** at
+the end, or straight into the milestone it belongs to.
 
-## Contexte et architecture cible
+## Goal of 1.0.0
 
-QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contrôle web gère les comptes et les sessions, et des runners locaux ou distants exécutent chaque session entière (QEMU + VDE). Les jalons y mènent sans casser l'existant : renommage, refactoring modulaire, multi-utilisateurs, admin, runners (jalons 1 à 5, faits, version **0.9.0**), puis durcissement applicatif, mise en production et vue Graphic achevée (jalons 6 à 8, version **1.0.0**).
+**QemuWeb open to a whole class at the CREMI, in production, without trusting the users.** One session per student,
+about **30 simultaneous sessions** (a switch and around 5 nodes each), spread over the server, a pool of runners and
+lab workstations, behind the CREMI HTTPS front end and OpenID.
 
-Les tâches annexes (correctifs, idées, petites fonctions) hors jalons sont dans [todo.md](todo.md).
+Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
+monitor command on their own hosts, and there are no quotas and no jail.
 
-Version actuelle : 0.9.0. Chaque jalon est livré sous forme d'une bêta. **0.9.0** stabilise ce qui existe (formats figés, runner distant testé de bout en bout) et reste réservée à des utilisateurs de confiance. **1.0.0** est la version de production : sécurité, runners distants en service, vue Graphic achevée (voir « Version 1.0.0 »).
+## Where we are (0.9.0)
 
-| Jalon | Version livrée |
-| --- | --- |
-| 1 — Renommage session / node | 0.9.0-beta.1 |
-| 2 — Refactoring modulaire | 0.9.0-beta.2 |
-| 3 — Multi-utilisateurs, auth simple | 0.9.0-beta.3 |
-| 4 — Rôle admin | 0.9.0-beta.4 |
-| 5a et 5b — Interface runner, runner local en processus séparé | 0.9.0-beta.4.1 |
-| Runner manuel et adoption des sessions, seconde console ttyS1, correctifs généraux | 0.9.0-beta.4.2 |
-| start.sh unique (suppression de `--local`), consoles serial0/serial1, bouton « 1 terminal », correctifs Clear et tree.sh | 0.9.0-beta.4.3 |
-| Options de ligne de commande pour le serveur et le runner (plus de variables PORT, XDG_DATA_HOME ni QEMUWEB_*), `common/cli.js` partagé, `server.sh`, `status.sh`, `--help` alignés | 0.9.0-beta.4.4 |
-| 5c — Runners distants (jeton d'enregistrement, WebSocket authentifié, placement, grâce et resynchronisation, administration), première livraison | 0.9.0-beta.5.1 |
-| Documentation : PDF générés depuis le Markdown (`make docs`), schémas SVG, `docs/json-files.md`, fiche de test d'un runner distant, `test/tests.md` | 0.9.0-beta.5.2 |
-| 5 — Runners local et distant (5c : runners distants) | 0.9.0-beta.5 |
-| Vue Graphic refaite (GRA01), README et documentation répartis dans `docs/`, déploiement CREMI (runner local et distant) | 0.9.0-beta.5.3 |
-| Déploiement CREMI derrière Apache et OpenID (`--auth proxy`, clé partagée `X-Proxy-Key`, comptes sans mot de passe), panneau Connections et test WebSocket dans `/admin` (OIDC01, WSD01) | 0.9.0-beta.5.4 |
-| Stabilisation (formats à 1, runner distant testé de bout en bout) | 0.9.0 |
-| 6 — Durcissement applicatif et jail minimaliste | 1.0.0-beta.1 |
-| 7 — Mise en production (runners distants, persistance, charge) | 1.0.0-beta.2 |
-| 8 — Vue Graphic achevée | 1.0.0-beta.3 |
-| Version 1.0.0 | 1.0.0 |
-
-```
-Navigateurs (étudiants, admin)
-        │ HTTPS + WebSocket
-      nginx (TLS, passage WebSocket)
-        │ proxy vers 127.0.0.1
-Plan de contrôle (Node.js)
-  authentification, utilisateurs et rôles, une session par utilisateur,
-  quotas, page /admin, placement des sessions, relais des consoles
-        │                                   │
-        │ socket Unix                       │ WebSocket TLS, ouvert par le runner
-Runner local                          Runner distant (enregistré par l'admin, jeton)
-  compte qemuweb-runner, groupe kvm     ...
-  ├─ Session alice : QEMU + VDE, scope systemd
-  └─ Session david : QEMU + VDE, scope systemd
-```
-
-Ce schéma montre l'architecture finale : le compte `qemuweb-runner`, les scopes systemd et les quotas n'arrivent qu'au jalon 6.
-
-Le plan de contrôle ne lance aucune VM. Il route chaque utilisateur vers sa session, où qu'elle tourne. L'isolation entre sessions repose sur le contrôle d'accès côté serveur, la liste blanche HMP et les quotas, renforcés par le compte dédié et les scopes systemd du runner.
-
-| Terme | Sens dans le code et l'interface |
-| --- | --- |
-| Utilisateur | Un compte (étudiant ou admin) |
-| Session | L'espace de travail d'un utilisateur : ses nodes, son moteur, son répertoire `runtime/sessions/<id>/`. Une seule par utilisateur. |
-| Node | Un élément d'une session : un host ou un switch |
-| Host | Un node de type machine virtuelle (QEMU ou VirtualBox) |
-| Switch | Un node de type switch VDE |
-| Runner | Une machine qui exécute des sessions, locale ou distante |
-| Plan de contrôle | Le serveur web Node.js : comptes, sessions, admin, relais des consoles |
-
-## Jalon 1 — Renommage session / node
-
-Premier jalon : un renommage pur, sans changement fonctionnel, pour que le mot « session » désigne enfin la même chose partout. Aujourd'hui, `sessionId` désigne l'instance du serveur, tandis que la Map `sessions` contient en réalité les hôtes et les switches.
-
-| Aujourd'hui (server.js, index.html) | Après le jalon 1 |
-| --- | --- |
-| `sessionId`, `runtimeInstance` (instance du serveur) | `session.id`, `session.runtimeDir` |
-| Map `sessions` (hôtes + switches) | `session.nodes` |
-| `sessionEngine` (global) | `session.engine` |
-| `/api/sessions/:sessionId`, `/api/stop/:sessionId`, `/api/reboot/…`, `/api/reset/…`, `/api/monitor/…`, `/api/hosts/:sessionId/…` | `/api/nodes/:nodeId`, `/api/nodes/:nodeId/stop`, `…/reboot`, `…/reset`, `…/monitor`, `…/config` |
-| Socket.IO `select-session`, `leave-session`, `session-snapshot`, `session-error`, `sessions-changed`, `sessions-removed`, `session-renamed` | `select-node`, `leave-node`, `node-snapshot`, `node-error`, `nodes-changed`, `nodes-removed`, `node-renamed` |
-| `kind: 'vm'` | `kind: 'host'` |
-| `runtime/<id>/`, lien `runtime/current` | `runtime/sessions/<id>/` |
-| Archive de session ZIP, `session.json` | Inchangés : ils décrivent bien une session |
-
-Regrouper l'état global dans un objet `Session` (engine, nodes, runtimeDir, archiveBusy) se fait dès ce jalon, avec une seule instance. Le jalon 3 n'aura plus qu'à en créer une par utilisateur.
-
-`kind: 'vm'` (environ 40 occurrences dans `server.js`) n'est pas stocké dans les archives ZIP : le renommer en `'host'` est sans impact de compatibilité.
-
-**Documentation à mettre à jour dans le même jalon**
-
-- `README.md` : chemin `runtime/sessions/<id>/` dans la section Configuration. Le reste emploie déjà « session » au bon sens (Save session, Load session ZIP).
-- `docs/architecture.md` : la boîte « Sessions · processes and temporary files » du schéma devient « Session · nodes », et un glossaire Session / Node / Host / Switch ouvre la page.
-- `AGENTS.md`, `CLAUDE.md`, `test/tests.md` : même vocabulaire.
-
-**Critères de fin**
-
-- [x] Tests unitaires et d'intégration verts (`scripts/run-tests.sh`), renommés eux aussi.
-- [x] Plus aucune variable globale d'état hors de l'objet `Session`.
-- [x] Les archives ZIP existantes (`demo/*.zip`) se chargent toujours.
-
-## Jalon 2 — Refactoring modulaire
-
-`server.js` (2 252 lignes, 85 fonctions) et `public/index.html` (2 980 lignes, dont environ 470 de CSS et 2 500 de JavaScript dans un seul `<script>`) sont découpés en modules, sans changement fonctionnel. Le découpage suit déjà la future frontière plan de contrôle / runner, ce qui allège d'autant le jalon 5.
-
-**Serveur**
-
-```
-common/                  partagé plan de contrôle + runner
-  system-config.js       catalogue config.json, profils, images
-runner/
-  index.js               façade : la seule API utilisée par le serveur web
-  session-runtime.js     répertoire d'une session, sockets, nettoyage
-  engines/
-    qemu.js              arguments, lancement, arrêt, reset
-    qemu-monitor.js      HMP + liste blanche
-    vbox.js              VBoxManage
-  network/
-    vde-switch.js        vde_switch + vdeterm (node-pty)
-    nics.js              ports et adresses MAC
-  console/
-    serial.js            socket série, buffer
-    guest-hook-filter.js filtre des marqueurs de démarrage invité
-  media/
-    disks.js             overlays qcow2 / VDI, reset
-    guest-media.js       ISO de démarrage (genisoimage)
-  metrics.js             ex resource-metrics.js
-  preflight.js           ex command-preflight.js (binaires, /dev/kvm)
-lib/                     plan de contrôle
-  session.js             classe Session, persistance de session.json
-  topology.js
-  session-archive.js     reste ici jusqu'au jalon 5
-routes/                  routes HTTP : nodes, topologie, archives, réglages, métriques
-sockets.js               événements Socket.IO
-server.js                démarrage et câblage
-```
-
-**Règles de dépendance**
-
-1. `runner/` ne dépend que de `common/` et de Node, jamais de `lib/`, d'Express ou de Socket.IO. Il signale état, logs et sortie série par un `EventEmitter`.
-2. Le reste du code n'appelle le runner que via `runner/index.js`. Ses fonctions (`createNode`, `start`, `stop`, `monitor`, `attachConsole`…) deviendront les messages du protocole au jalon 5.
-3. Au jalon 5, `runner/main.js` s'ajoute comme point d'entrée du processus `qemuweb-runner`, sans rien déplacer.
-
-**Interface web**
-
-- CSS extrait dans `public/css/app.css`.
-- JavaScript en modules ES natifs (`<script type="module">`), sans framework ni bundler : `api.js`, `socket.js`, `terminal.js`, `nodes.js`, `host-settings.js`, `topology.js`, `archive.js`, à côté des fichiers déjà séparés (`monitor-terminal.js`, `session-log.js`…).
-- `index.html` ne garde que la structure HTML.
-
-**Méthode** : un commit par module extrait, tests verts à chaque commit.
-
-**Critères de fin**
-
-- [x] Tests unitaires et d'intégration verts, plus des tests unitaires des modules `runner/` sans serveur HTTP.
-- [x] `server.js` sous 300 lignes (102), aucun fichier au-delà d'environ 600 lignes (le plus gros : `public/host-settings.js`, 498).
-- [x] Aucun import de `express`, `socket.io` ou `lib/` sous `runner/`, et aucun accès au runner hors de `runner/index.js`.
-- [x] La démo `demo/lan.zip` fonctionne à l'identique (test manuel).
-
-**Écarts par rapport au découpage prévu**
-
-- `common/` contient aussi `launch-settings.js`, `node-id.js`, `shell-quote.js` et `json-file.js` : ces helpers servent au plan de contrôle comme au runner.
-- `runner/` contient des modules en plus de ceux listés (`context.js`, `catalog.js`, `host-config.js`, `launch-preview.js`, `resources.js`, `node-lifecycle.js`, `engines/child-exit.js`, `media/guest-iso.js`, `media/image-hash.js`). Le contexte du runner était à l'origine un singleton de module : il est remplacé au jalon 3 par une instance par session (`createContext()`).
-- `runner/network/vde-switch.js` requiert `node-pty` (paquet, pas module natif de Node), inhérent à `vdeterm`.
-- La logique d'archive (`runner/archive-snapshot.js` et `runner/archive-zip.js`) appartient au runner depuis le jalon 5, comme l'analyse des topologies (`common/topology.js`).
-- Interface web : modules ajoutés à ceux prévus (`app.js`, `state.js`, `workspace.js`, `node-dialogs.js`, `startup-media.js`, `general-settings.js`). Les modules ont des imports circulaires, sans effet à l'exécution tant qu'ils ne font que déclarer au chargement.
-- Les commits intermédiaires du découpage serveur ne sont pas exécutables isolément (les modules sont arrivés avant le basculement de `server.js`).
-
-## Jalon 3 — Multi-utilisateurs, authentification simple
-
-Chaque étudiant se connecte avec un identifiant et un mot de passe et retrouve toujours sa session unique, avec ses machines, ses consoles et ses logs, même après une déconnexion.
-
-**Authentification**
-
-- Fichier `users.json` : login, hash `crypto.scrypt` (natif Node, sans dépendance), rôle.
-- Script d'administration, par exemple `scripts/user.sh add alice` ou un import CSV pour une promo entière.
-- Page de connexion et cookie `HttpOnly`, `Secure`, `SameSite=Lax`, signé.
-- Socket.IO authentifié au handshake (`io.use`) avec le même cookie.
-- Authentification isolée dans un module, pour la remplacer par OpenID Connect plus tard sans toucher au reste.
-
-**Une session par utilisateur, persistante**
-
-- Map `login → Session`, créée à la première connexion et `owner` enregistré dans `meta.json` (propre à la session vivante, jamais exporté ; `session.json` ne contient que la définition).
-- La session vit indépendamment du navigateur : fermer l'onglet ou se déconnecter ne stoppe aucune VM. Elle ne disparaît que sur suppression explicite (par l'utilisateur ou l'admin), sans expiration automatique. Un redémarrage du serveur arrête toutes les VM et vide `runtime/sessions/`, comme aujourd'hui.
-- À la reconnexion, le mécanisme existant `node-snapshot` (buffer série + logs) restaure les consoles.
-- Plusieurs onglets d'un même utilisateur restent possibles : ils rejoignent la même room.
-
-**Identifiant de session** : il reste aléatoire (16 caractères hexadécimaux), jamais égal au login. Le login est stocké dans `meta.json` (`owner`), une Map `login → session` sert aux recherches, et un lien lisible `runtime/users/<login> → ../sessions/<id>` aide l'admin (même mécanisme que `hostnameAliasPath`). Raisons : pas de collision entre une session supprimée et sa recréation, pas de login (e-mail, identifiant OIDC) dans les chemins de sockets limités à 107 octets, ni dans les exports ZIP ou sur les runners distants.
-
-**Isolation logique**
-
-- Chaque route résout `req.user → session`, puis cherche le `nodeId` uniquement dans cette session (404 sinon).
-- Les 12 `io.emit` deviennent `io.to('session:<id>')`.
-
-**Hors périmètre de ce jalon** : contrôle de l'en-tête `Origin` (protection CSRF), déconnexion révocable, mot de passe minimal, ralentissement des échecs de connexion, liste blanche HMP et quotas sont au jalon 6. Le cookie `SameSite=Lax` assure seul la protection contre les requêtes venues d'un autre site ; QemuWeb doit donc tourner sur son propre nom de domaine, pas sur un sous-domaine partagé avec des pages hébergées par les étudiants. Jusqu'à ce jalon, le Monitor accepte toute commande HMP d'une ligne et les limites de mémoire et de vCPU restent celles du code (32 768 Mo, 64 vCPU) : n'ouvrir QemuWeb qu'à des utilisateurs de confiance.
-
-**Exposition** : le serveur reste sur `127.0.0.1`, nginx assure le TLS et le passage en WebSocket (`client_max_body_size` adapté aux imports ZIP).
-
-**Critères de fin**
-
-- [x] Deux utilisateurs connectés en même temps ne voient ni ne pilotent les nodes de l'autre (test d'intégration dédié).
-- [x] Fermer le navigateur puis se reconnecter retrouve les VM en cours et leurs consoles.
-
-**Écarts par rapport au plan**
-
-- Le contexte du runner est une instance par session (`createContext()`), et `lib/session.js` ne porte plus que l'espace de travail : l'état du serveur (fichiers `server-<port>.pid` et `.session`, nettoyage) est dans `server/server-instance.js`, et `lib/session-manager.js` fait le lien login → session + runner.
-- `runtime/current` est supprimé, remplacé par `runtime/users/<login>`. Le fichier `server-<port>.session` liste désormais plusieurs identifiants de session (l'ancien format reste lu).
-- Les VM VirtualBox portent l'identifiant de session dans leur nom, et l'exclusion KVM / VirtualBox vaut pour toute la machine.
-- Un identifiant de node inconnu donne 404 (au lieu de 400 ou 500), sauf l'aperçu `GET /api/nodes/:id/options`.
-- `session.json` ne contient que la définition de la session (identique dans le ZIP et dans `runtime/`) ; ce qui est propre à la session vivante (`owner`, `createdAt`) est dans `meta.json`.
-- Ajouts : `DELETE /api/session` (suppression de sa propre session, avec le bouton de l'en-tête), `QEMUWEB_AUTH=off` (usage local explicite), `docs/deployment.md`.
-- Reporté au jalon 6 : contrôle `Origin`, déconnexion révocable, politique de mot de passe, ralentissement des échecs, liste blanche HMP, quotas, jail. Un compte retiré garde sa session jusqu'à sa suppression ou au redémarrage (jalon 4 pour l'administration).
-
-## Jalon 4 — Rôle admin
-
-L'admin voit toutes les sessions en cours, peut observer un étudiant en train de travailler, prendre la main sur une console pour l'aider, et fait le ménage en fin de TP en un clic.
-
-`admin` est un **rôle**, pas un type de compte à part : un admin est un utilisateur comme les autres, avec sa propre session (une seule), dans laquelle il travaille normalement (créer des hôtes, charger `lan.zip`, démarrer des VM). Le rôle ajoute la supervision, l'observation et les actions d'administration. Sa propre session apparaît dans la liste de supervision, marquée comme la sienne.
-
-**Naviguer entre sa session et celles des étudiants**
-
-- Trois vues : « Ma session » (l'interface normale, `/`), « Supervision » (`/admin`, le tableau de toutes les sessions, mis à jour en direct) et l'observation d'un étudiant (`/?observe=<login>`, l'interface normale en lecture seule).
-- Un bandeau de couleur distincte, visible seulement en observation, porte : l'étudiant observé, « lecture seule », les flèches précédent et suivant (qui passent d'une session active à l'autre pour une tournée de la salle), la liste déroulante des sessions, « Prendre la main » et « Ma session » (« Supervision » est dans l'en-tête). On passe donc d'un étudiant à l'autre sans retourner au tableau.
-- La cible est portée **par l'onglet** (paramètre d'URL gardé dans `sessionStorage`), et non par un cookie : l'interface ajoute un en-tête `X-Observe` à chaque requête, par le point d'entrée `window.fetch` qu'elle enveloppe déjà, et un paramètre d'authentification aux deux connexions Socket.IO. L'admin peut ainsi garder sa session dans un onglet et en observer une autre dans un second, sans état partagé.
-- Côté serveur, une requête portant `X-Observe` n'est acceptée que d'un admin, ne crée jamais de session, ne peut être qu'un `GET` ou `HEAD` (et un login inconnu donne 404).
-- Hors périmètre : un mur de consoles de plusieurs étudiants affichées en même temps.
-
-**Page `/admin`** : une ligne par session.
-
-| Colonne | Source |
-| --- | --- |
-| Utilisateur, date de création | `meta.json` (`owner`, `createdAt`) |
-| Nodes, VM en marche | `session.nodes` |
-| RAM réservée, CPU | mémoire des hôtes démarrés (`session.nodes`) + `runner/metrics.js` |
-| Dernière activité | horodatage en mémoire, mis à jour par les requêtes API et la saisie dans les consoles de l'utilisateur (une session jamais utilisée compte depuis sa création ; l'observation d'un admin ne compte pas) |
-
-**Observer une session (lecture seule)**
-
-- L'admin voit la session de l'étudiant dans l'interface normale, avec **sa propre disposition** : pour ses requêtes en lecture, le serveur lui fait voir la session choisie à la place de la sienne, et refuse tout ce qui n'est pas un `GET`. L'interface se met en mode observation (bandeau, actions désactivées).
-- Il reçoit en direct la sortie des consoles de l'étudiant, c'est-à-dire l'écho de sa saisie et les réponses (l'invité renvoie tout sur le port série), plus l'historique (les 256 Ko les plus récents de chaque console) et les logs. Un mot de passe saisi, sans écho dans l'invité, reste invisible.
-- Saisie, effacement (Clear) et redimensionnement des consoles sont refusés **côté serveur** pour un observateur : ils agiraient sur l'écran de l'étudiant.
-- L'interface de l'étudiant signale le node qu'il sélectionne, et celle de l'admin le suit.
-- Hors périmètre : reproduire à l'identique la disposition (panneaux, onglets, positions du graphe) du navigateur de l'étudiant, qui n'existe que chez lui.
-
-**Prendre la main (dernière étape du jalon)**
-
-- Bouton explicite sur un node observé. Les commandes de l'admin passent par le même port série : l'étudiant les voit, avec leurs réponses, comme s'il les avait tapées. Le flux ne dit pas qui tape ; un bandeau, envoyé par un événement distinct du flux série, l'indique des deux côtés.
-- **Verrou exclusif** : le clavier de l'étudiant est bloqué sur ce node tant que l'admin a la main. Elle est rendue par l'admin, à sa déconnexion, ou après 10 minutes sans saisie.
-- Le journal d'audit note le début et la fin de la prise de contrôle et le node concerné. Le texte tapé n'est pas enregistré.
-- Hors périmètre : une seconde console indépendante dans l'invité (réseau de TP isolé, images à modifier).
-
-**Autres actions**
-
-- Arrêter toutes les VM d'une session (sans supprimer ses nodes), ou la supprimer (disques compris). Les navigateurs de l'utilisateur sont rechargés.
-- Ménage groupé : sélection multiple des sessions, avec confirmation qui liste les sessions concernées ; la session de l'admin qui la lance est exclue. La colonne « Dernière activité » permet de repérer les sessions abandonnées (pas de suppression automatique ni de filtre par durée).
-- Gestion des comptes : créer (identifiant, mot de passe, rôle), réinitialiser un mot de passe, désactiver et réactiver. Un compte désactivé (`disabled` dans `users.json`, et `scripts/user.sh disable|enable`) ne peut plus se connecter et ses cookies sont refusés aussitôt ; sa session reste jusqu'à ce qu'un admin la supprime. Un admin ne peut ni se désactiver ni changer son propre rôle depuis la page.
-
-**Sécurité**
-
-- API `/api/admin/*` réservée au rôle `admin`, vérifié côté serveur : un seul routeur dont le premier maillon est le contrôle du rôle (même un chemin inconnu répond 403 à un non-admin), monté avant l'ouverture de la session de l'utilisateur.
-- Journal d'audit des actions admin : fichier `admin.log` en JSON lignes, dans le répertoire `logs/` à la racine du dépôt (ignoré par git ; `QEMUWEB_LOG_DIR` déplace le répertoire, par exemple vers `/var/log/qemuweb`). Chaque ligne note l'heure, l'admin, l'action, la cible et le résultat, y compris l'ouverture d'une observation, la prise de contrôle et les changements de comptes. Jamais de mot de passe.
-- Journal d'activité des utilisateurs : fichier `users.log` dans le même répertoire. Il note, pour tous les comptes, les événements d'utilisation sans aucun contenu : connexion, déconnexion, échec de connexion, création et suppression de session, création, démarrage, arrêt et suppression de nodes, archives chargées ou sauvegardées. `admin.log` ne contient que ce qui est propre au rôle admin (agir sur la session d'un autre, gérer les comptes).
-- Avec `QEMUWEB_AUTH=off`, l'utilisateur local est admin : `/admin` est ouvert à qui atteint le serveur, avec le même avertissement qu'ailleurs.
-
-**Découpage conseillé**
-
-1. 4a : contrôle du rôle et routeur `/api/admin/*`, champ `disabled`, module d'audit, horodatage d'activité, arrêt de toutes les VM dans la façade du runner.
-2. 4b : API d'administration : liste des sessions, arrêt, suppression, ménage groupé, gestion des comptes, le tout journalisé.
-3. 4c : observation en lecture seule (en-tête `X-Observe` et session substituée pour les requêtes en lecture, sockets en observation, suivi du node de l'étudiant).
-4. 4d : page `/admin`, mode observation de l'interface et navigation entre les sessions (bandeau, précédent et suivant, liste déroulante).
-5. 4e : prise de contrôle avec verrou exclusif, tests, documentation.
-
-**Critères de fin**
-
-- [x] Un utilisateur non admin reçoit 403 sur toute route `/api/admin/*`.
-- [x] L'admin observe la console d'un étudiant en direct sans pouvoir y taper, l'effacer ni la redimensionner (refusé côté serveur).
-- [x] La suppression groupée libère les processus QEMU/VDE et le répertoire `runtime/sessions/<id>/`.
-- [x] En prise de contrôle, le clavier de l'étudiant est bloqué, il voit les commandes et leurs réponses, et la main est rendue à la déconnexion de l'admin.
-- [x] Chaque action d'administration laisse une ligne dans le journal d'audit.
-
-## Jalon 5 — Runners local / distant
-
-L'exécution des sessions sort du serveur web vers des runners, sur le modèle de gitlab-runner : c'est le runner qui se connecte au plan de contrôle, avec un jeton délivré par l'admin. Une session entière (QEMU + VDE) tourne sur un seul runner pendant toute sa vie.
-
-**Enregistrement, comme gitlab-runner**
-
-1. L'admin crée un jeton d'enregistrement dans `/admin/runners` (usage unique, durée limitée).
-2. Sur la machine runner : `qemuweb-runner register --url https://qemuweb.example --token <jeton>`.
-3. Le plan de contrôle renvoie un jeton d'authentification propre au runner, stocké dans `~/.config/qemuweb-runner/runner.json` (`--runner-config` choisit un autre fichier ; JSON plutôt que TOML pour éviter une dépendance) avec ses limites (RAM, vCPU, sessions max).
-4. `qemuweb-runner run` (en terminal ou en unité `systemd --user`) ouvre une connexion WebSocket TLS **sortante** et la maintient. Aucun port entrant n'est nécessaire côté runner, ce qui marche derrière un NAT ou un pare-feu de salle de TP.
-5. Le runner annonce sa capacité : RAM, vCPU, moteurs (`qemu`, `vbox`), images disponibles avec leur empreinte.
-
-**Protocole runner** (un seul WebSocket multiplexé)
-
-- Commandes : créer ou supprimer une session, créer ou configurer un node, start, stop, reset, monitor.
-- Flux : console série, terminal de switch, logs, changements d'état, métriques.
-- Fichiers : import et export d'archives ZIP en flux.
-- Le runner local utilise le même protocole sur un socket Unix, enregistré automatiquement.
-- Le runner est la source de vérité sur l'état des nodes : après une coupure, il se reconnecte et resynchronise, et les VM n'ont pas cessé de tourner.
-
-**Placement** : à la création d'une session, le plan de contrôle choisit un runner en ligne qui a le moteur, les images et la RAM nécessaires. Pas de migration de session entre runners.
-
-**Administration des runners** : liste avec état (en ligne, vu pour la dernière fois), capacité et charge ; mettre en pause (drain : plus de nouvelles sessions) ; révoquer le jeton.
-
-**Mode utilisateur (user-land)** : un runner est un processus ordinaire, lancé sous un compte sans privilège, jamais root. Il n'écrit ni dans `/etc` ni dans `/var` : sa configuration, son socket et ses sessions sont dans le répertoire de l'utilisateur (`~/.config/qemuweb-runner/runner.json` et `--runtime`) et tout est configurable. QEMU et VDE fonctionnent sans privilège (switch VDE en espace utilisateur) ; seul `/dev/kvm` exige l'appartenance au groupe `kvm`. Cela permet de lancer un runner sur n'importe quelle machine de TP, y compris le poste d'un étudiant.
-
-**Plusieurs runners** : le plan de contrôle tient un registre des runners (identifiant, état, capacité, propriétaire éventuel). Une session est liée à un runner pour toute sa vie, choisi parmi les runners en ligne par une fonction de placement unique. La perte d'un runner ne touche que ses sessions. Piste ultérieure : un runner par étudiant, sur son poste de TP. Le runner d'un étudiant n'est alors **pas de confiance** : le plan de contrôle valide tout ce qu'il reçoit (événements limités à ses sessions, tailles bornées, aucune identité ni autorisation fournie par le runner) et ne lui envoie des commandes que pour ses sessions.
-
-**Sécurité** : la jail minimaliste (compte dédié ; scopes systemd ou espaces de noms utilisateur, selon ce qu'un compte sans privilège peut obtenir), la liste blanche HMP et les quotas arrivent au jalon 6. Jusque-là, le runner tourne sous le compte qui le lance : choisir un compte sans privilège, jamais root, et réserver les runners distants à des machines de confiance.
-
-**Découpage conseillé**
-
-1. 5a : interface runner formalisée au-dessus des modules `runner/` séparés au jalon 2, toujours dans le même processus.
-2. 5b : runner local en processus séparé sur socket Unix.
-3. 5c : runners distants, enregistrement et placement.
-
-**Critères de fin**
-
-- [x] Un runner distant s'enregistre avec un jeton admin et apparaît en ligne.
-- [x] Une session placée sur un runner distant se pilote comme une session locale.
-- [x] Couper puis rétablir le réseau du runner ne tue aucune VM et l'interface se resynchronise.
-
-## Stabilisation (0.9.0)
-
-À la sortie de 0.9.0, les formats de fichiers repartent à zéro : plus aucun numéro de version hérité des bêtas. Pendant les bêtas, aucun `schemaVersion` n'est incrémenté : les formats changent librement. La compatibilité avec un ancien format n'est pas conservée non plus (voir `AGENTS.md`).
-
-- Remettre `schemaVersion` à **1** partout : `session.json` (4 aujourd'hui), `host.json` (3), `switch.json` (2) et `config.json` (4). `meta.json` et `users.json` sont déjà à 1. Cela touche le code (`runner/session.js`, `runner/host-config.js`, `runner/session-runtime.js`, `runner/archive-snapshot.js`, `server/server-instance.js`, `common/system-config.js`), les tests, `config.json` et la documentation.
-- Réécrire les 5 archives de `demo/` avec ces valeurs (elles contiennent `session.json`, `host.json` et `switch.json`).
-- Renommer le fichier téléchargé `qemuweb-session-v4.zip` en `qemuweb-session.zip` (`server/routes/archives.js`, `public/archive.js`).
-- À partir de 0.9.0, tout changement de format incrémente le numéro et s'accompagne d'une décision explicite sur la compatibilité.
-- Terminer le test du runner distant de bout en bout (fiche `docs/remote-runner-test.md`, au CREMI) et cocher les critères du jalon 5.
-
-**Critères de fin**
-
-- [x] Les formats sont à 1, les démos réécrites, le ZIP renommé, les tests verts.
-- [x] Un runner distant s'enregistre, reçoit une session, survit à une coupure réseau et se pilote comme un runner local (jalon 5 coché). Validé au CREMI le 19 novembre 2026 (runner `salle-test` sur un poste distant, par le frontal HTTPS et `--auth proxy`).
-- [x] La version 0.9.0 est taguée ; elle reste réservée à des utilisateurs de confiance.
-
-## Version 1.0.0 — objectif
-
-**QemuWeb ouvert à une promo entière au CREMI, en production, sans faire confiance aux utilisateurs.** Une session par étudiant, environ **30 sessions simultanées** (un switch et de l'ordre de 5 nœuds chacune), réparties sur le serveur et des runners distants, derrière le frontend HTTPS du CREMI.
-
-| Axe | Critère de sortie | Jalon |
+| Milestone | Content | Version |
 | --- | --- | --- |
-| Sécurité | Liste blanche HMP, quotas (VM, session, serveur), mot de passe minimal, ralentissement des échecs de connexion, contrôle `Origin`, déconnexion révocable, runner sous un compte dédié avec `runtime/` en `0700` | 6 |
-| Production | Runner distant en service derrière le frontend (WebSocket, délais, en-têtes), sessions qui survivent au redémarrage du serveur, services systemd, images distribuées, documentation d'installation unique | 7 |
-| Charge | Environ 30 sessions simultanées tenues sans VM tuée ni interface qui se fige | 7 |
-| Vue Graphic | Plusieurs consoles flottantes, points restants de `docs/todo.md` traités | 8 |
-| Qualité | Tests unitaires et d'intégration verts, fiche de test manuelle déroulée sur le serveur de production, PDF et README à jour | tous |
+| 1 to 4 | Session and node naming, modular refactoring, multi-user accounts, admin role | 0.9.0-beta.1 to beta.4 |
+| 5 | Local runner as a separate process, remote runners (registration token, authenticated WebSocket, placement, grace period, administration) | 0.9.0-beta.4.1 to beta.5.1 |
+| Docs, graph | PDF documentation, Graphic view rebuilt (GRA01), README and documentation split into `docs/` | 0.9.0-beta.5.2, beta.5.3 |
+| CREMI | Apache and OpenID front end, `--auth proxy` (shared `X-Proxy-Key`), accounts without password, Connections panel and WebSocket test in `/admin` | 0.9.0-beta.5.4 |
+| Stabilisation | File formats back to `schemaVersion` 1, demo archives rewritten, session ZIP named `qemuweb-session.zip`; remote runner validated at the CREMI (registration, placement, network cut, revocation) | **0.9.0** |
 
-## Jalon 6 — Durcissement applicatif et jail minimaliste (1.0.0)
+Formats: from 0.9.0, every change of a format increments its number and comes with an explicit decision on
+compatibility.
 
-Les protections applicatives et la jail du runner sont regroupées ici, après les runners, pour être appliquées par le runner lui-même : il ne fait pas confiance aveuglément au plan de contrôle, y compris quand il est distant. Avant ce jalon, QemuWeb ne doit être ouvert qu'à des utilisateurs de confiance.
+## Order of the work
 
-**Comptes**
+1. **Reliable operation first** (milestone 6): little code, a large gain for whoever runs the server.
+2. **Reliable runners before personal runners** (7): sessions that survive, forced loss, then the student's own runner.
+3. **Hardening before opening** (8): personal runners, guest access and the whole class are only opened once the
+   protections exist.
+4. **Load at the end** (9): the 30-session test validates the whole.
 
-- Mot de passe : longueur minimale de 8 caractères imposée par `scripts/user.sh` et par la réinitialisation depuis `/admin`, avec une option explicite `--allow-weak` pour les comptes de test.
-- Ralentissement des échecs de connexion (par login et par adresse IP), sans verrouillage définitif.
+Each milestone is released as a beta `1.0.0-beta.N`, with the usual rules: tasks in visible sessions, tests on the
+user's order, local merge, manual test, then the tag.
 
-**Sessions web**
+| Milestone | Title | Size | Depends on |
+| --- | --- | --- | --- |
+| 6 | Operation at the CREMI | medium | none |
+| 7 | Reliable runners and personal runners | large | 6 (partly) |
+| 8 | Hardening | large | 7 (validation of runners) |
+| 9 | Load and quality | medium | 6, 7, 8 |
+| 10 | Graphic view and finishing | medium | independent |
 
-- Contrôle de l'en-tête `Origin` sur l'API (requêtes qui modifient l'état) et sur le branchement Socket.IO, avec une liste d'origines autorisées pour nginx. Il protège contre les sous-domaines voisins et les anciens navigateurs, que `SameSite=Lax` ne couvre pas. À traiter : un `Origin` absent sur le branchement Socket.IO (les requêtes GET de repli du navigateur n'en envoient pas).
-- Déconnexion révocable : le cookie signé est aujourd'hui sans état côté serveur, donc une copie reste valable jusqu'à son expiration. Prévoir une liste de sessions web côté serveur, ou la rotation du secret.
+Sizes of tasks: S about an hour, M half a day, L a day or more.
 
-**Liste blanche HMP**
+## Milestone 6: operation at the CREMI
 
-- `/api/nodes/:nodeId/monitor` n'accepte que `info …`, `system_reset`, `system_powerdown`, `stop`, `cont`, `sendkey`, `nmi`. Le runner la vérifie lui-même.
+What separates a deployment that works from one you can operate calmly.
 
-**Quotas** (nouvelle section `limits` de `config.json`, validée par `common/system-config.js`)
+- [ ] **AUT01** (M) Authentication.
+  - Remove `--auth both`: two modes only, `password` (local tests, ad hoc server) and `proxy` (production). `both` mixes
+    two ways in on one port and blurs "who authenticates this request?". Cost: no password login through the SSH
+    tunnel on a production server; an administrator is an OpenID login listed in `users.json` with the role admin, and
+    in an incident the service restarts with `--auth password` (documented in the tutorial). Touches
+    `server/options.js`, `server/auth/index.js`, the unit, the tutorial, the docs and the tests.
+  - The SSO session expires during use: Apache then answers an API call or a Socket.IO connection with a redirection to
+    the CREMI login, not a 401. Today `public/api.js` and `public/socket.js` only redirect on a 401 (and on the
+    Socket.IO error `Authentication required.`): a redirection to another origin makes the `fetch` fail without a
+    status and the socket shows `WebSocket unavailable`, and the page does not reload. Fix: `OIDCUnAuthAction 401` in
+    a `<Location>` for `/api/` and `/socket.io/`, and the interface reloading the page on a 401 when `/auth/me` says
+    `via: proxy` (and `/login.html`, a 401 in `--auth proxy`, must not be the target).
+  - Group to role: administrators come from `users.json` only; `X-User-Groups` is unused. Decide whether a directory
+    group may grant the admin role, and how to list a student in `/admin` without a prior `--no-password` entry.
+  - The proxy identity has no throttling of its own (see SEC01).
+  - Rotating the shared key without interruption, described in the tutorial.
+- [ ] **SVC01** (M) Services and operation.
+  - systemd units for the server, the local runner and a remote runner; `logrotate`; recovery after a reboot.
+  - CREMI wildcard certificate: `/etc/apache2/certs/star_emi_u-bordeaux_fr.crt` and `.key` are links the CREMI
+    repoints every year (the current one ends on 2 December 2026); Apache must be reloaded afterwards: say it in the
+    tutorial or add a hook.
+  - The OpenID provider must be reachable from Apache without the proxy (to check on the CREMI machine).
+  - Runtime path longer than 49 characters (a node's sockets must fit in 107 bytes) is only reported when the first
+    node is created: check it at startup, in the server and the runner, with the `--runtime` hint (or shorten the
+    socket paths with a short alias directory).
+  - `status.sh`, `killall.sh` and `cleanall.sh` only know the default `runtime/`: add `--runtime DIR` to each.
+  - Small fixes: a runner with an unreadable `config.json` still prints `✓ config.json  0 systems` after the error (it
+    should print a ✗ and abort); `start.sh` says "stopping the runner" although none was started when the server refuses
+    its options (and the status propagation is to be checked by hand: `./scripts/start.sh --session-hours 0` must exit
+    2 at once and leave nothing running).
+- [ ] **DOC01** (M) Documentation.
+  - One installation path: `docs/deployment.md` stays the generic reference and points to the files of `deploy/`
+    (unit, Apache site) instead of copying them; `deploy/cremi/deploy-cremi.md` becomes a short recipe that links to
+    it; the remote runner test sheet no longer repeats the runner installation.
+  - Bring `docs/user-guide.md` up to date (serial ports, `start.sh`, runner commands, Follow).
+- [ ] **PRP01** (S) `prepare.sh`.
+  - The Debian ISO and its `SHA512SUMS` come from `cdimage.debian.org`, which the CREMI squid has answered 503 for:
+    a setting for the base URL (or another host), or document placing both in `sources/debian13-legacy/` by hand.
+  - Alpine and OpenWrt builds do not use the proxy yet.
+  - The failure strings and phase markers of `scripts/prepare/lib/common.sh` are still unchecked against a real log.
 
-- Par VM : mémoire et vCPU maximum, au lieu des 32 768 Mo et 64 vCPU codés en dur dans `common/launch-settings.js` ; les champs de l'interface en dérivent.
-- Par session : nombre de nodes, RAM totale des hôtes démarrés.
-- Pour le serveur ou le runner : refus de démarrer une VM au-delà de la RAM disponible.
-- Appliqués par le runner, avec un message d'erreur clair. Les limites propres à un runner distant restent dans son `runner.json` (jalon 5).
+**Done when**
 
-**Jail minimaliste**
+- [ ] `--auth` has only `password` and `proxy`, and the CREMI server runs in `proxy`.
+- [ ] An expired SSO session sends the user back to the login, with no obscure error.
+- [ ] The server and a remote runner start at boot and their logs rotate.
+- [ ] One documented installation path, with no copy to keep in two places.
+- [ ] A Debian image builds behind the CREMI proxy without a special option.
 
-- Le runner tourne sous un compte système dédié `qemuweb-runner` (groupe `kvm`), distinct du plan de contrôle.
-- Chaque session est lancée dans un scope systemd (`systemd-run --user --scope -p MemoryMax=… -p CPUQuota=…`), comme garde-fou au-delà des limites QEMU. Un runner sans privilège ne peut limiter la mémoire et le CPU que si systemd lui délègue ces contrôleurs cgroup : à vérifier sur les machines cibles, avec les limites QEMU comme seule protection sinon.
-- `runtime/` en `0700`, images de base en lecture seule.
-- VirtualBox reste supporté mais hors jail : ses VM sont lancées par le démon VBoxSVC, donc hors du scope systemd. Un runner annonce `qemu`, `vbox` ou les deux ; QEMU reste la priorité.
-- Plus tard si besoin : un uid par session, bubblewrap ou nsjail, namespace réseau.
+## Milestone 7: reliable runners and personal runners
 
-**Critères de fin**
+- [ ] **RUN02** (L) Robust runners.
+  - Persist the session-to-runner binding: a restart currently deletes every session of a remote runner (the hello of an
+    untrusted runner is never adopted), although the VMs could keep running as for the local runner.
+  - Let the administrator force the loss of the sessions of a revoked or lost runner, without waiting for
+    `--runner-grace`.
+  - Keep the paused state of the local runner (a remote runner's is in `runners.json`).
+  - Test the re-selection of the console after a runner comes back (`runner-state`) in a real browser: today it is
+    only tested through the socket events of `check-runner-remote`.
+  - Restrict `/runner/connect` and `/api/runner/register` by address when the runners are known.
+- [ ] **PRN01** (L) Personal runners, server side (design below).
+- [ ] **PRN02** (M) The "My runner" page and the "runner offline" message.
+- [ ] **PRN03** (M) Base images for a runner: shared directory or HTTP download, workstation sheet.
 
-- [ ] Une commande HMP hors liste blanche est refusée, y compris sur un runner distant.
-- [ ] Un dépassement de quota (VM, session ou serveur) est refusé avec un message clair.
-- [ ] Un mot de passe trop court est refusé par `scripts/user.sh`, sauf avec `--allow-weak`.
-- [ ] Les échecs de connexion répétés sont ralentis.
-- [ ] Une requête d'écriture ou un branchement Socket.IO venant d'une origine non autorisée est refusé.
-- [ ] Après une déconnexion, l'ancien cookie n'ouvre plus de session.
-- [ ] Le runner local tourne sous le compte `qemuweb-runner`, `runtime/` est en `0700` et les images de base sont en lecture seule.
-- [ ] Une VM qui dépasse sa RAM est tuée par son scope sans affecter les autres sessions.
+### Personal runners (design)
 
-## Jalon 7 — Mise en production
+Two cases. At **home**, the user has no runner: the session runs on the server's pool of runners (pre-registered
+machines; `pickRunner` already picks the least loaded online runner under its `maxSessions`, not a round robin, and an
+administrator can pause one). In a **lab room**, the student's own workstation becomes their runner, and browser and
+runner are on the same computer.
 
-Ce qui sépare un runner distant qui marche en test d'un runner distant en service. Beaucoup de points viennent de `docs/todo.md` et du test au CREMI.
+- **"My runner" page**, open to every signed-in account (students included), in the account menu: creates a
+  registration token (15 minutes, single use, a few creations per day), shows the command to paste
+  (`./scripts/runner.sh register --url URL --token TOKEN`, then `run`), the state of the runner (online, offline since)
+  and revokes it. A page, not a command line tool: `/admin -> Runners` already covers the pool.
+- **Server side**: the token and the runner record get an `ownerLogin` (today only an administrator creates tokens;
+  see `server/runner-registration.js`, `server/routes/admin-runners.js`, `server/runner-store.js` and the
+  registration route). One personal runner per user to start with. The registration token stays in memory and single
+  use (a restart drops it, acceptable at 15 minutes); the runner's own token is durable in its `runner.json` (0600).
+- **Placement**: `pickRunner(login, ...)` already receives the login and ignores it. A **new or loaded** session goes to
+  the owner's personal runner when it is online, else to the server pool; an existing session **stays where it is** (no
+  migration: Save then Load session ZIP moves one). A personal runner takes **only its owner's session**, never another
+  user's (the one isolation rule kept before any quota). A session whose runner is offline shows "runner offline"
+  and comes back when the runner reconnects.
+- **Base images**: a read-only shared folder (NFS; the working disks are qcow2 files backed by the base image, which is
+  never written) or an HTTP/FTP download checked with the `.sha256` files, plus an option naming the images directory of
+  a runner (today `images/` of the repository).
+- **Lab workstation prerequisites** (to confirm with the CREMI): students in the `kvm` group (or an ACL on `/dev/kvm`),
+  Node 24, QEMU and VDE installed, the repository or a release reachable (shared home or folder), a short local
+  `--runtime` (at most 49 characters, for example under `/tmp`). `register --runtime` is only needed when the runner's
+  directory differs from `runtime/` of the repository.
+- **Later**: a device-code login (the runner prints a code, the user confirms it in the signed-in browser) instead of
+  pasting a token; a launcher in the room's image; balancing by free memory instead of a session count.
 
-**Frontend et exposition**
+**Done when**
 
-- Le frontend HTTPS du CREMI transmet les WebSocket (`Upgrade`, délai d'au moins 3600 s, sans mise en tampon) et les en-têtes `X-Forwarded-For` et `X-Forwarded-Proto` ; `--trust-proxy` accepte l'adresse du frontend (et non seulement `loopback`). Restriction par adresse IP de `/runner/connect` et `/api/runner/register` si les runners sont connus.
-- Taille maximale d'envoi alignée entre le frontend, nginx et l'application (archives ZIP de fichiers creux).
+- [ ] A server restart leaves the sessions of a remote runner in place.
+- [ ] The administrator can force the loss of the sessions of a runner.
+- [ ] A student creates their token, registers a lab workstation and their session lands on it; another student cannot
+  place theirs there.
+- [ ] A lab workstation finds the images through the shared directory or the download.
 
-**Runners**
+## Milestone 8: hardening
 
-- La liaison session-runner est persistée : les sessions d'un runner distant survivent à un redémarrage du serveur, et les VM n'ont pas cessé de tourner (comme pour le runner local).
-- L'admin peut forcer la perte des sessions d'un runner révoqué ou perdu, sans attendre `--runner-grace`.
-- La mise en pause d'un runner local est conservée (comme celle d'un runner distant dans `runners.json`).
-- `prepare.sh` fonctionne derrière un proxy HTTP (téléchargements et préconfiguration de l'installateur) et accepte un miroir ; les images d'un runner sont identifiables par leur empreinte.
+Application protections and the runner jail. **This milestone conditions the opening to the class**: before it, a
+personal runner and any guest access exist only for trusted users.
 
-**Runners personnels (conception décidée avec l'utilisateur, détail dans `docs/todo.md`)**
+- [ ] **SEC01** (L) Accounts and web sessions.
+  - Password: at least 8 characters, enforced by `scripts/user.sh` and the reset from `/admin`, with `--allow-weak` for
+    test accounts.
+  - Throttle repeated login failures (by login and by address; the relay now sends `X-Forwarded-For`), no permanent
+    lock; it also covers the identity given by the front end.
+  - `Origin` check on the API (state-changing requests) and on the Socket.IO handshake, with a list of allowed origins.
+    To handle: a missing `Origin` on the Socket.IO fallback (the browser's GET requests do not send one).
+  - Revocable logout: the signed cookie is stateless on the server, so a copy stays valid until it expires; keep a
+    list of web sessions on the server, or rotate the secret.
+  - Guest access by password outside OpenID, only here and with the quotas, the allowlist and the throttling in place,
+    never an administrator account (idea: `OIDCUnAuthAction pass`, `X-Proxy-Key` sent only with an OpenID identity, a
+    "CREMI login" link on the login page).
+- [ ] **SEC02** (L) HMP allowlist and quotas.
+  - `/api/nodes/:nodeId/monitor` accepts only `info ...`, `system_reset`, `system_powerdown`, `stop`, `cont`, `sendkey`
+    and `nmi`; the runner checks it itself, remote ones included.
+  - Quotas (a `limits` section of `config.json`, validated by `common/system-config.js`): per VM, memory and vCPU
+    instead of the 32 768 MB and 64 vCPU hard-coded in `common/launch-settings.js`; per session, number of nodes and
+    total memory of the started hosts; for the server or a runner, refuse to start a VM beyond the available RAM.
+    Enforced by the runner with a clear message; the limits of a remote runner stay in its `runner.json`.
+- [ ] **SEC03** (L) Untrusted runners. Everything a student's runner sends is validated: an event or a response is
+  accepted only for a session bound to that runner, frames and payloads have size limits, console data is treated as
+  untrusted text, archive streams are size-limited on both sides. A runner provides no identity or authorization:
+  logins, roles, console control and audit stay in the control plane.
+- [ ] **SEC04** (L) Minimal jail.
+  - The runner runs under a dedicated system account `qemuweb-runner` (group `kvm`), with `runtime/` in `0700` and the
+    base images read-only.
+  - One systemd scope per session (`systemd-run --user --scope -p MemoryMax=... -p CPUQuota=...`) as a safety net
+    beyond the QEMU limits. An unprivileged runner can limit memory and CPU only if systemd delegates the cgroup
+    controllers: check on the target machines, with the QEMU limits as the only protection otherwise. VirtualBox stays
+    supported but outside the jail (its VMs belong to the VBoxSVC daemon).
+  - Later if needed: a uid per session, bubblewrap or nsjail, a network namespace.
 
-- Deux cas d'usage : à la **maison**, la session tourne sur le parc de runners du serveur (placement automatique au moins chargé, qui existe déjà) ; en **salle de TP**, le poste de l'étudiant devient son runner.
-- Page « My runner » ouverte à tout compte connecté : créer un jeton d'enregistrement (15 min, usage unique), voir la commande à copier, l'état du runner et le révoquer. Un jeton et un runner sont liés à leur propriétaire (`ownerLogin`).
-- Placement : une session **nouvelle ou chargée** va sur le runner personnel de son propriétaire s'il est en ligne, sinon sur le parc du serveur ; une session existante reste où elle est (déménager = Save puis Load ZIP) ; un runner personnel n'accueille que la session de son propriétaire.
-- Images de base : dossier partagé (NFS, en lecture seule) ou téléchargement HTTP vérifié par SHA-256, et une option pour désigner le dossier des images d'un runner.
-- Confiance et quotas : hors de la première livraison, sauf la règle d'isolation ci-dessus ; la validation stricte de ce qu'envoie un runner d'étudiant et les quotas viennent après (jalon 6).
+**Done when**
 
-**Exploitation**
+- [ ] An HMP command outside the allowlist is refused, on a remote runner too.
+- [ ] A quota overrun is refused with a clear message.
+- [ ] A too short password is refused, except with `--allow-weak`.
+- [ ] Repeated login failures are slowed down.
+- [ ] A request or a Socket.IO connection from a disallowed origin is refused.
+- [ ] After a logout, the old cookie opens no session.
+- [ ] A student's runner sending invalid data, or data outside its session, is ignored with no effect on others.
+- [ ] A VM that exceeds its RAM is killed by its scope without affecting other sessions.
 
-- Services systemd du serveur, du runner local et du runner distant, rotation des journaux (`logrotate`), reprise après redémarrage de la machine.
-- Documentation d'installation unique : `docs/deployment.md` générique, recette du site (`deploy/cremi/`) courte qui y renvoie, fiche de test sans doublon.
+## Milestone 9: load and quality
 
-**Charge**
+- [ ] **LOD01** (L) Load test of about 30 simultaneous sessions (a switch and 5 nodes each) on the server, the pool and
+  lab workstations: memory and CPU measured, no VM killed, a responsive interface. Balance by free memory instead of a
+  session count if the test shows it is needed.
+- [ ] **QUA01** (M) Quality.
+  - Run the manual test sheet on the production server without a deviation; unit and integration tests green; PDFs and
+    README up to date.
+  - Open defects: the "switch consoles" button is not greyed out when the view is driven (Follow checked, or owner under
+    admin control) although it carries the `view-control` class (not reproduced by reading the code; find the exact
+    case); a `monitor` view received before the node data says Monitor is supported falls back to the console and is
+    not applied again later; the test harness kills only `start.sh` after 12 s, so the server and the runner, in
+    their own sessions, could survive a hung stop (`test/integration/qemuweb-client.js`); the lines written to the Log
+    view by Clear have no timestamp.
+  - More `config.json` warnings at startup (beyond the engine, KVM and serial port checks).
 
-- Un test de charge d'environ 30 sessions simultanées (un switch et 5 nœuds chacune) sur le serveur et les runners : mesure de la mémoire et du CPU, aucune VM tuée, interface réactive. Les quotas du jalon 6 en fixent les limites.
+**Done when**
 
-**Critères de fin**
+- [ ] The 30-session load test passes with no VM killed.
+- [ ] The manual test sheet is run on the CREMI server without a deviation.
+- [ ] The PDFs and the README are up to date.
 
-- [ ] Un runner distant tourne en service derrière le frontend du CREMI et se pilote comme un runner local.
-- [ ] Un redémarrage du serveur laisse les sessions d'un runner distant en place.
-- [ ] L'admin peut forcer la perte des sessions d'un runner.
-- [ ] `prepare.sh` construit une image derrière le proxy du CREMI.
-- [ ] Le test de charge de 30 sessions passe sans VM tuée.
-- [ ] Un seul parcours d'installation documenté, sans copie à maintenir en double.
+## Milestone 10: Graphic view and finishing
 
-## Jalon 8 — Vue Graphic achevée
+- [ ] **GRA02** (L) Several floating consoles: up to 4 overlapping windows, cascaded, a click brings one to the front,
+  each movable, resizable and closable, built on the 4 existing panes (today only one floating window exists: the
+  selected node's pane, `public/graphic-console.js`; a double click on another node reuses it). To decide: the maximum
+  number of windows; observer and Follow behaviour (disabled under Follow, as today); whether the geometry is kept
+  until a reload or saved; whether the windows stay independent of the per-user Terminals layout. An alternative is a
+  docked panel under the graph.
+- [ ] **GRA03** (M) Remaining points.
+  - No IP address on the cards: QemuWeb does not know a guest's address without a guest agent (or a startup-script
+    convention that reports it).
+  - Touch: the view pans with one finger and zooms with the buttons only; no pinch zoom.
+  - The position and size of the floating console are kept only until the page is reloaded.
+  - A link is removed by disconnecting the interface, which stays; removing the interface itself is only in Host
+    Settings.
+  - Disabled view controls have no tooltip saying why (view driven by the owner or by the controlling admin).
+  - Clear: the guard that decides whether `stty rows N cols M` may be typed is a heuristic on the cursor line (trimmed
+    line ends with `#`, `$`, `%` or `>`, cursor at the end), not covering other prompts (`]`, `:`, `λ`, zsh symbols),
+    wrapped long prompts, or REPLs whose prompt ends with `>` or `$` (python, sqlite, ssh). Ideas: a pure function with
+    a unit test over many prompts; or let the guest announce its prompt (`PS1` in `prepare.sh`).
+  - A pass on large networks (DMZ, gateways) and on small screens.
 
-La vue Graphic, refaite en grande partie par la tâche `GRA01` (pas de sélection de texte, zone sans bord, console flottante, cartes détaillées, disposition automatique, édition des liens), est menée au bout.
+**Done when**
 
-- **Plusieurs consoles flottantes** (`GRA02`) : jusqu'à 4 fenêtres superposées en cascade, premier plan au clic, déplaçables, redimensionnables, fermables, bâties sur les quatre panneaux existants. À trancher : observation et Follow, mémorisation de la géométrie, indépendance de la disposition de la vue Terminals.
-- Les points restants de `docs/todo.md` : pas d'adresse IP sur les cartes, pas de zoom au pincement, impossibilité de supprimer une interface depuis le graphe, infobulle des contrôles désactivés.
-- Un passage sur grands réseaux (DMZ, passerelles) et sur petit écran.
+- [ ] Several floating consoles show at once and are driven by mouse and keyboard.
+- [ ] The manual checks of the Graphic view all pass, on a desktop browser and at phone width.
 
-**Critères de fin**
+## After 1.0.0
 
-- [ ] Plusieurs consoles flottantes s'affichent en même temps et se pilotent à la souris et au clavier.
-- [ ] Les contrôles manuels de la vue Graphic (liste de la tâche GRA01) passent tous, sur un navigateur de bureau et à largeur de téléphone.
+- OpenID Connect built into QemuWeb (no front end), with the directory groups mapped to roles; today Apache does it.
+- Course subjects: the administrator publishes a session ZIP as a template, and each student instantiates it.
+- A teacher role distinct from the administrator, limited to their groups' sessions.
+- Other single sign-on systems are already supported through `--auth proxy` (see `docs/deployment.md`).
 
+## Backlog
 
-## Après la 1.0.0, et décisions prises
+Things noticed with no milestone yet. Move one into a milestone when it is scheduled, delete it when done.
 
-**Pistes suivantes**
+- Merge `docs/remote-runner-test.md` with the deployment documents once the runner choice is settled (see DOC01).
 
-- OpenID Connect à la place de `users.json`, avec les groupes de l'IdP associés aux rôles.
-- Sujets de TP : l'admin publie une archive ZIP de session comme modèle, et chaque étudiant l'instancie dans sa session.
-- Un rôle enseignant distinct de l'admin, limité aux sessions de ses groupes.
+## Decisions made
 
-**Décisions prises**
-
-| Question | Décision |
+| Question | Decision |
 | --- | --- |
-| Redémarrage du serveur | Tout est effacé : VM arrêtées, `runtime/sessions/` vidé, utilisateurs déconnectés (nouvelle clé de signature des cookies) |
-| Sessions inactives | Pas d'expiration : ménage manuel par l'admin depuis `/admin` |
-| VirtualBox | Conservé aux jalons 3 à 6, sans jail ni quota cgroup ; QEMU prioritaire |
-| Console admin | Lecture seule ; écriture seulement après une prise de contrôle explicite (verrou exclusif, visible par l'étudiant, journalisée) |
-| Sessions par utilisateur | Une seule, définitivement |
-| Identifiant de session | Aléatoire, login dans `owner`, lien `runtime/users/<login>` |
-| Numéros `schemaVersion` | Jamais incrémentés pendant les bêtas ; remis à 1 à la sortie de 0.9.0 (section Stabilisation) |
-| Sécurité (mot de passe minimal, quotas, liste blanche HMP, jail du runner) | Jalon 6, version 1.0.0 ; jusque-là, utilisateurs de confiance uniquement |
-| Contenu de 0.9.0 et de 1.0.0 | 0.9.0 stabilise l'existant (formats à 1, runner distant testé), 1.0.0 ajoute la sécurité, la mise en production et la vue Graphic achevée |
-| Taille cible de la 1.0.0 | Environ 30 sessions simultanées (un switch et 5 nœuds chacune), sur le serveur et des runners distants |
+| Authentication | Two modes, `password` and `proxy` (identity from the front end through `X-Remote-User`, guarded by `X-Proxy-Key`); `both` is removed in AUT01 |
+| Server restart | Local runner: sessions adopted again. Remote runner: sessions dropped today, the binding will be persisted (RUN02) |
+| Inactive sessions | No expiry: the administrator cleans up by hand from `/admin` |
+| Sessions per user | One, for good; a session lives on the runner that created it and moves by Save then Load ZIP |
+| Personal runners | Created by the user from "My runner"; a new or loaded session goes there when it is online, else to the pool |
+| Administrator console | Read-only; writing only after an explicit takeover (exclusive lock, visible to the student, logged) |
+| Session identifier | Random; the login is in `owner`; link `runtime/users/<login>` |
+| Security | Milestone 8; until then, trusted users only |
+| `schemaVersion` | At 1 since 0.9.0; any format change increments it with an explicit compatibility decision |
+| VirtualBox | Kept, outside the jail and the cgroup quotas; QEMU first |
+| Target size | About 30 simultaneous sessions (a switch and 5 nodes each) |

@@ -157,7 +157,7 @@ the implicit local user is admin, so `/admin` is open to anyone reaching the
 server.
 
 Until per-user quotas, command restrictions and cross-site request checks
-exist (milestone 6), give accounts only to trusted users: any user can run any
+exist (milestone 8), give accounts only to trusted users: any user can run any
 single-line QEMU monitor command on their own hosts. Log out only clears the
 browser's cookie (and, behind OpenID, ends the OpenID session); see [docs/deployment.md](deployment.md#known-limits).
 

@@ -65,7 +65,7 @@ chmod 440 /etc/sudoers.d/qemuweb && visudo -c
 ```
 
 > **Security note.** `qemuweb` is root-equivalent (full `sudo`, and it accepts every key of `/root/.ssh/authorized_keys`):
-> acceptable only for trusted users, until milestone 6. Then remove `/etc/sudoers.d/qemuweb` and restrict `authorized_keys`.
+> acceptable only for trusted users, until milestone 8. Then remove `/etc/sudoers.d/qemuweb` and restrict `authorized_keys`.
 
 Apache is configured with `sudo` in part 2: run `sudo apache2ctl configtest` before every restart.
 
@@ -390,7 +390,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/j
 # "Connected to the server." Then docs/remote-runner-test.md, steps 6 to 8.
 ```
 
-Until milestone 6 (quotas, HMP allowlist, `Origin` check, logout, jail): trusted users only.
+Until milestone 8 (quotas, HMP allowlist, `Origin` check, logout, jail): trusted users only.
 
 ## Annex A. Diagnostic checks with `curl`
 

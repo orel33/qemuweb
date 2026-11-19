@@ -48,7 +48,7 @@ consoles.
   The runner reports state, logs and serial output as events, which
   `server/sockets.js` forwards over Socket.IO to the relevant browser tabs.
 - **Users and sessions:** `server/auth/` checks the signed cookie of every request
-  and of the Socket.IO handshake (Origin checks are planned for milestone 6).
+  and of the Socket.IO handshake (Origin checks are planned for milestone 8).
   `server/session-manager.js` maps the login to its workspace `{session, runner}`,
   creating it at first use; it survives logouts and closed tabs until the user
   deletes it or the server stops. Each HTTP request goes to the router of the
@@ -561,7 +561,7 @@ crash they stay registered, as after a server crash today.
 ### User-land runners
 
 A runner is an ordinary unprivileged process, never root, possibly on a
-student's lab machine (roadmap, milestone 5, "Mode utilisateur").
+student's lab machine (roadmap, "Personal runners").
 
 - It assumes no root, no capability, no dedicated system account, and writes
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:

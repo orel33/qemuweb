@@ -62,7 +62,7 @@ If `qemu-system-x86_64 -netdev help` does not list `vde`, see
 | [docs/architecture.md](docs/architecture.md) | Data paths between the browser, the server, QEMU and VDE |
 | [docs/json-files.md](docs/json-files.md) | Specification of the JSON files |
 | [docs/development.md](docs/development.md) | Code layout, tests, building the documentation |
-| [docs/roadmap.md](docs/roadmap.md), [docs/todo.md](docs/todo.md) | Roadmap to 1.0.0 (in French) and open tasks |
+| [docs/roadmap.md](docs/roadmap.md) | Roadmap to 1.0.0: milestones, tasks and open points |
 
 PDF versions are in [docs/pdf/](docs/pdf/).
 

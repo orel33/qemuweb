@@ -202,11 +202,11 @@ rm -f ~/.config/qemuweb-runner/runner.json
 | "No runner is available" for a user | The runner is paused, offline, or at its `maxSessions`; the server log gives the reasons. |
 | A system is missing in the Add host dialog | Its image is not installed on REMOTE (Step 1). |
 | A plain `http://` URL is refused | Only loopback is accepted without `--insecure`; use variant A or `https://`. |
-| Sessions gone after restarting the server | Known limit: a server restart deletes the sessions of a remote runner (see `docs/todo.md`). |
+| Sessions gone after restarting the server | Known limit: a server restart deletes the sessions of a remote runner (see `docs/roadmap.md`, RUN02). |
 
 ---
 
-Remote runners are for **trusted machines** until milestone 6 (jail, quotas, HMP allowlist): a runner
+Remote runners are for **trusted machines** until milestone 8 (jail, quotas, HMP allowlist): a runner
 runs the machines under the account that starts it, with no confinement. Reference:
 `docs/deployment.md`, section "Remote runners"; the options of every program:
 `./scripts/server.sh --help`, `./scripts/runner.sh run --help`, `./scripts/runner.sh register --help`.

@@ -5,7 +5,7 @@ proxy in front of it that terminates TLS and forwards HTTP and WebSocket
 traffic. This page uses nginx; any proxy with the same features works.
 
 Until per-user quotas, QEMU monitor restrictions, cross-site request checks and
-the runner jail exist (milestone 6 of the roadmap), give accounts only to
+the runner jail exist (milestone 8 of the roadmap), give accounts only to
 trusted users.
 
 **Give QemuWeb its own domain name** (for example `qemuweb.example.org`), never
@@ -185,7 +185,7 @@ network. It dials **out**: there is no inbound port, so it works behind a NAT or
 The frame protocol of the local runner runs unchanged over a WebSocket on the path
 `/runner/connect` of the web server; nginx terminates TLS and passes the upgrade.
 
-> **Remote runners are for trusted machines.** Until milestone 6 (jail, quotas, HMP allowlist) a runner
+> **Remote runners are for trusted machines.** Until milestone 8 (jail, quotas, HMP allowlist) a runner
 > runs the machines under the account that starts it with no confinement, and the server relies on
 > its answers. Never use a machine you do not control, and never root. A runner per student is a later idea.
 
@@ -455,7 +455,7 @@ WebSocket upgrades included.
 ## Known limits
 
 - Cross-site request checks (`Origin`/CSRF) and a revocable logout come with
-  milestone 6; until then, keep QemuWeb on its own domain name (see above).
+  milestone 8; until then, keep QemuWeb on its own domain name (see above).
 - Log out only clears the cookie in the browser: a copied cookie stays valid
   until it expires (`--session-hours`). Removing the account, or restarting
   the server (every start draws a new cookie signing key, which logs everybody out),
