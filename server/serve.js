@@ -17,6 +17,7 @@ const {createRegisterRouter} = require('./routes/runner-register');
 const {ServerInstance} = require('./server-instance');
 const {SessionManager} = require('./session-manager');
 const {attachSockets} = require('./sockets');
+const {attachWsTest} = require('./ws-test');
 const {createSessionRouter} = require('./routes');
 const {createAuth} = require('./auth');
 const {ADMIN_LOG, USERS_LOG, createAudit, createUserLog} = require('./audit');
@@ -77,6 +78,7 @@ function serve({root, settings}) {
   if (settings.trustProxy !== null) app.set('trust proxy', settings.trustProxy);
   io.use(auth.socketMiddleware);
   const sockets = attachSockets(io, manager, {audit, currentUser: auth.currentUser});
+  attachWsTest(io, {socketMiddleware: auth.socketMiddleware, currentUser: auth.currentUser});
 
   app.use(auth.identify);
   auth.register(app);
@@ -97,7 +99,7 @@ function serve({root, settings}) {
   // X-Observe (admins, read-only) and the admin API come before anything that could open or
   // change the caller's own session.
   app.use('/api', observationGate(manager));
-  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null,
+  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null,
     runnerStore, runnerTokens, runnerGrace: settings.runnerGrace, trustProxy: settings.trustProxy !== null}));
   // Self-service deletion: stops and removes every node, then the session; the next request
   // opens a new, empty session.

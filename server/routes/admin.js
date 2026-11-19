@@ -59,10 +59,11 @@ function adminPage(root) {
 }
 
 // disconnectUser(login) closes the user's Socket.IO connections, browsers(login) counts the
-// user's connected browser tabs (server/sockets.js); logDir holds admin.log and users.log; `port` is the
+// user's connected browser tabs and connections() lists the live Socket.IO connections with their transport (server/sockets.js,
+// server/ws-transports.js: the Connections panel); logDir holds admin.log and users.log; `port` is the
 // server's port and `runtime` its --runtime when given, else null (the Runners panel, routes/admin-runners.js,
 // which also takes the runners store, the registration tokens, --runner-grace and whether a proxy is trusted).
-function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logDir, port, runtime, runnerStore, runnerTokens, runnerGrace, trustProxy}) {
+function createAdminRouter({manager, auth, audit, disconnectUser, browsers, connections, logDir, port, runtime, runnerStore, runnerTokens, runnerGrace, trustProxy}) {
   const router = express.Router();
   const usersFile = auth.usersFile;
   router.use(auth.requireAdmin);
@@ -106,6 +107,9 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, logD
       res.json(summaries.sort((a, b) => a.login.localeCompare(b.login)));
     } catch (error) { res.status(error.status || 500).json({error: error.message}); }
   });
+
+  // Live Socket.IO connections and the transport each one uses: {total, websocket, polling, items}. Read-only.
+  router.get('/connections', (_req, res) => res.json(connections()));
 
   router.use('/runners', createRunnersRouter({manager, store: runnerStore, tokens: runnerTokens, audited, port, runtime, graceSeconds: runnerGrace, trustProxy}));
 

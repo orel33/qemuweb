@@ -412,6 +412,30 @@ Check the result:
 - consoles connect over `wss://` (the Network tab shows a `101 Switching
   Protocols` response for `/socket.io/`).
 
+### WebSocket check
+
+The interface opens its Socket.IO connections over WebSocket and falls back to
+HTTP long polling only when the upgrade fails. If the reverse proxy drops the
+`Upgrade` header (this happened behind a relay that did not forward it),
+everything still works, only slower, so nobody notices. Three places tell:
+
+- the **Connections** panel of `/admin` lists every live connection with its
+  transport and warns when one is on **polling**;
+- the **Test WebSocket** button of the same panel opens a connection from your
+  browser forced to WebSocket (namespace `/ws-test`, administrators only) and
+  shows the round trip time, or the reason of the failure; after a failure it
+  tries polling and says whether the interface runs in fallback mode;
+- the server output (stderr, so `journalctl -u qemuweb` shows it) gets one line
+  when a connection is still on polling 20 seconds after it connected, at most
+  once per login every 10 minutes:
+  `[sockets] alice: still on polling 20 s after connecting (no WebSocket upgrade: check that the reverse proxy forwards Upgrade and Connection)`.
+
+If the test fails, check that the proxy forwards `Upgrade` and `Connection` (the
+two `proxy_set_header` lines above, or `ProxyPass ... upgrade=websocket` and
+`RewriteRule` for `ws://` in Apache), and that no intermediate relay strips
+them. The browser's Network tab shows a `101 Switching Protocols` for
+`/socket.io/` when it works.
+
 ## Other single sign-on systems
 
 `--auth proxy` (or `both`) is not tied to OpenID: the front end does the login, and QemuWeb only reads `X-Remote-User`,

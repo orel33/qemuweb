@@ -131,6 +131,21 @@ can:
   it disappears from `users.json`, its pages are logged out at once and its
   session, if any, is deleted with its machines. An admin cannot disable,
   remove or change the role of their own account there.
+- See which transport each browser connection really uses in the **Connections**
+  panel: one line per live Socket.IO connection (login, **WebSocket** or
+  **polling**, connected since, and whether it is the **main** connection of a
+  tab, an **observer** or a console connection), refreshed with the rest of the
+  page, with a summary such as "7 connections: 6 WebSocket, 1 polling". The
+  interface always asks for WebSocket first. A connection on **polling** works,
+  but slower (every keystroke and every console line is a separate HTTP
+  request), and the panel then shows a warning: usually the reverse proxy does
+  not forward `Upgrade` and `Connection`. **Test WebSocket** opens a test
+  connection from your own browser, forced to WebSocket, and shows "WebSocket
+  OK" with the average and minimum round trip time, or why it failed; if it
+  failed it also tries polling and says whether the interface runs in fallback
+  mode. The test creates no session. The server also writes one line to its
+  output when a connection is still on polling 20 seconds after it connected
+  (see [docs/deployment.md](deployment.md#websocket-check)).
 - Read the last 200 entries of the two server logs in the **Logs** panel at
   the bottom of the page (**Admin** and **Users** tabs), or **Download** them.
 

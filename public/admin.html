@@ -58,6 +58,24 @@
         </table>
       </div>
     </section>
+    <section aria-labelledby="connections-title">
+      <div class="admin-section-head">
+        <h2 id="connections-title">Connections</h2>
+        <span class="admin-updated" id="connections-updated" role="status"></span>
+      </div>
+      <div class="admin-toolbar">
+        <span class="admin-runners-hint" id="connections-summary"></span>
+        <button id="connections-test" class="admin-tool act-blue" type="button" title="Open a test connection forced to WebSocket"><span>Test WebSocket</span></button>
+      </div>
+      <p class="admin-warning" id="connections-warning" role="alert" hidden>At least one connection is on polling: the WebSocket upgrade does not work, so the interface is slower. Check that the reverse proxy forwards Upgrade and Connection (docs/deployment.md, "WebSocket check").</p>
+      <p class="admin-runners-hint admin-test-result" id="connections-result" role="status" hidden></p>
+      <div class="admin-table-wrap">
+        <table class="admin-table">
+          <thead><tr><th>Login</th><th>Transport</th><th>Connected since</th><th>Kind</th></tr></thead>
+          <tbody id="connections-body"></tbody>
+        </table>
+      </div>
+    </section>
     <section aria-labelledby="accounts-title">
       <div class="admin-section-head"><h2 id="accounts-title">Accounts</h2></div>
       <div class="admin-toolbar"><button id="show-create-account" class="admin-tool act-green" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>Create account</button></div>
@@ -116,6 +134,7 @@
     </form>
   </dialog>
   <!-- Inline Lucide icons: House, LogOut, Trash2, UserPlus here; Eye, Power, Trash2, KeyRound, UserX, UserCheck, UserMinus in admin.js, TriangleAlert in admin-runners.js. License: /icons/LICENSE-lucide.txt -->
+  <script src="/socket.io/socket.io.js"></script>
   <script type="module" src="/admin.js"></script>
 </body>
 </html>

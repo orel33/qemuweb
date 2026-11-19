@@ -438,6 +438,11 @@ body.observing .write-action { pointer-events: none; opacity: .45; }
 .session-state[data-state="idle"] { color: #8fa2b8; }
 .admin-error { color: #ff9a9f; }
 .admin-error[hidden] { display: none; }
+.admin-warning { color: #ffd479; }
+.admin-warning[hidden] { display: none; }
+.admin-test-result[data-state="ok"] { color: #9ee6b4; }
+.admin-test-result[data-state="failed"] { color: #ff9a9f; }
+td[data-transport="polling"] { color: #ffd479; }
 .admin-confirm-list { max-height: 240px; overflow: auto; margin: 0; }
 /* Observation of a login without a session: a message replaces the workspace. */
 .observe-notice { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; flex: 1; padding: 24px 16px; text-align: center; }

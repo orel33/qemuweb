@@ -1,8 +1,9 @@
 // Supervision page (/admin, administrators only): every session with its metrics, refreshed
 // every few seconds, the actions on sessions (observe, stop all, delete, bulk cleanup),
-// the runners (admin-runners.js), account management, and the last entries of admin.log and users.log. Every change goes through /api/admin/*, which checks the role and
+// the runners (admin-runners.js), the Socket.IO connections and the WebSocket test (admin-connections.js), account management, and the last entries of admin.log and users.log. Every change goes through /api/admin/*, which checks the role and
 // writes logs/admin.log.
 import {createRunnersPanel} from './admin-runners.js';
+import {createConnectionsPanel} from './admin-connections.js';
 
 const POLL_MS = 4000;
 const $ = id => document.getElementById(id);
@@ -195,6 +196,9 @@ function updateSelection() {
 const refreshRunners = createRunnersPanel({api, cell, confirm: confirmDialog, elements: {body: $('runners-body'), hint: $('runners-hint'), status: $('runners-updated'),
   pending: $('runners-pending'), lifetime: $('runners-lifetime'), create: $('runners-create-token'), tokenBox: $('runners-token'), error: $('runners-error')}});
 
+const refreshConnections = createConnectionsPanel({api, cell, elements: {body: $('connections-body'), summary: $('connections-summary'), warning: $('connections-warning'),
+  status: $('connections-updated'), test: $('connections-test'), result: $('connections-result')}});
+
 let refreshing = false;
 async function refreshSessions() {
   if (refreshing) return;
@@ -349,8 +353,9 @@ function init() {
   for (const tab of document.querySelectorAll('.admin-log-tabs [data-log]')) tab.addEventListener('click', () => selectLog(tab.dataset.log));
   refreshSessions();
   refreshRunners();
+  refreshConnections();
   refreshLog();
-  setInterval(() => { refreshSessions(); refreshRunners(); refreshAccounts({polling: true}); refreshLog({polling: true}); }, POLL_MS);
+  setInterval(() => { refreshSessions(); refreshRunners(); refreshConnections(); refreshAccounts({polling: true}); refreshLog({polling: true}); }, POLL_MS);
 }
 
 init();
