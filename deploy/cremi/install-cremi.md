@@ -33,6 +33,8 @@ node --version                                    # v24.x
 # 3. account (home /home/qemuweb, apart from the code), directories, ssh, sudo
 adduser --system --group --home /home/qemuweb --shell /bin/bash qemuweb
 install -d -o qemuweb -g qemuweb /srv/qemuweb
+# adduser --system copies nothing from /etc/skel: the default shell files for qemuweb
+install -o qemuweb -g qemuweb -m 0644 /etc/skel/.bashrc /etc/skel/.profile /etc/skel/.bash_logout /home/qemuweb/
 install -d -o qemuweb -g qemuweb -m 0750 /var/lib/qemuweb /etc/qemuweb /var/log/qemuweb
 # ssh for qemuweb: a copy of root's (authorized_keys: same people may log in; known_hosts)
 cp -a /root/.ssh /home/qemuweb/.ssh

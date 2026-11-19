@@ -15,3 +15,6 @@ users.json
 logs/*
 !logs/.gitkeep
 runners.json
+
+# Apache reference of another site: it holds the OIDC client secret, never commit it
+deploy/cremi/progsys.conf
