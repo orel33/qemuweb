@@ -77,6 +77,21 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   headers; and it sends no client address, so `--trust-proxy` and the login throttling of milestone 6 only see the relay.
   Ask the CREMI for both.
 
+- **Remove `--auth both`** (decided with the user, to do later): keep two modes, `password` (local tests, ad hoc server) and
+  `proxy` (production behind the front end). `both` mixes two ways in on one port and confuses the question "who
+  authenticates this request?". Cost to plan: no password login through the SSH tunnel on a production server (an
+  administrator is an OpenID login listed in `users.json` with the role admin; in an incident, restart with
+  `--auth password`), so the tunnel tests of consoles and runners need the server in `password` mode until the CREMI
+  relay passes WebSocket. Touches server/options.js, server/auth/index.js, the unit, the tutorial, the docs and the tests.
+- **Public access by password for guests outside OpenID**: not possible with Apache protecting everything (the
+  password accounts are reachable only by the tunnel). Idea: `OIDCUnAuthAction pass`, `X-Proxy-Key` sent only with an
+  OpenID identity, and a "CREMI login" link on the login page. Not before the quotas, the HMP allowlist and the login
+  throttling of milestone 6; never an admin account.
+- **CREMI relay and WebSocket**: for `qemuweb.emi.u-bordeaux.fr` the relay drops `Upgrade` (a WebSocket request to
+  `/runner/connect` gets a plain `302 /login.html` from the application) while Apache directly passes it (`401`): ask
+  for `proxy_http_version 1.1` and the `Upgrade`/`Connection` headers. Add `upgrade=%{Upgrade}i` to the Apache `LogFormat`
+  and the check of Annex A.3 to the tutorial.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
