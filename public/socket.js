@@ -5,6 +5,7 @@ import {captureView, renderTabs, showPage, showStatusError, updateControls} from
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {sessionLost} from './api.js';
+import {liveConnectionLost, receiveLiveData, receiveLiveEnd} from './capture-live.js';
 import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
 import {applyControl, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
@@ -148,6 +149,9 @@ export function initSockets() {
     refreshCaptureRules();
   });
   socket.on('captures', setCaptures);
+  socket.on('capture-live-data', receiveLiveData);
+  socket.on('capture-live-end', receiveLiveEnd);
+  socket.on('disconnect', liveConnectionLost);
   socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); loadAllCaptures(); });
   // The runner of the session is offline (a network cut; the machines keep running) or back.
   socket.on('runner-state', ({online}) => {

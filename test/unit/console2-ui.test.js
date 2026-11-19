@@ -83,7 +83,7 @@ test('the pane view menu is a view-control; the pane views are carried by the vi
   assert.match(apply, /setPaneView\(pane, shown\)/);
   assert.match(functionSource(terminal, 'setPaneView'), /viewChanged\(\)/);
   assert.match(terminal, /if \(view === 'console2'\) return hasSecondConsole\(machine\) \? view : 'console'/);
-  assert.match(moduleSource('view-state'), /views: \('console' \| 'console2' \| 'monitor' \| 'log' \| 'capture'\)\[\]/);
+  assert.match(moduleSource('view-state'), /views: \('console' \| 'console2' \| 'monitor' \| 'log'\)\[\]/);
 });
 
 test('observation disables the write actions instead of hiding them; the view controls follow the driver', () => {
