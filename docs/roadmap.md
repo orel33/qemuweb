@@ -124,7 +124,7 @@ Two features for the labs, decided as the top of the list. They are independent 
 
 What separates a deployment that works from one you can operate calmly.
 
-- [ ] **AUT01** (M) Authentication.
+- [x] **AUT01** (M) Authentication. Delivered (merged 20 November 2026, tested on the CREMI server in part: the expired-session reload and the key rotation were not exercised by hand); the group-to-role rule is left open in the Backlog.
   - Remove `--auth both`: two modes only, `password` (local tests, ad hoc server) and `proxy` (production). `both` mixes
     two ways in on one port and blurs "who authenticates this request?". Cost: no password login through the SSH
     tunnel on a production server; an administrator is an OpenID login listed in `users.json` with the role admin, and
@@ -160,7 +160,7 @@ What separates a deployment that works from one you can operate calmly.
 
 **Done when**
 
-- [ ] `--auth` has only `password` and `proxy`, and the CREMI server runs in `proxy`.
+- [x] `--auth` has only `password` and `proxy`, and the CREMI server runs in `proxy`.
 - [ ] An expired SSO session sends the user back to the login, with no obscure error.
 - [ ] The server and a remote runner start at boot and their logs rotate.
 - [ ] One documented installation path, with no copy to keep in two places.
@@ -354,8 +354,8 @@ personal runner and any guest access exist only for trusted users.
   down and up under the guest (the kernel logs "link down" then "link up"), without a reboot and without losing anything.
   A **Disconnect cable** / **Reconnect cable** pair on the link popover and in Host Settings > Network, distinct from
   *Remove link* (which unplugs the interface from its switch for good); a broken link is drawn dashed and red. The state is
-  runtime only: a started host has its cables plugged. To verify: which name `set_link` takes for a `-netdev` plus `-device`
-  pair (the NIC's net client name). Natural companion of CAP01 (same monitor plumbing, same buttons); lab use: a link
+  runtime only: a started host has its cables plugged. **Verified in the CAP01 spike (QEMU 11.1.3): `set_link <netdev id> off|on`
+  works with the netdev id (`lan0`...), and the host on the other side of the cable then sees 100% loss.** Natural companion of CAP01 (same monitor plumbing, same buttons); lab use: a link
   failure and the reconvergence of a routing protocol.
 - [ ] **NET02** (L) **Restore points** for a host or a session: `savevm`, `loadvm` and `delvm` of the monitor store and
   restore the whole state of a machine (memory, devices, disk) inside its `qcow2` working disk, so a student returns to
@@ -365,7 +365,8 @@ personal runner and any guest access exist only for trusted users.
   a session (snapshots probably stay out of it).
 - [ ] **NET03** (M) **Add or remove an interface while the host runs**: `netdev_add` plus `device_add` (and the reverse)
   connect a host to another switch with no restart, instead of today's "interface changes apply at the next start".
-  On the `q35` machine a hot-pluggable port is needed: reserve a few free `pcie-root-port` devices at launch, to verify.
+  **Verified in the CAP01 spike**: `netdev_add` works at runtime, but `device_add` fails with "Bus 'pcie.0' does not support hotplugging"
+  and a `pcie-root-port` cannot be added at runtime either, so free `pcie-root-port` devices must be declared at boot (a few per host).
   Host Settings > Network then applies live when the host runs; the guest kernel must handle the hot-plug (Debian does).
 - [ ] **GRA02** (L) Several floating consoles: up to 4 overlapping windows, cascaded, a click brings one to the front,
   each movable, resizable and closable, built on the 4 existing panes (today only one floating window exists: the
@@ -560,7 +561,7 @@ commit message.
 - [ ] **BUG07** `start.sh` says "The server exited (status 2); stopping the runner." although no runner was started when
   the server refuses its options. Also check by hand that `./scripts/start.sh --session-hours 0` exits 2 at once and
   leaves nothing running.
-- [ ] **BUG08** `docs/user-guide.md` still says the CREMI runs `--auth both`; it is `--auth proxy`. (Disappears with AUT01.)
+- [x] **BUG08** `docs/user-guide.md` still says the CREMI runs `--auth both`; it is `--auth proxy`. (Disappears with AUT01.)
 
 ### TODO
 
@@ -583,6 +584,8 @@ commit message.
 Things noticed with no milestone yet. Move one into a milestone when it is scheduled, delete it when done.
 
 - Merge `docs/remote-runner-test.md` with the deployment documents once the runner choice is settled (see DOC01).
+- Group to role (left over from AUT01): administrators come from `users.json` only and `X-User-Groups` is unused. Decide whether a
+  directory group may grant the admin role, and how to list a student in `/admin` without a prior `--no-password` entry.
 - Standalone local terminals (`CLI01`, size L, independent of the web interface): run machines on the user's own computer
   without a server and open `xterm` windows or `tmux` panes on their consoles. The runner already exposes `serial0.sock`,
   `serial1.sock` and `mon.sock` per node, and everything goes through `runner/index.js`. To settle: a mode with no server
