@@ -76,7 +76,7 @@ function bindWorkspace(io, {session, runner}) {
     });
   }
   runner.events.on('state', state => io.to(sessionRoom(session)).emit('nodes-changed', state));
-  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed']) {
+  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed', 'captures']) {
     runner.events.on(event, payload => io.to(sessionRoom(session)).emit(event, payload));
   }
 }
@@ -282,6 +282,8 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
   return {
     browsers: login => browsers.get(login) || 0,
     connections: () => transports.summary(),
+    // Whether `admin` holds the console-control lock of a session (the capture routes of an observing admin).
+    controlHeld: (sessionId, admin) => control.heldBy(sessionId, admin),
     // Closes every socket of a user at once (account disabled or role changed from /admin),
     // so that passive sockets stop receiving console output too.
     disconnectUser(login) {

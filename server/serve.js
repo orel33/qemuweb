@@ -64,7 +64,7 @@ function serve({root, settings}) {
   });
   manager.on('created', (workspace, {adopted}) => {
     const {session, runner} = workspace;
-    workspace.router = createSessionRouter({session, runner, userLog});
+    workspace.router = createSessionRouter({session, runner, userLog, audit});
     userLog.record(workspace.owner, adopted ? 'session-adopted' : 'session-created', {sessionId: session.id});
     console.log(`Session ${session.id} ${adopted ? 'adopted from the runner' : 'opened'} for ${workspace.owner}.`);
   });
@@ -98,7 +98,7 @@ function serve({root, settings}) {
   app.use(express.static(path.join(root, 'public')));
   // X-Observe (admins, read-only) and the admin API come before anything that could open or
   // change the caller's own session.
-  app.use('/api', observationGate(manager));
+  app.use('/api', observationGate(manager, {controlHeld: sockets.controlHeld}));
   app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null,
     runnerStore, runnerTokens, runnerGrace: settings.runnerGrace, trustProxy: settings.trustProxy !== null}));
   // Self-service deletion: stops and removes every node, then the session; the next request

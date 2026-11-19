@@ -7,12 +7,14 @@ import {engineSelect} from './node-dialogs.js';
 import {clearStartupTemplateError, defaultStartScript, renderGuestMedia, renderStartupTemplateValues, showStartupTemplateError, validateStartScriptDraft} from './startup-media.js';
 import {renderGraphic} from './graphic-view.js';
 import {renderConsoleSettings} from './host-console-settings.js';
+import {hideHostCaptures, showHostCaptures} from './captures.js';
 
 let optionsRequest = 0;
 let hostSettingsDraft = null;
 
 const networkControls = document.getElementById('network-controls');
 const nicList = document.getElementById('nic-list');
+const captureControls = document.getElementById('capture-controls');
 const addNic = document.getElementById('add-nic');
 
 export const qemuOptionsPanel = document.getElementById('qemu-options-panel');
@@ -165,6 +167,9 @@ export async function renderQemuOptions() {
   optionsCommands.textContent = '';
   networkControls.hidden = false;
   renderNicControls(machine);
+  // Captures belong to a host that exists, not to a draft.
+  captureControls.hidden = creating;
+  if (creating) hideHostCaptures(); else showHostCaptures(captureControls, machine.id);
   try {
     const body = await requestJson(launchOptionsUrl(machine, getMachineSettings(machine)), undefined, 'Settings unavailable');
     if (request !== optionsRequest || machine !== settingsMachine()) return;
