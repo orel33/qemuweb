@@ -15,7 +15,8 @@ Prepare every system by default. For each system:
   2. Build images/<sysname>.raw and images/<sysname>.vdi.
 The elapsed time of each step and the system total are displayed.
 
---list             List systems, allocated image disk usage (GB), and date.
+--list             List systems, allocated image disk usage (GB), date, and the state of the
+                   SHA-256 files of the images (ok, old: older than its image, missing).
 --all              Prepare every configured system (the default).
 --system <sysname> Prepare one configured system.
 --force            Rebuild and replace existing images. Save the old pair in
@@ -95,7 +96,7 @@ const fs = require('fs');
 const path = require('path');
 const [configFile, root] = process.argv.slice(2);
 const systems = require(path.join(root, 'common', 'system-config')).readCatalog(configFile).systems;
-const heading = ['System', 'RAW GB', 'VDI GB', 'Total GB', 'Built (local time)'];
+const heading = ['System', 'RAW GB', 'VDI GB', 'Total GB', 'Built (local time)', 'SHA-256 raw/vdi'];
 const rows = [heading];
 for (const [id, system] of Object.entries(systems)) {
   if (id === 'default') continue;
@@ -104,10 +105,17 @@ for (const [id, system] of Object.entries(systems)) {
     catch (error) { if (error.code === 'ENOENT') return null; throw error; }
   });
   const gb = stat => stat ? (stat.blocks * 512 / 1e9).toFixed(2) : '-';
+  // State of <image>.sha256: ok (not older than its image, as the server requires), old, missing; - without image.
+  const hashState = (format, stat) => {
+    if (!stat) return '-';
+    const file = path.resolve(root, system[format === 'raw' ? 'qemu' : 'vbox'].image) + '.sha256';
+    try { return fs.statSync(file).mtimeMs >= stat.mtimeMs ? 'ok' : 'old'; }
+    catch (error) { if (error.code === 'ENOENT') return 'missing'; throw error; }
+  };
   const latest = Math.max(...stats.filter(Boolean).map(stat => stat.mtimeMs), 0);
   const built = latest ? new Date(latest).toLocaleString('sv-SE', {hour12: false}) : '-';
   const total = stats.some(Boolean) ? (stats.reduce((bytes, stat) => bytes + (stat?.blocks || 0) * 512, 0) / 1e9).toFixed(2) : '-';
-  rows.push([id, gb(stats[0]), gb(stats[1]), total, built]);
+  rows.push([id, gb(stats[0]), gb(stats[1]), total, built, `${hashState('raw', stats[0])}/${hashState('vdi', stats[1])}`]);
 }
 const widths = heading.map((_, index) => Math.max(...rows.map(row => row[index].length)));
 for (const row of rows) console.log(row.map((value, index) => value.padEnd(widths[index])).join('  ').trimEnd());
