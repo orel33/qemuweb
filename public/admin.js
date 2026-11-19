@@ -299,12 +299,12 @@ function init() {
     me = await response.json();
     $('account-name').textContent = me.displayName ? `${me.displayName} (${me.login})` : me.login;
     $('auth-off-warning').hidden = me.authMode !== 'off';
-    // An identity given by the OpenID front end logs out there (--logout-url); without that URL there is no button.
-    $('logout').hidden = me.authMode === 'off' || (me.via === 'openid' && !me.logoutUrl);
+    // An identity given by the authenticating front end logs out there (--logout-url); without that URL there is no button.
+    $('logout').hidden = me.authMode === 'off' || (me.via === 'proxy' && !me.logoutUrl);
     refreshAccounts();
   });
   $('logout').addEventListener('click', async () => {
-    try { await fetch('/auth/logout', {method: 'POST'}); } finally { location.assign(me?.via === 'openid' && me.logoutUrl ? me.logoutUrl : '/login.html'); }
+    try { await fetch('/auth/logout', {method: 'POST'}); } finally { location.assign(me?.via === 'proxy' && me.logoutUrl ? me.logoutUrl : '/login.html'); }
   });
   $('select-all').addEventListener('change', event => {
     for (const box of $('sessions-body').querySelectorAll('input[type=checkbox]:not(:disabled)')) {
@@ -320,7 +320,7 @@ function init() {
     showError('create-account-error', null);
     $('create-account-dialog').showModal();
   });
-  // An account without a password is only recognised through the OpenID front end (users.json has no hash for it).
+  // An account without a password is only recognised through the authenticating front end (users.json has no hash for it).
   $('new-no-password').addEventListener('change', event => {
     $('new-password').disabled = event.target.checked;
     $('new-password').required = !event.target.checked;

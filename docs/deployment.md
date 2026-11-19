@@ -334,7 +334,7 @@ never written; reading the session list or the logs is not logged.
 
 | Event | Target |
 | --- | --- |
-| `login`, `logout` | `via`: `password` or `openid` (see [deploy/cremi/deploy-cremi.md](../deploy/cremi/deploy-cremi.md) for the OpenID front end). |
+| `login`, `logout` | `via`: `password` or `proxy` (the CREMI deployment, with OpenID: see [deploy/cremi/deploy-cremi.md](../deploy/cremi/deploy-cremi.md) . |
 | `proxy-refused` | `reason`: `wrong proxy key`, `invalid login` or `account disabled`. A request that carries a wrong `X-Proxy-Key` is also answered with 403. |
 | `login-failed` | none; `user` is the login name that was tried (control characters removed, at most 64 characters), whether or not the account exists. |
 | `session-created` | `sessionId`. |

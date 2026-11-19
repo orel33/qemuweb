@@ -62,9 +62,9 @@ The server is configured by options only: it reads **no environment variable**.
 | `--session-hours N` | `12` | login lifetime in hours (more than 0, at most 2160), renewed while the user is active |
 | `--runner-grace SECONDS` | `300` | how long the sessions of a remote runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once) |
 | `--trust-proxy VALUE` | `unset` | Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS |
-| `--auth MODE` | `password` | how users are identified: password (QemuWeb login), openid (identity given by the OpenID front end, Apache mod_auth_openidc, through X-Remote-User, trusted only with the shared key) or both |
-| `--proxy-key-file FILE` | `unset` | the key shared with the OpenID front end, one line (mode 0600), sent by it as X-Proxy-Key; required by --auth openid and --auth both |
-| `--logout-url URL` | `unset` | where the Log out button goes when the identity comes from the OpenID front end (no button without it) |
+| `--auth MODE` | `password` | how users are identified: password (QemuWeb login), proxy (identity given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through X-Remote-User, trusted only with the shared X-Proxy-Key) or both |
+| `--proxy-key-file FILE` | `unset` | the key shared with the authenticating front end, one line (mode 0600), sent by it as X-Proxy-Key; required by --auth proxy and --auth both |
+| `--logout-url URL` | `unset` | where the Log out button goes when the identity comes from the authenticating front end (no button without it) |
 | `--no-auth` | `off` | disables authentication: one shared local session, for single-user local work only (default: authentication on) |
 | `--ephemeral` | `off` | marks an ephemeral server of the test scenarios (tests only) |
 | `-h`, `--help` | | this text |

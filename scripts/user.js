@@ -4,8 +4,8 @@
 //   [--users FILE] <command>   first, optionally: another users file (default users.json of the project)
 //   add <login> [--role student|admin] [--no-password]
 //                                        create an account; --no-password: an account that cannot log in with a password,
-//                                        recognised only for its role and its disabled flag when the OpenID front end
-//                                        gives its identity (server --auth openid|both), e.g. an administrator
+//                                        recognised only for its role and its disabled flag when the authenticating front end
+//                                        gives its identity (server --auth proxy|both), e.g. an administrator
 //   passwd <login>                       change a password (refused for an account without password)
 //   role <login> student|admin           change a role
 //   remove <login>                       delete an account; a live server keeps its session (and its
@@ -26,7 +26,7 @@ const root = path.join(__dirname, '..');
 const USAGE = `Usage: scripts/user.sh [--users FILE] <command>
   add <login> [--role student|admin] [--no-password]
                              --no-password: no password login, the account is only recognised
-                             (role, disabled) for an identity given by the OpenID front end
+                             (role, disabled) for an identity given by the authenticating front end
   passwd <login>
   role <login> student|admin
   remove <login>             a live server keeps its session; delete it from /admin

@@ -5,7 +5,7 @@ Using QemuWeb from the browser, and managing its accounts and sessions. Installa
 
 ## Users and sessions
 
-Each user logs in (with a login and a password, or through the OpenID front end, see
+Each user logs in (with a login and a password, or through the authenticating front end, see
 [How to log in](#how-to-log-in)) and always finds the same
 session: its hosts, switches, consoles and logs. The session lives on the
 server, independently of the browser: closing the tab or logging out stops
@@ -24,9 +24,9 @@ By default (`--auth password`) a user logs in with a login and a password of `us
 with `--auth both` behind Apache and the OpenID of the CREMI, and there are two ways in to the same server and the same
 sessions (one session per login, whatever the way in):
 
-- **Students: through the OpenID front end** (`https://qemuweb.emi.u-bordeaux.fr/`). The user logs in once, at the CREMI;
+- **Students: through Apache and OpenID** (`https://qemuweb.emi.u-bordeaux.fr/`). The user logs in once, at the CREMI;
   QemuWeb then trusts the identity that Apache gives (`X-Remote-User`) and never shows its own login page. The header shows the
-  login (and the display name when OpenID gives one); **Log out** goes to the OpenID logout (`--logout-url`; no button
+  login (and the display name when the front end gives one); **Log out** goes to the OpenID logout (`--logout-url`; no button
   without it). A login that is not in `users.json` is a **student**: nothing has to be created for a student. It is
   trusted only on a request that carries the key shared with Apache (`X-Proxy-Key`, `--proxy-key-file`); a header sent
   without the key is ignored, whatever its address, and a wrong key is refused (403, written to `users.log`).
@@ -36,8 +36,8 @@ sessions (one session per login, whatever the way in):
   tunnel to `127.0.0.1:3002` (or a local browser) reaches QemuWeb without the key: the QemuWeb login page, and the password
   of an account that has one (`scripts/user.sh add admin --role admin`) apply.
 
-`--auth openid` accepts only the OpenID identity (no login page, no password). A `disabled` account of `users.json` is refused
-through OpenID too, and an account added with `--no-password` that is `disabled` is the way to refuse one student.
+`--auth proxy` means that the identity is given by an authenticating front end (here Apache with mod_auth_openidc; it could be SAML, CAS, LDAP...) through `X-Remote-User`, trusted only with the shared `X-Proxy-Key`; the mode accepts only that identity (no login page, no password). A `disabled` account of `users.json` is refused
+through the front end too, and an account added with `--no-password` that is `disabled` is the way to refuse one student.
 
 Accounts live in `users.json` at the repository root (mode 0600, ignored by
 Git; `--users FILE` of the server (and of `scripts/user.sh`) selects another file, and
@@ -47,7 +47,7 @@ stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 ```sh
 ./scripts/user.sh add alice                 # prompts for the password twice
 ./scripts/user.sh add bob --role admin      # roles: student (default) or admin
-./scripts/user.sh add carol --role admin --no-password   # no password: recognised through OpenID only
+./scripts/user.sh add carol --role admin --no-password   # no password: recognised through the front end only
 ./scripts/user.sh passwd alice              # change a password
 ./scripts/user.sh role alice admin          # change a role
 ./scripts/user.sh remove alice              # delete the account
@@ -59,7 +59,7 @@ stored as `scrypt` hashes. Manage them with `scripts/user.sh`:
 
 | Command | What it does |
 | --- | --- |
-| `add <login> [--role student\|admin] [--no-password]` | Creates an account. It fails if the login already exists: use `passwd` to change the password. To add an account again after `remove`, simply run `add` again. With `--no-password` no password is asked and none is stored: the account cannot log in with a password and is only recognised, for its role and its `disabled` flag, when the OpenID front end gives its login. |
+| `add <login> [--role student\|admin] [--no-password]` | Creates an account. It fails if the login already exists: use `passwd` to change the password. To add an account again after `remove`, simply run `add` again. With `--no-password` no password is asked and none is stored: the account cannot log in with a password and is only recognised, for its role and its `disabled` flag, when the authenticating front end gives its login. |
 | `passwd <login>` | Sets a new password for an existing account. Refused for an account without a password: `remove` it and `add` it again. |
 | `role <login> student\|admin` | Changes the role of an existing account. |
 | `remove <login>` | Deletes the account: the user can no longer log in and their cookie stops working at once. The script does not touch a running server: the session is **not** deleted, its machines keep running until it is deleted (from `/admin`) or the server restarts. If you `add` the same login again while the server is still running, that account finds the old session again. **Remove** in `/admin` also deletes the session. |
@@ -123,7 +123,7 @@ can:
   confirmed on the listed sessions). The admin's own session cannot be
   selected.
 - Manage accounts: **Create account** (login, password, role; the option **No password**
-  creates an account that is recognised through OpenID only), reset a
+  creates an account that is recognised through the front end only), reset a
   password (not offered for an account without password), change the role, disable or enable, and **Remove** an account:
   it disappears from `users.json`, its pages are logged out at once and its
   session, if any, is deleted with its machines. An admin cannot disable,
@@ -148,9 +148,9 @@ browser's cookie (and, behind OpenID, ends the OpenID session); see [docs/deploy
 | `--users FILE` | `users.json` | Users file. |
 | `--session-hours N` | `12` | Login lifetime, renewed while the user is active. |
 | `--trust-proxy VALUE` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
-| `--auth MODE` | `password` | `password`, `openid` (the identity given by the OpenID front end, Apache mod_auth_openidc, through `X-Remote-User`, trusted only with the shared `X-Proxy-Key`) or `both`. |
-| `--proxy-key-file FILE` | unset | The shared key, one line, mode 0600; required by `openid` and `both`. |
-| `--logout-url URL` | unset | Where **Log out** goes for an identity from the OpenID front end. |
+| `--auth MODE` | `password` | `password`, `proxy` (the identity is given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through `X-Remote-User`, trusted only with the shared `X-Proxy-Key`) or `both`. |
+| `--proxy-key-file FILE` | unset | The shared key, one line, mode 0600; required by `proxy` and `both`. |
+| `--logout-url URL` | unset | Where **Log out** goes for an identity from the authenticating front end. |
 | `--no-auth` | authentication on | Disables authentication: one shared local session, for single-user local work only. |
 | `--logs DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions, and `users.log`, the user events (JSON lines, mode 0600). |
 

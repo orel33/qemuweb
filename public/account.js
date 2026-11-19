@@ -1,5 +1,5 @@
 // Account controls in the header: user name, Supervision link (admins), Delete session, Log out, and the warning
-// shown when authentication is disabled (--no-auth). The session survives Log out. An identity given by the OpenID front end
+// shown when authentication is disabled (--no-auth). The session survives Log out. An identity given by the authenticating front end
 // shows its display name, and Log out goes to --logout-url (no button without it).
 import {installAuthRedirect, requestJson, accountLabel, canLogOut, logOut} from './api.js';
 import {confirmAction} from './nodes.js';

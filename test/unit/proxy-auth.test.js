@@ -1,4 +1,4 @@
-// Identity given by the OpenID front end (--auth openid | both), without a server: the shared key
+// Identity given by the authenticating front end (--auth proxy | both), without a server: the shared key
 // (X-Proxy-Key), the headers trusted only with it, auto-provisioned students, accounts of users.json
 // (admin role, disabled flag, no password), the Socket.IO handshake, the options and scripts/user.js.
 const assert = require('node:assert/strict');
@@ -20,7 +20,7 @@ const KEY = 'k'.repeat(64);
 const FAST = {N: 1024};
 
 function tempDir(t) {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-openid-'));
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-proxy-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
   return dir;
 }
@@ -61,13 +61,13 @@ test('with the key, X-Remote-User is the identity: an unknown login is a student
   const {auth} = await setup(t);
   const {req, next} = identify(auth, front('alice.martin', {'x-user-displayname': 'Alice Martin', 'x-user-mail': 'alice@example.org', 'x-user-groups': 'admins'}));
   assert.equal(next, true);
-  assert.deepEqual(req.user, {login: 'alice.martin', role: 'student', via: 'openid', displayName: 'Alice Martin', mail: 'alice@example.org'});
+  assert.deepEqual(req.user, {login: 'alice.martin', role: 'student', via: 'proxy', displayName: 'Alice Martin', mail: 'alice@example.org'});
   assert.equal(identify(auth, front('bob')).req.user.displayName, undefined, 'the display name is optional');
   assert.equal(identify(auth, front('bob', {'x-user-displayname': Buffer.from('Élodie\n', 'utf8').toString('latin1')})).req.user.displayName, 'Élodie', 'UTF-8 from Apache, no control character');
 });
 
 test('forged identity headers are never trusted without the right key', async t => {
-  for (const mode of ['both', 'openid']) {
+  for (const mode of ['both', 'proxy']) {
     const {auth, lines} = await setup(t, {mode, users: [{login: 'boss', hash: await hashPassword('pw', FAST), role: 'admin'}]});
     for (const headers of [{'x-remote-user': 'boss'}, {'x-remote-user': 'boss', 'x-user-groups': 'admins'}]) {
       const {req, res, next} = identify(auth, headers);
@@ -95,8 +95,8 @@ test('a refused key is audited again after the throttling interval', async t => 
   assert.deepEqual(lines.map(([user, event, target]) => [user, event, target.reason]), [['', 'proxy-refused', 'wrong proxy key'], ['', 'proxy-refused', 'wrong proxy key']]);
 });
 
-test('in openid mode a request without the key is 401, whatever it carries', async t => {
-  const {auth} = await setup(t, {mode: 'openid'});
+test('in proxy mode a request without the key is 401, whatever it carries', async t => {
+  const {auth} = await setup(t, {mode: 'proxy'});
   for (const url of ['/api/nodes', '/', '/login.html', '/auth/login']) {
     const {req, res, next} = identify(auth, {'x-remote-user': 'alice'}, {path: url});
     assert.equal(next, true);
@@ -152,7 +152,7 @@ test('both: a direct visit keeps the password flow; with a cookie and a proxy id
   assert.equal(none.res.redirected, '/login.html', 'a direct visit gets the login page');
   const both = identify(auth, front('boss', {cookie}));
   assert.equal(both.req.user.login, 'boss');
-  assert.equal(both.req.user.via, 'openid');
+  assert.equal(both.req.user.via, 'proxy');
   assert.equal(both.res.headers['Set-Cookie'], undefined, 'no cookie for a proxy identity');
 });
 
@@ -171,14 +171,14 @@ test('Socket.IO handshakes use the same identity; open sockets are re-checked wi
   const handshake = headers => new Promise(resolve => { const socket = {request: {headers}, data: {}}; auth.socketMiddleware(socket, error => resolve({error, socket})); });
   let result = await handshake(front('alice'));
   assert.equal(result.error, undefined);
-  assert.deepEqual(result.socket.data.user, {login: 'alice', role: 'student', via: 'openid'});
+  assert.deepEqual(result.socket.data.user, {login: 'alice', role: 'student', via: 'proxy'});
   assert.match((await handshake({'x-proxy-key': 'wrong', 'x-remote-user': 'alice'})).error.message, /Forbidden/);
   assert.match((await handshake({'x-remote-user': 'alice'})).error.message, /Authentication required/, 'forged header, no key');
-  assert.deepEqual(auth.currentUser('alice', 'openid'), {login: 'alice', role: 'student', via: 'openid'});
+  assert.deepEqual(auth.currentUser('alice', 'proxy'), {login: 'alice', role: 'student', via: 'proxy'});
   assert.equal(auth.currentUser('alice'), null, 'a cookie login must be in users.json');
   assert.deepEqual(auth.currentUser('toto'), {login: 'toto', role: 'student'});
   writeUsers(usersFile, [{login: 'alice', role: 'student', disabled: true}]);
-  assert.equal(auth.currentUser('alice', 'openid'), null, 'disabled in users.json: the open socket is closed');
+  assert.equal(auth.currentUser('alice', 'proxy'), null, 'disabled in users.json: the open socket is closed');
 });
 
 test('/auth/me, login and logout through the routes: via, display name, logout URL, no key or password logged', async t => {
@@ -188,17 +188,17 @@ test('/auth/me, login and logout through the routes: via, display name, logout U
   const call = async (route, req) => { const res = exchange().res; await routes[route]({secure: false, headers: {}, ...req}, res); return res; };
   const me = identify(auth, front('alice', {'x-user-displayname': 'Alice'}));
   assert.deepEqual((await call('GET /auth/me', {user: me.req.user})).body,
-    {login: 'alice', role: 'student', authMode: 'both', via: 'openid', displayName: 'Alice', logoutUrl: 'https://qw.example/.openid?logout=https://qw.example/bye'});
+    {login: 'alice', role: 'student', authMode: 'both', via: 'proxy', displayName: 'Alice', logoutUrl: 'https://qw.example/.openid?logout=https://qw.example/bye'});
   const direct = (await call('GET /auth/me', {user: {login: 'toto', role: 'student'}})).body;
   assert.equal(direct.via, 'password');
   assert.equal(direct.logoutUrl, undefined, 'the logout URL is for the front end identity only');
   await call('POST /auth/logout', {user: me.req.user});
-  assert.deepEqual(lines.map(([user, event, target]) => [user, event, target]), [['alice', 'login', {via: 'openid'}], ['alice', 'logout', {via: 'openid'}]]);
+  assert.deepEqual(lines.map(([user, event, target]) => [user, event, target]), [['alice', 'login', {via: 'proxy'}], ['alice', 'logout', {via: 'proxy'}]]);
   assert.doesNotMatch(JSON.stringify(lines), new RegExp(KEY));
 });
 
-test('openid mode has no password login route answer', async t => {
-  const {auth} = await setup(t, {mode: 'openid'});
+test('proxy mode has no password login route answer', async t => {
+  const {auth} = await setup(t, {mode: 'proxy'});
   const routes = {};
   auth.register({post: (route, ...handlers) => { routes[`POST ${route}`] = handlers.at(-1); }, get: () => {}});
   const res = exchange().res;
@@ -222,17 +222,17 @@ test('the proxy key file must be private and hold a usable key', t => {
   }
   assert.throws(() => readProxyKey(path.join(dir, 'missing')), /ENOENT/);
   // The server itself refuses to start the web stack without a readable key.
-  assert.throws(() => createAuth({settings: {...defaultSettings(root), authMode: 'openid', usersFile: path.join(dir, 'users.json'), proxyKeyFile: path.join(dir, 'missing')}}), /ENOENT/);
+  assert.throws(() => createAuth({settings: {...defaultSettings(root), authMode: 'proxy', usersFile: path.join(dir, 'users.json'), proxyKeyFile: path.join(dir, 'missing')}}), /ENOENT/);
 });
 
-test('options: --auth takes password, openid or both and the key file is required for the last two', () => {
+test('options: --auth takes password, proxy or both and the key file is required for the last two', () => {
   assert.equal(parseServerArguments([], {root}).authMode, 'password');
   assert.equal(parseServerArguments(['--auth', 'password'], {root}).authMode, 'password');
   const settings = parseServerArguments(['--auth', 'both', '--proxy-key-file', '/etc/qemuweb/proxy-key', '--logout-url', 'https://qw.example/bye'], {root});
   assert.deepEqual([settings.authMode, settings.proxyKeyFile, settings.logoutUrl], ['both', '/etc/qemuweb/proxy-key', 'https://qw.example/bye']);
-  assert.equal(parseServerArguments(['--auth', 'openid', '--proxy-key-file', 'key'], {root}).authMode, 'openid');
+  assert.equal(parseServerArguments(['--auth', 'proxy', '--proxy-key-file', 'key'], {root}).authMode, 'proxy');
   assert.equal(parseServerArguments([], {root}).proxyKeyFile, null);
-  for (const bad of [['--auth', 'openid'], ['--auth', 'both'], ['--auth', 'proxy', '--proxy-key-file', 'k'], ['--auth', 'password', '--no-auth']]) {
+  for (const bad of [['--auth', 'proxy'], ['--auth', 'both'], ['--auth', 'openid', '--proxy-key-file', 'k'], ['--auth', 'password', '--no-auth']]) {
     assert.throws(() => parseServerArguments(bad, {root}), cli.UsageError, bad.join(' '));
   }
   assert.match(cli.formatHelp(require('../../server/options').serverSpec(root)), /--auth MODE +\[password\]/);

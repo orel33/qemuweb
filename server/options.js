@@ -13,7 +13,7 @@ const DEFAULT_SESSION_HOURS = 12;
 const MAX_SESSION_HOURS = 24 * 90;
 const DEFAULT_RUNNER_GRACE = 300;
 const MAX_RUNNER_GRACE = 86400;
-const AUTH_MODES = ['password', 'openid', 'both'];
+const AUTH_MODES = ['password', 'proxy', 'both'];
 
 function serverSpec(root) {
   return {
@@ -48,22 +48,22 @@ function serverSpec(root) {
         convert: value => (value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value),
         description: 'Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS'},
       {flag: '--auth', metavar: 'MODE', kind: 'choice', key: 'authMode', default: 'password', choices: AUTH_MODES, fallback: 'password', exclusive: ['--no-auth'],
-        description: 'how users are identified: password (QemuWeb login), openid (identity given by the OpenID front end, Apache mod_auth_openidc, through X-Remote-User, trusted only with the shared key) or both'},
+        description: 'how users are identified: password (QemuWeb login), proxy (identity given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through X-Remote-User, trusted only with the shared X-Proxy-Key) or both'},
       {flag: '--proxy-key-file', metavar: 'FILE', kind: 'path', key: 'proxyKeyFile', default: null, fallback: 'unset',
-        description: 'the key shared with the OpenID front end, one line (mode 0600), sent by it as X-Proxy-Key; required by --auth openid and --auth both'},
+        description: 'the key shared with the authenticating front end, one line (mode 0600), sent by it as X-Proxy-Key; required by --auth proxy and --auth both'},
       {flag: '--logout-url', metavar: 'URL', kind: 'text', key: 'logoutUrl', default: null, fallback: 'unset',
         convert: value => {
           if (!/^https?:\/\/[^\s]+$/.test(value)) throw invalid('--logout-url', value, 'an http:// or https:// URL');
           return value;
         },
-        description: 'where the Log out button goes when the identity comes from the OpenID front end (no button without it)'},
+        description: 'where the Log out button goes when the identity comes from the authenticating front end (no button without it)'},
       {flag: '--no-auth', metavar: null, key: 'authMode', default: 'password', value: 'off', fallback: 'off', exclusive: ['--auth'],
         description: 'disables authentication: one shared local session, for single-user local work only (default: authentication on)'},
       {flag: '--ephemeral', metavar: null, key: 'ephemeral', default: false, value: true, fallback: 'off',
         description: 'marks an ephemeral server of the test scenarios (tests only)'}
     ],
     validate(settings) {
-      if (['openid', 'both'].includes(settings.authMode) && !settings.proxyKeyFile) {
+      if (['proxy', 'both'].includes(settings.authMode) && !settings.proxyKeyFile) {
         throw new UsageError(`--auth ${settings.authMode} requires --proxy-key-file FILE`);
       }
     }

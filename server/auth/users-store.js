@@ -4,7 +4,7 @@
 // the --users option). Mode 0600, never committed. Layout:
 //   {"schemaVersion": 1, "users": [{"login": "alice", "hash": "scrypt$...", "role": "student"}]}
 // An account without "hash" cannot log in with a password: it is only recognised, by the identity
-// the OpenID front end gives (server/auth/proxy.js), for its role and its "disabled" flag.
+// the authenticating front end gives (server/auth/proxy.js), for its role and its "disabled" flag.
 // The role is 'student' or 'admin' (the /admin page and API). "disabled": true, written only
 // when set, refuses the account's logins and cookies.
 // The account operations at the end are shared by scripts/user.js and the admin API.

@@ -10,7 +10,7 @@ consoles.
 | Term | Meaning |
 | --- | --- |
 | Session | A user's workspace: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `runtime/sessions/<id>/`. Each user owns exactly one session, with a random ID, recorded as `owner` in `meta.json` next to `session.json`. A session ZIP archive and `session.json` describe it; `meta.json` (owner, creation date) belongs to the live session only and is never exported. |
-| User | A login from `users.json`, or given by the OpenID front end (`X-Remote-User`, a student unless `users.json` says otherwise), or the implicit `local` user when `--no-auth`, with the role `student` or `admin`. An admin owns a session like anyone else and may also supervise, observe and clean up the others. |
+| User | A login from `users.json`, or given by the authenticating front end (`X-Remote-User`, a student unless `users.json` says otherwise), or the implicit `local` user when `--no-auth`, with the role `student` or `admin`. An admin owns a session like anyone else and may also supervise, observe and clean up the others. |
 | Observer | An admin's browser tab or socket reading another user's session (`X-Observe` header, Socket.IO `auth.observe`): read-only, except console input after taking control of a node. |
 | Node | An element of a session: a host or a switch. API routes and Socket.IO events use `nodeId`. |
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
@@ -23,7 +23,7 @@ consoles.
 | Part | Files | Role |
 | --- | --- | --- |
 | Browser | `public/` | Web interface (`index.html`, `css/app.css`, ES modules started by `app.js`) and xterm.js terminals. |
-| Authentication | `server/auth/` | The one place where the identity is resolved (`createAuth` in `server/auth/index.js`): the OpenID front end's `X-Remote-User`, trusted only with the shared `X-Proxy-Key` (`proxy.js`), else the signed cookie; sets `req.user` (HTTP, `/admin`, `X-Observe`) and `socket.data.user` (Socket.IO handshake, console control); the role `admin` opens the admin API. |
+| Authentication | `server/auth/` | The one place where the identity is resolved (`createAuth` in `server/auth/index.js`): the authenticating front end's `X-Remote-User`, trusted only with the shared `X-Proxy-Key` (`proxy.js`), else the signed cookie; sets `req.user` (HTTP, `/admin`, `X-Observe`) and `socket.data.user` (Socket.IO handshake, console control); the role `admin` opens the admin API. |
 | Session manager | `server/session-manager.js`, `server/session.js` | Maps a login to its session (ID, owner, runner ID) and creates it on the runner chosen by `pickRunner`. |
 | HTTP API and Socket.IO | `server/routes/`, `server/sockets.js` | One router per session, one command per request and archive streams; Socket.IO rooms `session:<id>`, `observers:<id>`, `node:<id>:<nodeId>`, `console:<id>:<consoleId>`. |
 | Admin | `server/routes/admin.js`, `server/audit.js` | `/api/admin/*` and `/admin`: list, stop, delete, observe; `logs/admin.log` and `logs/users.log`. |
@@ -233,7 +233,7 @@ The server is split into layers with one-way dependencies:
 | `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
 | `server/runner-gateway.js` | The runner socket `<runtime>/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
 | `server/server-instance.js` | `<runtime>/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `runtime/` connects). |
-| `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie), `proxy.js` (shared key file, identity from the OpenID front end). |
+| `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie), `proxy.js` (shared key file, identity from the authenticating front end). |
 | `server/audit.js` | Log directory (`logs/` or `--logs`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
 | `runner/main.js` | Runner process entry point, same startup sequence as the server: command line (`common/cli.js`, tables in `runner/options.js`: the local form `--port` or `--connect`, `--runtime`, `--config`, `--exit-on-disconnect`; the `run` and `register` subcommands of a remote runner), banner, `Options`, preflight, its own configuration checks, connection and its state lines. |
@@ -272,7 +272,7 @@ order. State that several modules reassign lives on the `store` object of
 | Module | Role |
 | --- | --- |
 | `app.js` | Entry point: initializes the other modules. |
-| `account.js` | User name (and display name from OpenID), Supervision link (admins), Delete session and Log out in the header; authentication-disabled warning. |
+| `account.js` | User name (and display name from the front end), Supervision link (admins), Delete session and Log out in the header; authentication-disabled warning. |
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
 | `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401, `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |

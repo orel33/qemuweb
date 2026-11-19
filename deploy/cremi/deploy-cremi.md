@@ -150,7 +150,7 @@ Notes:
 
 ### Stage 3: QemuWeb behind Apache
 
-QemuWeb trusts the identity of OpenID: no second login. Apache adds the header `X-Proxy-Key` (a secret shared with
+QemuWeb trusts the identity of OpenID: no second login (`--auth both`: `proxy` means that the identity is given by the front end, here Apache with `mod_auth_openidc`, through `X-Remote-User`, and `both` keeps the password login too). Apache adds the header `X-Proxy-Key` (a secret shared with
 QemuWeb) to every request it forwards, WebSocket included; QemuWeb believes `X-Remote-User` only on a request that carries
 that key (`--auth both`). A CREMI login that is not in `users.json` is a **student**; the **administrators** are listed in
 `users.json`. The administrator's SSH tunnel (Runner A, step 19) reaches the same port without the key: it keeps the
@@ -423,6 +423,6 @@ curl -s -o /dev/null -w '%{http_code}\n' https://v0-qemuweb.emi.u-bordeaux.fr/au
 
 **Expect**: `401`, `401`, `403`, then `302`, `302`, a `4xx` (the application's answer, not `302`), `401` or `404` (not `302`), then
 `under maintenance` (the page) and `503`; the last command prints `302`. In the journal, `users.log` (`/var/log/qemuweb/users.log`) shows the refused key as a
-`proxy-refused` line, and the logins of the browser as `"via":"openid"`.
+`proxy-refused` line, and the logins of the browser as `"via":"proxy"`.
 
 If a runner path answers `302`, the `AuthType None` block of that path does not apply: check `qemuweb-3-app.conf`.

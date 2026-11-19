@@ -50,11 +50,11 @@ function checkUsers(settings) {
   if (settings.authMode !== 'password') {
     readProxyKey(settings.proxyKeyFile);
     cli.pass(`proxy key  ${settings.proxyKeyFile}  (read; mode ${octal(fs.statSync(settings.proxyKeyFile).mode)})`);
-    if (!settings.logoutUrl) cli.warning('no --logout-url: users identified by the OpenID front end get no Log out button.');
+    if (!settings.logoutUrl) cli.warning('no --logout-url: users identified by the authenticating front end get no Log out button.');
   }
   const count = createUsersStore(settings.usersFile).count();
   if (count) cli.pass(`${path.basename(settings.usersFile)}  ${count} ${count === 1 ? 'account' : 'accounts'}`);
-  else if (settings.authMode === 'openid') cli.pass(`${path.basename(settings.usersFile)}  no account: every identity from the OpenID front end is a student`);
+  else if (settings.authMode === 'proxy') cli.pass(`${path.basename(settings.usersFile)}  no account: every identity from the authenticating front end is a student`);
   else cli.warning(`No user account in ${settings.usersFile}: nobody can log in. Add one with ./scripts/user.sh add <login>.`);
 }
 

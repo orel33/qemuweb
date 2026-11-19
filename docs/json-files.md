@@ -130,16 +130,16 @@ not offer the system. Changing the file does not modify existing hosts (section 
 ### 2.2 `users.json`
 
 `{"schemaVersion": 1, "users": [...]}`, sorted by `login` when written. The file
-may be absent (no account). With `--no-auth` it is not used. With `--auth openid` or `--auth both` it also lists the
-administrators (and any account to disable): a login the OpenID front end gives that is not in the file is a student. Re-read when its
+may be absent (no account). With `--no-auth` it is not used. With `--auth proxy` or `--auth both` it also lists the
+administrators (and any account to disable): a login the authenticating front end gives that is not in the file is a student. Re-read when its
 inode, size or date change, so `scripts/user.sh` applies without a restart.
 
 | Keyword (user entry) | Values / validation | Default | Flag |
 |:--|:--|:--|:--|
 | `login` | `^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$`, unique | — | F |
-| `hash` | `scrypt$N$r$p$<salt b64>$<key b64>`; N a power of two 2–1048576, r 1–32, p 1–16; absent for an account without password (`scripts/user.sh add LOGIN --no-password`): it cannot log in with a password and is only recognised, for its `role` and `disabled`, through the OpenID front end | absent | E |
+| `hash` | `scrypt$N$r$p$<salt b64>$<key b64>`; N a power of two 2–1048576, r 1–32, p 1–16; absent for an account without password (`scripts/user.sh add LOGIN --no-password`): it cannot log in with a password and is only recognised, for its `role` and `disabled`, through the authenticating front end | absent | E |
 | `role` | `{student, admin}` | `student` | E |
-| `disabled` | boolean; written only when `true`; refuses logins and cookies, and the OpenID identity of the login | absent | E |
+| `disabled` | boolean; written only when `true`; refuses logins and cookies, and the proxy identity of the login | absent | E |
 
 ```json
 {
@@ -397,7 +397,7 @@ date, `result` is `"ok"` or `"error: <message>"`.
 
 | `event` | `target` | `result` |
 |:--|:--|:--|
-| `login`, `logout` | `{via}`: `password` or `openid` (the way in; `logout` of `--no-auth` has none). An `openid` login is written at the first request of an identity, and again after a pause as long as `--session-hours` | — |
+| `login`, `logout` | `{via}`: `password` or `proxy` (the way in; `logout` of `--no-auth` has none). A `proxy` login is written at the first request of an identity, and again after a pause as long as `--session-hours` | — |
 | `proxy-refused` | `{reason}`: `wrong proxy key`, `invalid login` or `account disabled` (`user` is the login, empty for a wrong key); at most one line every 10 seconds for a wrong key. The key itself is never written | — |
 | `login-failed` | — (`user` is the name typed, printable, at most 64 characters) | — |
 | `session-created`, `session-adopted` | `{sessionId}` | — |

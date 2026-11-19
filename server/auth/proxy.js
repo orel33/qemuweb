@@ -1,6 +1,6 @@
 'use strict';
 
-// The identity given by the OpenID front end (Apache mod_auth_openidc), for --auth openid and
+// The identity given by the authenticating front end (for example Apache with mod_auth_openidc), for --auth proxy and
 // --auth both. Apache sets X-Remote-User (and optionally X-User-DisplayName, X-User-Mail) and adds
 // X-Proxy-Key, the secret it shares with the server (--proxy-key-file). The identity headers
 // are trusted only on a request that carries the right key, whatever its address: the
@@ -45,7 +45,7 @@ function textHeader(value, max) {
 // resolve(headers) answers one of:
 //   {status: 'none'}                          no X-Proxy-Key, or the key without X-Remote-User: no identity from the proxy
 //   {status: 'refused', code, reason}         to answer with the HTTP status `code` (wrong key, invalid login, disabled account)
-//   {status: 'ok', user: {login, role, via: 'openid', displayName?, mail?}}
+//   {status: 'ok', user: {login, role, via: 'proxy', displayName?, mail?}}
 // A login that is not in users.json is a student; one that is has its role, and its "disabled" flag refuses it.
 function createProxyIdentity({key, store, userLog = {record() {}}, now = Date.now}) {
   let lastRefusalLog = -Infinity;
@@ -67,7 +67,7 @@ function createProxyIdentity({key, store, userLog = {record() {}}, now = Date.no
     if (!LOGIN_PATTERN.test(login)) return refuse(403, 'invalid login');
     const account = store.get(login);
     if (account?.disabled) return refuse(403, 'account disabled', login);
-    const user = {login, role: account ? account.role : 'student', via: 'openid'};
+    const user = {login, role: account ? account.role : 'student', via: 'proxy'};
     const displayName = textHeader(headers['x-user-displayname'], 100);
     const mail = textHeader(headers['x-user-mail'], 254);
     if (displayName) user.displayName = displayName;
@@ -80,7 +80,7 @@ function createProxyIdentity({key, store, userLog = {record() {}}, now = Date.no
     if (!LOGIN_PATTERN.test(login)) return null;
     const account = store.get(login);
     if (account?.disabled) return null;
-    return {login, role: account ? account.role : 'student', via: 'openid'};
+    return {login, role: account ? account.role : 'student', via: 'proxy'};
   }
 
   return {resolve, current};
