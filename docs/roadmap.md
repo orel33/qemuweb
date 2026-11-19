@@ -8,7 +8,7 @@ QemuWeb devient une plateforme de TP réseau multi-utilisateur. Un plan de contr
 
 Les tâches annexes (correctifs, idées, petites fonctions) hors jalons sont dans [todo.md](todo.md).
 
-Version actuelle : 0.9.0-beta.5.4. Chaque jalon est livré sous forme d'une bêta. **0.9.0** stabilise ce qui existe (formats figés, runner distant testé de bout en bout) et reste réservée à des utilisateurs de confiance. **1.0.0** est la version de production : sécurité, runners distants en service, vue Graphic achevée (voir « Version 1.0.0 »).
+Version actuelle : 0.9.0. Chaque jalon est livré sous forme d'une bêta. **0.9.0** stabilise ce qui existe (formats figés, runner distant testé de bout en bout) et reste réservée à des utilisateurs de confiance. **1.0.0** est la version de production : sécurité, runners distants en service, vue Graphic achevée (voir « Version 1.0.0 »).
 
 | Jalon | Version livrée |
 | --- | --- |
@@ -324,9 +324,9 @@ L'exécution des sessions sort du serveur web vers des runners, sur le modèle d
 
 **Critères de fin**
 
-- [ ] Les formats sont à 1, les démos réécrites, le ZIP renommé, les tests verts.
-- [ ] Un runner distant s'enregistre, reçoit une session, survit à une coupure réseau et se pilote comme un runner local (jalon 5 coché).
-- [ ] La version 0.9.0 est taguée ; elle reste réservée à des utilisateurs de confiance.
+- [x] Les formats sont à 1, les démos réécrites, le ZIP renommé, les tests verts.
+- [ ] Un runner distant s'enregistre, reçoit une session, survit à une coupure réseau et se pilote comme un runner local (jalon 5 coché). **Reporté** : le runner local et le déploiement CREMI (Apache, OpenID, WebSocket) sont validés ; le test du runner distant (Runner B) reste à faire.
+- [x] La version 0.9.0 est taguée ; elle reste réservée à des utilisateurs de confiance.
 
 ## Version 1.0.0 — objectif
 

@@ -87,8 +87,6 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   password accounts are reachable only by the tunnel). Idea: `OIDCUnAuthAction pass`, `X-Proxy-Key` sent only with an
   OpenID identity, and a "CREMI login" link on the login page. Not before the quotas, the HMP allowlist and the login
   throttling of milestone 6; never an admin account.
-- **CREMI relay**: WebSocket, upload size and timeouts are now set on httpsproxy (verified: `101` on `/socket.io/`).
-  Still to obtain: `X-Forwarded-For` (the Apache log shows `"-"`) and, for the build VMs, the IPv4 of v0-qemuweb on the squid proxy.
 
 ## Console and terminal
 
