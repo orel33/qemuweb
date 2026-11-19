@@ -168,8 +168,8 @@ sudo install -m 0644 deploy/cremi/whoami.html /var/www/qemuweb/whoami.html
 sudo install -m 0644 deploy/cremi/qemuweb-2-oidc.conf /etc/apache2/sites-available/qemuweb.conf
 # the OpenID site takes the place of the maintenance site (both use the same names: never enable the two)
 sudo a2dissite qemuweb-maintenance && sudo a2ensite qemuweb
-# a broken configuration stops Apache: on any error, go back at once to the maintenance site
-sudo apache2ctl configtest && sudo systemctl restart apache2 || { sudo a2dissite qemuweb; sudo a2ensite qemuweb-maintenance; sudo systemctl restart apache2; echo 'BACK ON THE MAINTENANCE SITE: fix the error above'; }
+sudo apache2ctl configtest                        # Syntax OK (restart only if it is)
+sudo systemctl restart apache2                    # restart: a new module is loaded
 sudo systemctl is-active apache2                  # active
 
 # 10a. on the server, without a session: a redirection to the CREMI login, not the page
@@ -243,8 +243,9 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me    # 401:
 apache2 -v | head -1                              # 2.4.47 or later: ProxyPass ... upgrade=websocket (WebSocket)
 sudo a2enmod proxy proxy_http proxy_wstunnel      # reverse proxy, WebSocket
 sudo install -m 0644 deploy/cremi/qemuweb-3-app.conf /etc/apache2/sites-available/qemuweb.conf
-sudo apache2ctl configtest                        # Syntax OK
-sudo systemctl restart apache2                    # restart: new modules are loaded
+sudo apache2ctl configtest                        # Syntax OK (restart only if it is)
+sudo systemctl restart apache2                    # restart: a new module is loaded
+sudo systemctl is-active apache2                  # active
 
 # 14a. on the server, without a session: OpenID answers first (302), not the application (401)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/auth/me
