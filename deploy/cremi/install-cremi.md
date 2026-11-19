@@ -161,9 +161,7 @@ sudo grep -c CHANGE_ME /etc/apache2/qemuweb-oidc.inc    # 0 (and exit status 1: 
 # 9. the OpenID module, and the site of stage 2
 # the CREMI OpenID provider must be reachable from here without the proxy (mod_auth_openidc reads its metadata at startup)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' https://openid.emi.u-bordeaux.fr/.well-known/openid-configuration   # 200
-# the module comes from a package: if the next line shows nothing, install it as ROOT (sudo does not keep the apt proxy):
-#   apt install -y libapache2-mod-auth-openidc
-dpkg -l libapache2-mod-auth-openidc | tail -1     # ii: installed
+dpkg -l libapache2-mod-auth-openidc | tail -1     # ii: installed at step 1 (if not, redo step 1 as root: sudo has no apt proxy)
 sudo a2enmod auth_openidc headers                 # OpenID; headers: RequestHeader (identity for the application)
 sudo install -m 0644 deploy/cremi/goodbye.html /var/www/qemuweb/goodbye.html
 sudo install -m 0644 deploy/cremi/qemuweb-2-oidc.conf /etc/apache2/sites-available/qemuweb.conf
