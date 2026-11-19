@@ -56,7 +56,7 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   (`--trust-proxy loopback`, never from a direct connection), creates the session from it, and takes the role of
   administrators from a group claim. Then the second password (`users.json`, `scripts/user.sh`) goes away; until then
   the user logs in twice (OpenID, then QemuWeb). The logout must also end the OpenID session
-  (`/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/au-revoir`).
+  (`/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye`).
 - **To check on the CREMI machine** (`deploy/cremi/install-cremi.md`, not testable from the repository): the https relay
   must pass WebSocket (Socket.IO, `/runner/connect`), 3600 s timeouts and large bodies; `LimitRequestBody` of the site
   (1 GiB) must match what the relay accepts; the OpenID provider must be reachable from Apache without the proxy.

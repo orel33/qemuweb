@@ -5,11 +5,11 @@ Debian or Ubuntu (TODO: confirm with `cat /etc/os-release`). Files to copy are i
 
 | File | Use |
 |---|---|
-| `qemuweb-1-hello.conf` | Apache site, stage 1: static page, HTTP and HTTPS |
+| `qemuweb-maintenance.conf` | Apache site, stage 1 (static maintenance page, HTTP and HTTPS, no OpenID); also the site to switch to to take QemuWeb offline |
 | `qemuweb-2-oidc.conf` | Apache site, stage 2: the static page behind OpenID |
 | `qemuweb-3-app.conf` | Apache site, stage 3: QemuWeb behind Apache and OpenID (final site) |
 | `qemuweb-oidc.inc.example` | model of the file that holds the OpenID secrets (kept on the server only) |
-| `hello.html`, `attente.html`, `au-revoir.html` | static pages: test page, waiting page, logout page |
+| `maintenance.html`, `goodbye.html` | static pages: the maintenance page (test page of stages 1 and 2, error page of stage 3, maintenance mode), the logout page |
 | `qemuweb.service`, `qemuweb-runner.service` | systemd units (server, local runner) |
 
 **Network.** `qemuweb.emi.u-bordeaux.fr` is an alias of the CREMI https relay `httpsproxy.emi.u-bordeaux.fr`
@@ -23,10 +23,11 @@ OpenID only with Apache2 (`mod_auth_openidc`), so Apache2 is the front end; Qemu
 which forwards your SSH agent to reach the git mirror; `qemuweb` is a sudoer). Part 2 goes in **three stages**, each
 tested alone, so that a failure points at one layer only:
 
-1. **Stage 1**: a static "hello" page over HTTP and HTTPS, without OpenID. Proves the https relay, the names, the
-   certificate and Apache.
+1. **Stage 1**: a static page "QemuWeb is under maintenance" over HTTP and HTTPS, without OpenID. Proves the https
+   relay, the names, the certificate and Apache. This site stays useful: it is the one you switch to when you take
+   QemuWeb offline (see "Maintenance mode").
 2. **Stage 2**: the same page behind OpenID. Proves `mod_auth_openidc`, the client secrets and the identity header.
-3. **Stage 3**: QemuWeb itself behind Apache (WebSocket, large uploads, waiting page, runners excluded from OpenID).
+3. **Stage 3**: QemuWeb itself behind Apache (WebSocket, large uploads, maintenance page on error, runners excluded from OpenID).
 
 Then the runner that runs the machines: **A** on this same machine (local runner), **B** on another machine (remote
 runner). The two aliases are in the workstation's `~/.ssh/config`: `qemuweb` (root) and `qemuweb-app` (user
@@ -102,37 +103,39 @@ sudo openssl x509 -in /etc/apache2/certs/star_emi_u-bordeaux_fr.crt -noout -subj
 sudo openssl x509 -in /etc/apache2/certs/star_emi_u-bordeaux_fr.crt -noout -pubkey | openssl sha256
 sudo openssl pkey -in /etc/apache2/certs/star_emi_u-bordeaux_fr.key -pubout | openssl sha256
 
-# 6. the static page and the site of stage 1
-sudo a2enmod ssl                                  # TLS
+# 6. the maintenance page and the site of stage 1
+sudo a2enmod ssl rewrite                          # TLS; rewrite: the 503 of every other path
 # the Debian default site answers unknown names (and the bare IP) with its "It works" page: off
 sudo a2dissite 000-default
 # the global name of the server (otherwise apache2ctl warns AH00558)
 echo 'ServerName v0-qemuweb.emi.u-bordeaux.fr' | sudo tee /etc/apache2/conf-available/servername.conf
 sudo a2enconf servername
 sudo install -d /var/www/qemuweb
-sudo install -m 0644 deploy/cremi/hello.html /var/www/qemuweb/hello.html
-sudo install -m 0644 deploy/cremi/qemuweb-1-hello.conf /etc/apache2/sites-available/qemuweb.conf
-sudo a2ensite qemuweb
+sudo install -m 0644 deploy/cremi/maintenance.html /var/www/qemuweb/maintenance.html
+sudo install -m 0644 deploy/cremi/qemuweb-maintenance.conf /etc/apache2/sites-available/qemuweb-maintenance.conf
+sudo a2ensite qemuweb-maintenance
 sudo apache2ctl configtest                        # Syntax OK
 sudo systemctl enable apache2 && sudo systemctl restart apache2    # restart: mod_ssl adds port 443
 sudo systemctl status apache2 --no-pager | head -5
 
 # 7a. on the server, Apache alone (-k is not used: this also checks the certificate)
-curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/hello.html | head -1
-curl --noproxy '*' -s --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/hello.html
-curl --noproxy '*' -s -o /dev/null -w '%{http_code} %{redirect_url}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:80:127.0.0.1 http://v0-qemuweb.emi.u-bordeaux.fr/hello.html
+curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html | head -1
+curl --noproxy '*' -s --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html
+# any other path: the same page, with the status 503
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/anything
+curl --noproxy '*' -s -o /dev/null -w '%{http_code} %{redirect_url}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:80:127.0.0.1 http://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html
 
 # 7b. from another machine inside the CREMI (a lab machine, or the workstation on the CREMI VPN), to this machine by its
 #     name. The jump host `cremi` does not run commands: use a machine you can log in to.
-#     curl -s https://v0-qemuweb.emi.u-bordeaux.fr/hello.html
+#     curl -s https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html
 
 # 7c. from the workstation, through the CREMI https relay, then in a browser
-#     curl -s https://qemuweb.emi.u-bordeaux.fr/hello.html
+#     curl -s https://qemuweb.emi.u-bordeaux.fr/maintenance.html
 ```
 
-**Expect (stage 1)**: 7a prints `HTTP/2 200` (or `HTTP/1.1 200 OK`), then `hello from v0-qemuweb` in the page, then
-`302 https://v0-qemuweb.emi.u-bordeaux.fr/hello.html`. 7b and 7c print the same page, and the browser shows the padlock
-with no warning.
+**Expect (stage 1)**: 7a prints `HTTP/2 200` (or `HTTP/1.1 200 OK`), then the page (`QemuWeb is under maintenance`), then
+`503` (any other path), then `302 https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html`. 7b and 7c print the same page, and
+the browser shows the padlock with no warning.
 
 If 7a works but 7b does not: the machine's firewall (443). If 7a and 7b work but 7c does not (403, 502, certificate
 or name error): the problem is the CREMI relay (ask the CREMI), not this machine. `sudo tail -n 20
@@ -159,25 +162,27 @@ sudo grep -c CHANGE_ME /etc/apache2/qemuweb-oidc.inc    # 0 (and exit status 1: 
 # the CREMI OpenID provider must be reachable from here without the proxy (mod_auth_openidc reads its metadata at startup)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' https://openid.emi.u-bordeaux.fr/.well-known/openid-configuration   # 200
 sudo a2enmod auth_openidc headers                 # OpenID; headers: RequestHeader (identity for the application)
-sudo install -m 0644 deploy/cremi/au-revoir.html /var/www/qemuweb/au-revoir.html
+sudo install -m 0644 deploy/cremi/goodbye.html /var/www/qemuweb/goodbye.html
 sudo install -m 0644 deploy/cremi/qemuweb-2-oidc.conf /etc/apache2/sites-available/qemuweb.conf
+# the OpenID site takes the place of the maintenance site (both use the same names: never enable the two)
+sudo a2dissite qemuweb-maintenance && sudo a2ensite qemuweb
 sudo apache2ctl configtest                        # Syntax OK
 sudo systemctl restart apache2                    # restart: a new module is loaded
 
 # 10a. on the server, without a session: a redirection to the CREMI login, not the page
-curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/hello.html | grep -iE '^(HTTP|location)'
+curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html | grep -iE '^(HTTP|location)'
 
 # 10b. from another machine inside the CREMI, the same
-#      curl -s -D - -o /dev/null https://v0-qemuweb.emi.u-bordeaux.fr/hello.html | grep -iE '^(HTTP|location)'
+#      curl -s -D - -o /dev/null https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html | grep -iE '^(HTTP|location)'
 
-# 10c. in a browser, https://qemuweb.emi.u-bordeaux.fr/hello.html: CREMI login, then the page. Then, on the server,
-#      the access log: the line of hello.html has `user=` followed by your CREMI login
+# 10c. in a browser, https://qemuweb.emi.u-bordeaux.fr/maintenance.html: CREMI login, then the page. Then, on the server,
+#      the access log: the line of maintenance.html has `user=` followed by your CREMI login
 sudo tail -n 5 /var/log/apache2/qemuweb-access.log
 ```
 
 **Expect (stage 2)**: 10a prints `HTTP/1.1 302 Found` and a `location:` that starts with
 `https://openid.emi.u-bordeaux.fr/`; 10b prints the same. In the browser (10c) you are sent to the CREMI login, then
-see `hello from v0-qemuweb`; the log line of `/hello.html` reads `user=<your CREMI login>` (`user=-` on the first, redirected request, which had
+see `QemuWeb is under maintenance`; the log line of `/maintenance.html` reads `user=<your CREMI login>` (`user=-` on the first, redirected request, which had
 no session). A user without the group `cremi-active` gets `403` after the login.
 
 **Why the log shows the identity.** The site sets the header `X-Remote-User` from the claim `preferred_username`
@@ -192,8 +197,8 @@ If 10a gives `500` or no redirection: `sudo tail -n 30 /var/log/apache2/qemuweb-
 an error of the token endpoint; an unreachable provider as a metadata error). If the OpenID provider is only
 reachable through the proxy, add `OIDCOutgoingProxy proxy:3128` to the site (not needed on the reference site).
 
-To log out (to test again): `https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/au-revoir`
-(the page `/au-revoir` is not protected, so that the logout is not followed by an immediate login).
+To log out (to test again): `https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye`
+(the page `/goodbye` is not protected, so that the logout is not followed by an immediate login).
 
 ### Stage 3: QemuWeb behind Apache
 
@@ -215,10 +220,9 @@ sudo systemctl enable --now qemuweb
 sudo journalctl -u qemuweb -n 30 --no-pager -o cat    # "QemuWeb is ready." "No runner connected."
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me    # 401: the application alone
 
-# 13. the proxy modules, the waiting page and the site of stage 3
+# 13. the proxy modules and the site of stage 3 (the maintenance page is already in place)
 apache2 -v | head -1                              # 2.4.47 or later: ProxyPass ... upgrade=websocket (WebSocket)
 sudo a2enmod proxy proxy_http proxy_wstunnel      # reverse proxy, WebSocket
-sudo install -m 0644 deploy/cremi/attente.html /var/www/qemuweb/attente.html
 sudo install -m 0644 deploy/cremi/qemuweb-3-app.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest                        # Syntax OK
 sudo systemctl restart apache2                    # restart: new modules are loaded
@@ -231,9 +235,9 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin'
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/json' -d '{}' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/api/runner/register
 # runner connection, same (without the WebSocket upgrade; 401 or 404, never 302)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect
-# the waiting page: QemuWeb stopped, a path without OpenID gives 503 and the page of attente.html
+# the maintenance page: QemuWeb stopped, a path without OpenID gives 503 and the page of maintenance.html
 sudo systemctl stop qemuweb
-curl --noproxy '*' -s -w '\n%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect | grep -E 'not available|^50'
+curl --noproxy '*' -s -w '\n%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect | grep -E 'under maintenance|^50'
 sudo systemctl start qemuweb
 
 # 14b. from another machine inside the CREMI
@@ -246,14 +250,14 @@ sudo tail -n 5 /var/log/apache2/qemuweb-access.log
 ```
 
 **Expect (stage 3)**: 14a prints `302`, `302`, then a `4xx` (the application's answer, not `302`), then `401` or `404`
-(not `302`), then `not available` (the page) and `503`. 14b prints `302`. In the browser (14c): CREMI login, QemuWeb
+(not `302`), then `under maintenance` (the page) and `503`. 14b prints `302`. In the browser (14c): CREMI login, QemuWeb
 login, then the application; the access log lines carry `user=<your CREMI login>`.
 
 What Apache does for QemuWeb (`qemuweb-3-app.conf`): proxies everything to `127.0.0.1:3002` with
 `upgrade=websocket` (Socket.IO and `/runner/connect`) and a one-hour timeout; sends `X-Forwarded-Proto: https`
 (QemuWeb runs with `--trust-proxy loopback`, so the login cookie is `Secure`; Apache itself adds `X-Forwarded-For`
 and `X-Forwarded-Host`); accepts bodies up to 1 GiB (`LimitRequestBody 1073741824`, for session ZIP archives, which
-are flat sparse files; `/api/runner/register` takes 8 KiB); and shows `attente.html` on 502 and 503.
+are flat sparse files; `/api/runner/register` takes 8 KiB); and shows `maintenance.html` on 502 and 503.
 
 **Runners and OpenID.** `/runner/connect` and `/api/runner/register` are excluded from OpenID with an
 `AuthType None` block, because a runner has no browser: it authenticates with its own token (a bearer token checked
@@ -275,21 +279,49 @@ Each stage is only a site file: put the previous one back, test, reload. Modules
 sudo install -m 0644 deploy/cremi/qemuweb-2-oidc.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest && sudo systemctl reload apache2
 
-# from stage 2 to stage 1 (no more OpenID: the static page only)
-sudo install -m 0644 deploy/cremi/qemuweb-1-hello.conf /etc/apache2/sites-available/qemuweb.conf
+# from stage 2 to stage 1 (no more OpenID: the static maintenance page only)
+sudo a2dissite qemuweb && sudo a2ensite qemuweb-maintenance
 sudo apache2ctl configtest && sudo systemctl reload apache2
 
 # out of the site altogether (the secrets file stays: delete it by hand if you give up)
-sudo a2dissite qemuweb && sudo apache2ctl configtest && sudo systemctl reload apache2
+sudo a2dissite qemuweb qemuweb-maintenance && sudo apache2ctl configtest && sudo systemctl reload apache2
 ```
 
-Then repeat the checks of that stage. Note that stage 1 and stage 2 serve a test page: nobody can use QemuWeb until
-stage 3 is back.
+Then repeat the checks of that stage. Note that stage 1 and stage 2 serve the maintenance page: nobody can use QemuWeb
+until stage 3 is back.
+
+### Maintenance mode
+
+The stage 1 site is also the **maintenance switch** of the production site. To take QemuWeb offline for a while (an
+update, an intervention of the CREMI), put Apache on the maintenance site: every visitor gets the page "QemuWeb is
+under maintenance" with the status `503`, and nothing reaches QemuWeb.
+
+```sh
+# maintenance ON (the stage 3 site is replaced by the maintenance site)
+sudo a2dissite qemuweb && sudo a2ensite qemuweb-maintenance
+sudo apache2ctl configtest && sudo systemctl reload apache2
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/    # 503
+
+# maintenance OFF (the site of stage 3 again)
+sudo a2dissite qemuweb-maintenance && sudo a2ensite qemuweb
+sudo apache2ctl configtest && sudo systemctl reload apache2
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/    # 302 (OpenID)
+```
+
+What it does and does not do:
+- QemuWeb and its local runner keep running: the machines of the students are not touched, only the web access is cut,
+  as in a network cut. The page reloads itself every 30 seconds, so users come back by themselves.
+- `/runner/connect` and `/api/runner/register` answer `503` too. A remote runner reconnects with a growing delay; the
+  server drops its sessions after `--runner-grace` (300 s) if the maintenance lasts longer.
+- The maintenance site needs only `ssl` and `rewrite` and no secret: it works even if OpenID or the secrets file is
+  broken.
+- `qemuweb.conf` and `qemuweb-maintenance.conf` define the same names: **enable one at a time** (`a2dissite` first).
 
 ### Update later
 
 ```sh
 # 15. a restart deletes the sessions of remote runners; the machines of the local runner survive
+#     (for a long update, put the maintenance site first: see "Maintenance mode")
 cd /srv/qemuweb && git pull && npm ci && sudo systemctl restart qemuweb
 # after a change of a site file or of the secrets file
 sudo apache2ctl configtest && sudo systemctl reload apache2
