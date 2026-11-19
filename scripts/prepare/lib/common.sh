@@ -276,7 +276,6 @@ CLOUD_INIT_FAILURES=(
   'Failed to run module'
   'Failed run of stage'
   'Unable to locate package'
-  'Failed to start cloud-(init|config|final)'   # the cloud-init services themselves, not any service
 )
 
 # Progress phases: "percent@label@regex", regex on the same normalised log. The
@@ -440,17 +439,22 @@ watch_vm() {
       last_size=$size; last_growth=$SECONDS; stall_warned=0
       serial_strip < "$log" | tr -d ' \t\n' > "$norm"
       if (( ! tty && follow > 0 )); then follow_new_lines "$log"; fi
-      for f in "${failures[@]}"; do
-        if serial_has "$norm" "${f// /}"; then
-          vm_failed "$label" "$pid" "$log" "the serial log shows an error: $f"
-          return 1
-        fi
-      done
+      # The end marker comes first: once the guest has printed it, the image is prepared and what the
+      # guest says afterwards (cloud-final.service reporting a failed package module, a service that
+      # does not start while it shuts down) is not a failure of the build.
+      if (( ! done_seen )) && serial_has "$norm" "$done_re"; then done_seen=1; fi
+      if (( ! done_seen )); then
+        for f in "${failures[@]}"; do
+          if serial_has "$norm" "${f// /}"; then
+            vm_failed "$label" "$pid" "$log" "the serial log shows an error: $f"
+            return 1
+          fi
+        done
+      fi
       for entry in "${phases[@]}"; do
         IFS=@ read -r pct text re <<< "$entry"
         if (( pct > percent )) && serial_has "$norm" "$re"; then percent=$pct; phase=$text; fi
       done
-      if (( ! done_seen )) && serial_has "$norm" "$done_re"; then done_seen=1; fi
     fi
     if (( done_seen )) && { (( ! wait_exit )) || (( ! alive )); }; then
       frame_erase

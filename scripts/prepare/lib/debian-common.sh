@@ -105,6 +105,14 @@ chpasswd:
   users:
     - {name: toto, password: toto, type: text}
 write_files:
+  # No service is started while the image is built: a package whose service cannot start without a
+  # configuration (isc-dhcp-server, dnsmasq) would make dpkg, apt and cloud-init fail. The file is
+  # removed again by the last runcmd, so the image keeps the normal behaviour.
+  - path: /usr/sbin/policy-rc.d
+    permissions: '0755'
+    content: |
+      #!/bin/sh
+      exit 101
   - path: /usr/local/sbin/qemuweb-guest-start
     permissions: '0755'
     encoding: b64
@@ -134,6 +142,7 @@ runcmd:
   - [touch, /etc/cloud/cloud-init.disabled]
   # The build proxy must not stay in the image, which is used on other networks.
   - [rm, -f, /etc/apt/apt.conf.d/90cloud-init-aptproxy]
+  - [rm, -f, /usr/sbin/policy-rc.d]
   # Finish the template with no fixed machine ID. This is the last guest-side
   # change before the temporary preparation VM is shut down.
   - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
