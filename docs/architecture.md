@@ -288,7 +288,7 @@ order. State that several modules reassign lives on the `store` object of
 | `general-settings.js` | General Settings dialog. |
 | `topology.js` | `.topo` load/save, and the start of the saved view. |
 | `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
-| `captures.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the Host Settings section, the session list dialog, the link popover actions, and the Capture view of a pane (capture choice, filter, start and stop). |
+| `captures.js`, `capture-dialog.js`, `capture-button.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the interface labels, the preselection and the pane button state. `capture-dialog.js` is the Capture dialog (interface, Start/Stop, files, all captures of the session), `capture-button.js` the pane bar button, and the link popover opens the dialog. The Capture view of a pane (capture choice, filter, start and stop) is `capture-live.js`. |
 | `graphic-console.js` | Floating console of the Graphic view: the console workspace shown as a movable, resizable window over the graph, with the selected node's pane only. |
 | `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
 | `archive.js` | Session ZIP save and load dialogs. |

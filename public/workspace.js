@@ -2,6 +2,7 @@
 import {machines, saveViewSettings, savedView, store} from './state.js';
 import {jsonRequest, nodeUrl} from './api.js';
 import {leaveCaptureView} from './capture-live.js';
+import {updateCaptureButton} from './capture-button.js';
 import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setPaneView, updatePaneViewControls, usablePaneView} from './terminal.js';
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
@@ -51,6 +52,7 @@ function updatePaneStates() {
     const machine = pane.machineId && machines.get(pane.machineId);
     updatePaneActionMenu(pane, machine);
     pane.settingsButton.hidden = !machine || machine.kind !== 'host';
+    updateCaptureButton(pane);
     pane.clearButton.hidden = !machine;
     pane.clearButton.disabled = !machine || !isConsoleView(pane.view);
     for (const button of pane.fontButtons) button.hidden = !machine;

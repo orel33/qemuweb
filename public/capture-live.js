@@ -104,6 +104,16 @@ export function showCaptureView(pane) {
   requestAnimationFrame(() => fitTerminal(pane));
 }
 
+// Selects a capture in the pane's Capture view (the Capture dialog's "Open live view"). A live
+// view in progress ends first: the person asked for another capture.
+export function chooseLiveCapture(pane, captureId) {
+  if (!pane.live || pane.view !== 'capture') return;
+  stopLive(pane);
+  refreshBar(pane);
+  if ([...pane.live.select.options].some(option => option.value === captureId)) pane.live.select.value = captureId;
+  refreshBar(pane);
+}
+
 // The pane leaves the Capture view or changes node: the live view ends, its tcpdump with it.
 export function leaveCaptureView(pane) {
   if (!pane.live) return;

@@ -7,6 +7,7 @@ import {openHostSettings} from './host-settings.js';
 import {canType, observing, socketOptions} from './observe.js';
 import {canCapture} from './captures.js';
 import {leaveCaptureView, showCaptureView} from './capture-live.js';
+import {createCaptureButton} from './capture-button.js';
 
 export const panes = [];
 
@@ -468,7 +469,9 @@ export function initTerminals() {
     pane.clearButton.hidden = true;
     pane.clearButton.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><use href="#pane-clear-icon"></use></svg>';
     pane.clearButton.addEventListener('click', () => clearPaneConsole(pane));
-    pane.settingsButton.after(pane.clearButton);
+    pane.captureButton = createCaptureButton(pane);
+    pane.settingsButton.after(pane.captureButton);
+    pane.captureButton.after(pane.clearButton);
     pane.fontButtons = [-1, 1].map(change => {
       const button = document.createElement('button');
       button.type = 'button';

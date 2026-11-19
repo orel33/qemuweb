@@ -1,25 +1,23 @@
 // Traffic capture in the interface: the captures of each node (kept from the server's `captures`
-// events and from the list route), the reasons a capture cannot start, and the capture section of
-// Host Settings > Network. The server and the runner do the work (docs/architecture.md, "Traffic
-// capture"); this module only asks for it.
+// events and from the list route), the reasons a capture cannot start, the interface labels and the
+// state of the pane button, and the requests. The Capture dialog (capture-dialog.js) and the pane
+// button (capture-button.js) show them. The server and the runner do the work (docs/architecture.md,
+// "Traffic capture"); this module only asks for it.
 import {machines} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {holdingControl, observing} from './observe.js';
 
-const POLL_MS = 2000;
 // Captures per node, as the server's `captures` event sends them: {id, nodeId, interface, index,
 // file, state, reason, message, startedAt, endedAt, bytes}.
 const byNode = new Map();
-const nameOf = nodeId => machines.get(nodeId)?.hostname || nodeId;
+export const nameOf = nodeId => machines.get(nodeId)?.hostname || nodeId;
 let limits = {maxBytes: 100 * 1024 * 1024, maxPerNode: 4};
-// The section of Host Settings being shown: {container, nodeId}, or null.
-let panel = null;
-let pollTimer = null;
 const changeListeners = new Set();
 
 export const capturesOf = nodeId => byNode.get(nodeId) || [];
 export const isRecording = capture => capture.state !== 'stopped';
 export const recordingOf = nodeId => capturesOf(nodeId).filter(isRecording);
+export const allCaptures = () => [...byNode.values()].flat();
 export const onCapturesChanged = listener => changeListeners.add(listener);
 
 // An observer may look but not capture; an administrator holding the control lock may.
@@ -31,11 +29,18 @@ export function formatBytes(bytes) {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
+// Why a host cannot be captured at all (whatever the interface), or null.
+function hostCaptureBlocker(machine) {
+  if (!canCapture()) return 'Read-only observation: take control of the session to capture.';
+  if (machine.engine !== 'qemu') return 'Capture is available for QEMU hosts only.';
+  return null;
+}
+
 // Why interface `index` of a host cannot be captured now, or null. `machine` is the live record
 // of machines (state.js).
 export function captureBlocker(machine, index) {
-  if (!canCapture()) return 'Read-only observation: take control of the session to capture.';
-  if (machine.engine !== 'qemu') return 'Capture is available for QEMU hosts only.';
+  const hostBlocker = hostCaptureBlocker(machine);
+  if (hostBlocker) return hostBlocker;
   if (!machine.running) return 'The host is stopped: start it to capture.';
   if (machine.busy) return 'The host is busy.';
   if (machine.pendingRestart) return 'The host has pending changes: restart it first.';
@@ -47,9 +52,37 @@ export function captureBlocker(machine, index) {
 
 function publishChange(nodeId) {
   for (const listener of changeListeners) listener(nodeId);
-  renderPanel();
-  renderSessionList();
 }
+
+// How an interface of a host is named in the Capture dialog: "Ethernet 0 · to switch lan".
+// `switchName` is the name of the switch it is connected to, empty when it is not connected.
+export function interfaceLabel(index, switchName) {
+  return `Ethernet ${index} · ${switchName ? `to switch ${switchName}` : 'not connected'}`;
+}
+
+// The interface the Capture dialog selects first: the one being recorded, else the first
+// connected one (the only one, usually), else Ethernet 0 (its reason is then shown).
+export function preselectInterface(machine, captures) {
+  const recording = captures.find(item => item.state !== 'stopped');
+  if (recording) return recording.index;
+  const connected = (machine.interfaces || []).findIndex(Boolean);
+  return connected < 0 ? 0 : connected;
+}
+
+// The Capture button of a console pane: {hidden, disabled, recording, title}. A switch or an empty
+// pane has none; a host always has one (stopped hosts keep their files), disabled with the reason
+// when capture is out of reach (observer, VirtualBox).
+export function captureButtonState(machine, captures) {
+  const recording = captures.filter(item => item.state !== 'stopped').length;
+  if (!machine || machine.kind !== 'host') return {hidden: true, disabled: true, recording: 0, title: ''};
+  const blocker = hostCaptureBlocker(machine);
+  if (blocker) return {hidden: false, disabled: true, recording, title: blocker};
+  const title = recording ? `Capture: recording ${recording} ${recording === 1 ? 'interface' : 'interfaces'}` : 'Capture the traffic of this host';
+  return {hidden: false, disabled: false, recording, title};
+}
+
+// The host's state changed (started, stopped, switches connected): the reasons change with it.
+export const refreshCaptureRules = () => publishChange(null);
 
 // Nodes were removed: their captures went with them.
 export function forgetCaptures(nodeIds) {
@@ -88,14 +121,15 @@ export async function loadCaptures(nodeId) {
   } catch (_) { /* The list stays as it was. */ }
 }
 
-const action = async (nodeId, captureId, verb, options) => requestJson(nodeUrl(nodeId, `captures${captureId ? `/${captureId}` : ''}${verb ? `/${verb}` : ''}`), options, 'Capture request failed.');
+export const captureAction = async (nodeId, captureId, verb, options) => requestJson(nodeUrl(nodeId, `captures${captureId ? `/${captureId}` : ''}${verb ? `/${verb}` : ''}`), options, 'Capture request failed.');
 
-export const startCapture = (nodeId, index) => action(nodeId, '', '', jsonRequest('POST', {interface: `eth${index}`}));
-export const stopCapture = (nodeId, captureId) => action(nodeId, captureId, 'stop', {method: 'POST'});
+export const startCapture = (nodeId, index) => captureAction(nodeId, '', '', jsonRequest('POST', {interface: `eth${index}`}));
+export const stopCapture = (nodeId, captureId) => captureAction(nodeId, captureId, 'stop', {method: 'POST'});
+export const deleteCapture = (nodeId, captureId) => captureAction(nodeId, captureId, '', {method: 'DELETE'});
 
 // The browser downloads straight from the server; an observing administrator needs the
 // X-Observe header, so the file goes through a Blob.
-async function download(nodeId, capture) {
+export async function downloadCapture(nodeId, capture) {
   const url = nodeUrl(nodeId, `captures/${capture.id}/download`);
   const link = document.createElement('a');
   link.download = capture.file;
@@ -111,137 +145,8 @@ async function download(nodeId, capture) {
   if (observing) setTimeout(() => URL.revokeObjectURL(link.href), 60000);
 }
 
-function button(text, title, onClick, disabled = false) {
-  const element = document.createElement('button');
-  element.type = 'button';
-  element.textContent = text;
-  element.title = title;
-  element.disabled = disabled;
-  element.addEventListener('click', onClick);
-  return element;
-}
-
-// One capture file: name, state and size, Stop (while recording), Download and Delete.
-function fileRow(capture, run, withHost = false) {
-  const nodeId = capture.nodeId;
-  const row = document.createElement('div');
-  row.className = 'capture-row capture-file';
-  const name = document.createElement('span');
-  name.textContent = withHost ? `${nameOf(nodeId)} · ${capture.file}` : capture.file;
-  name.title = capture.file;
-  const note = document.createElement('span');
-  note.className = 'capture-note';
-  note.textContent = `${capture.message} · ${formatBytes(capture.bytes)}`;
-  const actions = document.createElement('span');
-  actions.className = 'capture-actions';
-  const recording = isRecording(capture);
-  actions.append(
-    ...(recording ? [button('Stop', 'Stop this capture', () => run(() => action(nodeId, capture.id, 'stop', {method: 'POST'})), !canCapture())] : []),
-    button('Download', capture.bytes <= 24 ? 'Nothing was captured yet' : 'Download the PCAP file', () => run(() => download(nodeId, capture)), !canCapture() || capture.bytes <= 24),
-    button('Delete', recording ? 'Stop the capture first' : 'Delete the capture file', () => {
-      if (confirm(`Delete ${capture.file}?`)) run(() => action(nodeId, capture.id, '', {method: 'DELETE'}));
-    }, !canCapture() || recording));
-  row.append(name, note, actions);
-  return row;
-}
-
-// ---- The captures of the whole session (button of the bottom toolbar) ---------------------------
-const listButton = document.getElementById('show-captures');
-const listDialog = document.getElementById('captures-dialog');
-const listBody = document.getElementById('captures-list');
-let listTimer = null;
-
-export const allCaptures = () => [...byNode.values()].flat();
-
-function renderSessionList() {
-  const all = allCaptures();
-  listButton.dataset.recording = String(all.some(isRecording));
-  listButton.disabled = !canCapture();
-  listButton.title = canCapture() ? 'Traffic captures of this session' : 'Read-only observation: take control of the session to use captures';
-  clearTimeout(listTimer);
-  if (!listDialog.open) return;
-  const status = document.createElement('p');
-  status.className = 'capture-status';
-  status.setAttribute('role', 'status');
-  const run = async work => {
-    status.textContent = '';
-    try { await work(); } catch (error) { status.textContent = error.message; }
-  };
-  const rows = all.map(capture => fileRow(capture, run, true));
-  if (!rows.length) {
-    const empty = document.createElement('p');
-    empty.textContent = 'No capture yet. Start one from Host Settings > Network, or from a link in the Graphic view.';
-    rows.push(empty);
-  }
-  listBody.replaceChildren(...rows, status);
-  if (all.some(isRecording)) listTimer = setTimeout(loadAllCaptures, POLL_MS);
-}
-
 // The right to capture may have changed (an administrator took or released control).
 export function refreshCaptureAccess() {
-  renderSessionList();
-  renderPanel();
+  publishChange(null);
   loadAllCaptures();
 }
-
-export function initCaptures() {
-  listButton.addEventListener('click', () => { listDialog.showModal(); renderSessionList(); loadAllCaptures(); });
-  document.getElementById('close-captures').addEventListener('click', () => listDialog.close());
-  listDialog.addEventListener('close', () => clearTimeout(listTimer));
-  renderSessionList();
-}
-
-function renderPanel() {
-  clearTimeout(pollTimer);
-  if (!panel || !panel.container.closest('dialog[open]')) { panel = null; return; }
-  const {container, nodeId} = panel;
-  const machine = machines.get(nodeId);
-  const status = document.createElement('p');
-  status.className = 'capture-status';
-  status.setAttribute('role', 'status');
-  const run = async work => {
-    status.textContent = '';
-    try { await work(); } catch (error) { status.textContent = error.message; }
-  };
-  const head = document.createElement('div');
-  head.className = 'capture-head';
-  head.innerHTML = '<strong>Traffic capture</strong><span>Records the frames of an interface, both directions, into a PCAP file for Wireshark.</span>';
-  container.replaceChildren(head);
-  if (!machine || machine.kind !== 'host') return;
-  for (const [index, switchId] of (machine.interfaces || []).entries()) {
-    const row = document.createElement('div');
-    row.className = 'capture-row';
-    const label = document.createElement('span');
-    label.textContent = `Ethernet ${index}`;
-    const current = capturesOf(nodeId).find(item => item.index === index && isRecording(item));
-    const blocker = captureBlocker(machine, index);
-    const note = document.createElement('span');
-    note.className = 'capture-note';
-    note.textContent = current ? `recording · ${formatBytes(current.bytes)}` : blocker || '';
-    const toggle = current
-      ? button('Stop', `Stop capturing eth${index}`, () => run(() => action(nodeId, current.id, 'stop', {method: 'POST'})), !canCapture())
-      : button('Capture', blocker || `Start capturing eth${index}`, () => run(() => action(nodeId, '', '', jsonRequest('POST', {interface: `eth${index}`}))), !!blocker);
-    toggle.classList.add(current ? 'capture-stop' : 'capture-start');
-    row.append(label, note, toggle);
-    container.append(row);
-  }
-  for (const capture of capturesOf(nodeId)) container.append(fileRow(capture, run));
-  container.append(status);
-  // The size of a running capture is not pushed: look again while one is recording.
-  if (recordingOf(nodeId).length) pollTimer = setTimeout(() => loadCaptures(nodeId), POLL_MS);
-}
-
-// Shows the capture section of node `nodeId` in `container` (Host Settings > Network).
-export function showHostCaptures(container, nodeId) {
-  panel = {container, nodeId};
-  renderPanel();
-  loadCaptures(nodeId);
-}
-
-export function hideHostCaptures() {
-  clearTimeout(pollTimer);
-  panel = null;
-}
-
-// The host's state changed (started, stopped, switches connected): the reasons change with it.
-export const refreshHostCaptures = () => renderPanel();
