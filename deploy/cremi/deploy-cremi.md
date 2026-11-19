@@ -169,10 +169,11 @@ unset KEY
 sudo ls -l /etc/qemuweb/proxy-key /etc/apache2/qemuweb-proxykey.inc   # -rw------- qemuweb qemuweb, and -rw------- root root
 sudo grep -c CHANGE_ME /etc/apache2/qemuweb-proxykey.inc              # 0 (and exit status 1: nothing is left to replace)
 
-# 11. administrators (users.json is 0600). Students need no account. LOGIN is your CREMI login: recognised as
+# 11. administrators (users.json is 0600). Students need no account. LOGIN is your CREMI login (edit it): recognised as
 #     administrator through OpenID, without a QemuWeb password (add one login per administrator)
+LOGIN="..."                                       # your CREMI login, between the quotes
 U='./scripts/user.sh --users /etc/qemuweb/users.json'
-$U add LOGIN --role admin --no-password
+$U add "$LOGIN" --role admin --no-password
 $U list
 
 # 12. service (QemuWeb on 127.0.0.1:3002; port 3002 is never opened in the firewall)
@@ -192,7 +193,7 @@ sudo systemctl is-active apache2                  # active
 **Check (stage 3)**, in a **private window**: `https://qemuweb.emi.u-bordeaux.fr/` sends you to the CREMI login, then
 straight to the interface (no QemuWeb login page): the header shows your login, and **Log out** returns to the CREMI
 logout page. Without a runner it says that no runner is available: expected (Runner A below), and the consoles do not
-open yet. As a student (a CREMI login that is not in `users.json`) there is no Supervision link; as `LOGIN` there is one.
+open yet. As a student (a CREMI login that is not in `users.json`) there is no Supervision link; as an administrator there is one.
 The access log shows your CREMI login. Failure: Annex A.3.
 
 Notes:
@@ -201,7 +202,7 @@ Notes:
   (session ZIP archives) and shows `maintenance.html` on 502 and 503.
 - `qemuweb.service` runs `--auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
   goes to the OpenID logout, which ends at `/goodbye`. After a change of an account, no restart is needed.
-- To disable a student, add the login with `$U add LOGIN --no-password` then `$U disable LOGIN`: a disabled login is
+- To disable a student, add the login with `$U add "$LOGIN" --no-password` then `$U disable "$LOGIN"`: a disabled login is
   refused through OpenID too.
 - To change the key: repeat step 10, then `sudo systemctl restart qemuweb` and `sudo systemctl reload apache2`.
 - `/runner/connect` and `/api/runner/register` are outside OpenID (`AuthType None`): a runner has no browser and uses its
@@ -218,8 +219,9 @@ restart. Run on the server as `qemuweb`.
 
 ```sh
 cd /srv/qemuweb && git pull
+LOGIN="..."                                      # your CREMI login, between the quotes (repeat for each administrator)
 U='./scripts/user.sh --users /etc/qemuweb/users.json'
-$U add LOGIN --role admin --no-password          # LOGIN: your CREMI login (repeat for each administrator)
+$U add "$LOGIN" --role admin --no-password
 $U list
 sudo install -m 0644 deploy/cremi/qemuweb-3-app.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest && sudo systemctl reload apache2
