@@ -29,6 +29,7 @@ if [[ ! -s "$raw" ]]; then
   require_commands isoinfo python3 qemu-system-x86_64 qemu-img
   # Fail in seconds, before any VM starts, when the installer could not reach the mirrors.
   check_debian_mirrors "$id"
+  guest_proxy_note
 
   temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
   trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; rm -rf "$temp_dir"' EXIT

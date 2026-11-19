@@ -26,6 +26,7 @@ prepare_debian_image() {
     require_commands qemu-system-x86_64 qemu-img genisoimage python3 base64
     # Fail in seconds, before any VM starts, when apt in the VM could not reach the mirrors.
     check_debian_mirrors "$id"
+    guest_proxy_note
     temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
     chmod 700 "$temp_dir"
     trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; [[ -n "${temp_dir:-}" ]] && rm -rf "$temp_dir"' EXIT

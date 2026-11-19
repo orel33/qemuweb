@@ -149,11 +149,32 @@ proxy_inherit() {
   fi
 }
 
-# The proxy as the build VM must use it. In QEMU user-mode networking the host
-# is 10.0.2.2, so a proxy on this machine's loopback is reached there.
+# The proxy as the build VM must use it. In QEMU user-mode networking the host is
+# 10.0.2.2, so a proxy on this machine's loopback is reached there. A proxy given
+# by a NAME is resolved here, on this machine: the VM does not know the search
+# domains of this machine, so a short name such as "proxy" that works here
+# ("Could not resolve 'proxy'" was the first failure seen at the CREMI) would not
+# resolve in the VM. An address is kept as it is.
 guest_proxy_url() {
-  local re='^(https?://([^@/]*@)?)(localhost|127\.[0-9.]+)([:/].*)?$'
-  if [[ "$PROXY_URL" =~ $re ]]; then printf '%s10.0.2.2%s' "${BASH_REMATCH[1]}" "${BASH_REMATCH[4]}"; else printf '%s' "$PROXY_URL"; fi
+  local re='^(https?://([^@/]*@)?)([^:/@]+)([:/].*)?$' prefix host rest ip
+  if [[ ! "$PROXY_URL" =~ $re ]]; then printf '%s' "$PROXY_URL"; return 0; fi
+  prefix="${BASH_REMATCH[1]}"; host="${BASH_REMATCH[3]}"; rest="${BASH_REMATCH[4]}"
+  case "$host" in
+    localhost|127.*) ip=10.0.2.2 ;;
+    *[!0-9.]*) ip=$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR == 1 {print $1; exit}'); [[ -n "$ip" ]] || ip="$host" ;;
+    *) ip="$host" ;;
+  esac
+  printf '%s%s%s' "$prefix" "$ip" "$rest"
+}
+
+# Say which proxy address the build VM gets when it differs from the one given.
+guest_proxy_note() {
+  [[ -n "$PROXY_URL" ]] || return 0
+  local guest
+  guest="$(guest_proxy_url)"
+  if [[ "$guest" != "$PROXY_URL" ]]; then
+    echo "  Proxy for the build VM: $(proxy_redact "$guest") (the VM has no search domain: the name is resolved on this machine)"
+  fi
 }
 
 # ---------------------------------------------------------------------------
@@ -310,19 +331,26 @@ progress_gauge() {
 # vm_failed LABEL PID LOG REASON: stop the VM and explain the failure. The caller
 # exits with status 1 (and keeps the log directory).
 vm_failed() {
-  local label="$1" pid="$2" log="$3" reason="$4" dir
+  local label="$1" pid="$2" log="$3" reason="$4" dir first
   dir=$(dirname "$log")
+  # the first lines that explain a network failure: the last lines of a log are often unrelated
+  first=$(serial_strip < "$log" 2>/dev/null | LC_ALL=C grep -a -n -i -E 'Could not resolve|Failed to fetch|Temporary failure|Bad archive|Unable to locate|Failed to retrieve' | head -n 5 | cut -c1-220 || true)
   progress_end_line
   vm_stop "$pid"
   {
     echo "prepare.sh: $label failed: $reason"
     echo 'Last 20 lines of the serial log (escape sequences removed):'
     serial_strip < "$log" 2>/dev/null | LC_ALL=C grep -av '^[[:space:]]*$' | tail -n 20 | sed 's/^/  | /' || true
+    if [[ -n "$first" ]]; then echo 'First network errors in the log (line number, text):'; printf '%s\n' "$first" | sed 's/^/  | /'; fi
     echo "Log directory: $dir (full serial log: $log)"
     if [[ -s "$dir/qemu.stderr" ]]; then echo 'QEMU error output:'; sed 's/^/  | /' "$dir/qemu.stderr"; fi
     echo 'What to check first:'
     echo "  - The build VM needs the Debian mirror. Proxy in use: $(proxy_describe)."
     echo '    Set it with --proxy URL or the https_proxy variable (the VM cannot see this shell).'
+    if LC_ALL=C grep -aqi 'Could not resolve' "$log" 2>/dev/null; then
+      echo "  - 'Could not resolve': the VM cannot resolve a host name. A proxy given by a short name needs its domain:"
+      echo '    use the full name or the address with --proxy (the name is resolved on this machine, see "Proxy for the build VM").'
+    fi
     echo '  - Read the whole serial log above for the first error.'
     echo '  - Or build the image on a machine with Internet access and copy images/ here.'
   } >&2
