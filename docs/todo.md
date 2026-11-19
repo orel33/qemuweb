@@ -70,6 +70,10 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   headers; and it sends no client address, so `--trust-proxy` and the login throttling of milestone 6 only see the relay.
   Ask the CREMI for both.
 
+- **`prepare.sh` shows no progress during the build**: after `Formatting '...raw.tmp'` the Debian installer runs
+  silently in a VM (its output goes to `serial.log`) for several minutes, up to 30 minutes before a failure. Idea: print
+  the elapsed time and the last line of `serial.log` every few seconds, and the log directory so that it can be followed.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
