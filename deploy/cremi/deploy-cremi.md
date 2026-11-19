@@ -4,9 +4,9 @@ Debian 13 (trixie), Apache2 and OpenID, on `v0-qemuweb`. The files to copy are i
 
 | File | Use |
 |---|---|
-| `qemuweb-maintenance.conf` | Apache site of stage 1 (maintenance page, no OpenID); also the maintenance switch |
-| `qemuweb-2-oidc.conf` | Apache site of stage 2 (a page behind OpenID) |
-| `qemuweb-3-app.conf` | Apache site of stage 3 (QemuWeb behind OpenID): the final site |
+| `qemuweb-site-maintenance.conf` | Apache site of stage 1 (maintenance page, no OpenID); also the maintenance switch |
+| `qemuweb-site-oidc.conf` | Apache site of stage 2 (a page behind OpenID) |
+| `qemuweb-site-app.conf` | Apache site of stage 3 (QemuWeb behind OpenID): the final site |
 | `qemuweb-oidc.inc.example` | model of the OpenID secrets file (kept on the server only) |
 | `qemuweb-proxykey.inc.example` | model of the file with the key shared by Apache and QemuWeb (kept on the server only) |
 | `maintenance.html`, `whoami.html`, `goodbye.html` | static pages: maintenance and error page, OpenID attributes of the user, logout |
@@ -98,7 +98,7 @@ echo 'ServerName v0-qemuweb.emi.u-bordeaux.fr' | sudo tee /etc/apache2/conf-avai
 sudo a2enconf servername
 sudo install -d /var/www/qemuweb
 sudo install -m 0644 deploy/cremi/maintenance.html /var/www/qemuweb/maintenance.html
-sudo install -m 0644 deploy/cremi/qemuweb-maintenance.conf /etc/apache2/sites-available/qemuweb-maintenance.conf
+sudo install -m 0644 deploy/cremi/qemuweb-site-maintenance.conf /etc/apache2/sites-available/qemuweb-maintenance.conf
 sudo a2ensite qemuweb-maintenance
 sudo apache2ctl configtest                        # Syntax OK (restart only if it is)
 sudo systemctl enable apache2 && sudo systemctl restart apache2    # restart: mod_ssl adds port 443
@@ -129,7 +129,7 @@ dpkg -l libapache2-mod-auth-openidc | tail -1     # ii: installed at step 1 (if 
 sudo a2enmod auth_openidc headers include         # OpenID; headers: RequestHeader (identity for the application); include: SSI of whoami.html
 sudo install -m 0644 deploy/cremi/goodbye.html /var/www/qemuweb/goodbye.html
 sudo install -m 0644 deploy/cremi/whoami.html /var/www/qemuweb/whoami.html
-sudo install -m 0644 deploy/cremi/qemuweb-2-oidc.conf /etc/apache2/sites-available/qemuweb.conf
+sudo install -m 0644 deploy/cremi/qemuweb-site-oidc.conf /etc/apache2/sites-available/qemuweb.conf
 # the OpenID site takes the place of the maintenance site (both use the same names: never enable the two)
 sudo a2dissite qemuweb-maintenance && sudo a2ensite qemuweb
 sudo apache2ctl configtest                        # Syntax OK (restart only if it is)
@@ -186,7 +186,7 @@ sudo journalctl -u qemuweb-server --since "2 min ago" --no-pager | tail -n 25   
 
 # 13. the proxy modules and the site of stage 3 (the maintenance page is already in place)
 sudo a2enmod proxy proxy_http proxy_wstunnel      # reverse proxy, WebSocket (Apache 2.4.47 or later: upgrade=websocket)
-sudo install -m 0644 deploy/cremi/qemuweb-3-app.conf /etc/apache2/sites-available/qemuweb.conf
+sudo install -m 0644 deploy/cremi/qemuweb-site-app.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest                        # Syntax OK (restart only if it is)
 sudo systemctl restart apache2                    # restart: new modules are loaded
 sudo systemctl is-active apache2                  # active
@@ -207,7 +207,7 @@ Notes:
 - To disable a student, add the login with `$U add "$LOGIN" --no-password` then `$U disable "$LOGIN"`: a disabled login is
   refused through OpenID too.
 - To change the key without an interruption, see "Rotate the shared key" below.
-- An expired OpenID session: `/api/`, `/socket.io/` and `/auth/` have `OIDCUnAuthAction 401` in `qemuweb-3-app.conf`, so
+- An expired OpenID session: `/api/`, `/socket.io/` and `/auth/` have `OIDCUnAuthAction 401` in `qemuweb-site-app.conf`, so
   Apache answers them `401` instead of redirecting to the CREMI login (another origin, which the page cannot follow). The
   interface then reloads the page once (not twice within 30 seconds), and Apache sends that page request to the login.
 - `/runner/connect` and `/api/runner/register` are outside OpenID (`AuthType None`): a runner has no browser and uses its
@@ -252,7 +252,7 @@ LOGIN="..."                                      # your CREMI login, between the
 U='./scripts/user.sh --users /etc/qemuweb/users.json'
 $U add "$LOGIN" --role admin --no-password
 $U list
-sudo install -m 0644 deploy/cremi/qemuweb-3-app.conf /etc/apache2/sites-available/qemuweb.conf
+sudo install -m 0644 deploy/cremi/qemuweb-site-app.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest && sudo systemctl reload apache2
 sudo install -m 0644 deploy/cremi/qemuweb-server.service /etc/systemd/system/qemuweb-server.service
 sudo systemctl daemon-reload && sudo systemctl restart qemuweb-server
@@ -291,7 +291,7 @@ Each stage is one site file: put the previous one back and reload.
 
 ```sh
 # from stage 3 to stage 2 (QemuWeb stays installed, but is no longer reachable through Apache)
-sudo install -m 0644 deploy/cremi/qemuweb-2-oidc.conf /etc/apache2/sites-available/qemuweb.conf
+sudo install -m 0644 deploy/cremi/qemuweb-site-oidc.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest && sudo systemctl reload apache2
 
 # from stage 2 to stage 1 (no more OpenID: the static maintenance page only)
@@ -521,7 +521,7 @@ curl -sS -i --http1.1 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-W
 `under maintenance` (the page) and `503`; the `/auth/me` from another machine prints `302`; the relay check (last command) is described below. In the journal, `users.log` (`/var/log/qemuweb/users.log`) shows the refused key as a
 `proxy-refused` line, and the logins of the browser as `"via":"proxy"`.
 
-If a runner path answers `302`, the `AuthType None` block of that path does not apply: check `qemuweb-3-app.conf`.
+If a runner path answers `302`, the `AuthType None` block of that path does not apply: check `qemuweb-site-app.conf`.
 
 The relay check must print `HTTP/1.1 401` with `Content-Length: 0` and no `X-Powered-By`: the upgrade request reached the runner
 gateway, which refuses it with an empty body. A `401` with `X-Powered-By: Express` and a JSON body

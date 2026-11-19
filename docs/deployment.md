@@ -451,7 +451,7 @@ for another system; only `--logout-url` differs: the logout address of the front
 
 The front end must remove any `X-Remote-User` sent by a browser and add `X-Proxy-Key` to every request it forwards,
 WebSocket upgrades included. It must also answer an API call (`/api/`), a Socket.IO connection (`/socket.io/`) and `/auth/` without a session with a plain `401`,
-not with a redirection to its login (with `mod_auth_openidc`: `OIDCUnAuthAction 401` in those `<Location>`s, see `deploy/cremi/qemuweb-3-app.conf`): the page then reloads once
+not with a redirection to its login (with `mod_auth_openidc`: `OIDCUnAuthAction 401` in those `<Location>`s, see `deploy/cremi/qemuweb-site-app.conf`): the page then reloads once
 and a page request goes to the login of the front end. The key file may hold two keys (one per line) so that the key can change without an interruption.
 
 ## Known limits

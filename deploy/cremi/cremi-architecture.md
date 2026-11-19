@@ -70,7 +70,7 @@ WebSocket carries the consoles of the machines (Socket.IO on `/socket.io/`) and 
 | Stage | Setting |
 | --- | --- |
 | Inbound relay (nginx, in the `location` of the site) | `proxy_http_version 1.1;` `proxy_set_header Upgrade $http_upgrade;` `proxy_set_header Connection $connection_upgrade;` `proxy_read_timeout 3600s;` `proxy_send_timeout 3600s;` `proxy_buffering off;` `proxy_request_buffering off;` `client_max_body_size 1g;` `proxy_set_header Host $host;` `proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;`; and, once in the `http` section, the `map` below |
-| Apache (`qemuweb-3-app.conf`) | `ProxyPass / http://127.0.0.1:3002/ upgrade=websocket timeout=3600` (Apache 2.4.47 or later, modules `proxy`, `proxy_http`, `proxy_wstunnel`), `ProxyTimeout 3600`, `LimitRequestBody 1073741824` |
+| Apache (`qemuweb-site-app.conf`) | `ProxyPass / http://127.0.0.1:3002/ upgrade=websocket timeout=3600` (Apache 2.4.47 or later, modules `proxy`, `proxy_http`, `proxy_wstunnel`), `ProxyTimeout 3600`, `LimitRequestBody 1073741824` |
 | QemuWeb | `--trust-proxy loopback` (only Apache talks to it) |
 
 The relay's configuration, as the CREMI applies it for this site:
