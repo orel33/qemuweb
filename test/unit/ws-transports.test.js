@@ -88,7 +88,7 @@ test('the polling line is written at most once per login every 10 minutes', () =
   for (let i = 0; i < 3; i++) registry.track(socket('polling'), {login: 'alice'});
   registry.track(socket('polling'), {login: 'bob'});
   advance(POLLING_WARN_AFTER_MS);
-  assert.deepEqual(lines.map(line => line.split(':')[0] + line.split(':')[1]), ['[sockets] alice', '[sockets] bob']);
+  assert.deepEqual(lines.map(line => line.split(':')[0]), ['[sockets] alice', '[sockets] bob']);
   advance(WARN_EVERY_MS - POLLING_WARN_AFTER_MS - 1);
   registry.track(socket('polling'), {login: 'alice'});
   advance(POLLING_WARN_AFTER_MS);
