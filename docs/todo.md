@@ -39,10 +39,10 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 - **`runner-state` in the browser**: the re-selection of the console after a runner comes back is only tested
   through the socket events of `check-runner-remote`, not in a real browser.
 
-- **`prepare.sh` behind an HTTP proxy**: the ISO URL is fixed (`cdimage.debian.org`, which squid at the CREMI answers 503 for)
-  and the preseed of the installer has an empty `mirror/http/proxy`, so the installer VM cannot reach the network
-  through a proxy either. Idea: a proxy option for `prepare.sh` (used by the downloads and written into the preseed)
-  and a mirror URL setting.
+- **`prepare.sh`: ISO host blocked by the CREMI proxy**: the Debian ISO and its `SHA512SUMS` come from the fixed URL
+  `cdimage.debian.org`, which the CREMI squid has answered 503 for. Idea: a setting for the base URL
+  of the ISO (or another host), or document placing the ISO and `SHA512SUMS` in `sources/debian13-legacy/` by hand.
+  Also unchecked against a real log: the failure strings and phase markers of `scripts/prepare/lib/common.sh`.
 
 - **Runtime path too long, reported late**: a `runtime/` directory of more than 49 characters (the sockets of a node
   must fit in 107 bytes) only fails when the first node is created or a session is loaded, with "move the project to a
@@ -69,10 +69,6 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   in HTTP/1.0, which cannot carry a WebSocket (consoles, `/runner/connect`) until it is set to HTTP/1.1 with the `Upgrade`
   headers; and it sends no client address, so `--trust-proxy` and the login throttling of milestone 6 only see the relay.
   Ask the CREMI for both.
-
-- **`prepare.sh` shows no progress during the build**: after `Formatting '...raw.tmp'` the Debian installer runs
-  silently in a VM (its output goes to `serial.log`) for several minutes, up to 30 minutes before a failure. Idea: print
-  the elapsed time and the last line of `serial.log` every few seconds, and the log directory so that it can be followed.
 
 ## Console and terminal
 

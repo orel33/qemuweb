@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'HELP'
-Usage: bash scripts/prepare.sh [--all | --system <sysname>] [--force]
+Usage: bash scripts/prepare.sh [--all | --system <sysname>] [--force] [--proxy <url>]
        bash scripts/prepare.sh --hash [--system <sysname>]
        bash scripts/prepare.sh --list
        bash scripts/prepare.sh --help
@@ -21,6 +21,14 @@ The elapsed time of each step and the system total are displayed.
 --force            Rebuild and replace existing images. Save the old pair in
                    images/backups/ for recovery. Running VMs and old working
                    disks may become incompatible with the new base.
+--proxy <url>      HTTP proxy (http://host:port) for the downloads and for the build VMs
+                   (Debian installer, cloud-init). "none" or an empty value means no
+                   proxy. Default: the https_proxy / http_proxy variable, when set.
+                   The proxy in use is printed at the start. Debian builds first check
+                   that the Debian mirrors answer through it, then show a progress line
+                   (phase, estimated percentage, elapsed time) and stop at once, with the
+                   end of the serial log, when the installer or cloud-init reports an
+                   error. A VM that ends nothing within 30 minutes is stopped.
 --hash             Only record the SHA-256 of the existing images in images/<sysname>.raw.sha256
                    and .vdi.sha256 (sha256sum format), without building anything. Every build
                    records them itself; the server uses a hash file that is not older than its
@@ -40,6 +48,8 @@ explicit_all=false
 list_only=false
 force=false
 hash_only=false
+proxy_set=false
+proxy_value=''
 while (( $# )); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -53,14 +63,17 @@ while (( $# )); do
       selected_system="$2"; shift 2 ;;
     --force) force=true; shift ;;
     --hash) hash_only=true; shift ;;
+    --proxy)
+      [[ "$proxy_set" == false && $# -ge 2 && "$2" != --* ]] || fail 'Expected one proxy URL (or none) after --proxy.'
+      proxy_set=true; proxy_value="$2"; shift 2 ;;
     *) fail "Unknown option: $1 (see --help)." ;;
   esac
 done
 
-if [[ "$hash_only" == true && ( "$explicit_all" == true || "$force" == true || "$list_only" == true ) ]]; then
-  fail '--hash cannot be combined with --all, --force or --list.'
+if [[ "$hash_only" == true && ( "$explicit_all" == true || "$force" == true || "$list_only" == true || "$proxy_set" == true ) ]]; then
+  fail '--hash cannot be combined with --all, --force, --proxy or --list.'
 fi
-if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true ) ]]; then
+if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true || "$proxy_set" == true ) ]]; then
   fail '--list cannot be combined with preparation options.'
 fi
 
@@ -133,6 +146,12 @@ if [[ "$hash_only" == true ]]; then
   for id in "${target_ids[@]}"; do write_image_hashes "$id"; done
   exit 0
 fi
+
+# Shared preparation code. Choose the proxy once (exit status 2 when it is invalid);
+# the per-system scripts inherit it through the environment.
+source "$ROOT/scripts/prepare/lib/common.sh"
+if [[ "$proxy_set" == true ]]; then proxy_init "$proxy_value"; else proxy_init; fi
+echo "Proxy: $(proxy_describe)"
 
 verify_images() {
   node - "$ROOT/config.json" "$1" "$ROOT" <<'NODE'
