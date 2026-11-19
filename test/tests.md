@@ -40,6 +40,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `config-warnings.test.js` | Check the config.json warnings a runner announces at startup, and the start-time memory warning (above 90 % of the RAM): a missing base image names the system and the `prepare.sh` command, no warning when the images exist, default memory or processors above the machine, QEMU without `/dev/kvm`, a runner without any engine, and a bounded list. |
 | `engines.test.js` | Check which engines a runner can run from its commands: QEMU needs its emulator and disk tool, VirtualBox needs VBoxManage. |
 | `session-archive.test.js` | Write and read session ZIP archives; reject modified, unsafe or incomplete ones. |
+| `demo-archives.test.js` | Open every `demo/*.zip` with the session ZIP reader (`runner/archive-zip.js`): valid entries, `session.json` and node files at `schemaVersion` 1, node IDs matching their directories. |
 | `session-log.test.js` | Check log replay, clearing and history limits. |
 | `tcg09-graphic.test.js` | Build the network graph from example topologies and check links, positions and states. |
 | `topology.test.js` | Parse and format example topologies; reject invalid references and directives. |
