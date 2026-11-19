@@ -400,6 +400,14 @@ Ce qui sépare un runner distant qui marche en test d'un runner distant en servi
 - La mise en pause d'un runner local est conservée (comme celle d'un runner distant dans `runners.json`).
 - `prepare.sh` fonctionne derrière un proxy HTTP (téléchargements et préconfiguration de l'installateur) et accepte un miroir ; les images d'un runner sont identifiables par leur empreinte.
 
+**Runners personnels (conception décidée avec l'utilisateur, détail dans `docs/todo.md`)**
+
+- Deux cas d'usage : à la **maison**, la session tourne sur le parc de runners du serveur (placement automatique au moins chargé, qui existe déjà) ; en **salle de TP**, le poste de l'étudiant devient son runner.
+- Page « My runner » ouverte à tout compte connecté : créer un jeton d'enregistrement (15 min, usage unique), voir la commande à copier, l'état du runner et le révoquer. Un jeton et un runner sont liés à leur propriétaire (`ownerLogin`).
+- Placement : une session **nouvelle ou chargée** va sur le runner personnel de son propriétaire s'il est en ligne, sinon sur le parc du serveur ; une session existante reste où elle est (déménager = Save puis Load ZIP) ; un runner personnel n'accueille que la session de son propriétaire.
+- Images de base : dossier partagé (NFS, en lecture seule) ou téléchargement HTTP vérifié par SHA-256, et une option pour désigner le dossier des images d'un runner.
+- Confiance et quotas : hors de la première livraison, sauf la règle d'isolation ci-dessus ; la validation stricte de ce qu'envoie un runner d'étudiant et les quotas viennent après (jalon 6).
+
 **Exploitation**
 
 - Services systemd du serveur, du runner local et du runner distant, rotation des journaux (`logrotate`), reprise après redémarrage de la machine.

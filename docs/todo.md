@@ -88,6 +88,47 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   OpenID identity, and a "CREMI login" link on the login page. Not before the quotas, the HMP allowlist and the login
   throttling of milestone 6; never an admin account.
 
+## Personal runners (design, to build in milestone 7)
+
+Decided with the user, in this order of work. Nothing is coded yet.
+
+**Two cases.** At **home**, the user has no runner: the session runs on the server's pool of runners (pre-registered
+machines; the placement `pickRunner` already picks the least loaded online runner under its `maxSessions`, not a
+round robin, and an administrator can pause one). In a **lab room**, the student's own workstation becomes
+their runner, and browser and runner are on the same computer.
+
+**"My runner" page.** Open to every signed-in account (students included), in the account menu. It creates a
+registration token (15 minutes, single use, a few creations per day), shows the command to paste
+(`./scripts/runner.sh register --url URL --token TOKEN`, then `run`), the state of the runner (online, offline since) and
+revokes it. A page, not a command line tool: the administrator's `/admin -> Runners` already covers the pool.
+- The token and the runner record get an `ownerLogin` (today only an administrator creates tokens; see
+  `server/runner-registration.js`, `server/routes/admin-runners.js`, `server/runner-store.js`, the registration route).
+- One personal runner per user to start with. The registration token stays in memory and single use (a restart
+  drops it, which is acceptable at 15 minutes); the runner's own token is durable in its `runner.json` (0600).
+
+**Placement.** `pickRunner(login, ...)` already receives the login and ignores it. New rule: a **new or loaded**
+session goes to the owner's personal runner when it is online, else to the server pool; an existing session
+**stays where it is** (no migration: Save then Load session ZIP moves one). A personal runner takes **only its
+owner's session**, never another user's (the one isolation rule kept before any quota). A session whose runner is
+offline shows "runner offline" and comes back when the runner reconnects.
+
+**Base images.** The runner must find the images prepared by `prepare.sh`: a read-only shared folder (NFS; the
+working disks are qcow2 files backed by the base image, which is never written) or an HTTP/FTP download checked
+with the `.sha256` files, plus an option naming the images directory of a runner (today `images/` of the repository).
+
+**Lab workstation prerequisites** (to confirm with the CREMI): students in the `kvm` group (or an ACL on
+`/dev/kvm`), Node 24, QEMU and VDE installed, the repository or a release reachable (shared home or folder),
+a short local `--runtime` (at most 49 characters, for example under `/tmp`).
+
+**Tasks.** Three deliverables, each reviewable alone: PRN01 (server: `ownerLogin` on tokens and runners, routes open
+to signed-in accounts for their own runner, daily creation limit, the placement rule, unit tests), PRN02 (the "My runner"
+page, the "runner offline" message, the docs; needs PRN01) and PRN03 (images directory option, HTTP download checked
+by SHA-256, workstation installation sheet; independent). Start with PRN01, after the Runner B test.
+
+**Later.** A device-code login (the runner prints a code, the user confirms it in the signed-in browser) instead of
+pasting a token; a launcher installed in the room's image; validation of everything a student's runner sends and quotas
+(milestone 6); balancing by free memory instead of a session count.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
