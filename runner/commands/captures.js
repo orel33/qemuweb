@@ -37,7 +37,13 @@ const commands = {
     const {id, stream} = io.outgoing();
     io.afterResponse(() => pipeline(fs.createReadStream(file.path, {start: 0, end: size - 1}), stream).catch(() => {}));
     return {stream: id, size, name: file.name};
-  }
+  },
+
+  // The live Capture view (runner/capture-live.js): liveId is chosen by the server; the text comes as
+  // 'capture-live' events. `filter` is an optional tcpdump expression, validated here.
+  'capture.live.start': ({session, runner}, {nodeId, captureId, liveId, filter}) => runner.captureLive.start(nodeOf(session, nodeId), {liveId, captureId, filter}),
+
+  'capture.live.stop': ({runner}, {liveId}) => runner.captureLive.stop(liveId)
 };
 
 module.exports = {commands};

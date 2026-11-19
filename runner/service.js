@@ -9,6 +9,7 @@
 //                                         creation date, nodes)
 //   capabilities()                        engines, kvm, cpus, memory, images and config warnings
 //   setConsoleFlow(paused)                pauses console sources while the connection is congested
+//   stopCaptureLives()                    ends every live capture view (the control connection closed)
 //   events                                'event' (sessionId, event, payload)
 // Session IDs come from the control plane (session.create); the runner never invents one.
 const fs = require('fs');
@@ -25,7 +26,7 @@ const {availableEngines} = require('./preflight');
 const {statusError} = require('./commands/errors');
 
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
-const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures'];
+const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures', 'capture-live'];
 const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology', 'archives', 'consoles', 'captures']
   .map(name => require(`./commands/${name}`).commands));
 // Commands that answer for an unknown node themselves: the launch preview describes host
@@ -123,6 +124,11 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     for (const {runner} of sessions.values()) runner.setConsoleFlow(paused);
   }
 
+  // The control connection is gone: no live capture view has a reader any more.
+  function stopCaptureLives() {
+    for (const {runner} of sessions.values()) runner.captureLive.stopNode();
+  }
+
   // What this runner can do, announced in hello: no image is hashed here (only known digests).
   function capabilities() {
     let kvm = true;
@@ -155,7 +161,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
         owner: session.owner, createdAt: session.createdAt, nodes: runner.listNodes()}))};
   }
 
-  return {events, handle, input, hello, capabilities, shutdown, setConsoleFlow, availableEngines: engines};
+  return {events, handle, input, hello, capabilities, shutdown, setConsoleFlow, stopCaptureLives, availableEngines: engines};
 }
 
 module.exports = {createRunnerService};

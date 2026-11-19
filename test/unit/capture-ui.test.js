@@ -58,3 +58,20 @@ test('the controls and indicators are wired in the page', () => {
   assert.match(moduleSource('host-settings'), /showHostCaptures\(captureControls, machine\.id\)/);
   assert.match(moduleSource('app'), /^initCaptures\(\);$/m);
 });
+
+test('the Capture view is one more view of every pane, for QEMU hosts and the right to capture only', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
+  assert.equal((html.match(/data-view="capture"/g) || []).length, 4);
+  assert.equal((html.match(/data-view="capture"[^>]*hidden/g) || []).length, 4, 'hidden until a QEMU host is shown');
+  const terminal = moduleSource('terminal');
+  assert.match(terminal, /\['console', 'console2', 'monitor', 'log', 'capture'\]\.includes\(view\)/);
+  assert.match(terminal, /view === 'capture'\) return MonitorTerminal\.isSupported\(machine\) && canCapture\(\) \? view : 'console'/);
+  assert.match(terminal, /pane\.view === 'capture' && \(!monitorSupported \|\| !canCapture\(\)\)/, 'the view falls back to the console');
+  assert.match(terminal, /if \(pane\.view === 'capture'\) leaveCaptureView\(pane\)/, 'leaving the view ends the live capture');
+  assert.match(moduleSource('workspace'), /leaveCaptureView\(pane\);\s*pane\.view = 'console'/, 'changing the node ends it too');
+  assert.match(fs.readFileSync(path.join(publicDir, 'view-state.js'), 'utf8'), /PANE_VIEWS = \['console', 'console2', 'monitor', 'log', 'capture'\]/);
+  const live = moduleSource('capture-live');
+  assert.match(live, /socket\.emit\('capture-live', \{nodeId: pane\.machineId, captureId, filter\}/);
+  assert.match(live, /socket\.emit\('capture-live-stop'\)/);
+  assert.match(live, /FILTER_MAX = 200/);
+});

@@ -10,6 +10,7 @@
 //   serial-reset  {nodeId, serial?, preserveLine?}   console ID, like serial
 //   nodes-removed {ids}
 //   captures      {nodeId, captures: [<capture>...]}   see runner/capture.js
+//   capture-live  {liveId, data} or {liveId, end}      see runner/capture-live.js
 // Their payloads are exactly what the web layer forwards to browsers over Socket.IO.
 const {createContext} = require('./context');
 const guestMedia = require('./media/guest-media');
@@ -23,6 +24,7 @@ const {createQemu} = require('./engines/qemu');
 const {createVirtualBox} = require('./engines/vbox');
 const {createMonitor} = require('./engines/qemu-monitor');
 const {createCapture} = require('./capture');
+const {createCaptureLive} = require('./capture-live');
 const {createSerial} = require('./console/serial');
 const {createVdeSwitch} = require('./network/vde-switch');
 const {createHostConfig} = require('./host-config');
@@ -52,6 +54,7 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
   ctx.vbox = createVirtualBox(ctx);
   ctx.monitor = createMonitor(ctx);
   ctx.capture = createCapture(ctx);
+  ctx.captureLive = createCaptureLive(ctx);
   ctx.serial = createSerial(ctx);
   ctx.vde = createVdeSwitch(ctx);
   ctx.hostConfig = createHostConfig(ctx);
@@ -155,6 +158,7 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     monitor,
     // Traffic capture (runner/capture.js)
     capture: ctx.capture,
+    captureLive: ctx.captureLive,
 
     // Network
     validateNetworkInterfaces: nics.validateNetworkInterfaces,

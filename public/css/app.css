@@ -481,3 +481,10 @@ body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailab
    under control, or an observer following with Follow checked), every control that changes the
    view state (class view-control) is disabled; observe.js also blocks it for the keyboard. */
 body[data-view-driven="true"] .view-control { pointer-events: none; opacity: .45; }
+
+.capture-live-bar { flex: none; display: flex; gap: 6px; padding: 4px 8px; border-bottom: 1px solid #35404c; background: #141c26; }
+.capture-live-bar[hidden] { display: none; }
+.capture-live-bar select { flex: 0 1 36%; min-width: 0; height: var(--control-small); border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 12px system-ui, sans-serif; }
+.capture-live-bar input { flex: 1 1 auto; min-width: 0; height: var(--control-small); padding: 0 8px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 12px ui-monospace, monospace; }
+.capture-live-bar button { height: var(--control-small); padding: 0 12px; }
+@media (max-width: 850px) { .capture-live-bar { flex-wrap: wrap; } .capture-live-bar select { flex: 1 1 100%; } }

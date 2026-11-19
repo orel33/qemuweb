@@ -35,6 +35,8 @@ function serveConnection(connection, service) {
     }
     if (pendingSerial.size) flushSerial();
     connection.send({type: 'event', sessionId, event, payload});
+    // Live capture text slows down like console output (runner/capture-live.js reads ctx.flow).
+    if (event === 'capture-live' && connection.pendingBytes > CONGESTED_BYTES) service.setConsoleFlow(true);
   }
 
   function respond(id, work) {
@@ -70,6 +72,8 @@ function serveConnection(connection, service) {
     service.events.off('event', onEvent);
     pendingSerial.clear();
     service.setConsoleFlow(false);
+    // No browser is left to read a live capture: its tcpdump processes end with the connection.
+    service.stopCaptureLives?.();
   });
   connection.send(service.hello());
 }

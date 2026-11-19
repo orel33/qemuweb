@@ -32,4 +32,26 @@ function captureId(index, date, repeat = 0) {
   return `eth${index}-${stamp}${repeat ? `-${repeat}` : ''}`;
 }
 
-module.exports = {LIMITS, WATCH_INTERVAL_MS, MAX_INTERFACES, CAPTURE_ID, isCaptureId, interfaceIndex, captureId};
+// The optional filter of the live view: a tcpdump (BPF) expression typed by the user, passed to
+// tcpdump as ONE argument, never through a shell. Only the characters of such expressions are
+// accepted (words, numbers, addresses, ports, brackets, comparison and logic operators), at most
+// FILTER_MAX of them, and it cannot start with '-' (it would look like an option; the runner also
+// puts '--' before it). Returns the trimmed expression ('' for none) or throws an Error whose
+// message is shown to the user.
+const FILTER_MAX = 200;
+const FILTER_CHARACTERS = /^[A-Za-z0-9 .:/_()[\]&|!<>=+*%^,-]+$/;
+function validateFilter(value) {
+  if (value === undefined || value === null) return '';
+  if (typeof value !== 'string') throw new Error('The filter must be text.');
+  const filter = value.trim();
+  if (filter.length > FILTER_MAX) throw new Error(`The filter is too long (at most ${FILTER_MAX} characters).`);
+  if (filter && !FILTER_CHARACTERS.test(filter)) throw new Error('The filter has characters a tcpdump expression does not use: letters, digits, spaces and . : / _ - ( ) [ ] & | ! < > = + * % ^ , are accepted.');
+  if (filter.startsWith('-')) throw new Error('The filter cannot start with "-".');
+  return filter;
+}
+
+// Live view identifiers are chosen by the server and checked by the runner.
+const LIVE_ID = /^[0-9a-f]{16}$/;
+const MAX_LIVE = 4;
+
+module.exports = {FILTER_MAX, validateFilter, LIVE_ID, MAX_LIVE, LIMITS, WATCH_INTERVAL_MS, MAX_INTERFACES, CAPTURE_ID, isCaptureId, interfaceIndex, captureId};
