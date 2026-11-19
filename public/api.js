@@ -1,4 +1,5 @@
 import {observeHeaders, observing} from './observe.js';
+import {handleUnauthorized} from './session-expiry.js';
 // HTTP helpers for the QemuWeb REST API.
 // URL of a node resource: /api/nodes/<nodeId>[/<action>].
 export function nodeUrl(nodeId, action = '') {
@@ -25,13 +26,9 @@ export function launchOptionsUrl(machine, settings) {
   return `${nodeUrl(machine.id, 'options')}?${params}`;
 }
 
-// Sends the browser to the login page once, e.g. after a 401 response.
-let redirectingToLogin = false;
-export function redirectToLogin() {
-  if (redirectingToLogin) return;
-  redirectingToLogin = true;
-  location.assign('/login.html');
-}
+// After a 401 response or a Socket.IO authentication error: the login page (password login), or one reload that sends
+// an identity from the front end to its login (public/session-expiry.js). Answers 'none' when it did nothing.
+export const sessionLost = handleUnauthorized;
 
 // The header text of a user: the login, with the display name the authenticating front end gave when there is one.
 export function accountLabel(me) {
@@ -49,12 +46,12 @@ export async function logOut(me) {
   try { await fetch('/auth/logout', {method: 'POST'}); }
   finally {
     if (me.via === 'proxy' && me.logoutUrl) location.assign(me.logoutUrl);
-    else redirectToLogin();
+    else location.assign('/login.html');
   }
 }
 
 // Every fetch() of the UI goes through this wrapper: a 401 response means the login
-// session expired or was revoked, so the page returns to the login form. In an observation
+// session expired or was revoked, so the page returns to the login (see sessionLost). In an observation
 // tab, it adds the X-Observe header to the session API requests (not to /api/admin).
 export function installAuthRedirect() {
   const nativeFetch = window.fetch.bind(window);
@@ -64,7 +61,7 @@ export function installAuthRedirect() {
       options = {...options, headers: {...Object.fromEntries(new Headers(options.headers || {})), ...observeHeaders()}};
     }
     const response = await nativeFetch(resource, options);
-    if (response.status === 401) redirectToLogin();
+    if (response.status === 401) sessionLost();
     return response;
   };
 }

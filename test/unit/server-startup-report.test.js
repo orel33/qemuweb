@@ -33,14 +33,14 @@ test('server: given options are shown with their source; the environment is igno
     assert.equal(parseServerArguments([], {root}).port, 3002);
     assert.equal(parseServerArguments([], {root}).authMode, 'password');
     const settings = parseServerArguments(['--listen', '3003', '--runtime', '/var/lib/qemuweb', '--users', '/etc/qemuweb/users.json', '--runners', '/etc/qemuweb/runners.json', '--logs', '/var/log/qemuweb',
-      '--session-hours', '8', '--runner-grace', '60', '--trust-proxy', 'loopback', '--auth', 'both', '--proxy-key-file', '/etc/qemuweb/proxy-key', '--logout-url', 'https://qw.example/bye', '--ephemeral'], {root});
+      '--session-hours', '8', '--runner-grace', '60', '--trust-proxy', 'loopback', '--auth', 'proxy', '--proxy-key-file', '/etc/qemuweb/proxy-key', '--logout-url', 'https://qw.example/bye', '--ephemeral'], {root});
     const text = blockOf(serverSpec(root), settings, [['Runner socket', '/var/lib/qemuweb/runner-3003.sock']]);
     for (const [name, value] of [['--listen', '3003'], ['--runtime', '/var/lib/qemuweb'], ['--users', '/etc/qemuweb/users.json'], ['--runners', '/etc/qemuweb/runners.json'], ['--logs', '/var/log/qemuweb'],
-      ['--session-hours', '8'], ['--runner-grace', '60'], ['--trust-proxy', 'loopback'], ['--auth', 'both'], ['--proxy-key-file', '/etc/qemuweb/proxy-key'], ['--logout-url', 'https://qw.example/bye'], ['--ephemeral', 'on']]) {
+      ['--session-hours', '8'], ['--runner-grace', '60'], ['--trust-proxy', 'loopback'], ['--auth', 'proxy'], ['--proxy-key-file', '/etc/qemuweb/proxy-key'], ['--logout-url', 'https://qw.example/bye'], ['--ephemeral', 'on']]) {
       assert.match(text, new RegExp(`${name} +${escape(value)} +\\(option\\)`), `${name} option`);
     }
     assert.match(text, /--no-auth +off +\(default\)/, '--auth and --no-auth exclude each other');
-    assert.equal(settings.authMode, 'both');
+    assert.equal(settings.authMode, 'proxy');
     assert.match(text, /\/var\/lib\/qemuweb\/runner-3003\.sock/);
     assert.doesNotMatch(text, /PORT|XDG_DATA_HOME|QEMUWEB_/);
   } finally {

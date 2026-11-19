@@ -4,7 +4,7 @@ import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderCons
 import {captureView, renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
-import {redirectToLogin} from './api.js';
+import {sessionLost} from './api.js';
 import {applyControl, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
 let socket = null;
@@ -35,7 +35,7 @@ export function publishView({force = false} = {}) {
 }
 
 function socketConnectError(error) {
-  if (error?.message === 'Authentication required.') { redirectToLogin(); return; }
+  if (error?.message === 'Authentication required.' && sessionLost() !== 'none') return;
   showStatusError('WebSocket unavailable');
   console.error(error);
 }

@@ -1,6 +1,6 @@
 // Session ZIP archive save and load dialogs.
 import {graphicLayoutKey, machines, saveViewSettings, store} from './state.js';
-import {jsonRequest, redirectToLogin, requestJson} from './api.js';
+import {jsonRequest, sessionLost, requestJson} from './api.js';
 import {showStatusError} from './workspace.js';
 
 const archiveDialog = document.getElementById('session-archive-dialog');
@@ -106,7 +106,7 @@ function importArchive(file, {autoStart, discardDisks}, onProgress, onUploaded) 
     request.addEventListener('load', () => {
       let data = {};
       try { data = JSON.parse(request.responseText); } catch (_) { /* Not JSON: use the generic message. */ }
-      if (request.status === 401) redirectToLogin();
+      if (request.status === 401) sessionLost();
       if (request.status >= 200 && request.status < 300) resolve(data);
       else reject(new Error(data.error || 'Cannot load session.'));
     });

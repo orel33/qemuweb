@@ -5,6 +5,7 @@ import {installAuthRedirect, requestJson, accountLabel, canLogOut, logOut} from 
 import {confirmAction} from './nodes.js';
 import {showStatusError} from './workspace.js';
 import {observedLogin} from './observe.js';
+import {setIdentityVia} from './session-expiry.js';
 
 const account = document.getElementById('account');
 const accountName = document.getElementById('account-name');
@@ -20,6 +21,7 @@ export function initAccount() {
   fetch('/auth/me', {cache: 'no-store'}).then(async response => {
     if (!response.ok) return;
     const me = await response.json();
+    setIdentityVia(me.via);
     // Observing yourself is just your own session.
     if (observedLogin === me.login) { location.replace('/'); return; }
     // Admins go to Supervision from their session or an observed one; students never see it.

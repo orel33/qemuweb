@@ -23,7 +23,7 @@ consoles.
 | Part | Files | Role |
 | --- | --- | --- |
 | Browser | `public/` | Web interface (`index.html`, `css/app.css`, ES modules started by `app.js`) and xterm.js terminals. |
-| Authentication | `server/auth/` | The one place where the identity is resolved (`createAuth` in `server/auth/index.js`): the authenticating front end's `X-Remote-User`, trusted only with the shared `X-Proxy-Key` (`proxy.js`), else the signed cookie; sets `req.user` (HTTP, `/admin`, `X-Observe`) and `socket.data.user` (Socket.IO handshake, console control); the role `admin` opens the admin API. |
+| Authentication | `server/auth/` | The one place where the identity is resolved (`createAuth` in `server/auth/index.js`): the authenticating front end's `X-Remote-User`, trusted only with one of the (at most two) shared `X-Proxy-Key` values (`proxy.js`) with `--auth proxy`, the signed cookie with `--auth password`; sets `req.user` (HTTP, `/admin`, `X-Observe`) and `socket.data.user` (Socket.IO handshake, console control); the role `admin` opens the admin API. |
 | Session manager | `server/session-manager.js`, `server/session.js` | Maps a login to its session (ID, owner, runner ID) and creates it on the runner chosen by `pickRunner`. |
 | HTTP API and Socket.IO | `server/routes/`, `server/sockets.js` | One router per session, one command per request and archive streams; Socket.IO rooms `session:<id>`, `observers:<id>`, `node:<id>:<nodeId>`, `console:<id>:<consoleId>`. `server/ws-transports.js` keeps the registry of live connections and their transport (Connections panel of `/admin`, log line for a connection stuck on polling); `server/ws-test.js` is the admin-only `/ws-test` namespace of the Test WebSocket button. |
 | Admin | `server/routes/admin.js`, `server/audit.js` | `/api/admin/*` and `/admin`: list, stop, delete, observe; `logs/admin.log` and `logs/users.log`. |
@@ -274,7 +274,7 @@ order. State that several modules reassign lives on the `store` object of
 | `app.js` | Entry point: initializes the other modules. |
 | `account.js` | User name (and display name from the front end), Supervision link (admins), Delete session and Log out in the header; authentication-disabled warning. |
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
-| `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, redirect to the login page on 401, `X-Observe` header in an observation tab. |
+| `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, session-expiry handling on 401 (`session-expiry.js`: login page, or one reload for an identity from the front end), `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |
 | `terminal.js` | Console panes, menus, font size and Console (ttyS0)/Console (ttyS1)/Monitor/Log views. |
 | `host-console-settings.js` | Console tab of Host Settings: read-only console (`serial0.sock`, `serial1.sock`) and monitor sockets. |
