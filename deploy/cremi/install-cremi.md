@@ -56,6 +56,8 @@ node --version                                    # v24.x
 
 # 3. standard account (home /home/qemuweb, apart from the code; adduser copies /etc/skel and gives a normal UID)
 adduser --disabled-password --gecos '' --home /home/qemuweb --shell /bin/bash qemuweb
+# the same .bashrc (and prompt) as root's; check that it holds no secret and nothing specific to root first
+install -o qemuweb -g qemuweb -m 0644 /root/.bashrc /home/qemuweb/.bashrc
 # directories: code, runtime (sessions, sockets), configuration (users.json, runners.json), logs
 install -d -o qemuweb -g qemuweb /srv/qemuweb
 install -d -o qemuweb -g qemuweb -m 0750 /var/lib/qemuweb /etc/qemuweb /var/log/qemuweb
