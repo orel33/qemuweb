@@ -145,16 +145,18 @@ Notes:
   attribute, add a row with its claim name (listed at https://services.emi.u-bordeaux.fr/intranet/mesinfos/info.php).
 - The site sets `X-Remote-User` from `preferred_username`, after removing any `X-Remote-User` and `X-User-*` sent by a
   browser. It is the identity QemuWeb will trust in stage 3, together with the shared key.
-- In the log, the relay talks HTTP/1.0 (a WebSocket needs 1.1) and sends no `X-Forwarded-For`: both to ask the CREMI.
+- In the log, the second field is the address of the client (`X-Forwarded-For`, sent by the relay).
 - Logout, to test again: `https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye`.
 
 ### Stage 3: QemuWeb behind Apache
 
-QemuWeb trusts the identity of OpenID: no second login (`--auth both`: `proxy` means that the identity is given by the front end, here Apache with `mod_auth_openidc`, through `X-Remote-User`, and `both` keeps the password login too). Apache adds the header `X-Proxy-Key` (a secret shared with
-QemuWeb) to every request it forwards, WebSocket included; QemuWeb believes `X-Remote-User` only on a request that carries
-that key (`--auth both`). A CREMI login that is not in `users.json` is a **student**; the **administrators** are listed in
-`users.json`. The administrator's SSH tunnel (Runner A, step 19) reaches the same port without the key: it keeps the
-QemuWeb password login. A header without the key is ignored, whatever its address.
+QemuWeb trusts the identity given by Apache: no QemuWeb login at all (`--auth proxy`: the identity comes from the front end,
+here Apache with `mod_auth_openidc`, through the header `X-Remote-User`). Apache adds the header `X-Proxy-Key` (a secret
+shared with QemuWeb) to every request it forwards, WebSocket included; QemuWeb believes `X-Remote-User` only on a request
+that carries that key. Without the key, a request has no identity (`401`); with a wrong key it is refused (`403`). A CREMI
+login that is not in `users.json` is a **student**; the **administrators** are listed in `users.json` (their CREMI login,
+no QemuWeb password). The SSH tunnel to port 3002 therefore no longer gives a login page: administer through the public
+name, and see "Emergency: password mode" if OpenID is down. A header without the key is ignored, whatever its address.
 
 ```sh
 # 10. the key shared by Apache and QemuWeb: one random value, in two root-readable places, never in the repository
@@ -168,10 +170,9 @@ sudo ls -l /etc/qemuweb/proxy-key /etc/apache2/qemuweb-proxykey.inc   # -rw-----
 sudo grep -c CHANGE_ME /etc/apache2/qemuweb-proxykey.inc              # 0 (and exit status 1: nothing is left to replace)
 
 # 11. administrators (users.json is 0600). Students need no account. LOGIN is your CREMI login: recognised as
-#     administrator through OpenID, without a QemuWeb password; "admin" is the account of the SSH tunnel (asks a password)
+#     administrator through OpenID, without a QemuWeb password (add one login per administrator)
 U='./scripts/user.sh --users /etc/qemuweb/users.json'
 $U add LOGIN --role admin --no-password
-$U add admin --role admin
 $U list
 
 # 12. service (QemuWeb on 127.0.0.1:3002; port 3002 is never opened in the firewall)
@@ -198,7 +199,7 @@ Notes:
 - Apache proxies to `127.0.0.1:3002` with WebSocket (`upgrade=websocket`) and a one-hour timeout, sends
   `X-Forwarded-Proto: https` (so the login cookie is `Secure`, with `--trust-proxy loopback`), accepts bodies up to 1 GiB
   (session ZIP archives) and shows `maintenance.html` on 502 and 503.
-- `qemuweb.service` runs `--auth both --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
+- `qemuweb.service` runs `--auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
   goes to the OpenID logout, which ends at `/goodbye`. After a change of an account, no restart is needed.
 - To disable a student, add the login with `$U add LOGIN --no-password` then `$U disable LOGIN`: a disabled login is
   refused through OpenID too.
@@ -208,6 +209,48 @@ Notes:
 - If the consoles freeze, or `/runner/connect` fails only through the public name: the relay must pass WebSocket
   (HTTP/1.1, `Upgrade`), 3600 s and large bodies (ask the CREMI). With Apache older than 2.4.47, replace the `ProxyPass /`
   line by `RewriteCond %{HTTP:Upgrade} websocket [NC]` and `RewriteRule ^/?(.*) ws://127.0.0.1:3002/$1 [P,L]`.
+
+### Switch an installed server to `--auth proxy`
+
+For a server already running with the password login (service without `--auth`, or `--auth both`): create the key (step 10,
+if `/etc/qemuweb/proxy-key` does not exist), declare the administrators (step 11), install the site and the service,
+restart. Run on the server as `qemuweb`.
+
+```sh
+cd /srv/qemuweb && git pull
+U='./scripts/user.sh --users /etc/qemuweb/users.json'
+$U add LOGIN --role admin --no-password          # LOGIN: your CREMI login (repeat for each administrator)
+$U list
+sudo install -m 0644 deploy/cremi/qemuweb-3-app.conf /etc/apache2/sites-available/qemuweb.conf
+sudo apache2ctl configtest && sudo systemctl reload apache2
+sudo install -m 0644 deploy/cremi/qemuweb.service /etc/systemd/system/qemuweb.service
+sudo systemctl daemon-reload && sudo systemctl restart qemuweb
+sleep 3 && sudo journalctl -u qemuweb --since "1 min ago" --no-pager | tail -n 8
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me        # 401: no identity without the key
+curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin' -H 'X-Proxy-Key: wrong' http://127.0.0.1:3002/auth/me   # 403
+```
+
+Then, in a private window, open `https://qemuweb.emi.u-bordeaux.fr/`: CREMI login, then the interface with your login and
+the Supervision link (no QemuWeb login page). The restart keeps the machines of the local runner.
+
+### Emergency: password mode
+
+If OpenID is down, or to test with the tunnel, restart QemuWeb with its own login for the time of the incident:
+
+```sh
+# on the server, as qemuweb: a drop-in replaces the authentication options (nothing is edited in the repository)
+sudo systemctl edit qemuweb      # in the editor, write the three lines below, save, quit
+#   [Service]
+#   ExecStart=
+#   ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb --users /etc/qemuweb/users.json --runners /etc/qemuweb/runners.json --logs /var/log/qemuweb --session-hours 12 --runner-grace 300 --trust-proxy loopback --auth password
+cd /srv/qemuweb && ./scripts/user.sh --users /etc/qemuweb/users.json add admin --role admin    # asks a password
+sudo systemctl restart qemuweb
+# (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app   then http://127.0.0.1:3012, log in as admin
+# back to normal: remove the drop-in and restart
+sudo rm -r /etc/systemd/system/qemuweb.service.d && sudo systemctl daemon-reload && sudo systemctl restart qemuweb
+```
+
+Delete the `admin` account afterwards (`./scripts/user.sh --users /etc/qemuweb/users.json remove admin`).
 
 ### Rolling back one stage
 
@@ -302,10 +345,8 @@ sudo systemctl enable --now qemuweb-runner
 sudo journalctl -u qemuweb-runner -n 30 --no-pager -o cat   # "Connected to the server."
 sudo journalctl -u qemuweb -n 10 --no-pager -o cat          # the server sees its runner
 
-# 19. try it without Apache and OpenID: an SSH tunnel from the workstation (keep it open), then
-#     http://127.0.0.1:3012 in a browser (no key: the QemuWeb login page), log in as admin (QemuWeb password), "Load session ZIP" demo/lan.zip,
-#     start, open a console
-#     (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app
+# 19. in a private window: https://qemuweb.emi.u-bordeaux.fr/ (CREMI login), "Load session ZIP" demo/lan.zip, start, open a console
+#     (without Apache: "Emergency: password mode" above, with the SSH tunnel)
 
 # 20. on the server: the machines run here, under the runner's account
 ps -eo pid,user,args | grep -E "[q]emu-system|[v]de_switch" | cut -c1-110
@@ -318,7 +359,7 @@ server keeps the machines.
 ## Runner B: remote, on another machine
 
 Dials the server through Apache with its own token (`/runner/connect` and `/api/runner/register` are outside OpenID).
-Until the relay passes WebSocket, test with the SSH tunnel of `docs/remote-runner-test.md` (variant A).
+The relay passes WebSocket (Annex A.3 checks it).
 
 ```sh
 # 21. as root on REMOTE (proxy first if needed)
