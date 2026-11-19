@@ -105,14 +105,17 @@ Writing `Connection "upgrade"` instead would work for WebSocket but would ask ev
 
 ```sh
 # From any machine, through the public name: a WebSocket request must reach QemuWeb.
-# 401 (Server: nginx, no X-Powered-By) = the relay forwards Upgrade. 302 to /login.html = it drops it.
+# `HTTP/1.1 401` with `Content-Length: 0` and no X-Powered-By = the relay forwards Upgrade (the runner gateway refused it).
+# `401` with `X-Powered-By: Express` and a JSON body {"error":"Authentication required."} = the relay dropped Upgrade (an
+# ordinary GET reached Express); a 101 or any other status is not right either. (In --auth password mode, the emergency mode,
+# a dropped Upgrade gives a 302 to /login.html again.)
 curl -sS -i --http1.1 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" \
-  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" https://qemuweb.emi.u-bordeaux.fr/runner/connect | head -4
+  -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" https://qemuweb.emi.u-bordeaux.fr/runner/connect | head -8
 
-# On v0-qemuweb, directly to Apache (bypasses the relay): 401 too means Apache and the application are right.
+# On v0-qemuweb, directly to Apache (bypasses the relay): the same answer (401, Content-Length: 0) means Apache and the application are right.
 curl -sS -i --http1.1 --noproxy '*' -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" \
   -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 \
-  https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect | head -4
+  https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect | head -8
 
 # The relay's body size limit: a 5 MB body must not answer 413 from nginx
 head -c 5000000 /dev/zero > /tmp/five-mb.bin
@@ -137,7 +140,7 @@ network: it talks to the server on a Unix socket under `/var/lib/qemuweb`.
 
 | Symptom | Likely cause |
 | --- | --- |
-| A WebSocket request through the public name answers `302` to `/login.html` | The relay drops `Upgrade` (HTTP/1.0 or the headers missing) |
+| A WebSocket request through the public name answers `401` with `X-Powered-By: Express` and a JSON body (instead of `Content-Length: 0` and no `X-Powered-By`); in `--auth password` mode, a `302` to `/login.html` | The relay drops `Upgrade` (HTTP/1.0 or the headers missing) |
 | `413 Request Entity Too Large` from nginx on a session upload | `client_max_body_size` of the relay is below the file size |
 | The consoles freeze after some minutes, or the runner reconnects often | A timeout on the path shorter than 3600 s (relay or Apache) |
 | The page works but `/admin` shows connections on `polling` | A stage forwards HTTP but not the `Upgrade` of the WebSocket |
