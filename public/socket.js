@@ -5,7 +5,7 @@ import {captureView, renderTabs, showPage, showStatusError, updateControls} from
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {sessionLost} from './api.js';
-import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshHostCaptures, setCaptures} from './captures.js';
+import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
 import {applyControl, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
 let socket = null;
@@ -145,7 +145,7 @@ export function initSockets() {
     if (machine.id === store.activeId) updateControls();
     updatePaneViewControls();
     if (store.graphicVisible) scheduleSessionSync();
-    refreshHostCaptures();
+    refreshCaptureRules();
   });
   socket.on('captures', setCaptures);
   socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); loadAllCaptures(); });

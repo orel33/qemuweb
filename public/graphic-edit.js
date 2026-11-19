@@ -6,6 +6,7 @@ import {machines} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {observing} from './observe.js';
 import {captureBlocker, recordingOf, startCapture, stopCapture} from './captures.js';
+import {openCaptureDialog} from './capture-dialog.js';
 import {chooseRestartTiming, scheduleSessionSync} from './nodes.js';
 import {renderTabs, showStatusError} from './workspace.js';
 import {graphicCanvas, graphicGraph, renderGraphic, screenPoint, selectedGraphicLink, selectGraphicLink, setGraphicPosition} from './graphic-view.js';
@@ -189,7 +190,7 @@ export function refreshEditTools() {
     : {label: 'Capture', capture: true, disabled: !!blocker, reason: blocker, run: () => report(startCapture(link.hostId, link.nicIndex))};
   showPopover('link', (link.x1 + link.x2) / 2, (link.y1 + link.y2) / 2, `${nameOf(link.hostId)} eth${link.nicIndex} ↔ ${nameOf(link.switchId)}${portText}`, [
     capture,
-    {label: 'Captures…', capture: true, run: () => document.getElementById('show-captures').click()},
+    {label: 'Captures…', capture: true, run: () => openCaptureDialog(link.hostId, {index: link.nicIndex})},
     {label: 'Remove link', run: () => { selectGraphicLink(null); setInterface(link.hostId, link.nicIndex, null); }}
   ]);
 }

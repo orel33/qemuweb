@@ -81,15 +81,10 @@ button:disabled { opacity: .45; cursor: default; }
 .nic-row select:disabled { opacity: 1; color: #aeb9c6; background-color: #303942; border-color: #46515d; -webkit-text-fill-color: #aeb9c6; }
 .nic-row button { width: var(--control-field); height: var(--control-field); padding: 0; border-radius: 4px; }
 .network-help { margin: 0; color: #bdc8d6; font-size: 13px; line-height: 1.5; }
-#capture-controls { gap: 8px; margin-top: 14px; padding: 12px 0 0; border: 0; border-top: 1px solid #35404c; border-radius: 0; background: transparent; }
-.capture-controls { display: flex; flex-direction: column; }
-.capture-controls[hidden] { display: none; }
-.capture-head { display: flex; flex-direction: column; gap: 2px; }
-.capture-head span { color: #9fb1c7; font-size: 12px; }
 .capture-row { display: grid; grid-template-columns: minmax(120px, 250px) minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .capture-row .capture-note { min-width: 0; overflow: hidden; color: #9fb1c7; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
 .capture-file > span:first-child { overflow: hidden; text-overflow: ellipsis; font-family: ui-monospace, monospace; font-size: 12px; }
-.capture-actions { display: flex; gap: 6px; }
+.capture-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .capture-stop { color: #ffb4b4; }
 .capture-status { margin: 0; color: #ffb4b4; font-size: 12px; }
 .capture-status:empty { display: none; }
@@ -236,11 +231,24 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .topology-svg[data-zoom="far"] .rec-text { display: none; }
 @media (prefers-reduced-motion: no-preference) { .rec-dot { animation: rec-pulse 1.4s ease-in-out infinite; } }
 @keyframes rec-pulse { 50% { opacity: 0.35; } }
-#show-captures[data-recording="true"] { color: #ff6b6b; }
-#show-captures[data-recording="true"] svg { animation: none; }
-#show-captures:disabled { opacity: 0.5; }
-.captures-dialog { width: min(720px, calc(100vw - 32px)); }
-.captures-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow: auto; }
+/* Capture dialog */
+.capture-dialog { width: min(720px, calc(100vw - 32px)); }
+.capture-dialog p { margin: 0; white-space: normal; }
+.capture-tabs { display: flex; flex-wrap: wrap; gap: 4px; margin: 12px 0; border-bottom: 1px solid #35404c; }
+.capture-tabs button { height: var(--control-small); padding: 0 12px; border: 1px solid transparent; border-bottom: 0; border-radius: 4px 4px 0 0; background: transparent; color: #9fb1c7; }
+.capture-tabs button[aria-selected="true"] { border-color: #35404c; background: #1a2633; color: #e7edf5; }
+.capture-panel { display: flex; flex-direction: column; gap: 10px; }
+.capture-panel[hidden] { display: none; }
+.capture-interface { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.capture-interface select { flex: 1 1 220px; min-width: 0; height: var(--control-small); border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 13px system-ui, sans-serif; }
+.capture-toggle { height: 40px; font-size: 15px; font-weight: 700; }
+.capture-toggle[data-recording="true"] { border-color: #ff6b6b; background: #4a1f24; color: #ffd0d0; }
+.capture-state { color: #d7e1ee; font-size: 13px; }
+.capture-hint { color: #9fb1c7; font-size: 12px; }
+.capture-empty { color: #9fb1c7; font-size: 13px; }
+.capture-dialog .capture-row { grid-template-columns: minmax(0, 1fr) auto; gap: 4px 10px; }
+.capture-dialog .capture-row .capture-note { grid-column: 1 / -1; grid-row: 2; white-space: normal; }
+.capture-files { display: flex; flex-direction: column; gap: 8px; max-height: 40vh; overflow: auto; }
 .topology-link:hover .link-line, .topology-link.is-selected .link-line { stroke: #ffe96a; stroke-width: 4.5; }
 .topology-link text { fill: #e0df9c; font: 700 12px system-ui, sans-serif; paint-order: stroke; stroke: #111a24; stroke-width: 4px; stroke-linejoin: round; }
 .topology-svg[data-zoom="far"] .topology-link text, .topology-svg[data-zoom="far"] .node-detail, .topology-svg[data-zoom="far"] .node-status, .topology-svg[data-zoom="far"] .node-dot { display: none; }
@@ -315,6 +323,16 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .pane-clear-button:not(:disabled):hover { border-color: #c49aff; background: #304256; }
 .pane-clear-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .pane-clear-button svg { width: 18px; height: 18px; }
+/* Capture button of the pane bar: the REC red of the Graphic view marks while a capture of the host records. */
+.pane-capture-button { position: relative; display: grid; place-items: center; flex: none; width: var(--control-small); height: var(--control-small); padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #7fd0e8; }
+.pane-capture-button:not(:disabled):hover { border-color: #7fd0e8; background: #304256; }
+.pane-capture-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+.pane-capture-button:disabled { opacity: 0.5; }
+.pane-capture-button svg { width: 18px; height: 18px; }
+.pane-capture-button[hidden] { display: none; }
+.pane-capture-button[data-recording="true"] { border-color: #ff6b6b; color: #ff6b6b; }
+.pane-capture-button[data-recording="true"]::after { content: ""; position: absolute; top: 2px; right: 2px; width: 7px; height: 7px; border-radius: 50%; background: #ff4d4d; }
+@media (prefers-reduced-motion: no-preference) { .pane-capture-button[data-recording="true"]::after { animation: rec-pulse 1.4s ease-in-out infinite; } }
 .pane-session-title { display: inline-block; flex: 0 1 auto; min-width: 0; max-width: 240px; box-sizing: border-box; height: var(--control-small); padding: 0 9px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 700 13px/28px system-ui, sans-serif; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .pane-session-title[hidden], .pane-session-menu[hidden] { display: none; }
 .pane-session-title[data-empty="true"] { padding-left: 0; border-color: transparent; background: transparent; color: #9daec0; }
@@ -357,6 +375,8 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .pane-metrics { flex: none; color: #b7c9db; font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .pane-metrics[data-status="unavailable"] { color: #8899aa; }
 @container (max-width: 550px) { .console-pane-header { gap: 6px; } }
+/* A narrow pane wraps its bar onto a second row instead of clipping the controls. */
+@container (max-width: 480px) { .console-pane-header { flex-wrap: wrap; row-gap: 4px; } }
 .terminal-frame { position: relative; display: flex; flex: 1; gap: 8px; min-width: 0; min-height: 0; padding: 8px; background: #0b0f14; }
 .terminal-empty-logo { display: none; position: absolute; top: 50%; left: 50%; width: 112px; height: 112px; transform: translate(-50%, -50%); transition: transform .18s ease, filter .18s ease; }
 .console-pane[data-empty="true"] .terminal-empty-logo { display: block; }
@@ -367,6 +387,8 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .terminal .xterm { font-family: var(--console-font-family); font-size: var(--console-font-size); }
 .terminal .xterm-viewport { overflow-x: hidden; overflow-y: scroll; scrollbar-width: none; }
 .terminal .xterm-viewport::-webkit-scrollbar { display: none; }
+/* xterm.js 6 draws its own scrollbar (.xterm-scrollable-element > .scrollbar); the slider of the pane (.terminal-scroll) is the only one shown. The wheel and the keys still scroll the terminal. */
+.terminal .xterm-scrollable-element > .scrollbar { display: none !important; }
 .terminal-scroll { flex: none; width: 14px; height: 100%; margin: 0; appearance: none; writing-mode: vertical-lr; direction: ltr; border-radius: 8px; background: #243244; cursor: pointer; }
 .terminal-scroll::-webkit-slider-thumb { width: 12px; height: 44px; appearance: none; border: 1px solid #a9bfd8; border-radius: 7px; background: #7894b1; }
 .terminal-scroll::-moz-range-thumb { width: 12px; height: 44px; border: 1px solid #a9bfd8; border-radius: 7px; background: #7894b1; }

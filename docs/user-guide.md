@@ -248,13 +248,18 @@ guest and the guest cannot see it. It works on a **running QEMU host** with an i
 connected to a switch; a stopped host, a VirtualBox host and an interface that is not
 connected are shown disabled, with the reason as the tooltip.
 
-- **Start and stop.** In **Host Settings → Network**, the section **Traffic capture** lists
-  the interfaces: **Capture** starts, **Stop** ends. In the Graphic view, click a link and use
-  **Capture** / **Stop capture** in its popover. A node and a link being recorded show a red
-  **REC** mark. Several interfaces of a host can be recorded at the same time, one capture each.
-- **Download and delete.** The files appear in the same section, and in the **Traffic
-  captures** list (the radio-waves button of the bottom toolbar) which shows every capture of
-  the session with its state and size. **Download** gives `eth0-<date>.pcap` (a capture still
+- **Start and stop.** Click the **Capture** button (radio waves icon) in the bar of the
+  terminal pane of the host. The dialog names the host; choose the **interface** (each one
+  shows the switch it is connected to, such as "Ethernet 0 · to switch lan"; the connected one
+  is preselected) and click **Start capture**; the same button reads **Stop capture** while it
+  records, with the size. The pane button turns red while a capture of the host records, and a
+  node and a link being recorded show a red **REC** mark in the Graphic view. In the Graphic
+  view you can also click a link and use **Capture** / **Stop capture** in its popover;
+  **Captures…** opens the dialog on that host and interface. Several interfaces of a host can
+  be recorded at the same time, one capture each. The button is hidden for a switch.
+- **Download and delete.** The files of the host are listed under the button of the dialog,
+  with their state, size and time; the tab **All captures of the session** lists those of every
+  host. **Download** gives `eth0-<date>.pcap` (a capture still
   recording is cut after its last whole packet); open it with Wireshark (`File → Open`) or
   `tcpdump -r`. **Delete** removes the file (stop the capture first).
 - **Limits.** A capture file stops at **100 MB** (the state reads "stopped: size limit
@@ -262,8 +267,9 @@ connected are shown disabled, with the reason as the tooltip.
   **4** capture files: delete one to start another. A capture also ends when the host stops
   (its file stays). The files stay until you delete them, remove the host, or delete the
   session; they are **not** part of the session ZIP. The packet times are QEMU's clock.
-- **Live view.** Choose **Capture** in the view menu of a terminal pane (next to Console,
-  Monitor and Log) to see the packets as text while they arrive, as `tcpdump` prints them.
+- **Live view.** Click **Open live view** on a file in the dialog (it switches the pane to the
+  Capture view with that capture selected), or choose **Capture** in the view menu of a
+  terminal pane (next to Console, Monitor and Log), to see the packets as text while they arrive, as `tcpdump` prints them.
   Pick a capture, type an optional **filter** (a tcpdump expression such as `icmp`,
   `host 10.0.0.2` or `tcp port 80`; letters, digits and `. : / _ - ( ) [ ] & | ! < > = + * % ^ ,`
   only, 200 characters at most, not starting with `-`), then **Start**; **Stop** ends the

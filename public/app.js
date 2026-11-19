@@ -15,7 +15,7 @@ import {initFloatingConsole} from './graphic-console.js';
 import {initArchive} from './archive.js';
 import {initSockets} from './socket.js';
 import {initObserve} from './observe.js';
-import {initCaptures} from './captures.js';
+import {initCaptureDialog} from './capture-dialog.js';
 
 initAccount();
 initTerminals();
@@ -32,4 +32,4 @@ initNodeDialogs();
 initHostSettings();
 initSockets();
 initObserve();
-initCaptures();
+initCaptureDialog();

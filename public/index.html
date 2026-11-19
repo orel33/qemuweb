@@ -120,7 +120,6 @@
         <div class="network-controls-head"><button id="add-nic" type="button">+ Interface</button></div>
         <div id="nic-list"></div>
       </section>
-      <section class="capture-controls" id="capture-controls" aria-label="Traffic capture" hidden></section>
     </div></section>
     <section class="settings-tab-panel" id="host-panel-startup" role="tabpanel" aria-labelledby="host-tab-startup" data-settings-panel="startup" hidden>
       <div id="startup-template-values" class="startup-template-values" aria-label="Startup template values"></div>
@@ -146,11 +145,25 @@
     <div class="host-create-actions" id="host-create-actions" hidden><div class="host-action-options"><label class="create-autostart"><input id="host-autostart" type="checkbox" checked>Start automatically</label></div><button id="cancel-host-create" type="button">Cancel</button><button id="confirm-host-create" type="submit">OK</button></div>
     </form>
   </dialog>
-  <dialog class="confirm-dialog captures-dialog" id="captures-dialog" aria-labelledby="captures-title">
-    <h2 id="captures-title">Traffic captures</h2>
-    <p>PCAP files of the interfaces you captured, both directions. Open them in Wireshark. At most 4 per host, 100 MB each; they are not part of the session ZIP.</p>
-    <div id="captures-list" class="captures-list"></div>
-    <div class="confirm-actions"><button id="close-captures" type="button">Close</button></div>
+  <dialog class="confirm-dialog capture-dialog" id="capture-dialog" aria-labelledby="capture-dialog-title">
+    <h2 id="capture-dialog-title">Traffic capture</h2>
+    <div class="capture-tabs" role="tablist" aria-label="Capture views">
+      <button id="capture-tab-host" type="button" role="tab" aria-controls="capture-panel-host" aria-selected="true">This host</button>
+      <button id="capture-tab-all" type="button" role="tab" aria-controls="capture-panel-all" aria-selected="false" tabindex="-1">All captures of the session</button>
+    </div>
+    <section id="capture-panel-host" class="capture-panel" role="tabpanel" aria-labelledby="capture-tab-host">
+      <label class="capture-interface" for="capture-interface">Interface <select id="capture-interface"></select></label>
+      <button id="capture-toggle" class="capture-toggle" type="button">Start capture</button>
+      <p id="capture-state" class="capture-state" role="status"></p>
+      <p id="capture-hint" class="capture-hint">Records what this interface sends and receives. Open the file in Wireshark.</p>
+      <div id="capture-files" class="capture-files"></div>
+    </section>
+    <section id="capture-panel-all" class="capture-panel" role="tabpanel" aria-labelledby="capture-tab-all" hidden>
+      <p class="capture-hint">PCAP files of every host of the session, both directions. At most 4 per host, 100 MB each; they are not part of the session ZIP.</p>
+      <div id="capture-all-files" class="capture-files"></div>
+    </section>
+    <p id="capture-status" class="capture-status" role="status"></p>
+    <div class="confirm-actions"><button id="close-capture-dialog" type="button">Close</button></div>
   </dialog>
   <dialog class="confirm-dialog" id="session-archive-dialog" aria-labelledby="session-archive-title">
     <h2 id="session-archive-title">Save session</h2>
@@ -200,6 +213,7 @@
     <symbol id="pane-reset-icon" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></symbol>
     <symbol id="pane-remove-icon" viewBox="0 0 24 24"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></symbol>
     <symbol id="pane-settings-icon" viewBox="0 0 24 24"><path d="M12.22 2h-.44a2 2 0 0 0-2 1.72l-.13 1.06a2 2 0 0 1-1 1.52l-.92.53a2 2 0 0 1-1.81.06l-.92-.46a2 2 0 0 0-2.56.75l-.22.38a2 2 0 0 0 .53 2.64l.8.62a2 2 0 0 1 .76 1.73v.98a2 2 0 0 1-.76 1.73l-.8.62a2 2 0 0 0-.53 2.64l.22.38a2 2 0 0 0 2.56.75l.92-.46a2 2 0 0 1 1.81.06l.92.53a2 2 0 0 1 1 1.52l.13 1.06a2 2 0 0 0 2 1.72h.44a2 2 0 0 0 2-1.72l.13-1.06a2 2 0 0 1 1-1.52l.92-.53a2 2 0 0 1 1.81-.06l.92.46a2 2 0 0 0 2.56-.75l.22-.38a2 2 0 0 0-.53-2.64l-.8-.62a2 2 0 0 1-.76-1.73v-.98a2 2 0 0 1 .76-1.73l.8-.62a2 2 0 0 0 .53-2.64l-.22-.38a2 2 0 0 0-2.56-.75l-.92.46a2 2 0 0 1-1.81-.06l-.92-.53a2 2 0 0 1-1-1.52l-.13-1.06A2 2 0 0 0 12.22 2z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="pane-capture-icon" viewBox="0 0 24 24"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></symbol>
     <symbol id="pane-clear-icon" viewBox="0 0 24 24"><path d="M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21"/><path d="m5.082 11.09 8.828 8.828"/></symbol>
   </svg>
   <main id="console-workspace" data-layout="single">
@@ -246,7 +260,6 @@
     <button id="stop-all" class="icon-button write-action act-amber" type="button" disabled title="Stop all: stop every running host and switch; the nodes are kept" aria-label="Stop all"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v10"/><path d="M18.4 6.6a9 9 0 1 1-12.77.04"/></svg></button>
     <button id="exit-all" class="icon-button write-action" type="button" disabled title="Remove all hosts and switches" aria-label="Remove all hosts and switches"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="14" height="14" rx="2"/><path d="M7 21h12a2 2 0 0 0 2-2V7M7 7l6 6m0-6-6 6"/></svg></button>
     <button id="delete-session" class="icon-button write-action" type="button" title="Delete session: stop and remove every host and switch of your session" aria-label="Delete session"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg></button>
-    <button id="show-captures" class="icon-button" type="button" title="Traffic captures of this session" aria-label="Traffic captures"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="2"/><path d="M16.24 7.76a6 6 0 0 1 0 8.49m-8.48-.01a6 6 0 0 1 0-8.49m11.31-2.82a10 10 0 0 1 0 14.14m-14.14 0a10 10 0 0 1 0-14.14"/></svg></button>
     <div class="page-controls" aria-label="Console pages"><button id="previous-page" class="icon-button view-control" type="button" disabled title="Previous page" aria-label="Previous page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg></button><span id="page-position">0 / 0</span><button id="next-page" class="icon-button view-control" type="button" disabled title="Next page" aria-label="Next page"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 18 6-6-6-6"/></svg></button></div>
     <button id="toggle-console-columns" class="icon-button view-control" type="button" title="Layout: 1 terminal" aria-label="Layout: 1 terminal"></button>
     <button id="toggle-switch-consoles" class="icon-button view-control" type="button" aria-pressed="true" title="Hide switch consoles" aria-label="Hide switch consoles"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
