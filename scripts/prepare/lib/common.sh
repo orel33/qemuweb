@@ -248,7 +248,9 @@ check_debian_mirrors() {
 PREPARE_VM_TIMEOUT=1800
 PREPARE_STALL_WARN=300
 
-# Failure strings, one place for all builds. Each is an extended regular
+# Failure strings, one place for all builds. The log is matched as ONE line (no whitespace, no newline): never use an
+# open `.*` in a pattern, it would run to the next occurrence anywhere in the log (a non-fatal "Failed to start
+# isc-dhcp-server.service" followed, much later, by "cloud-init" once matched `Failed to start .*Cloud`); bound it, as in `.{0,60}`. Each is an extended regular
 # expression matched case-insensitively against the log WITHOUT escape sequences
 # and WITHOUT any whitespace (a screen drawn by the installer may be cut by cursor
 # movements), so spaces in a string here are only for reading.
@@ -259,7 +261,7 @@ DEBIAN_INSTALLER_FAILURES=(
   'Bad archive mirror'                 # the error dialog of an unreachable mirror
   'Installation step failed'           # main-menu: a step failed, waits for a choice
   'Failed to retrieve'
-  'Unable to .*mirror'
+  'Unable to .{0,60}mirror'
   'Unable to install'                  # for example "Unable to install the selected kernel"
   'Failed to run preseeded command'    # the late command failed
   'Execution of preseeded command'
@@ -274,7 +276,7 @@ CLOUD_INIT_FAILURES=(
   'Failed to run module'
   'Failed run of stage'
   'Unable to locate package'
-  'Failed to start .*Cloud'
+  'Failed to start cloud-(init|config|final)'   # the cloud-init services themselves, not any service
 )
 
 # Progress phases: "percent@label@regex", regex on the same normalised log. The
