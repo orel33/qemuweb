@@ -4,10 +4,7 @@
 // the files of every host. The rules and the requests are those of captures.js; nothing is decided
 // here.
 import {machines} from './state.js';
-import {
-  allCaptures, canCapture, captureBlocker, capturesOf, deleteCapture, downloadCapture, formatBytes, interfaceLabel,
-  isRecording, loadAllCaptures, loadCaptures, nameOf, onCapturesChanged, preselectInterface, startCapture, stopCapture
-} from './captures.js';
+import {allCaptures, canCapture, captureBlocker, capturesOf, deleteCapture, downloadCapture, formatBytes, interfaceLabel, isRecording, loadAllCaptures, loadCaptures, nameOf, onCapturesChanged, preselectInterface, startCapture, stopCapture} from './captures.js';
 import {setPaneView} from './terminal.js';
 import {chooseLiveCapture} from './capture-live.js';
 
