@@ -122,8 +122,9 @@ curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:4
 curl --noproxy '*' -s --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/hello.html
 curl --noproxy '*' -s -o /dev/null -w '%{http_code} %{redirect_url}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:80:127.0.0.1 http://v0-qemuweb.emi.u-bordeaux.fr/hello.html
 
-# 7b. from the CREMI jump host, to this machine by its name (on the workstation)
-#     ssh cremi 'curl -s https://v0-qemuweb.emi.u-bordeaux.fr/hello.html'
+# 7b. from another machine inside the CREMI (a lab machine, or the workstation on the CREMI VPN), to this machine by its
+#     name. The jump host `cremi` does not run commands: use a machine you can log in to.
+#     curl -s https://v0-qemuweb.emi.u-bordeaux.fr/hello.html
 
 # 7c. from the workstation, through the CREMI https relay, then in a browser
 #     curl -s https://qemuweb.emi.u-bordeaux.fr/hello.html
@@ -166,8 +167,8 @@ sudo systemctl restart apache2                    # restart: a new module is loa
 # 10a. on the server, without a session: a redirection to the CREMI login, not the page
 curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/hello.html | grep -iE '^(HTTP|location)'
 
-# 10b. from the CREMI jump host, the same (on the workstation)
-#      ssh cremi 'curl -s -D - -o /dev/null https://v0-qemuweb.emi.u-bordeaux.fr/hello.html | grep -iE "^(HTTP|location)"'
+# 10b. from another machine inside the CREMI, the same
+#      curl -s -D - -o /dev/null https://v0-qemuweb.emi.u-bordeaux.fr/hello.html | grep -iE '^(HTTP|location)'
 
 # 10c. in a browser, https://qemuweb.emi.u-bordeaux.fr/hello.html: CREMI login, then the page. Then, on the server,
 #      the access log: the line of hello.html has `user=` followed by your CREMI login
@@ -235,8 +236,8 @@ sudo systemctl stop qemuweb
 curl --noproxy '*' -s -w '\n%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect | grep -E 'not available|^50'
 sudo systemctl start qemuweb
 
-# 14b. from the CREMI jump host (on the workstation)
-#      ssh cremi 'curl -s -o /dev/null -w "%{http_code}\n" https://v0-qemuweb.emi.u-bordeaux.fr/auth/me'
+# 14b. from another machine inside the CREMI
+#      curl -s -o /dev/null -w '%{http_code}\n' https://v0-qemuweb.emi.u-bordeaux.fr/auth/me
 
 # 14c. in a browser, https://qemuweb.emi.u-bordeaux.fr/ : CREMI login, then the QemuWeb login (toto), "Load session
 #      ZIP" demo/lan.zip (needs a runner: see Runner A), start, open a console (WebSocket). In the developer tools,
@@ -260,7 +261,7 @@ by QemuWeb, which rejects an unknown one with 401; registration needs a one-time
 The local runner (Runner A) does not use Apache at all: it dials the Unix socket of the server.
 
 If the consoles open but freeze, or `/runner/connect` fails only through the public name while it works on the
-server (14a) and from the jump host (14b): the CREMI relay must pass WebSocket and allow 3600 s and large bodies
+server (14a) and from another machine inside the CREMI (14b): the CREMI relay must pass WebSocket and allow 3600 s and large bodies
 (ask the CREMI). If Apache is older than 2.4.47 (`apache2 -v`), `upgrade=websocket` does not exist: replace the
 `ProxyPass / ...` line by a `RewriteCond %{HTTP:Upgrade} websocket [NC]` plus `RewriteRule ^/?(.*)
 ws://127.0.0.1:3002/$1 [P,L]` pair (and enable `rewrite`).
