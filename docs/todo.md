@@ -66,6 +66,11 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   repoints every year (the current certificate ends on 2 December 2026). Apache must be reloaded
   (`sudo systemctl reload apache2`) after a renewal: say it in the tutorial, or add a hook.
 
+- **CREMI relay: HTTP/1.0 and no `X-Forwarded-For`** (seen in the Apache log of `v0-qemuweb`): the relay talks to Apache
+  in HTTP/1.0, which cannot carry a WebSocket (consoles, `/runner/connect`) until it is set to HTTP/1.1 with the `Upgrade`
+  headers; and it sends no client address, so `--trust-proxy` and the login throttling of milestone 6 only see the relay.
+  Ask the CREMI for both.
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that

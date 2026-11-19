@@ -104,7 +104,7 @@ sudo openssl x509 -in /etc/apache2/certs/star_emi_u-bordeaux_fr.crt -noout -pubk
 sudo openssl pkey -in /etc/apache2/certs/star_emi_u-bordeaux_fr.key -pubout | openssl sha256
 
 # 6. the maintenance page and the site of stage 1
-sudo a2enmod ssl rewrite                          # TLS; rewrite: the 503 of every other path
+sudo a2enmod ssl rewrite include                  # TLS; rewrite: the 503 of every other path; include: SSI of the page
 # the Debian default site answers unknown names (and the bare IP) with its "It works" page: off
 sudo a2dissite 000-default
 # the global name of the server (otherwise apache2ctl warns AH00558)
@@ -177,15 +177,30 @@ curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:4
 # 10b. from another machine inside the CREMI, the same
 #      curl -s -D - -o /dev/null https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html | grep -iE '^(HTTP|location)'
 
-# 10c. in a browser, https://qemuweb.emi.u-bordeaux.fr/maintenance.html: CREMI login, then the page. Then, on the server,
+# 10c. in a PRIVATE window of a browser (no cookie of an earlier attempt: an old session cookie or a cached 403/502 breaks the
+#      login), https://qemuweb.emi.u-bordeaux.fr/maintenance.html: CREMI login, then the page. Then, on the server,
 #      the access log: the line of maintenance.html has `user=` followed by your CREMI login
 sudo tail -n 5 /var/log/apache2/qemuweb-access.log
 ```
 
 **Expect (stage 2)**: 10a prints `HTTP/1.1 302 Found` and a `location:` that starts with
 `https://openid.emi.u-bordeaux.fr/`; 10b prints the same. In the browser (10c) you are sent to the CREMI login, then
-see `QemuWeb is under maintenance`; the log line of `/maintenance.html` reads `user=<your CREMI login>` (`user=-` on the first, redirected request, which had
+see `QemuWeb is under maintenance` and, below it, a block **You are signed in** with your login, name, email and
+groups (the page is filled by the server: see below); the log line of `/maintenance.html` reads `user=<your CREMI login>` (`user=-` on the first, redirected request, which had
 no session). A user without the group `cremi-active` gets `403` after the login.
+
+A good log looks like this (checked on the CREMI machine): the return of the provider, `GET /.openid?state=...&code=...`
+answered `302` with `user=-`, then `GET /maintenance.html` answered `200` with `user=<your CREMI login>`. Two things to
+notice there: the relay talks to Apache in **HTTP/1.0** (a WebSocket needs HTTP/1.1, so the relay must be configured for
+it: see stage 3) and it sends **no `X-Forwarded-For`** (the log shows `"-"`, `%h` is the address of the relay): the real
+address of a client is not available to QemuWeb until the CREMI adds that header.
+
+**Why the page shows the identity.** `maintenance.html` contains a few server side includes (`<!--#echo
+var="OIDC_CLAIM_preferred_username" -->`, module `include`, enabled at step 6): Apache fills them with the claims that
+mod_auth_openidc keeps in the environment (`OIDC_CLAIM_<name>`), and shows the block only when a login is present. To
+show another attribute, add a row with its claim name (the list of the variables of a logged-in user is at
+https://services.emi.u-bordeaux.fr/intranet/mesinfos/info.php). Without a user (stage 1, maintenance mode) the block is
+not shown.
 
 **Why the log shows the identity.** The site sets the header `X-Remote-User` from the claim `preferred_username`
 (`RequestHeader set X-Remote-User ... env=OIDC_CLAIM_preferred_username`), and the `LogFormat` of the site prints
