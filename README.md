@@ -35,7 +35,7 @@ More in [docs/architecture.md](docs/architecture.md).
 On **Ubuntu 24.04, x86-64**, with KVM (your user in the `kvm` group):
 
 ```sh
-sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
+sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2 tcpdump
 # Node.js 24 is required (Ubuntu's package is too old): nvm install, or sudo n 24
 git clone https://github.com/orel33/qemuweb.git && cd qemuweb
 npm ci

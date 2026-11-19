@@ -12,8 +12,12 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    compile `node-pty`, which has no Linux prebuild:
 
    ```sh
-   sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2
+   sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2 tcpdump
    ```
+
+   `tcpdump` is only needed for the live **Capture** view of the Terminals
+   (see [Capturing traffic](user-guide.md#capturing-traffic)); the PCAP files
+   do not need it. Without it that view says so and everything else works.
 
 2. Install **Node.js 24 LTS** with npm. Ubuntu's `nodejs` package is too old,
    and `npm ci` fails with `EBADENGINE` on other Node versions. Use one of:

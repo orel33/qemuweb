@@ -238,6 +238,43 @@ everything, including each interface's switch and port.
   (the interface itself stays; remove it in Host Settings). A running host needs a restart
   for the change to apply, as in Host Settings. `Esc` cancels an editing mode.
 
+### Capturing traffic
+
+QemuWeb can record the frames of a host's Ethernet interface, in both directions, into a
+standard **PCAP** file that you download and open in Wireshark. The host records them
+itself (QEMU copies every frame between the interface and its switch): nothing runs in the
+guest and the guest cannot see it. It works on a **running QEMU host** with an interface
+connected to a switch; a stopped host, a VirtualBox host and an interface that is not
+connected are shown disabled, with the reason as the tooltip.
+
+- **Start and stop.** In **Host Settings → Network**, the section **Traffic capture** lists
+  the interfaces: **Capture** starts, **Stop** ends. In the Graphic view, click a link and use
+  **Capture** / **Stop capture** in its popover. A node and a link being recorded show a red
+  **REC** mark. Several interfaces of a host can be recorded at the same time, one capture each.
+- **Download and delete.** The files appear in the same section, and in the **Traffic
+  captures** list (the radio-waves button of the bottom toolbar) which shows every capture of
+  the session with its state and size. **Download** gives `eth0-<date>.pcap` (a capture still
+  recording is cut after its last whole packet); open it with Wireshark (`File → Open`) or
+  `tcpdump -r`. **Delete** removes the file (stop the capture first).
+- **Limits.** A capture file stops at **100 MB** (the state reads "stopped: size limit
+  reached"; a burst of traffic can overshoot by a few megabytes), and a host keeps at most
+  **4** capture files: delete one to start another. A capture also ends when the host stops
+  (its file stays). The files stay until you delete them, remove the host, or delete the
+  session; they are **not** part of the session ZIP. The packet times are QEMU's clock.
+- **Live view.** Choose **Capture** in the view menu of a terminal pane (next to Console,
+  Monitor and Log) to see the packets as text while they arrive, as `tcpdump` prints them.
+  Pick a capture, type an optional **filter** (a tcpdump expression such as `icmp`,
+  `host 10.0.0.2` or `tcp port 80`; letters, digits and `. : / _ - ( ) [ ] & | ! < > = + * % ^ ,`
+  only, 200 characters at most, not starting with `-`), then **Start**; **Stop** ends the
+  view and the capture goes on. A stopped capture is shown from its first packet and the view
+  ends by itself. The view needs the `tcpdump` program on the machine of the runner; the pane
+  says so when it is missing.
+- **Who can do what.** The owner of the session, and an administrator who **took control** of
+  it, can start, stop, list, download, delete and watch captures. An administrator who only
+  observes cannot, not even list or download; the controls are shown disabled. Starting,
+  stopping, deleting and downloading are recorded in the audit logs (who, which host and
+  capture, never the packets).
+
 ### Startup scripts
 
 Each host can run `start.sh` at boot from an automatically built startup disk.

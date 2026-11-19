@@ -328,7 +328,7 @@ takes 1 GiB (`free -g`, `nproc`).
 
 ```sh
 # 16. packages of the runner, and /dev/kvm for qemuweb
-sudo apt update && sudo apt install -y qemu-system-x86 qemu-utils genisoimage vde2 rsync
+sudo apt update && sudo apt install -y qemu-system-x86 qemu-utils genisoimage vde2 tcpdump rsync
 qemu-system-x86_64 -netdev help | grep vde          # must list vde; else docs/install.md#qemu-without-vde-support (.env.local in /srv/qemuweb)
 sudo usermod -aG kvm qemuweb
 sudo -u qemuweb sh -c 'test -w /dev/kvm && echo kvm-ok'
@@ -378,7 +378,7 @@ The relay passes WebSocket (Annex A.3 checks it).
 ```sh
 # 21. as root on REMOTE (proxy first if needed)
 apt update
-apt install -y bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2 ca-certificates gnupg
+apt install -y bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2 tcpdump ca-certificates gnupg
 curl -fsSL https://deb.nodesource.com/setup_24.x | bash -
 apt install -y nodejs
 adduser --disabled-password --gecos '' runner
