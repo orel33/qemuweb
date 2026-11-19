@@ -29,17 +29,19 @@ compatibility.
 
 ## Order of the work
 
-1. **Reliable operation first** (milestone 6): little code, a large gain for whoever runs the server.
-2. **Reliable runners before personal runners** (7): sessions that survive, forced loss, then the student's own runner.
-3. **Hardening before opening** (8): personal runners, guest access and the whole class are only opened once the
+1. **The two priority features first** (below): they are what the labs ask for, and they are independent of the rest.
+2. **Reliable operation first** (milestone 6): little code, a large gain for whoever runs the server.
+3. **Reliable runners before personal runners** (7): sessions that survive, forced loss, then the student's own runner.
+4. **Hardening before opening** (8): personal runners, guest access and the whole class are only opened once the
    protections exist.
-4. **Load at the end** (9): the 30-session test validates the whole.
+5. **Load at the end** (9): the 30-session test validates the whole.
 
 Each milestone is released as a beta `1.0.0-beta.N`, with the usual rules: tasks in visible sessions, tests on the
 user's order, local merge, manual test, then the tag.
 
 | Milestone | Title | Size | Depends on |
 | --- | --- | --- | --- |
+| next | Priority features: traffic capture, host services | large | none (IMG01 helps) |
 | 6 | Operation at the CREMI | medium | none |
 | 7 | Reliable runners and personal runners | large | 6 (partly) |
 | 8 | Hardening | large | 7 (validation of runners) |
@@ -47,6 +49,76 @@ user's order, local merge, manual test, then the tag.
 | 10 | Graphic view and finishing | medium | independent |
 
 Sizes of tasks: S about an hour, M half a day, L a day or more.
+
+## Priority features (next)
+
+Two features for the labs, decided as the top of the list. They are independent of milestones 6 to 10 and can start at once.
+
+- [ ] **CAP01** (L) Traffic capture. Students analyse what their machines exchange: a button starts a capture on an
+  interface of a host (`host/eth0`) or on a link (the "cable" between a host interface and its switch), and the result
+  is a PCAP file to download and open in Wireshark. A live view runs in a terminal of the Terminals view.
+  - **How to capture, per host interface.** QEMU can dump the frames of one NIC itself, with no help from the guest:
+    `-object filter-dump,id=cap-ethN,netdev=<id>,file=<node dir>/capture-ethN.pcap` (the `netdev` ids already exist in
+    `runner/engines/qemu.js`, one per interface). It can be added and removed while the machine runs with the monitor
+    (`object_add` / `object_del` over the HMP socket the runner already drives), so a capture starts and stops without a
+    reboot. The file is a standard PCAP, both directions. The "link" in the Graphic view is exactly that traffic, so a
+    capture on a link is a capture on the host interface at its end. **To verify first** on the QEMU in use (11.1.3):
+    `object_add filter-dump` through HMP, the direction option, and a bound on the file size (the runner must stop a
+    capture that reaches its limit).
+  - **Capturing a whole switch** (all ports) is different: a VDE switch only forwards a frame to the ports that need it.
+    Options to study: the switch in hub mode (a mode of `vde_switch`, from its management socket) with a plug that
+    writes a PCAP, or one capture per port. Second step, after the per-interface capture works.
+  - **Server and runner.** Runner commands to start, stop and list the captures of a node (the file lives in the node's
+    directory, removed with it), a download route that streams the file from the runner (remote runners included; same
+    streaming as session archives, size-limited), and the audit log of who started what. Routes for the node's owner
+    and for an administrator who took control; read-only observers can neither start nor download.
+  - **Interface.** In the Graphic view, a link popover **Capture** (start, stop, download); in Host Settings > Network, a
+    capture button on each interface; a recording indicator on the node and the link; a list of the captures of a
+    session with their size and a **Download** button. Disabled with a reason when the host is stopped or in observation.
+  - **Live console.** A new view of a console pane, next to Console (ttyS0), Console (ttyS1), Monitor and Log:
+    **Capture**, that shows the packets as text while they arrive, as `tcpdump` would. The runner reads the growing PCAP
+    with `tcpdump -l -n -r -` (or `tshark`) and sends the lines to the pane like any console output; an optional filter
+    expression (BPF) typed by the student is passed as one argument, never through a shell, and checked for length.
+    `tcpdump` (or `tshark`) becomes a prerequisite of the runner's machine, in the install documents.
+  - **Guest side stays possible.** With `tcpdump` in the image (IMG01) a student can still run it in a serial console;
+    CAP01 is the complement that needs nothing in the guest and delivers a file.
+  - **Later.** VirtualBox hosts (`VBoxManage modifyvm --nictrace`) as the same feature for the other engine; a capture
+    filter at start; limits and quotas (milestone 8: size per capture, number of captures per session).
+  - Unit tests for the runner commands and the routes with a fake monitor; the real capture is checked by hand with a
+    `ping` between two hosts and the file opened in Wireshark. Documents: user guide (a section "Capturing traffic"),
+    `docs/json-files.md` if a capture is described in a file, runner prerequisites.
+- [ ] **HSV01** (L) Host services. A **Services** tab in Host Settings lists the services a host can run (DHCP, DNS,
+  web server, FTP, telnet...) as checkboxes; the chosen ones start at the next boot (the interface offers **Apply and
+  reboot**).
+  - **What can be chosen.** Only services that exist in the image: a catalog per system in `config.json`
+    (`services`: unit name, label, package, a short description), the units installed but disabled in the image, so
+    the checkbox list is the same for every host of that system and no arbitrary unit name can be typed. The image
+    must therefore carry the packages (`isc-dhcp-server` or `dnsmasq`, `bind9`, `apache2`, `vsftpd`, a telnet server...)
+    **installed and disabled**: this is a choice to make together with IMG01 (a lighter image against more services
+    available; a variant "network services" image is the alternative).
+  - **How it is stored and applied.** `host.json` gets a list of the enabled unit names (a new field, so `schemaVersion`
+    stays 1 only if the field is optional with a default of empty: decide and write the compatibility decision per
+    `docs/json-files.md`). At start, the startup disk (the ISO the runner already builds from `start.sh`) carries a file
+    with the list, and the guest's `qemuweb-start.service` runs `systemctl enable --now` on each listed unit before the
+    user's script; the host then has them whether or not the lab script also configures them. The startup disk must be
+    enabled for the host: the tab says so, or turns it on.
+  - **The lab still configures the service.** The tab starts the daemon; its configuration (a `dhcpd.conf`, the DNS zone,
+    the web pages) comes from the startup script and its extra files, which exist already. A short guide section shows
+    one example per service.
+  - **Interface.** The tab shows the services of the host's system with their state at the last boot (from the Log
+    view: started or failed), a checkbox each, **Apply and reboot** that saves then reboots, and a disabled state with a
+    reason while the host is running without reboot allowed or in observation. Services of a **switch** are out of scope.
+  - **Scope.** The Debian images (`debian13-legacy`, `debian13-cloud`, systemd). Alpine (OpenRC) and OpenWrt need their
+    own mechanism and are not part of the first delivery.
+  - Unit tests for the catalog validation (unknown unit names rejected), the host file, and the startup-disk content;
+    the boot with a service enabled is checked by hand (a DHCP server answering another host, a web server answering
+    `curl`).
+- **Done when**
+  - [ ] A student starts a capture on a host interface, runs a `ping` and downloads a PCAP that Wireshark opens and that
+    shows the ping.
+  - [ ] The Terminals view has a **Capture** view that shows the packets live.
+  - [ ] A host started with the DHCP service checked answers a DHCP request from another host without the student
+    installing or enabling anything.
 
 ## Milestone 6: operation at the CREMI
 
@@ -323,6 +395,123 @@ personal runner and any guest access exist only for trusted users.
 - [ ] The manual checks of the Graphic view all pass, on a desktop browser and at phone width.
 
 ## After 1.0.0
+
+### More guests (later)
+
+A system is declared in the catalog (`config.json`: label, memory, image, disk interface, network model, serial ports) and
+built by a script of `scripts/prepare/`; the console of a host is its serial port. The current systems are Alpine, OpenWrt
+and Debian 13 (legacy and cloud). Two directions widen the choice. The contract an image must satisfy (serial login as
+root on `ttyS0`, the startup service that reads the startup disk, the file layout) was written in the archived
+`docs/bak/image-contract.md`; recover it with `git log -p -- docs/bak/image-contract.md` and bring it back into
+`docs/architecture.md` as part of the first task below.
+
+- [ ] **GST01** (M per system) **More Linux-like and Unix systems with a serial console** ("xterm mode", like today's
+  hosts). Candidates, to pick by what a network lab needs, with the cost of each:
+  - **Tiny Core Linux** (about 20 MB, boots in seconds, runs from RAM, no systemd): the lightest possible host, good for
+    many cheap machines; its extension system and BusyBox tools are unusual for students.
+  - **A router image with an actual routing suite**: Alpine with FRRouting (OSPF, BGP, RIP) or **VyOS** (Debian based),
+    since routing labs are the strongest use of a virtual network.
+  - **FreeBSD, OpenBSD, NetBSD**: another TCP/IP stack and the `pf` firewall, a good contrast in a network course; they
+    boot on a serial console and take a VDE interface through the usual models.
+  - **Another Debian-family or RPM system** (Ubuntu or Fedora/Rocky cloud images, as the `debian13-cloud` pattern): useful
+    for package and service administration labs; heavier.
+  - Less likely: SliTaz or Damn Small Linux (small but old), Buildroot or a custom minimal kernel (the leanest of all,
+    at the cost of building and maintaining it), MikroTik RouterOS CHR (licence terms to read first).
+  First step, shared: write the image contract back into the documentation, and add one prototype (my suggestion: Tiny Core
+  as the lightest, and Alpine with FRRouting as the routing host) to test the process; then each system is a `prepare`
+  script, a catalog entry and a check that it joins VDE, shows a serial login and runs a startup script.
+- [ ] **DSP01** (L) **A graphical display for a node**, in the browser, for machines that have a screen. Two uses: Linux
+  desktops, and the Windows systems below. QEMU already offers VNC (`-vnc`) and SPICE (`-spice`); the web client for VNC is
+  **noVNC** (a JavaScript client; check its licence and the build into the project, which has no bundler), and spice-html5 for
+  SPICE (less maintained). Design:
+  - **A new kind of view** in a pane (next to Console, Monitor and Log): **Display**, a canvas with keyboard and mouse,
+    resize, clipboard if the protocol allows it, and a "view only" mode for observers (the administrator's observation
+    stays read-only, control is the explicit takeover that exists).
+  - **Transport**: no TCP port opened on the runner. QEMU listens on a Unix socket in the node directory (`-vnc unix:...`
+    with a password), the runner relays the stream as a binary channel of its protocol (like console streams, but binary
+    and with backpressure), the server relays it to the browser through Socket.IO or a WebSocket under its own
+    authentication. Bandwidth and latency through the CREMI relay and Apache are the risk: measure with one machine
+    before anything else.
+  - **Headless and graphic are both valid**: a host without display keeps `-display none` as today, a host with a graphical
+    system starts with a display and a video adapter; the catalog says which (`display: "vnc"`). Without a display, a
+    Windows host can still be reached by its network (RDP, OpenSSH, PowerShell) from another machine of the lab, or on
+    the **Special Administration Console** over the serial port for the server editions.
+  - **Cost** (to put in front of the user): a graphical guest uses much more memory and CPU than a serial Linux one and its
+    disk is tens of gigabytes; the 30-session sizing of milestone 9 does not hold for them. Per-user quotas (milestone 8)
+    must say how many such machines a student may start, and the pool may need dedicated runners (the placement can filter
+    on a runner capability `display`).
+  - Security: the stream is authenticated like the consoles, one password per machine start, never exposed on the network;
+    the observer rules and the admin takeover apply to the display as they do to the consoles.
+- [ ] **WIN01** (L) **Windows guests** (XP, 10, 11...), on top of DSP01. A system whose image the user supplies, **QemuWeb
+  never distributes one**: Microsoft licences apply to every machine, including a classroom one; confirm with the CREMI which
+  licences exist (academic agreements) before any work. Technical points to settle: **Windows 11** needs UEFI (OVMF), a TPM
+  (`swtpm`) and secure boot, **Windows 10 and XP** boot with BIOS; the network adapter on VDE (`e1000` or `rtl8139` work
+  without drivers, `virtio` needs the virtio-win drivers on an ISO); the **startup script** mechanism (`start.sh` on an
+  ISO read by a systemd service) has no direct equivalent: a first-boot batch or PowerShell script on the startup disk, or
+  nothing; **no serial console**, so a host of this kind lives by DSP01 or by its network; memory (4 GB or more per machine)
+  and disk (tens of GB, working disks as qcow2 on the base image) make them unfit for 30 simultaneous students. Likely
+  scope: a few shared machines used by an instructor or a small group, not one per student.
+
+### Data exchange between host and guest (later)
+
+- [ ] **SHR01** (L) A **shared folder** between a node and QemuWeb, so a student can move files in and out of a machine
+  without a network between them. Today the only channels are the startup disk (an ISO read at boot, in one direction,
+  built from `start.sh` and its extra files) and the serial console (typing, no files).
+  - **Mechanism, first choice: 9p over virtio.** QEMU shares a directory of the runner's machine with `-fsdev local` and
+    `-device virtio-9p-pci,mount_tag=...` (or `-virtfs`), and the guest mounts it with
+    `mount -t 9p -o trans=virtio TAG /mnt/share`. It needs no daemon and no guest software, only the 9p kernel modules,
+    which Debian kernels have (to verify on `debian13-legacy` and `debian13-cloud`). Alternatives to weigh: **virtiofs**
+    (faster, but needs a `virtiofsd` process per share and shared memory), a **second small disk image** swapped between
+    boots (simple and isolated, but not live), SMB or NFS over a management network (extra network, defeats the lab),
+    and file transfer over the serial line (slow, fragile).
+  - **Where the folder lives.** One directory per node in the session (`<node dir>/share/`), created on first use,
+    mounted at boot by a line the startup mechanism writes, and removed with the node. Optionally a **session-wide** folder
+    that several hosts mount, to exchange files between guests: useful, but it bypasses the network the lab is about, so
+    it would be off by default.
+  - **Interface.** A **Files** tab in Host Settings (or a pane action) lists the folder with a size, lets the student
+    **upload** files and **download** one or all (a ZIP), and delete. The same upload and download streams as the session
+    archives, size-limited, through the runner interface so a remote runner works. Whether the folder goes in the session
+    ZIP (probably as an option, size aware).
+  - **Uses.** Lab files delivered to a host (instead of rebuilding the startup ISO), results and logs collected from a guest,
+    a capture file made inside the guest, and the PCAP of CAP01 next to the machine that produced it.
+  - **Security, to settle before building.** The guest can write into a host directory: confine the share to the node's
+    own directory, choose the 9p security model (`mapped-xattr` or `none` with a squash), forbid anything but regular files
+    and directories, cap the total size and the number of files (a full disk of the runner must not follow), offer a
+    **read-only** share, and treat a bug in the 9p server as a possible escape: it belongs with the jail of milestone 8
+    (the runner's own account and a locked-down directory). Not for untrusted users before that.
+  - Study first on the engines: QEMU only; VirtualBox has shared folders of its own (guest additions required), out of scope.
+  - Unit tests for the folder handling, the size limits and the routes; a manual check that a file written by the guest
+    appears in the download and a file uploaded appears in the guest.
+
+### Engines and guests (later)
+
+Today a host is a QEMU machine (or a VirtualBox one) running one of the prepared images, and the runner announces which
+engines it has (`runner/engines/`, the hello capabilities). Three larger ideas widen what a node can be. None is a
+condition of 1.0.0; each starts with a study that decides whether it is worth building.
+
+- [ ] **ENG01** (L) A **Docker engine**: a node that is a container, connected to the VDE network like a host. The
+  container gets a network interface wired to the session's VDE switch (a `vde_plug` on a tap device or a veth pair moved
+  into the container's network namespace), a console through `docker attach` or `exec`, and start, stop and remove like a
+  host. To study first: wiring a container to VDE needs privileges (creating a tap or moving an interface into a
+  namespace needs `CAP_NET_ADMIN` or root), which conflicts with the unprivileged runner and the jail of milestone 8:
+  decide whether the runner uses a small privileged helper, rootless Podman or a sidecar; what a container shares with
+  the machine (the kernel) and what that means when the user is untrusted; how images are chosen (an allowlist per
+  system in `config.json`, never a free image name); persistence and the ZIP archive of a container node (probably none).
+  New engine capability in the runner's hello, a `container` kind of node in `host.json`, and a new mode of the
+  placement (only runners that announce Docker).
+- [ ] **ENG02** (L) **Docker images as virtual machines through b2c** (boot2container): a tiny kernel and initramfs boot
+  a container image as the whole userspace of a QEMU machine, so a Docker image runs as a **real VM**, with its own
+  kernel, a real network interface on VDE and a serial console. This avoids the privilege and trust problems of ENG01,
+  since the guest is a normal QEMU machine, at the price of a boot (fast) and a kernel per node. Study: the b2c version to
+  use and how it is fed (image, command line, the registry access through the outbound proxy), serial consoles, how to
+  describe such a host in the catalog (a system whose image is a container reference rather than a disk), and caching of
+  the pulled layers on the runner. To verify on the actual project (I have not run it here).
+- [ ] **ENG03** (L) **macOS virtual machines** under QEMU/KVM. Technically possible with a recognised boot loader and
+  suitable virtual hardware (a Penryn-like CPU model, OVMF, a supported disk and network adapter), with no VDE-specific
+  obstacle. **Licence first**: the macOS licence allows macOS in a virtual machine only on Apple-branded hardware, so
+  QemuWeb can neither distribute an image nor run it on the CREMI's servers; the feature, if it exists, would be an
+  option that a runner on a Mac (or a user holding a licence on a Mac) enables, with an image the user supplies. Decide with
+  the CREMI whether this is acceptable at all before any technical work; if not, drop it.
 
 - OpenID Connect built into QemuWeb (no front end), with the directory groups mapped to roles; today Apache does it.
 - Course subjects: the administrator publishes a session ZIP as a template, and each student instantiates it.
