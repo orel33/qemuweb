@@ -4,10 +4,13 @@
 <meta charset="utf-8">
 <title>QemuWeb: who am I</title>
 <style>
-body { font-family: sans-serif; max-width: 40em; margin: 3em auto; padding: 0 1em; color: #222; }
-table { border-collapse: collapse; }
+body { font-family: sans-serif; max-width: 50em; margin: 3em auto; padding: 0 1em; color: #222; }
+table { border-collapse: collapse; width: 100%; }
 th, td { text-align: left; padding: 0.2em 1em 0.2em 0; vertical-align: top; }
-th { font-weight: normal; color: #666; }
+th { font-weight: normal; color: #666; width: 6em; }
+/* a long value never goes out of the page; the groups are cut at the commas by the script below */
+td { overflow-wrap: anywhere; }
+#groups { white-space: pre-line; font-size: 0.9em; }
 </style>
 </head>
 <body>
@@ -17,7 +20,12 @@ th { font-weight: normal; color: #666; }
 <tr><th>Login</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_preferred_username" --></td></tr>
 <tr><th>Name</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_name" --></td></tr>
 <tr><th>Email</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_email" --></td></tr>
-<tr><th>Groups</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_grps" --></td></tr>
+<tr><th>Groups</th><td id="groups"><!--#echo encoding="entity" var="OIDC_CLAIM_grps" --></td></tr>
 </table>
+<script>
+// OIDC_CLAIM_grps is one string with the groups separated by commas: one group per line
+var groups = document.getElementById('groups');
+groups.textContent = groups.textContent.split(',').join('\n');
+</script>
 </body>
 </html>
