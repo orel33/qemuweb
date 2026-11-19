@@ -7,6 +7,7 @@ const {execFileSync} = require('child_process');
 const {entityKind} = require('../common/node-id');
 const {shellQuote} = require('../common/shell-quote');
 const {writeJsonAtomic} = require('../common/json-file');
+const {SWITCH_SCHEMA_VERSION} = require('../common/schema-versions');
 const {readStartupFiles} = require('./media/guest-media');
 
 function createSessionRuntime(ctx) {
@@ -118,7 +119,7 @@ function createSessionRuntime(ctx) {
   }
 
   function persistSwitchConfiguration(node) {
-    writeJsonAtomic(tempFile(node, 'switch.json'), {schemaVersion: 2, id: node.id, name: node.hostname, kind: 'vde'});
+    writeJsonAtomic(tempFile(node, 'switch.json'), {schemaVersion: SWITCH_SCHEMA_VERSION, id: node.id, name: node.hostname, kind: 'vde'});
   }
 
   function activeConfiguration(node) {

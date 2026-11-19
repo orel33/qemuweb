@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
 const {entityKind} = require('../common/node-id');
+const {SESSION_SCHEMA_VERSION, HOST_SCHEMA_VERSION, SWITCH_SCHEMA_VERSION} = require('../common/schema-versions');
 const {validateLaunchSettings} = require('../common/launch-settings');
 const {selectedProfile, validateOverrides, profileSerialPorts} = require('../common/system-config');
 
@@ -87,7 +88,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
       if (ids.has(host.id) || typeof host.name !== 'string' || !host.name.trim() || host.name.length > 64 || /[\x00-\x1f\x7f]/.test(host.name) || names.has(host.name.toLowerCase())) throw new Error('Invalid or duplicate host identity.');
       ids.add(host.id); names.add(host.name.toLowerCase());
       expectedFiles.add(`${host.id}/host.json`);
-      if (host.schemaVersion !== 3 || host.engine !== snapshot.engine || !imageById(host.system)) throw new Error(`Unknown system or engine for ${host.name}.`);
+      if (host.schemaVersion !== HOST_SCHEMA_VERSION || host.engine !== snapshot.engine || !imageById(host.system)) throw new Error(`Unknown system or engine for ${host.name}.`);
       const profile = selectedProfile(readConfig(), host.system, host.engine);
       validateOverrides(host.config, profile);
       validateLaunchSettings({memory: host.config.memory ?? profile.memory,
@@ -229,7 +230,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
 
   function archivedSessionFiles(stage, paths) {
     const metadata = JSON.parse(fs.readFileSync(path.join(stage, 'session.json'), 'utf8'));
-    if (metadata.schemaVersion !== 4 || !['qemu', 'vbox'].includes(metadata.engine) ||
+    if (metadata.schemaVersion !== SESSION_SCHEMA_VERSION || !['qemu', 'vbox'].includes(metadata.engine) ||
         Object.keys(metadata).some(key => !['schemaVersion', 'engine', 'hosts', 'switches'].includes(key)) ||
         !Array.isArray(metadata.hosts) || !Array.isArray(metadata.switches)) {
       throw new Error('Invalid session.json in archive.');
@@ -240,7 +241,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
       entityKind(id, kind);
       const file = path.join(stage, id, kind === 'host' ? 'host.json' : 'switch.json');
       const data = JSON.parse(fs.readFileSync(file, 'utf8'));
-      if (data.id !== id || data.schemaVersion !== (kind === 'host' ? 3 : 2)) throw new Error(`Invalid configuration for ${id}.`);
+      if (data.id !== id || data.schemaVersion !== (kind === 'host' ? HOST_SCHEMA_VERSION : SWITCH_SCHEMA_VERSION)) throw new Error(`Invalid configuration for ${id}.`);
       if (kind === 'switch' && (data.kind !== 'vde' ||
           Object.keys(data).some(key => !['schemaVersion', 'id', 'name', 'kind'].includes(key)))) {
         throw new Error(`Invalid switch configuration for ${id}.`);

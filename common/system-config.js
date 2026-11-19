@@ -2,6 +2,7 @@
 
 const fs = require('fs');
 const {validatePorts} = require('./console-id');
+const {CONFIG_SCHEMA_VERSION} = require('./schema-versions');
 
 const engines = ['qemu', 'vbox'];
 const editableKeys = ['memory', 'cpus', 'clock', 'startupDiskEnabled', 'serialPorts'];
@@ -60,8 +61,8 @@ function readCatalog(file) {
   let catalog;
   try { catalog = JSON.parse(fs.readFileSync(file, 'utf8')); }
   catch (error) { throw new Error(`Cannot read config.json: ${error.message}`); }
-  if (!isObject(catalog) || catalog.schemaVersion !== 4 || !isObject(catalog.systems) || !isObject(catalog.systems.default)) {
-    throw new Error('config.json must contain schemaVersion 4 and systems.default.');
+  if (!isObject(catalog) || catalog.schemaVersion !== CONFIG_SCHEMA_VERSION || !isObject(catalog.systems) || !isObject(catalog.systems.default)) {
+    throw new Error(`config.json must contain schemaVersion ${CONFIG_SCHEMA_VERSION} and systems.default.`);
   }
   if (Object.keys(catalog).some(key => !['schemaVersion', 'systems'].includes(key))) throw new Error('Unknown top-level key in config.json.');
   const cache = new Map(), visiting = new Set();

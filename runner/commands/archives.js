@@ -15,7 +15,7 @@ const {createSessionSnapshot} = require('../archive-snapshot');
 const {statusError} = require('./errors');
 
 const MAX_SESSION_ARCHIVE = 0xffffffff;
-const ARCHIVE_NAME = 'qemuweb-session-v4.zip';
+const ARCHIVE_NAME = 'qemuweb-session.zip';
 
 const snapshotOf = ({session, runner, commands, emit}) => createSessionSnapshot({session, runner, commands, emit});
 

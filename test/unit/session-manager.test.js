@@ -46,7 +46,7 @@ test('each user gets one persistent session with a random ID, an owner and an al
   }
   // session.json is the definition only; what belongs to the live session is in meta.json.
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(toto.session.runtimeDir, 'session.json'), 'utf8')),
-    {schemaVersion: 4, engine: 'qemu', hosts: [], switches: []});
+    {schemaVersion: 1, engine: 'qemu', hosts: [], switches: []});
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(toto.session.runtimeDir, 'meta.json'), 'utf8')),
     {schemaVersion: 1, owner: 'toto', createdAt: toto.session.createdAt});
   assert.equal(new Date(toto.session.createdAt).toISOString(), toto.session.createdAt);
@@ -180,14 +180,14 @@ test('the owner is not part of the session definition: an archive that carries o
   const emitted = [];
   const snapshot = createSessionSnapshot({session, runner, commands, emit: (event, payload) => emitted.push(event)});
   const stage = fs.mkdtempSync(path.join(runtimeRoot, 'stage-'));
-  fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: []}));
+  fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: [], switches: []}));
   const files = snapshot.archivedSessionFiles(stage, ['session.json']);
   snapshot.installArchive(files, stage);
-  assert.deepEqual(JSON.parse(fs.readFileSync(session.metadataFile, 'utf8')), {schemaVersion: 4, engine: 'qemu', hosts: [], switches: []});
+  assert.deepEqual(JSON.parse(fs.readFileSync(session.metadataFile, 'utf8')), {schemaVersion: 1, engine: 'qemu', hosts: [], switches: []});
   assert.equal(JSON.parse(fs.readFileSync(session.metaFile, 'utf8')).owner, 'titi');
   assert.deepEqual(emitted, ['general-settings-changed', 'nodes-changed']);
   for (const extra of [{owner: 'toto'}, {baseImages: {}}, {intruder: 1}]) {
-    fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: [], ...extra}));
+    fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: [], switches: [], ...extra}));
     assert.throws(() => snapshot.archivedSessionFiles(stage, ['session.json']), /Invalid session.json/, `refused: ${Object.keys(extra)}`);
   }
 });
@@ -206,10 +206,10 @@ test('empty runtime sessions left by a stopped server are pruned, with their met
     fs.utimesSync(dir, old, old);
     return dir;
   };
-  const definition = JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [], switches: []});
+  const definition = JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: [], switches: []});
   const empty = make('00000000000000a1', {'session.json': definition, 'meta.json': '{}'});
   const emptyLegacy = make('00000000000000a2', {'session.json': definition});
-  const withNodes = make('00000000000000a3', {'session.json': JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: ['h-0123456789abcdef'], switches: []}), 'meta.json': '{}'});
+  const withNodes = make('00000000000000a3', {'session.json': JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: ['h-0123456789abcdef'], switches: []}), 'meta.json': '{}'});
   const unexpected = make('00000000000000a4', {'session.json': definition, 'meta.json': '{}', 'keep.txt': 'x'});
   const vacant = make('00000000000000a5', {});
   const recent = path.join(sessions, '00000000000000a6');
