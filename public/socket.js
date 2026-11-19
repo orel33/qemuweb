@@ -5,7 +5,7 @@ import {captureView, renderTabs, showPage, showStatusError, updateControls} from
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {redirectToLogin} from './api.js';
-import {refreshHostCaptures, setCaptures} from './captures.js';
+import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshHostCaptures, setCaptures} from './captures.js';
 import {applyControl, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
 let socket = null;
@@ -148,7 +148,7 @@ export function initSockets() {
     refreshHostCaptures();
   });
   socket.on('captures', setCaptures);
-  socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); });
+  socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); loadAllCaptures(); });
   // The runner of the session is offline (a network cut; the machines keep running) or back.
   socket.on('runner-state', ({online}) => {
     if (!online) showStatusError('Runner offline, reconnecting…');
@@ -163,6 +163,7 @@ export function initSockets() {
   socket.on('node-renamed', event => { const machine = machines.get(event.nodeId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === store.activeId) updateControls(); } });
   socket.on('nodes-removed', event => {
     for (const id of event.ids || []) machines.delete(id);
+    forgetCaptures(event.ids || []);
     showPage();
   });
   socket.on('node-error', showStatusError);
@@ -170,7 +171,7 @@ export function initSockets() {
   // observed session is gone: say so, with a link back to the supervision page.
   socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
   socket.on('observe-unavailable', () => observationUnavailable());
-  socket.on('console-control', applyControl);
+  socket.on('console-control', event => { applyControl(event); refreshCaptureAccess(); });
   socket.on('owner-view', view => viewReceived('owner', view));
   socket.on('controller-view', view => viewReceived('controller', view));
   socket.on('connect_error', socketConnectError);

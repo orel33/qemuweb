@@ -10,6 +10,7 @@ const POLL_MS = 2000;
 // Captures per node, as the server's `captures` event sends them: {id, nodeId, interface, index,
 // file, state, reason, message, startedAt, endedAt, bytes}.
 const byNode = new Map();
+const nameOf = nodeId => machines.get(nodeId)?.hostname || nodeId;
 let limits = {maxBytes: 100 * 1024 * 1024, maxPerNode: 4};
 // The section of Host Settings being shown: {container, nodeId}, or null.
 let panel = null;
@@ -47,6 +48,27 @@ export function captureBlocker(machine, index) {
 function publishChange(nodeId) {
   for (const listener of changeListeners) listener(nodeId);
   renderPanel();
+  renderSessionList();
+}
+
+// Nodes were removed: their captures went with them.
+export function forgetCaptures(nodeIds) {
+  for (const id of nodeIds) { byNode.delete(id); publishChange(id); }
+}
+
+// Every capture of the session (the list dialog, the indicators after a page load).
+export async function loadAllCaptures() {
+  if (!canCapture()) return;
+  try {
+    const body = await requestJson('/api/captures', {cache: 'no-store'}, 'Cannot list the captures.');
+    if (body.limits) limits = body.limits;
+    const nodes = new Set([...byNode.keys(), ...body.captures.map(item => item.nodeId)]);
+    for (const nodeId of nodes) {
+      const own = body.captures.filter(item => item.nodeId === nodeId);
+      if (own.length) byNode.set(nodeId, own); else byNode.delete(nodeId);
+      publishChange(nodeId);
+    }
+  } catch (_) { /* The lists stay as they were. */ }
 }
 
 // The server's `captures` event ({nodeId, captures}).
@@ -63,11 +85,13 @@ export async function loadCaptures(nodeId) {
     const body = await requestJson(`${nodeUrl(nodeId, 'captures')}`, {cache: 'no-store'}, 'Cannot list the captures.');
     if (body.limits) limits = body.limits;
     setCaptures({nodeId, captures: body.captures});
-    if (!body.captures.length) publishChange(nodeId);
   } catch (_) { /* The list stays as it was. */ }
 }
 
 const action = async (nodeId, captureId, verb, options) => requestJson(nodeUrl(nodeId, `captures${captureId ? `/${captureId}` : ''}${verb ? `/${verb}` : ''}`), options, 'Capture request failed.');
+
+export const startCapture = (nodeId, index) => action(nodeId, '', '', jsonRequest('POST', {interface: `eth${index}`}));
+export const stopCapture = (nodeId, captureId) => action(nodeId, captureId, 'stop', {method: 'POST'});
 
 // The browser downloads straight from the server; an observing administrator needs the
 // X-Observe header, so the file goes through a Blob.
@@ -95,6 +119,76 @@ function button(text, title, onClick, disabled = false) {
   element.disabled = disabled;
   element.addEventListener('click', onClick);
   return element;
+}
+
+// One capture file: name, state and size, Stop (while recording), Download and Delete.
+function fileRow(capture, run, withHost = false) {
+  const nodeId = capture.nodeId;
+  const row = document.createElement('div');
+  row.className = 'capture-row capture-file';
+  const name = document.createElement('span');
+  name.textContent = withHost ? `${nameOf(nodeId)} · ${capture.file}` : capture.file;
+  name.title = capture.file;
+  const note = document.createElement('span');
+  note.className = 'capture-note';
+  note.textContent = `${capture.message} · ${formatBytes(capture.bytes)}`;
+  const actions = document.createElement('span');
+  actions.className = 'capture-actions';
+  const recording = isRecording(capture);
+  actions.append(
+    ...(recording ? [button('Stop', 'Stop this capture', () => run(() => action(nodeId, capture.id, 'stop', {method: 'POST'})), !canCapture())] : []),
+    button('Download', capture.bytes <= 24 ? 'Nothing was captured yet' : 'Download the PCAP file', () => run(() => download(nodeId, capture)), !canCapture() || capture.bytes <= 24),
+    button('Delete', recording ? 'Stop the capture first' : 'Delete the capture file', () => {
+      if (confirm(`Delete ${capture.file}?`)) run(() => action(nodeId, capture.id, '', {method: 'DELETE'}));
+    }, !canCapture() || recording));
+  row.append(name, note, actions);
+  return row;
+}
+
+// ---- The captures of the whole session (button of the bottom toolbar) ---------------------------
+const listButton = document.getElementById('show-captures');
+const listDialog = document.getElementById('captures-dialog');
+const listBody = document.getElementById('captures-list');
+let listTimer = null;
+
+export const allCaptures = () => [...byNode.values()].flat();
+
+function renderSessionList() {
+  const all = allCaptures();
+  listButton.dataset.recording = String(all.some(isRecording));
+  listButton.disabled = !canCapture();
+  listButton.title = canCapture() ? 'Traffic captures of this session' : 'Read-only observation: take control of the session to use captures';
+  clearTimeout(listTimer);
+  if (!listDialog.open) return;
+  const status = document.createElement('p');
+  status.className = 'capture-status';
+  status.setAttribute('role', 'status');
+  const run = async work => {
+    status.textContent = '';
+    try { await work(); } catch (error) { status.textContent = error.message; }
+  };
+  const rows = all.map(capture => fileRow(capture, run, true));
+  if (!rows.length) {
+    const empty = document.createElement('p');
+    empty.textContent = 'No capture yet. Start one from Host Settings > Network, or from a link in the Graphic view.';
+    rows.push(empty);
+  }
+  listBody.replaceChildren(...rows, status);
+  if (all.some(isRecording)) listTimer = setTimeout(loadAllCaptures, POLL_MS);
+}
+
+// The right to capture may have changed (an administrator took or released control).
+export function refreshCaptureAccess() {
+  renderSessionList();
+  renderPanel();
+  loadAllCaptures();
+}
+
+export function initCaptures() {
+  listButton.addEventListener('click', () => { listDialog.showModal(); renderSessionList(); loadAllCaptures(); });
+  document.getElementById('close-captures').addEventListener('click', () => listDialog.close());
+  listDialog.addEventListener('close', () => clearTimeout(listTimer));
+  renderSessionList();
 }
 
 function renderPanel() {
@@ -131,24 +225,7 @@ function renderPanel() {
     row.append(label, note, toggle);
     container.append(row);
   }
-  for (const capture of capturesOf(nodeId)) {
-    const row = document.createElement('div');
-    row.className = 'capture-row capture-file';
-    const name = document.createElement('span');
-    name.textContent = capture.file;
-    const note = document.createElement('span');
-    note.className = 'capture-note';
-    note.textContent = `${capture.message} · ${formatBytes(capture.bytes)}`;
-    const actions = document.createElement('span');
-    actions.className = 'capture-actions';
-    actions.append(
-      button('Download', 'Download the PCAP file', () => run(() => download(nodeId, capture)), !canCapture() || capture.bytes <= 24),
-      button('Delete', 'Delete the capture file', () => {
-        if (confirm(`Delete ${capture.file}?`)) run(() => action(nodeId, capture.id, '', {method: 'DELETE'}));
-      }, !canCapture() || isRecording(capture)));
-    row.append(name, note, actions);
-    container.append(row);
-  }
+  for (const capture of capturesOf(nodeId)) container.append(fileRow(capture, run));
   container.append(status);
   // The size of a running capture is not pushed: look again while one is recording.
   if (recordingOf(nodeId).length) pollTimer = setTimeout(() => loadCaptures(nodeId), POLL_MS);

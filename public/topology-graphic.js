@@ -273,7 +273,7 @@
     };
   }
 
-  function drawNode(node, graph, selectedId) {
+  function drawNode(node, graph, selectedId, recording) {
     const machine = node.machine;
     const isSwitch = machine.kind === 'switch';
     const iconType = NodeIcons.typeForMachine(machine.kind);
@@ -301,10 +301,21 @@
     group.append(element('circle', {cx: left + 25, cy: top + 94, r: 4.5, class: 'node-dot'}));
     group.append(element('text', {x: left + 36, y: top + 98, class: 'node-status'}, node.state.toUpperCase()));
     if (info.links) group.append(element('text', {x: -left - 14, y: top + 98, class: 'node-detail', 'text-anchor': 'end'}, info.links));
+    if (recording?.node(node.id)) {
+      group.classList.add('is-recording');
+      group.append(recordingMark(-left - 22, top + 18));
+    }
     return group;
   }
 
-  function drawLink(link, graph, selectedLink) {
+  // The "recording" sign: a red dot (it pulses unless the user asks for less motion) and REC.
+  function recordingMark(x, y) {
+    const mark = element('g', {class: 'rec-mark', transform: `translate(${x}, ${y})`});
+    mark.append(element('circle', {r: 5, class: 'rec-dot'}), element('text', {x: -9, y: 4, 'text-anchor': 'end', class: 'rec-text'}, 'REC'), element('title', {}, 'Recording a capture'));
+    return mark;
+  }
+
+  function drawLink(link, graph, selectedLink, recording) {
     const group = element('g', {class: 'topology-link'});
     group.dataset.linkId = `${link.hostId}:${link.nicIndex}`;
     if (selectedLink === group.dataset.linkId) group.classList.add('is-selected');
@@ -315,6 +326,10 @@
     const text = (label, content) => element('text', {x: label.x, y: label.y, 'text-anchor': label.anchor, class: 'link-label'}, content);
     group.append(text(link.hostLabel, `eth${link.nicIndex}`), text(link.portLabel, link.port == null ? 'port?' : `#${link.port}`));
     group.append(element('title', {}, `${host.hostname} eth${link.nicIndex} ↔ ${sw.hostname}${link.port == null ? '' : ` port ${link.port}`}`));
+    if (recording?.link(link.hostId, link.nicIndex)) {
+      group.classList.add('is-recording');
+      group.append(recordingMark((link.x1 + link.x2) / 2, (link.y1 + link.y2) / 2));
+    }
     return group;
   }
 
@@ -335,9 +350,9 @@
     svg.classList.add('topology-svg');
     const viewport = element('g', {class: 'topology-viewport'});
     const links = element('g', {class: 'topology-links'});
-    for (const link of graph.links) links.append(drawLink(link, graph, options.selectedLink));
+    for (const link of graph.links) links.append(drawLink(link, graph, options.selectedLink, options.recording));
     const layer = element('g', {class: 'topology-nodes'});
-    for (const node of graph.nodes) layer.append(drawNode(node, graph, options.selectedId));
+    for (const node of graph.nodes) layer.append(drawNode(node, graph, options.selectedId, options.recording));
     viewport.append(links, layer);
     svg.append(viewport);
     container.prepend(svg);

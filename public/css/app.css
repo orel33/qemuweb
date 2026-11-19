@@ -230,6 +230,17 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .topology-svg text { user-select: none; -webkit-user-select: none; pointer-events: none; }
 .topology-link .link-line { fill: none; stroke: #c5c343; stroke-width: 3; }
 .topology-link .link-hit { fill: none; stroke: transparent; stroke-width: 16; cursor: pointer; }
+.topology-link.is-recording .link-line { stroke: #ff6b6b; }
+.rec-dot { fill: #ff4d4d; }
+.rec-text { fill: #ffb4b4; font: 700 10px system-ui, sans-serif; paint-order: stroke; stroke: #111a24; stroke-width: 3px; }
+.topology-svg[data-zoom="far"] .rec-text { display: none; }
+@media (prefers-reduced-motion: no-preference) { .rec-dot { animation: rec-pulse 1.4s ease-in-out infinite; } }
+@keyframes rec-pulse { 50% { opacity: 0.35; } }
+#show-captures[data-recording="true"] { color: #ff6b6b; }
+#show-captures[data-recording="true"] svg { animation: none; }
+#show-captures:disabled { opacity: 0.5; }
+.captures-dialog { width: min(720px, calc(100vw - 32px)); }
+.captures-list { display: flex; flex-direction: column; gap: 8px; max-height: 50vh; overflow: auto; }
 .topology-link:hover .link-line, .topology-link.is-selected .link-line { stroke: #ffe96a; stroke-width: 4.5; }
 .topology-link text { fill: #e0df9c; font: 700 12px system-ui, sans-serif; paint-order: stroke; stroke: #111a24; stroke-width: 4px; stroke-linejoin: round; }
 .topology-svg[data-zoom="far"] .topology-link text, .topology-svg[data-zoom="far"] .node-detail, .topology-svg[data-zoom="far"] .node-status, .topology-svg[data-zoom="far"] .node-dot { display: none; }
