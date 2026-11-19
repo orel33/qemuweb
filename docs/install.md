@@ -100,6 +100,7 @@ bash scripts/prepare.sh --list               # show prepared images and the stat
 bash scripts/prepare.sh --hash               # record image hashes without building
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/  # behind an HTTP proxy
+bash scripts/prepare.sh --system <id> --follow  # also show the last 20 lines of the build log
 ```
 
 Downloads go to `sources/<system>/`. Each system gets a RAW base image for QEMU
@@ -130,7 +131,9 @@ The Debian builds run an installer (Debian 13 Legacy) or cloud-init (Debian 13 C
 in a VM, which cannot see your environment: the proxy is written into the installer
 preseed (`mirror/http/proxy`) and the cloud-init apt configuration, and removed from
 the finished image. A proxy on the machine's own loopback (`localhost`, `127.x`) is
-given to the VM as `10.0.2.2`, the host as seen from QEMU's user-mode network. Before
+given to the VM as `10.0.2.2`, the host as seen from QEMU's user-mode network; a proxy
+given by a name is resolved on this machine and the VM gets its address (a short name
+such as `proxy` works here through the search domains of the machine, not in the VM). Before
 starting the VM, the build fetches the `Release` files of `deb.debian.org` and
 `security.debian.org` through the same proxy and stops at once, naming the failing URL
 and the `curl` error, when they are not reachable. The ISO and the other systems are
@@ -145,6 +148,10 @@ place on a terminal, and printed every 30 seconds otherwise. The percentage is a
 estimate by phase read from the serial log (the steps of the installer, the stages of
 cloud-init), not a measure of work: it never goes back and reaches 100% only at the end.
 Cloud-init prints nothing while it installs packages, so that phase is long.
+
+`--follow` (or `--follow=N`, 1 to 100 lines) shows the last 20 lines of the serial log
+under the status line, redrawn in place on a terminal, so that a long phase can be watched.
+Without a terminal (a pipe, a file) the new log lines are printed as they appear.
 
 The build stops at once (status 1) when the log shows an error that will not recover,
 such as the installer's `Bad archive mirror` dialog; it then prints the last 20 lines

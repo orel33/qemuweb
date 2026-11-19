@@ -316,8 +316,42 @@ vm_stop() {
 }
 
 PREPARE_LINE_OPEN=0   # 1 while a progress line, not yet ended by a newline, is on the terminal
+PREPARE_FOLLOW_LINES="${QEMUWEB_PREPARE_FOLLOW:-0}"   # --follow: lines of the serial log shown under the progress line (0: none)
+PREPARE_FRAME_ROWS=0  # rows of the frame drawn in place (progress line and log lines), 0 when none
+PREPARE_FOLLOW_SEEN=0 # without a terminal: log lines already printed
+
 progress_end_line() {
-  if (( PREPARE_LINE_OPEN )); then echo; PREPARE_LINE_OPEN=0; fi
+  if (( PREPARE_FRAME_ROWS > 0 )); then PREPARE_FRAME_ROWS=0   # the frame stays on screen, the cursor is below it
+  elif (( PREPARE_LINE_OPEN )); then echo; PREPARE_LINE_OPEN=0; fi
+}
+
+# Erase the frame drawn in place, if any.
+frame_erase() {
+  if (( PREPARE_FRAME_ROWS > 0 )); then printf '\033[%dA\r\033[J' "$PREPARE_FRAME_ROWS"; PREPARE_FRAME_ROWS=0; fi
+}
+
+# frame_draw LINE LOG N: the progress line, then the last N lines of the serial log (no escape
+# sequences, no blank lines, cut to the width of the terminal so that a row is never wrapped), redrawn
+# in place: the previous frame is erased first.
+frame_draw() {
+  local line="$1" log="$2" count="$3" width rows=1 text
+  width=${COLUMNS:-$(tput cols 2>/dev/null || echo 80)}
+  frame_erase
+  printf '%s\n' "${line:0:$((width - 1))}"
+  while IFS= read -r text; do
+    text=${text//$'\t'/ }
+    printf '  %s\n' "${text:0:$((width - 4))}"
+    rows=$((rows + 1))
+  done < <(serial_strip < "$log" | LC_ALL=C grep -av '^[[:space:]]*$' | tail -n "$count")
+  PREPARE_FRAME_ROWS=$rows
+}
+
+# Without a terminal: print the log lines that appeared since the last call (like tail -f).
+follow_new_lines() {
+  local log="$1" total
+  total=$(serial_strip < "$log" | LC_ALL=C grep -acv '^[[:space:]]*$' || true)
+  serial_strip < "$log" | LC_ALL=C grep -av '^[[:space:]]*$' | tail -n +$((PREPARE_FOLLOW_SEEN + 1)) | sed 's/^/  | /'
+  PREPARE_FOLLOW_SEEN=${total:-0}
 }
 
 progress_gauge() {
@@ -368,7 +402,7 @@ watch_vm() {
   local dir norm start=$SECONDS size last_size=-1 last_growth=$SECONDS
   local percent=0 phase='Starting the VM' done_seen=0 alive elapsed idle
   local last_report=-1000 stall_warned=0 entry pct text re f line
-  local tty=0
+  local tty=0 follow=$PREPARE_FOLLOW_LINES
   if [[ -t 1 ]]; then tty=1; fi
   dir=$(dirname "$log"); norm="$dir/.serial.normalized"
   [[ -e "$log" ]] || : > "$log"
@@ -379,6 +413,7 @@ watch_vm() {
     if (( size != last_size )); then
       last_size=$size; last_growth=$SECONDS; stall_warned=0
       serial_strip < "$log" | tr -d ' \t\n' > "$norm"
+      if (( ! tty && follow > 0 )); then follow_new_lines "$log"; fi
       for f in "${failures[@]}"; do
         if serial_has "$norm" "${f// /}"; then
           vm_failed "$label" "$pid" "$log" "the serial log shows an error: $f"
@@ -392,6 +427,7 @@ watch_vm() {
       if (( ! done_seen )) && serial_has "$norm" "$done_re"; then done_seen=1; fi
     fi
     if (( done_seen )) && { (( ! wait_exit )) || (( ! alive )); }; then
+      frame_erase
       line="$(progress_gauge 100) 100%  Done  $(printf '%02d:%02d' $(( (SECONDS - start) / 60 )) $(( (SECONDS - start) % 60 )))"
       if (( tty )); then printf '\r\033[K%s\n' "$line"; else echo "$line"; fi
       PREPARE_LINE_OPEN=0
@@ -417,7 +453,9 @@ watch_vm() {
     fi
     if (( tty || elapsed - last_report >= 30 )); then
       line="$(progress_gauge "$percent") $(printf '%3d' "$percent")%  $phase  $(printf '%02d:%02d' $(( elapsed / 60 )) $(( elapsed % 60 )))  log $(( size / 1024 )) KB"
-      if (( tty )); then printf '\r\033[K%s' "$line"; PREPARE_LINE_OPEN=1; else echo "$line"; fi
+      if (( tty && follow > 0 )); then frame_draw "$line" "$log" "$follow"
+      elif (( tty )); then printf '\r\033[K%s' "$line"; PREPARE_LINE_OPEN=1
+      else echo "$line"; fi
       last_report=$elapsed
     fi
     sleep 1

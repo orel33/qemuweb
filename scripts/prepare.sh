@@ -30,6 +30,9 @@ The elapsed time of each step and the system total are displayed.
                    (phase, estimated percentage, elapsed time) and stop at once, with the
                    end of the serial log, when the installer or cloud-init reports an
                    error. A VM that ends nothing within 30 minutes is stopped.
+--follow[=N]       Show the last N lines (20 by default, 1 to 100) of the build VM's serial log
+                   under the progress line, redrawn in place on a terminal; without a terminal,
+                   the new log lines are printed as they appear.
 --hash             Only record the SHA-256 of the existing images in images/<sysname>.raw.sha256
                    and .vdi.sha256 (sha256sum format), without building anything. Every build
                    records them itself; the server uses a hash file that is not older than its
@@ -51,6 +54,7 @@ force=false
 hash_only=false
 proxy_set=false
 proxy_value=''
+follow_lines=0
 while (( $# )); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
@@ -63,6 +67,11 @@ while (( $# )); do
       [[ -n "$2" && "$2" != --* ]] || fail 'Expected one system ID after --system.'
       selected_system="$2"; shift 2 ;;
     --force) force=true; shift ;;
+    --follow) follow_lines=20; shift ;;
+    --follow=*)
+      follow_lines="${1#--follow=}"
+      [[ "$follow_lines" =~ ^[0-9]+$ ]] && (( follow_lines >= 1 && follow_lines <= 100 )) || fail '--follow=N needs a number of lines from 1 to 100.'
+      shift ;;
     --hash) hash_only=true; shift ;;
     --proxy)
       [[ "$proxy_set" == false && $# -ge 2 && "$2" != --* ]] || fail 'Expected one proxy URL (or none) after --proxy.'
@@ -71,10 +80,10 @@ while (( $# )); do
   esac
 done
 
-if [[ "$hash_only" == true && ( "$explicit_all" == true || "$force" == true || "$list_only" == true || "$proxy_set" == true ) ]]; then
-  fail '--hash cannot be combined with --all, --force, --proxy or --list.'
+if [[ "$hash_only" == true && ( "$explicit_all" == true || "$force" == true || "$list_only" == true || "$proxy_set" == true || $follow_lines -gt 0 ) ]]; then
+  fail '--hash cannot be combined with --all, --force, --proxy, --follow or --list.'
 fi
-if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true || "$proxy_set" == true ) ]]; then
+if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true || "$proxy_set" == true || $follow_lines -gt 0 ) ]]; then
   fail '--list cannot be combined with preparation options.'
 fi
 
@@ -123,6 +132,7 @@ NODE
   exit 0
 fi
 
+export QEMUWEB_PREPARE_FOLLOW="$follow_lines"
 target_ids=("${system_ids[@]}")
 if [[ -n "$selected_system" ]]; then
   found=false
