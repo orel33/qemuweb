@@ -66,12 +66,14 @@ function createQemu(ctx) {
         node.activeConfig = null;
         node.everStarted = !!node.runDisk;
         removeConsoleSockets(node);
+        ctx.capture.hostStopped(node, child);
         publishState(node, `QEMU error: ${error.message}`);
       }
     });
     child.once('exit', code => {
       removeConsoleSockets(node);
       if (node.machine === child) { node.machine = null; node.activeConfig = null; }
+      ctx.capture.hostStopped(node, child);
       if (node.stopping || node.action === 'reboot' || node.action === 'reset' || node.action === 'destroy') return;
       publishState(node, `QEMU stopped (${code})`);
     });

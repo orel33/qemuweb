@@ -35,15 +35,30 @@ function accountErrorStatus(error) {
 // Requests carrying "X-Observe: <login>" read another user's session instead of the caller's:
 // admins only, GET and HEAD only, never creating a session. Observing your own login is
 // just your own session. Sets req.observed to the observed workspace.
-function observationGate(manager) {
+//
+// One exception: the traffic capture routes (list, start, stop, delete, download), only while this
+// admin holds the console-control lock of that session (`controlHeld(sessionId, login)`); the
+// request then also carries req.observedControl = true, and the capture routes refuse every other
+// observation.
+const CAPTURE_NODE_PATH = /^\/api\/nodes\/[^/]+\/captures(?:\/[^/]+(?:\/(?:stop|download))?)?$/;
+const CAPTURE_LIST_PATH = /^\/api\/captures$/;
+
+function observationGate(manager, {controlHeld = () => false} = {}) {
   return (req, res, next) => {
     const login = req.get('X-Observe');
     if (!login || login === req.user.login) return next();
     if (req.user.role !== 'admin') return res.status(403).json({error: 'Administrator role required to observe a session.'});
-    if (!['GET', 'HEAD'].includes(req.method)) return res.status(403).json({error: 'Read-only observation: this action is not allowed.'});
     const workspace = LOGIN_PATTERN.test(login) ? manager.get(login) : null;
+    const url = `${req.baseUrl || ''}${req.path}`;
+    const capture = CAPTURE_NODE_PATH.test(url) || CAPTURE_LIST_PATH.test(url);
+    const controlled = !!(capture && workspace && controlHeld(workspace.session.id, req.user.login));
+    const readOnly = ['GET', 'HEAD'].includes(req.method);
+    if (!readOnly && !(controlled && ['POST', 'DELETE'].includes(req.method) && CAPTURE_NODE_PATH.test(url))) {
+      return res.status(403).json({error: 'Read-only observation: this action is not allowed.'});
+    }
     if (!workspace) return res.status(404).json({error: `No session for ${login}.`});
     req.observed = workspace;
+    if (controlled) req.observedControl = true;
     next();
   };
 }

@@ -24,6 +24,7 @@
 // controls a session, the view goes the other way: the admin's page publishes controller-view,
 // relayed to the session room and shown by the owner's pages.
 const {ConsoleControl} = require('./console-control');
+const {attachCaptureLive} = require('./capture-live');
 const {normalizeView} = require('../public/view-state');
 const {baseNodeId} = require('../common/console-id');
 const {createTransportRegistry} = require('./ws-transports');
@@ -76,7 +77,7 @@ function bindWorkspace(io, {session, runner}) {
     });
   }
   runner.events.on('state', state => io.to(sessionRoom(session)).emit('nodes-changed', state));
-  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed']) {
+  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed', 'captures']) {
     runner.events.on(event, payload => io.to(sessionRoom(session)).emit(event, payload));
   }
 }
@@ -253,6 +254,9 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
       if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) return;
       runner.request('console.resize', {nodeId: request.id, cols, rows}).catch(() => {});
     }));
+    // The live Capture view of this pane (server/capture-live.js): the owner, or the admin holding the control lock.
+    attachCaptureLive(socket, {runner, guard, allowed: () => !observer || control.heldBy(session.id, user.login),
+      record: ({nodeId, captureId}) => { if (observer) audit.record(user.login, 'capture-viewed', {login: workspace.owner, nodeId, captureId}); }});
     socket.on('clear-console', guard(request => {
       if (observer) return refuse('Read-only observation: the console cannot be cleared.');
       if (!request || !request.id || request.id !== socket.data.nodeId) return;
@@ -282,6 +286,8 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
   return {
     browsers: login => browsers.get(login) || 0,
     connections: () => transports.summary(),
+    // Whether `admin` holds the console-control lock of a session (the capture routes of an observing admin).
+    controlHeld: (sessionId, admin) => control.heldBy(sessionId, admin),
     // Closes every socket of a user at once (account disabled or role changed from /admin),
     // so that passive sockets stop receiving console output too.
     disconnectUser(login) {

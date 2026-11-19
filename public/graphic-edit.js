@@ -5,6 +5,7 @@
 import {machines} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {observing} from './observe.js';
+import {captureBlocker, recordingOf, startCapture, stopCapture} from './captures.js';
 import {chooseRestartTiming, scheduleSessionSync} from './nodes.js';
 import {renderTabs, showStatusError} from './workspace.js';
 import {graphicCanvas, graphicGraph, renderGraphic, screenPoint, selectedGraphicLink, selectGraphicLink, setGraphicPosition} from './graphic-view.js';
@@ -56,7 +57,7 @@ function hintText() {
 
 function showPopover(kind, wx, wy, title, items) {
   const at = screenPoint(wx, wy);
-  const key = `${kind}:${title}`;
+  const key = `${kind}:${title}:${items.map(item => `${item.label}${item.disabled ? '!' : ''}`).join('|')}`;
   const fresh = popover.dataset.key !== key || popover.hidden;
   popover.dataset.kind = kind;
   popover.dataset.key = key;
@@ -78,7 +79,9 @@ function buildPopover(title, items) {
     const button = document.createElement('button');
     button.type = 'button';
     button.textContent = item.label;
-    button.className = 'write-action';
+    button.className = item.capture ? 'capture-action' : 'write-action';
+    button.disabled = !!item.disabled;
+    if (item.reason) button.title = item.reason;
     button.addEventListener('click', () => { popover.hidden = true; item.run(); });
     popover.append(button);
   }
@@ -177,7 +180,16 @@ export function refreshEditTools() {
   const link = id && graphicGraph?.links.find(item => `${item.hostId}:${item.nicIndex}` === id);
   if (mode || !link || observing) { if (popover.dataset.kind === 'link') popover.hidden = true; return; }
   const portText = link.port == null ? '' : ` port ${link.port}`;
+  const host = machines.get(link.hostId);
+  const recording = recordingOf(link.hostId).find(capture => capture.index === link.nicIndex);
+  const blocker = host && captureBlocker(host, link.nicIndex);
+  const report = work => work.catch(error => showStatusError(error.message));
+  const capture = recording
+    ? {label: 'Stop capture', capture: true, run: () => report(stopCapture(link.hostId, recording.id))}
+    : {label: 'Capture', capture: true, disabled: !!blocker, reason: blocker, run: () => report(startCapture(link.hostId, link.nicIndex))};
   showPopover('link', (link.x1 + link.x2) / 2, (link.y1 + link.y2) / 2, `${nameOf(link.hostId)} eth${link.nicIndex} ↔ ${nameOf(link.switchId)}${portText}`, [
+    capture,
+    {label: 'Captures…', capture: true, run: () => document.getElementById('show-captures').click()},
     {label: 'Remove link', run: () => { selectGraphicLink(null); setInterface(link.hostId, link.nicIndex, null); }}
   ]);
 }

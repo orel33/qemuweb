@@ -5,6 +5,8 @@ import {focusPane, renderPaneSessionOptions, showStatusError, updateControls, vi
 import {rebootActiveMachine, removeActiveMachine, resetActiveMachine, startActiveMachine, stopActiveMachine} from './nodes.js';
 import {openHostSettings} from './host-settings.js';
 import {canType, observing, socketOptions} from './observe.js';
+import {canCapture} from './captures.js';
+import {leaveCaptureView, showCaptureView} from './capture-live.js';
 
 export const panes = [];
 
@@ -162,22 +164,26 @@ export function usablePaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
   if (!machine) return 'console';
   if (view === 'log') return view;
+  // The live capture needs a QEMU host and the right to capture (not a plain observer).
+  if (view === 'capture') return MonitorTerminal.isSupported(machine) && canCapture() ? view : 'console';
   if (view === 'monitor') return MonitorTerminal.isSupported(machine) && !observing ? view : 'console';
   if (view === 'console2') return hasSecondConsole(machine) ? view : 'console';
   return 'console';
 }
 export function setPaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
-  if (!['console', 'console2', 'monitor', 'log'].includes(view) || !machine) return;
+  if (!['console', 'console2', 'monitor', 'log', 'capture'].includes(view) || !machine) return;
   if (usablePaneView(pane, view) !== view) return;
   pane.viewMenu.open = false;
   if (pane.view === view) { pane.terminal.focus(); return; }
+  if (pane.view === 'capture') leaveCaptureView(pane);
   pane.view = view;
   pane.monitorInput = '';
   pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === view)));
   updatePaneViewMenuIcon(pane);
   if (view === 'monitor') renderMonitorView(pane);
   else if (view === 'log') renderLogView(pane);
+  else if (view === 'capture') showCaptureView(pane);
   else showPaneConsole(pane);
   pane.clearButton.disabled = !isConsoleView(view);
   viewChanged();
@@ -212,6 +218,11 @@ export function updatePaneViewControls() {
         button.disabled = observing;
         if (observing) button.setAttribute('aria-disabled', 'true'); else button.removeAttribute('aria-disabled');
       }
+      if (button.dataset.view === 'capture') {
+        button.hidden = !monitorSupported;
+        button.disabled = !canCapture();
+        if (button.disabled) button.setAttribute('aria-disabled', 'true'); else button.removeAttribute('aria-disabled');
+      }
       if (button.dataset.view === 'console2') button.hidden = !hasSecondConsole(machine);
       if (isConsoleView(button.dataset.view)) {
         const label = consoleViewLabel(button.dataset.view, machine);
@@ -224,7 +235,8 @@ export function updatePaneViewControls() {
         else delete button.dataset.port;
       }
     });
-    if ((pane.view === 'monitor' && !monitorSupported) || (pane.view === 'console2' && !hasSecondConsole(machine))) {
+    if ((pane.view === 'monitor' && !monitorSupported) || (pane.view === 'console2' && !hasSecondConsole(machine)) || (pane.view === 'capture' && (!monitorSupported || !canCapture()))) {
+      if (pane.view === 'capture') leaveCaptureView(pane);
       pane.view = 'console';
       pane.monitorInput = '';
       fellBack = true;

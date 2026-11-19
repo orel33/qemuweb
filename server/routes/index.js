@@ -6,8 +6,9 @@
 // (req.workspace) and can never name a node of another one. Node routes send one runner
 // command each; the runner answers 404 for a node ID that is not in the session.
 const express = require('express');
+const {isCaptureId, interfaceIndex} = require('../../common/capture');
 
-const ROUTE_MODULES = ['settings', 'nodes', 'hosts', 'topology', 'archives', 'metrics'];
+const ROUTE_MODULES = ['settings', 'nodes', 'hosts', 'topology', 'archives', 'metrics', 'captures'];
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
 
 // The users.log event of a request of the owner, or null. Only explicit actions on nodes and
@@ -19,6 +20,16 @@ function userEvent(req) {
   const node = /^(POST|DELETE) \/api\/nodes\/([^/]+)(?:\/(start|stop))?$/.exec(key);
   if (node && node[1] === 'POST' && node[3]) return {event: node[3] === 'start' ? 'node-started' : 'node-stopped', target: {nodeId: nodeId(node[2])}};
   if (node && node[1] === 'DELETE' && !node[3]) return {event: 'node-deleted', target: {nodeId: nodeId(node[2])}};
+  const capture = /^(POST|DELETE|GET) \/api\/nodes\/([^/]+)\/captures(?:\/([^/]+)(?:\/(stop|download))?)?$/.exec(key);
+  if (capture) {
+    const [, method, id, captureId, action] = capture;
+    const event = method === 'POST' && !captureId ? 'capture-started' : method === 'POST' && action === 'stop' ? 'capture-stopped'
+      : method === 'DELETE' && captureId && !action ? 'capture-deleted' : method === 'GET' && action === 'download' ? 'capture-downloaded' : null;
+    if (event) {
+      const iface = interfaceIndex(req.body?.interface);
+      return {event, target: {nodeId: nodeId(id), ...(isCaptureId(captureId) ? {captureId} : {}), ...(event === 'capture-started' && iface !== null ? {interface: `eth${iface}`} : {})}};
+    }
+  }
   switch (key) {
     case 'POST /api/switches': return {event: 'node-created', target: {nodeId: nodeId(req.body?.id), kind: 'switch'}};
     case 'POST /api/hosts': return {event: 'node-created', target: {nodeId: nodeId(req.body?.id), kind: 'host'}};
@@ -35,12 +46,14 @@ function userEvent(req) {
 
 // runner: the session's runner handle. userLog (server/audit.js createUserLog) receives the
 // owner's node and archive actions, written once the response is sent, with "ok" or the HTTP
-// error status.
-function createSessionRouter({session, runner, userLog = {record() {}}}) {
+// error status. audit (admin.log) receives the capture actions of an administrator who holds the
+// control lock of the session: who acted and on whose session ({login: owner}).
+function createSessionRouter({session, runner, userLog = {record() {}}, audit = {record() {}}}) {
   const router = express.Router();
   router.use((req, res, next) => {
-    const logged = !req.observed && userEvent(req);
-    if (logged) res.once('finish', () => userLog.record(session.owner, logged.event, logged.target, res.statusCode < 400 ? 'ok' : `error: HTTP ${res.statusCode}`));
+    const logged = userEvent(req);
+    if (logged && !req.observed) res.once('finish', () => userLog.record(session.owner, logged.event, logged.target, res.statusCode < 400 ? 'ok' : `error: HTTP ${res.statusCode}`));
+    else if (logged && req.observedControl) res.once('finish', () => audit.record(req.user.login, logged.event, {login: session.owner, ...logged.target}, res.statusCode < 400 ? 'ok' : `error: HTTP ${res.statusCode}`));
     next();
   });
   router.use('/api', (req, res, next) => {

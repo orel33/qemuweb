@@ -1,6 +1,7 @@
 // Pane layout, paging, node tabs, pane state badges and resource metrics.
 import {machines, saveViewSettings, savedView, store} from './state.js';
 import {jsonRequest, nodeUrl} from './api.js';
+import {leaveCaptureView} from './capture-live.js';
 import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setPaneView, updatePaneViewControls, usablePaneView} from './terminal.js';
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
@@ -305,6 +306,7 @@ function setPaneSessions(ids, activeIndex = 0) {
     if (before[pane.index] === pane.machineId) return;
     pane.actionMenu.open = false;
     pane.sessionMenu.open = false;
+    leaveCaptureView(pane);
     pane.view = 'console';
     pane.monitorInput = '';
     pane.monitorAvailable = false;

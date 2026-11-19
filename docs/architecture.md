@@ -155,16 +155,16 @@ classic script shared by the server and the browser: `paneCount`,
   layout:   'single' | 'columns-2' | 'rows-2' | 'grid-4',
   panes:    (nodeId | null)[],   exactly paneCount(layout) entries: the node shown in each
                                  pane, in pane order; null = empty pane
-  views:    ('console' | 'console2' | 'monitor' | 'log')[],
+  views:    ('console' | 'console2' | 'monitor' | 'log' | 'capture')[],
                                  parallel to panes: the view of each pane
-                                 (Console ttyS0, Console ttyS1, Monitor, Log)
+                                 (Console ttyS0, Console ttyS1, Monitor, Log, Capture)
   switches: boolean,             switch consoles shown
   active:   nodeId | null }      the selected node (tab or graphic selection)
 ```
 
 `normalizeView` returns a valid view state or null: known keys only (others
 dropped), known layouts and modes, `panes` and `views` of the right length (a view state without `views` is
-invalid), `views` entries among the four views, `panes` with strings or
+invalid), `views` entries among the five views, `panes` with strings or
 null; node IDs not in the given list become null, and a node shown in two panes is kept in the first one; the view of a pane left
 empty becomes `console`. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
@@ -174,7 +174,7 @@ In the browser, `captureView()` reads the view and `applyView(view)` shows one
 (layout, switch consoles, the panes' nodes through the same
 assignment as the pane node menu, active node, mode), without saving it and
 attaching only the consoles of panes whose node changes; then each pane's view
-(`setPaneView`), only if its node allows it (Monitor needs a QEMU host, ttyS1 a
+(`setPaneView`), only if its node allows it (Monitor and Capture need a QEMU host, Capture also the right to capture, ttyS1 a
 second console, else `console`; an observer is never shown the Monitor, a
 followed `monitor` shows the console). `viewChanged()`, at
 the end of `setPaneSessions` (so `showPage`), `focusPane` and
@@ -247,6 +247,8 @@ The server is split into layers with one-way dependencies:
 | `runner/context.js` | Per-session context: session, commands, paths, `hostNodes()` of every session of the runner, console flow, events. |
 | `runner/archive-snapshot.js`, `runner/archive-zip.js` | What a session ZIP contains, and the ZIP format itself. |
 | `runner/session-runtime.js` | Node records, runtime directories, hostname aliases, state and log publishing. |
+| `runner/capture.js`, `runner/capture-live.js`, `runner/pcap.js` | Traffic capture (see [Traffic capture](#traffic-capture)): `filter-dump` through the monitor, the size watcher and the capture records; the live view (`tcpdump`); whole packets of a growing PCAP. `common/capture.js` holds the limits, the capture ID rules and the filter validation. |
+| `server/routes/captures.js`, `server/capture-live.js` | Capture routes (owner or control-lock admin), the download stream, and the relay of the live view to a pane socket. |
 | `runner/node-lifecycle.js` | Host start, stop, reboot, reset and deletion. |
 | `runner/catalog.js`, `runner/host-config.js` | System catalog and `host.json`. |
 | `runner/launch-preview.js` | Settings, storage paths and commands a host would use, without starting it. |
@@ -286,11 +288,108 @@ order. State that several modules reassign lives on the `store` object of
 | `general-settings.js` | General Settings dialog. |
 | `topology.js` | `.topo` load/save, and the start of the saved view. |
 | `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
+| `captures.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the Host Settings section, the session list dialog, the link popover actions, and the Capture view of a pane (capture choice, filter, start and stop). |
 | `graphic-console.js` | Floating console of the Graphic view: the console workspace shown as a movable, resizable window over the graph, with the selected node's pane only. |
 | `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
 | `archive.js` | Session ZIP save and load dialogs. |
 | `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
 | `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |
+
+## Traffic capture
+
+A student can record the frames of a host interface into a PCAP file, and watch them as text.
+
+### Design
+
+QEMU has a network filter object, `filter-dump`, that sits between a NIC and its netdev inside the
+QEMU process and writes every frame to a file by itself. Nothing runs in the guest and no program of
+ours writes the file. The runner adds it **while the host runs**, through the HMP monitor it already
+drives (`runner/engines/qemu-monitor.js`, the `mon.sock` of the node):
+
+```text
+object_add filter-dump,id=cap-<capture id>,netdev=lan<N>,file=<node dir>/captures/<capture id>.pcap,queue=all
+object_del cap-<capture id>
+```
+
+`lan<N>` is the netdev id of interface N (`-netdev vde,id=lan<N>`, `runner/engines/qemu.js`);
+`queue=all` records both directions; `maxlen` is left at its default (whole packets). The capture ID
+is also the file name, built by the runner, never taken from a user: `eth<N>-<UTC time>[-<n>]`
+(`common/capture.js`).
+
+- **Data path.** Browser → server route (`server/routes/captures.js`, one runner command each) →
+  runner (`runner/capture.js`) → monitor. The server never reads the file: a download is a runner
+  stream (`capture.download`, same credit flow control as session archives, so local and remote
+  runners share one code path) relayed to the HTTP response, refused above the limit plus 64 MB.
+  The runner lists the files itself and serves only those; it validates the node and interface,
+  builds every path, and refuses a second capture on an interface being captured.
+- **Records and lifetime.** The capture records (`recording`/`stopped`, reason, size) live in the
+  runner's memory with the session; the files live in `<node dir>/captures/` and go with the node
+  or the session. A capture is not part of the session ZIP. The `captures` event
+  (`{nodeId, captures}`) goes to the session's room on each change; the size of a recording capture
+  is not pushed (the browser asks again every 2 s while it displays one).
+- **Limits** (`common/capture.js`, one place; placeholders for the quotas of milestone 8): 100 MB
+  per capture file and 4 capture files per node. A 500 ms watcher polls the size of the recording
+  files and removes the filter at the limit (state "stopped: size limit reached"); a burst can
+  overshoot by what QEMU writes between two looks. A capture also ends when the QEMU process exits
+  (`host-stopped`), whatever the cause.
+- **Verification after `object_add`.** QEMU's monitor says nothing when the filter cannot be made
+  (unknown netdev, unwritable path): the runner checks that the file exists afterwards. A comma in
+  the runtime path is doubled for QEMU; a path with whitespace or quotes is refused.
+- **Download of a live capture.** `runner/pcap.js` walks the packet records and cuts the file after
+  the last whole packet, so Wireshark never opens a half packet.
+- **Rights.** The owner, and an administrator who holds the console-control lock of the observed
+  session (the observation gate's one exception: only POST and DELETE on the node capture routes
+  and the capture GETs, only while `controlHeld`), may start, stop, list, download, delete and
+  watch. Any other observer gets 403 on every capture route, the list and the download included.
+  Starts, stops, deletes and downloads go to `users.log` (`capture-started`, `capture-stopped`,
+  `capture-deleted`, `capture-downloaded`: node, capture ID, interface) or, for an administrator, to
+  `admin.log` with the owner's login; a live view started by an administrator is logged as
+  `capture-viewed`. Packet contents are never logged.
+- **Not covered.** VirtualBox hosts (disabled with the reason), a stopped host (QEMU does not
+  exist), the capture of a whole switch, and a capture filter at start (the BPF filter belongs to the
+  live view only).
+
+### Live view
+
+The only place where an external program runs. `capture.live.start` spawns `tcpdump -l -n -r -
+[-- <filter>]` on the runner's machine **with an argument array, never a shell**, and
+`runner/capture-live.js` feeds its standard input with the capture file from the first byte, then
+as the file grows while the capture records. Its output goes to the browser as `capture-live`
+events ({liveId, data}, 32 KB at most each, 50 ms coalescing), which the server relays to the pane
+socket that asked (`capture-live` → `capture-live-data` / `capture-live-end`, `server/capture-live.js`).
+The view ends by itself when the capture is stopped and read to its end (`End of the capture.`),
+when tcpdump fails or is missing (an immediate error for a missing one), when the pane leaves the
+Capture view or changes node (`capture-live-stop`), when its socket closes, when the node is
+removed, and when the control connection closes; every case kills the tcpdump process (SIGTERM,
+then SIGKILL after 2 s). At most 4 views per session; output waits while the connection is
+congested (`ctx.flow`, as for consoles). `tcpdump` is found in the runner's `PATH` and the `sbin`
+directories (`runner/capture-live.js findTcpdump`).
+
+The optional filter is **one** argument, after `--`: at most 200 characters, only
+`A-Za-z0-9`, space and `. : / _ - ( ) [ ] & | ! < > = + * % ^ ,`, not starting with `-`
+(`validateFilter` in `common/capture.js`, checked in the browser's input, by the server and again by
+the runner). A syntax error of the expression is tcpdump's own message, shown in the pane.
+
+### Spike (QEMU 11.1.3, two Alpine guests on one `vde_switch`)
+
+Checked on the QEMU of `.env.local` before writing the code:
+
+- `object_add filter-dump,...,queue=all` and `object_del <id>` work on the **running** machine
+  through HMP. A duplicate id answers `Error: attempt to add duplicate property`; an unknown netdev
+  or an unwritable path fails **silently** (empty reply, no file), hence the check above.
+- The PCAP is valid (`tcpdump -r`, `tshark -r`) and holds both directions (ARP, ICMP request and
+  reply, DHCP). `queue=rx` alone holds one direction only. Packet times are QEMU's clock, not the
+  wall clock.
+- The file is readable while it grows and `tail -c +1 -f F | tcpdump -l -n -r -` prints each packet
+  as it arrives: QEMU does not buffer (a few milliseconds).
+- QEMU **truncates** an existing file when the filter is created, also a file another running
+  filter writes (it corrupted the first capture): a file name is never reused. After `object_del`
+  or when QEMU exits, the file stays complete and valid.
+- `maxlen=64` works (snapshot length 64 in the header, `caplen` 64, real `len`); not used.
+- For later tasks: `set_link <netdev id> off|on` works with the **netdev id** (`lan0`), as seen by
+  the other host (100% loss). A NIC can be added at runtime with `netdev_add vde,...`, but on `q35`
+  `device_add` fails with `Bus 'pcie.0' does not support hotplugging`, and a `pcie-root-port` cannot
+  be added at runtime either: hot-adding NICs needs free root ports declared at boot.
 
 ## Images and the session
 
@@ -419,6 +518,11 @@ query options, type and declared size; the result is the import response).
 Commands whose HTTP route takes a JSON body receive it as `body`
 (`host.create`, `host.configure`, `session.setEngine`, `topology.*`, ...).
 
+Traffic capture (see [Traffic capture](#traffic-capture)): `captures.list {nodeId?}`,
+`capture.start {nodeId, interface}`, `capture.stop {nodeId, captureId}`, `capture.delete {nodeId, captureId}`,
+`capture.download {nodeId, captureId}` (result `{stream, size, name}`, then the PCAP on that stream),
+`capture.live.start {nodeId, captureId, liveId, filter?}`, `capture.live.stop {liveId}`.
+
 Consoles (`nodeId` of the console commands is a [console ID](#console-ids)):
 `console.attach {nodeId}` (the `node-snapshot` content: state, logs, serial
 buffer of that console), `console.resize {nodeId, cols, rows}`, `console.clear {nodeId,
@@ -427,7 +531,7 @@ line, column}`, and `input` messages.
 ### Events
 
 `state`, `log`, `logs-reset`, `serial`, `serial-reset`, `nodes-removed`,
-`nodes-changed`, `node-renamed` and `general-settings-changed`, with today's
+`nodes-changed`, `node-renamed`, `general-settings-changed`, `captures` `{nodeId, captures}` and `capture-live` `{liveId, data}` or `{liveId, end}`, with today's
 Socket.IO payloads; `server/sockets.js` forwards them to the rooms of `sessionId`
 (the last three were emitted by routes, they now come from the runner like the
 others).

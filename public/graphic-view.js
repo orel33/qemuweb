@@ -7,6 +7,7 @@ import {graphicLayoutKey, machines, store} from './state.js';
 import {fitTerminals} from './terminal.js';
 import {closeLayoutMenu, selectMachine, viewChanged, workspace} from './workspace.js';
 import {viewDriver} from './observe.js';
+import {onCapturesChanged, recordingOf} from './captures.js';
 import {closeFloatingConsole, openFloatingConsole, refreshFloatingConsole} from './graphic-console.js';
 import {cancelEditMode, handleEditClick, refreshEditTools} from './graphic-edit.js';
 
@@ -112,13 +113,20 @@ export function fitToView() {
   return true;
 }
 
+// Which interfaces are being captured, for the drawing: a link (host, interface) and a node.
+const recordingIndicator = {
+  link: (hostId, nic) => recordingOf(hostId).some(capture => capture.index === nic),
+  node: id => recordingOf(id).length > 0
+};
+onCapturesChanged(() => renderGraphic());
+
 export function renderGraphic() {
   refreshFloatingConsole();
   if (!store.graphicVisible) return;
   for (const id of graphicPositions.keys()) if (!machines.has(id)) graphicPositions.delete(id);
   const focusedId = document.activeElement?.closest?.('.topology-node')?.dataset.nodeId;
   const graph = TopologyGraphic.draw(graphicCanvas, machines.values(), graphicPositions,
-    {view, selectedId: store.activeId, selectedLink, specs: specsOf});
+    {view, selectedId: store.activeId, selectedLink, specs: specsOf, recording: recordingIndicator});
   graphicGraph = graph;
   if (selectedLink && !graph.links.some(link => `${link.hostId}:${link.nicIndex}` === selectedLink)) selectedLink = null;
   graphicSummary.textContent = `${graph.hosts} host${graph.hosts === 1 ? '' : 's'} · ${graph.switches} switch${graph.switches === 1 ? '' : 'es'} · ${graph.links.length} link${graph.links.length === 1 ? '' : 's'}`;
