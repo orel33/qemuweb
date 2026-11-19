@@ -49,6 +49,19 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   shorter directory". Check it at startup (`Checking configuration…`, with the `--runtime` hint), in the server and the
   runner, or shorten the node socket paths (for example a short alias directory for the sockets).
 
+## Deployment and identity
+
+- **OIDC01: QemuWeb trusts the CREMI OpenID** (follows `DEP01`, the Apache2 deployment): the server accepts
+  `X-Remote-User` (and `X-User-Mail`, `X-User-Groups`, `X-User-DisplayName`) only from the local Apache
+  (`--trust-proxy loopback`, never from a direct connection), creates the session from it, and takes the role of
+  administrators from a group claim. Then the second password (`users.json`, `scripts/user.sh`) goes away; until then
+  the user logs in twice (OpenID, then QemuWeb). The logout must also end the OpenID session
+  (`/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/au-revoir`).
+- **To check on the CREMI machine** (`deploy/cremi/install-cremi.md`, not testable from the repository): the https relay
+  must pass WebSocket (Socket.IO, `/runner/connect`), 3600 s timeouts and large bodies; `LimitRequestBody` of the site
+  (1 GiB) must match what the relay accepts; the OpenID provider must be reachable from Apache without the proxy.
+- **`docs/pdf/install-cremi.pdf`** is the PDF of the old nginx tutorial: regenerate it (`make docs`).
+
 ## Console and terminal
 
 - **Clear: shell prompt detection** (`public/terminal.js`, `clearPaneConsole`). The guard that
@@ -74,9 +87,9 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 
 - **Merge the deployment documents** (at the 0.9.0 stabilisation, once the CREMI frontend, the local or remote
   runner choice and milestone 6 are settled): `docs/deployment.md` (generic reference), `deploy/cremi/install-cremi.md`
-  (site recipe) and `docs/remote-runner-test.md` (test sheet) repeat the systemd unit, the nginx site, the runner
+  (site recipe) and `docs/remote-runner-test.md` (test sheet) repeat the systemd unit, the web server site (Apache in `deploy/cremi/`, nginx in `deployment.md`), the runner
   `register`/`run` commands, the account and package steps. Keep two documents: `deployment.md` stays the generic
-  reference and points to the files of `deploy/` (unit, nginx) instead of copying them; `install-cremi.md` becomes a
+  reference and points to the files of `deploy/` (unit, Apache site) instead of copying them; `install-cremi.md` becomes a
   short recipe that links to it; the test sheet no longer repeats the runner installation.
 
 ## Ideas

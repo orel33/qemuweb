@@ -18,3 +18,6 @@ runners.json
 
 # Apache reference of another site: it holds the OIDC client secret, never commit it
 deploy/cremi/progsys.conf
+
+# OIDC secrets of the Apache site: kept on the server (/etc/apache2/qemuweb-oidc.inc), never committed
+deploy/cremi/qemuweb-oidc.inc
