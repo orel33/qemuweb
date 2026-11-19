@@ -11,6 +11,7 @@ Debian 13 (trixie), Apache2 and OpenID, on `v0-qemuweb`. The files to copy are i
 | `qemuweb-proxykey.inc.example` | model of the file with the key shared by Apache and QemuWeb (kept on the server only) |
 | `maintenance.html`, `whoami.html`, `goodbye.html` | static pages: maintenance and error page, OpenID attributes of the user, logout |
 | `qemuweb-server.service`, `qemuweb-runner.service` | systemd units: server, local runner |
+| `cremi-architecture.md` | the network at the CREMI: inbound relay, Apache, outbound proxy, the WebSocket settings of every stage, checks and symptoms |
 | `qwctl.sh` | one command to start, stop, restart and inspect the two services (`status`, `restart`, `logs`) |
 
 **Network.** `qemuweb.emi.u-bordeaux.fr` is an alias of the CREMI https relay (`httpsproxy`, 10.252.0.222), which forwards
