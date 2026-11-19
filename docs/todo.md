@@ -57,10 +57,9 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   administrators from a group claim. Then the second password (`users.json`, `scripts/user.sh`) goes away; until then
   the user logs in twice (OpenID, then QemuWeb). The logout must also end the OpenID session
   (`/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye`).
-- **To check on the CREMI machine** (`deploy/cremi/install-cremi.md`, not testable from the repository): the https relay
+- **To check on the CREMI machine** (`deploy/cremi/deploy-cremi.md`, not testable from the repository): the https relay
   must pass WebSocket (Socket.IO, `/runner/connect`), 3600 s timeouts and large bodies; `LimitRequestBody` of the site
   (1 GiB) must match what the relay accepts; the OpenID provider must be reachable from Apache without the proxy.
-- **`docs/pdf/install-cremi.pdf`** is the PDF of the old nginx tutorial: regenerate it (`make docs`).
 
 - **CREMI wildcard certificate renewal**: `/etc/apache2/certs/star_emi_u-bordeaux_fr.crt` and `.key` are links the CREMI
   repoints every year (the current certificate ends on 2 December 2026). Apache must be reloaded
@@ -95,10 +94,10 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   runner commands, Follow. The manual is now `docs/user-guide.md` (moved out of the README): bring it up to date.
 
 - **Merge the deployment documents** (at the 0.9.0 stabilisation, once the CREMI frontend, the local or remote
-  runner choice and milestone 6 are settled): `docs/deployment.md` (generic reference), `deploy/cremi/install-cremi.md`
+  runner choice and milestone 6 are settled): `docs/deployment.md` (generic reference), `deploy/cremi/deploy-cremi.md`
   (site recipe) and `docs/remote-runner-test.md` (test sheet) repeat the systemd unit, the web server site (Apache in `deploy/cremi/`, nginx in `deployment.md`), the runner
   `register`/`run` commands, the account and package steps. Keep two documents: `deployment.md` stays the generic
-  reference and points to the files of `deploy/` (unit, Apache site) instead of copying them; `install-cremi.md` becomes a
+  reference and points to the files of `deploy/` (unit, Apache site) instead of copying them; `deploy-cremi.md` becomes a
   short recipe that links to it; the test sheet no longer repeats the runner installation.
 
 ## Ideas

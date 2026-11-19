@@ -8,7 +8,8 @@
 set -euo pipefail
 
 toc=()
-if [[ "${1:-}" == --toc ]]; then toc=(--toc --toc-depth=3); shift; fi
+# --toc: the first heading becomes the title, the contents follow it (sections and their sub-sections)
+if [[ "${1:-}" == --toc ]]; then toc=(--toc --toc-depth=2 --shift-heading-level-by=-1 --metadata toc-title=Contents); shift; fi
 if [[ $# -ne 2 || "$1" == -h || "$1" == --help ]]; then
   echo "Usage: $0 [--toc] IN.md OUT.pdf" >&2
   [[ "${1:-}" == -h || "${1:-}" == --help ]] && exit 0

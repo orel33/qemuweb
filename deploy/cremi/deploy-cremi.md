@@ -1,6 +1,6 @@
-# QemuWeb at the CREMI (qemuweb.emi.u-bordeaux.fr): Apache2 and OpenID
+# QemuWeb at the CREMI
 
-Debian 13 (trixie). The files to copy are in `deploy/cremi/`.
+Debian 13 (trixie), Apache2 and OpenID, on `v0-qemuweb`. The files to copy are in `deploy/cremi/`.
 
 | File | Use |
 |---|---|

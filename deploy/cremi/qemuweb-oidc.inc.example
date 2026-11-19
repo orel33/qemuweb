@@ -1,4 +1,4 @@
-# OpenID client of QemuWeb, included by the Apache site (stages 2 and 3 of install-cremi.md).
+# OpenID client of QemuWeb, included by the Apache site (stages 2 and 3 of deploy-cremi.md).
 # Copy this file to /etc/apache2/qemuweb-oidc.inc (root, mode 0600), then replace the three CHANGE_ME
 # values by the ones of the reference site (same OpenID client). The real file never goes in the repository.
 OIDCClientID CHANGE_ME

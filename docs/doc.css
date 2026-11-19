@@ -56,8 +56,11 @@ figure img, p > img { max-width: 100%; height: auto; }
 figcaption { font-size: 8pt; color: #4a5565; margin-top: 1.2mm; text-align: left; }
 img[src$="favicon.svg"] { height: 7mm; width: 7mm; vertical-align: -1.5mm; }
 
-/* table of contents (md2pdf.sh --toc): light grey box, no colour fill that prints badly */
-nav#TOC { margin: 1em 0 2em; padding: 0.6em 1em; border: 1px solid #bbb; background: #f6f6f6; }
-nav#TOC ul { margin: 0.1em 0; padding-left: 1.3em; list-style: none; }
+/* table of contents (md2pdf.sh --toc): after the title, light grey box, nothing that prints badly */
+nav#TOC { margin: 1em 0 2em; padding: 0.5em 1.2em 0.7em; border: 1px solid #bbb; background: #f6f6f6; break-inside: avoid; }
+nav#TOC #toc-title { margin: 0 0 0.3em; font-size: 1em; text-transform: uppercase; letter-spacing: 0.05em; color: #555; border: 0; }
+nav#TOC ul { margin: 0.15em 0; padding-left: 1.4em; list-style: none; }
 nav#TOC > ul { padding-left: 0; }
+nav#TOC > ul > li { margin-top: 0.25em; font-weight: bold; }
+nav#TOC > ul > li > ul > li { font-weight: normal; }
 nav#TOC a { color: inherit; text-decoration: none; }
