@@ -35,6 +35,8 @@ ssh aliases `qemuweb` (root) and `qemuweb-app` (user `qemuweb`, `ForwardAgent ye
 # 0. proxy (3128); /etc/profile.d is read by the login shells of qemuweb
 export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1,qemuweb.emi.u-bordeaux.fr,v0-qemuweb.emi.u-bordeaux.fr
 echo 'export http_proxy=http://proxy:3128/ https_proxy=http://proxy:3128/ no_proxy=localhost,127.0.0.1,qemuweb.emi.u-bordeaux.fr,v0-qemuweb.emi.u-bordeaux.fr' > /etc/profile.d/proxy.sh
+# apt run by sudo keeps no proxy variable: give the proxy to apt itself
+printf 'Acquire::http::Proxy "http://proxy:3128/";\nAcquire::https::Proxy "http://proxy:3128/";\n' > /etc/apt/apt.conf.d/95proxy
 
 # 1. packages (build-essential, python3: node-pty is compiled by npm ci; apache2 and its OpenID module: the front end)
 apt update && apt full-upgrade -y
@@ -120,7 +122,7 @@ sudo ls -l /etc/apache2/qemuweb-oidc.inc          # -rw------- 1 root root
 sudo grep -c CHANGE_ME /etc/apache2/qemuweb-oidc.inc    # 0 (and exit status 1: nothing is left to replace)
 
 # 9. the OpenID module, and the site of stage 2
-dpkg -l libapache2-mod-auth-openidc | tail -1     # ii: installed at step 1 (if not, redo step 1 as root: sudo has no apt proxy)
+dpkg -l libapache2-mod-auth-openidc | tail -1     # ii: installed at step 1 (if not: sudo apt install -y libapache2-mod-auth-openidc)
 sudo a2enmod auth_openidc headers include         # OpenID; headers: RequestHeader (identity for the application); include: SSI of whoami.html
 sudo install -m 0644 deploy/cremi/goodbye.html /var/www/qemuweb/goodbye.html
 sudo install -m 0644 deploy/cremi/whoami.html /var/www/qemuweb/whoami.html
@@ -241,20 +243,30 @@ takes 1 GiB (`free -g`, `nproc`).
 
 ```sh
 # 16. packages of the runner, and /dev/kvm for qemuweb
-sudo apt install -y qemu-system-x86 qemu-utils genisoimage vde2
+sudo apt update && sudo apt install -y qemu-system-x86 qemu-utils genisoimage vde2 rsync
 qemu-system-x86_64 -netdev help | grep vde          # must list vde; else docs/install.md#qemu-without-vde-support (.env.local in /srv/qemuweb)
 sudo usermod -aG kvm qemuweb
 sudo -u qemuweb sh -c 'test -w /dev/kvm && echo kvm-ok'
+```
 
-# 17. base images. Building on this machine does not work behind the CREMI proxy (cdimage.debian.org answers 503
-#     from squid, and the Debian installer that runs in the VM gets no proxy): build on the workstation, then
-#     copy (-a keeps the dates: the server ignores a hash file older than its image, -S keeps the file sparse).
-#     (on the workstation, in the repository)
-#       bash scripts/prepare.sh --system debian13-legacy
-#       rsync -aS --progress images/debian13-legacy.raw images/debian13-legacy.raw.sha256 qemuweb-app:/srv/qemuweb/images/
-cd /srv/qemuweb
-bash scripts/prepare.sh --list
+**17. Base image.** Building it on this machine fails behind the CREMI proxy, so it is built on the **workstation** and
+copied. On the workstation, in the repository (the second command records the SHA-256 files that `rsync` copies; `-a`
+keeps the dates, `-S` keeps the file sparse):
 
+```sh
+bash scripts/prepare.sh --system debian13-legacy          # builds images/debian13-legacy.raw (nothing to do if it exists)
+bash scripts/prepare.sh --hash --system debian13-legacy   # records images/debian13-legacy.raw.sha256, without building
+ls -lh images/debian13-legacy.raw*
+rsync -aS --progress images/debian13-legacy.raw images/debian13-legacy.raw.sha256 qemuweb-app:/srv/qemuweb/images/
+```
+
+Then, on the server:
+
+```sh
+cd /srv/qemuweb && bash scripts/prepare.sh --list         # debian13-legacy is listed, with a size and a date
+```
+
+```sh
 # 18. the runner service
 sudo install -m 0644 deploy/cremi/qemuweb-runner.service /etc/systemd/system/qemuweb-runner.service
 sudo systemctl daemon-reload
