@@ -101,6 +101,7 @@ bash scripts/prepare.sh --hash               # record image hashes without build
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/  # behind an HTTP proxy
 bash scripts/prepare.sh --system <id> --follow  # also show the last 20 lines of the build log
+bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/ -6  # the build VM reaches the proxy over IPv6
 ```
 
 Downloads go to `sources/<system>/`. Each system gets a RAW base image for QEMU
@@ -133,7 +134,14 @@ preseed (`mirror/http/proxy`) and the cloud-init apt configuration, and removed 
 the finished image. A proxy on the machine's own loopback (`localhost`, `127.x`) is
 given to the VM as `10.0.2.2`, the host as seen from QEMU's user-mode network; a proxy
 given by a name is resolved on this machine and the VM gets its address (a short name
-such as `proxy` works here through the search domains of the machine, not in the VM). Before
+such as `proxy` works here through the search domains of the machine, not in the VM).
+
+The build VM goes out over IPv4. A proxy may accept this machine over IPv6 and refuse its IPv4
+address (`403`, `ERR_ACCESS_DENIED`): your own `curl` and `apt` then work (they prefer IPv6)
+and the VM does not. The check before the VM starts is made over the same family as the VM and
+says so. Ask for the IPv4 address of the machine to be authorised, or give `-6` (`--ipv6`): the
+proxy name is then resolved to its IPv6 address, which the VM receives in brackets
+(`http://[2001:db8::42]:3128/`; such an address can also be given to `--proxy` directly). Before
 starting the VM, the build fetches the `Release` files of `deb.debian.org` and
 `security.debian.org` through the same proxy and stops at once, naming the failing URL
 and the `curl` error, when they are not reachable. The ISO and the other systems are

@@ -50,6 +50,10 @@ fetch_file() {
       {
         echo "prepare.sh: download failed: $url"
         echo "  Proxy in use: $(proxy_describe)."
+        if [[ "$err" == *403* ]]; then
+          echo "  The proxy answered 403 (access denied) over IPv$family. The build VM goes out in IPv4 unless -6/--ipv6 is given:"
+          echo '  ask for the IPv4 address of this machine to be authorised on the proxy, or retry with -6 if it accepts IPv6.'
+        fi
         echo '  Without direct Internet access, set the proxy with --proxy URL or the https_proxy variable.'
       } >&2
       return 1
@@ -97,9 +101,10 @@ prep_acceleration() {
 # ---------------------------------------------------------------------------
 PROXY_URL=''
 PROXY_SOURCE=''
+PREPARE_IPV6="${QEMUWEB_PREPARE_IPV6:-0}"   # -6/--ipv6: the build VM reaches the proxy over IPv6
 
 proxy_valid() {
-  local re='^https?://(([^/@:]+(:[^/@]*)?)@)?[A-Za-z0-9.-]+(:[0-9]{1,5})?/?$'
+  local re='^https?://(([^/@:]+(:[^/@]*)?)@)?(\[[0-9A-Fa-f:.]+\]|[A-Za-z0-9.-]+)(:[0-9]{1,5})?/?$'
   [[ "$1" =~ $re ]]
 }
 
@@ -156,13 +161,22 @@ proxy_inherit() {
 # ("Could not resolve 'proxy'" was the first failure seen at the CREMI) would not
 # resolve in the VM. An address is kept as it is.
 guest_proxy_url() {
-  local re='^(https?://([^@/]*@)?)([^:/@]+)([:/].*)?$' prefix host rest ip
+  local re='^(https?://([^@/]*@)?)(\[[^]]+\]|[^:/@]+)([:/].*)?$' prefix host rest ip=''
   if [[ ! "$PROXY_URL" =~ $re ]]; then printf '%s' "$PROXY_URL"; return 0; fi
   prefix="${BASH_REMATCH[1]}"; host="${BASH_REMATCH[3]}"; rest="${BASH_REMATCH[4]}"
   case "$host" in
+    \[*) ip="$host" ;;                       # an IPv6 address: as it is
     localhost|127.*) ip=10.0.2.2 ;;
-    *[!0-9.]*) ip=$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR == 1 {print $1; exit}'); [[ -n "$ip" ]] || ip="$host" ;;
-    *) ip="$host" ;;
+    *)
+      if (( PREPARE_IPV6 )); then
+        # -6: the IPv6 address of the proxy (an IPv4-mapped answer is not one)
+        ip=$(getent ahostsv6 "$host" 2>/dev/null | awk 'NR == 1 {print $1; exit}')
+        if [[ -n "$ip" && "$ip" != ::ffff:* ]]; then ip="[$ip]"; else ip="$host"; fi
+      elif [[ "$host" == *[!0-9.]* ]]; then
+        ip=$(getent ahostsv4 "$host" 2>/dev/null | awk 'NR == 1 {print $1; exit}'); [[ -n "$ip" ]] || ip="$host"
+      else
+        ip="$host"
+      fi ;;
   esac
   printf '%s%s%s' "$prefix" "$ip" "$rest"
 }
@@ -174,6 +188,9 @@ guest_proxy_note() {
   guest="$(guest_proxy_url)"
   if [[ "$guest" != "$PROXY_URL" ]]; then
     echo "  Proxy for the build VM: $(proxy_redact "$guest") (the VM has no search domain: the name is resolved on this machine)"
+  fi
+  if (( PREPARE_IPV6 )) && [[ "$guest" != *'://['* && "$guest" != *'@['* ]]; then
+    echo "  Warning: --ipv6 given but the proxy has no IPv6 address that could be found here: the build VM goes out in IPv4."
   fi
 }
 
@@ -190,9 +207,16 @@ DEBIAN_SECURITY_URL=http://security.debian.org/debian-security
 # as the VM will use. Stop at once with a clear message when one is unreachable.
 check_debian_mirrors() {
   local id="$1" url err
-  local args=(-fsSL --connect-timeout 10 --max-time 30 -o /dev/null)
-  if [[ -n "$PROXY_URL" ]]; then args+=(--proxy "$PROXY_URL"); else args+=(--noproxy '*'); fi
-  echo "  Checking the Debian mirrors (proxy: $(proxy_describe))"
+  local args=(-fsSL --connect-timeout 10 --max-time 30 -o /dev/null) family=''
+  if [[ -n "$PROXY_URL" ]]; then
+    # The build VM reaches the proxy over IPv4, unless -6/--ipv6 (or an IPv6 proxy address) is given: check the same way.
+    # A proxy that accepts this machine over IPv6 only passes a check without this flag, and refuses the VM.
+    if (( PREPARE_IPV6 )) || [[ "$PROXY_URL" == *'://['* || "$PROXY_URL" == *'@['* ]]; then family=6; else family=4; fi
+    args+=(--proxy "$PROXY_URL" "-$family")
+  else
+    args+=(--noproxy '*')
+  fi
+  echo "  Checking the Debian mirrors (proxy: $(proxy_describe)${family:+, over IPv$family})"
   for url in "$DEBIAN_MIRROR_URL/dists/$DEBIAN_SUITE/Release" "$DEBIAN_SECURITY_URL/dists/$DEBIAN_SUITE-security/Release"; do
     if ! err=$(curl "${args[@]}" "$url" 2>&1); then
       {
