@@ -30,7 +30,7 @@ function setup(t) {
   const profile = selectedProfile(runner.readConfig(), 'debian13-legacy', 'qemu');
   const stage = path.join(dir, 'stage');
   fs.mkdirSync(path.join(stage, HOST), {recursive: true});
-  const host = (extra = {}) => ({schemaVersion: 3, id: HOST, name: 'h1', system: 'debian13-legacy', engine: 'qemu',
+  const host = (extra = {}) => ({schemaVersion: 1, id: HOST, name: 'h1', system: 'debian13-legacy', engine: 'qemu',
     config: profile.startupDiskEnabled === false ? {} : {startupDiskEnabled: false},
     network: {interfaces: []}, disk: false, ...extra});
   const archive = (hosts, extra = {}) => {
@@ -81,7 +81,7 @@ test('a working disk needs a well-formed base image identity of the right format
 test('host.json may carry a baseImage', t => {
   const {snapshot, stage, host} = setup(t);
   const baseImage = {format: 'raw', size: 1, sha256: ZERO};
-  fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 4, engine: 'qemu', hosts: [HOST], switches: []}));
+  fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: [HOST], switches: []}));
   fs.writeFileSync(path.join(stage, HOST, 'host.json'), JSON.stringify({...host(), baseImage}));
   const files = snapshot.archivedSessionFiles(stage, ['session.json', `${HOST}/host.json`]);
   assert.deepEqual(files.hosts[0].baseImage, baseImage);

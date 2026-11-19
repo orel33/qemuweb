@@ -12,7 +12,7 @@ QemuWeb (never typed by hand). Braces list allowed values. `†` marks something
 that is not implemented. A *node* is a host or a switch. IDs: a host is
 `h-` + 16 lowercase hex characters, a switch `s-` + 16, a session 16, a remote
 runner `r-` + 8. An unknown keyword is an error in every file below, except where
-stated. `schemaVersion` is never migrated: a file with another value is rejected.
+stated. `schemaVersion` is never migrated: a file with another value is rejected. Every format is at version 1 at the release of 0.9.0; from 0.9.0 on, every format change increments the number and comes with an explicit decision on compatibility.
 
 All the JSON files written by the project are UTF-8, indented by two spaces and
 end with a newline. `writeJsonAtomic` (`common/json-file.js`) writes a temporary
@@ -32,7 +32,7 @@ do the same in their own writer.
 | `<host>/host.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
 | `<switch>/switch.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
 | `*.topo` (text, `demo/`) | user, topology export | umask | no | `common/topology.js` |
-| session ZIP (`qemuweb-session-v4.zip`) | runner (export) | 0600 | — | `runner/archive-zip.js`, `runner/archive-snapshot.js` |
+| session ZIP (`qemuweb-session.zip`) | runner (export) | 0600 | — | `runner/archive-zip.js`, `runner/archive-snapshot.js` |
 | `logs/admin.log` (or `--logs DIR`) | server | 0600 | no | `server/audit.js` (tail for `/admin`) |
 | `logs/users.log` | server | 0600 | no | `server/audit.js` |
 
@@ -58,7 +58,7 @@ Companions needed to understand the JSON files:
 
 ### 2.1 `config.json` — system catalog
 
-Top level: `{"schemaVersion": 4, "systems": {...}}` and nothing else.
+Top level: `{"schemaVersion": 1, "systems": {...}}` and nothing else.
 `systems.default` is mandatory and abstract (never offered). Every other system
 has `"basedOn": "default"` (or another system) and must resolve a non-empty
 `image` for both engines. A system ID matches `^[A-Za-z0-9_-]{1,32}$`.
@@ -101,7 +101,7 @@ Minimal real example (the shipped file has five systems; two shown):
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 1,
   "systems": {
     "default": {
       "type": "linux", "arch": "x86_64", "mode": "text", "label": "Default Linux",
@@ -216,14 +216,14 @@ owner (a ZIP that adds one is refused).
 
 | Keyword | Values / validation | Default | Flag |
 |:--|:--|:--|:--|
-| `schemaVersion` | `{4}` | `4` | F |
+| `schemaVersion` | `{1}` | `1` | F |
 | `engine` | `{qemu, vbox}` | `qemu` (first engine of the runner) | S |
 | `hosts` | unique host IDs, sorted; only hosts with a name and a system | `[]` | G |
 | `switches` | unique switch IDs, sorted | `[]` | G |
 
 ```json
 {
-  "schemaVersion": 4,
+  "schemaVersion": 1,
   "engine": "qemu",
   "hosts": ["h-2b493e734492f941", "h-2ff82cc0d54ff610"],
   "switches": ["s-210a52699538eb60"]
@@ -252,7 +252,7 @@ the server sends; never exported, and a ZIP containing it is refused.
 
 | Keyword | Values / validation | Default | Flag |
 |:--|:--|:--|:--|
-| `schemaVersion` | `{3}` | `3` | F |
+| `schemaVersion` | `{1}` | `1` | F |
 | `id` | host ID, equal to its directory name | generated | F |
 | `name` | 1–64 characters, no control character, unique in the session (case-insensitive on import) | `h<n>` | E |
 | `system` | system ID of `config.json` (not `default`) | — | F |
@@ -270,7 +270,7 @@ the server sends; never exported, and a ZIP containing it is refused.
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 1,
   "id": "h-2ff82cc0d54ff610",
   "name": "grave",
   "system": "debian13-legacy",
@@ -298,13 +298,13 @@ Rules:
 
 | Keyword | Values / validation | Default | Flag |
 |:--|:--|:--|:--|
-| `schemaVersion` | `{2}` | `2` | F |
+| `schemaVersion` | `{1}` | `1` | F |
 | `id` | switch ID, equal to its directory name | generated | F |
 | `name` | 1–64 characters, no control character, unique among all nodes | `s<n>` | E |
 | `kind` | `{vde}` | `vde` | F |
 
 ```json
-{"schemaVersion": 2, "id": "s-210a52699538eb60", "name": "s1", "kind": "vde"}
+{"schemaVersion": 1, "id": "s-210a52699538eb60", "name": "s1", "kind": "vde"}
 ```
 
 A switch has at most 32 ports; its VDE directory (`vde/`) and management socket
@@ -338,7 +338,7 @@ HOST debian13-legacy  grave    s1
 
 ### 2.10 Session archive (ZIP)
 
-`qemuweb-session-v4.zip`, UTF-8 names, stored entries (Deflate only for
+`qemuweb-session.zip`, UTF-8 names, stored entries (Deflate only for
 `disk.qcow2`), data descriptors, ZIP64 sizes when needed. Layout (real
 `demo/lan.zip`, one host shown):
 
@@ -360,8 +360,8 @@ What is rejected on load (`runner/archive-zip.js`, `runner/archive-snapshot.js`)
 | Entry names | only `session.json`, `<id>/host.json` \| `switch.json` \| `disk.qcow2` \| `startup/<path>`; no `..`, absolute, `\` or control character; no duplicate |
 | Structure | single volume; sizes, CRC, local and central headers must agree; no hidden or overlapping entry; no comment, no symbolic link |
 | Limits | archive 4 GiB; 10000 entries; metadata files 4 MiB; one disk 64 GiB; total 256 GiB; 64 MiB free space kept |
-| `session.json` | `schemaVersion` 4, only `engine`, `hosts`, `switches`; engine available on this runner; no duplicate ID |
-| Node files | `id` equals the directory; `host.json` version 3, `switch.json` version 2 with `kind: vde` |
+| `session.json` | `schemaVersion` 1, only `engine`, `hosts`, `switches`; engine available on this runner; no duplicate ID |
+| Node files | `id` equals the directory; `host.json` and `switch.json` `schemaVersion` 1, the latter with `kind: vde` |
 | Hosts | `system` exists in this `config.json`; `engine` equals the archive engine; overrides valid; at most 4 interfaces; MACs and (switch, port) unique; a connected interface names a switch of the archive; start script variables resolvable when the startup disk is on |
 | Working disk | `baseImage` present, same format and size and SHA-256 as the local image, else refused (or discarded with "Discard working disks"); QCOW2 must have a raw backing file and the recorded virtual size, then is rebased and checked |
 | Session | the current session must be empty (HTTP 409 otherwise) |

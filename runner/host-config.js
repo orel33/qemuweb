@@ -3,6 +3,7 @@
 // host.json content and the host configuration returned to the web layer.
 const {selectedProfile, sparseOverrides} = require('../common/system-config');
 const {writeJsonAtomic} = require('../common/json-file');
+const {HOST_SCHEMA_VERSION} = require('../common/schema-versions');
 const {readStartupFiles} = require('./media/guest-media');
 
 function createHostConfig(ctx) {
@@ -14,7 +15,7 @@ function createHostConfig(ctx) {
     startupDiskEnabled = node.guestIsoAttached, name = node.hostname) {
     const profile = selectedProfile(readConfig(), node.selectedImage.id, node.engine);
     return {
-      schemaVersion: 3,
+      schemaVersion: HOST_SCHEMA_VERSION,
       id: node.id,
       name,
       system: node.selectedImage.id,

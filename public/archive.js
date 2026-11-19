@@ -229,7 +229,7 @@ export function initArchive() {
     try {
       const includeDisks = archiveChoice.checked;
       if (window.showSaveFilePicker) {
-        const handle = await window.showSaveFilePicker({suggestedName: 'qemuweb-session-v4.zip', types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
+        const handle = await window.showSaveFilePicker({suggestedName: 'qemuweb-session.zip', types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
         writable = await handle.createWritable();
       }
       archiveProgressText.textContent = includeDisks ? 'Stopping session and creating archive…' : 'Creating archive…';
@@ -241,7 +241,7 @@ export function initArchive() {
       if (writable) { await response.body.pipeTo(writable); writable = null; }
       else {
         const url = URL.createObjectURL(await response.blob());
-        const link = document.createElement('a'); link.href = url; link.download = 'qemuweb-session-v4.zip'; link.click();
+        const link = document.createElement('a'); link.href = url; link.download = 'qemuweb-session.zip'; link.click();
         setTimeout(() => URL.revokeObjectURL(url), 60000);
       }
       archiveDialog.close();

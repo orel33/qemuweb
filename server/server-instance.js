@@ -7,6 +7,7 @@
 // Another server started on the same runtime/ never prunes a session listed in a live record.
 const fs = require('fs');
 const path = require('path');
+const {SESSION_SCHEMA_VERSION} = require('../common/schema-versions');
 
 const SESSION_ID = /^[0-9a-f]{16}$/;
 
@@ -78,7 +79,7 @@ class ServerInstance {
         if (!files.length) { fs.rmdirSync(directory); removed++; continue; }
         if (!files.includes('session.json') || files.some(file => !['session.json', 'meta.json'].includes(file))) continue;
         const metadata = JSON.parse(fs.readFileSync(path.join(directory, 'session.json'), 'utf8'));
-        if (metadata.schemaVersion !== 4) continue;
+        if (metadata.schemaVersion !== SESSION_SCHEMA_VERSION) continue;
         if (!Array.isArray(metadata.hosts) || metadata.hosts.length || !Array.isArray(metadata.switches) || metadata.switches.length) continue;
         fs.rmSync(path.join(directory, 'meta.json'), {force: true});
         fs.unlinkSync(path.join(directory, 'session.json'));

@@ -12,6 +12,7 @@
 const fs = require('fs');
 const path = require('path');
 const {writeJsonAtomic} = require('../common/json-file');
+const {SESSION_SCHEMA_VERSION} = require('../common/schema-versions');
 
 const SESSION_ID = /^[0-9a-f]{16}$/;
 
@@ -47,7 +48,7 @@ class Session {
     const ids = kind => [...this.nodes.values()]
       .filter(node => node.kind === kind && node.hostname && (kind === 'switch' || node.selectedImage))
       .map(node => node.id).sort();
-    return {schemaVersion: 4, engine, hosts: ids('host'), switches: ids('switch')};
+    return {schemaVersion: SESSION_SCHEMA_VERSION, engine, hosts: ids('host'), switches: ids('switch')};
   }
 
   // Removes the runtime directory when the session holds no node, keeping anything unexpected.

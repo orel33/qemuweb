@@ -6,7 +6,7 @@
 const {pipeline} = require('stream/promises');
 
 // The downloaded file name (the runner's archive.estimate reports the same format name).
-const ARCHIVE_NAME = 'qemuweb-session-v4.zip';
+const ARCHIVE_NAME = 'qemuweb-session.zip';
 
 function register({app, session, runner, handle}) {
   app.get('/api/session-archive/estimate', handle('archive.estimate', req => ({includeDisks: req.query.includeDisks === 'true'}), 400, {noStore: true}));
