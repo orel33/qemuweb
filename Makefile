@@ -12,9 +12,12 @@ SHARED := docs/doc.css docs/doc.lua scripts/md2pdf.sh $(wildcard docs/img/*.svg 
 .PHONY: docs clean-docs
 docs: $(PDFS)
 
+# Documents printed with a table of contents
+TOC_DOCS := deploy/cremi/install-cremi.md
+
 define PDF_RULE
 docs/pdf/$(basename $(notdir $(1))).pdf: $(1) $(SHARED)
-	./scripts/md2pdf.sh $(1) $$@
+	./scripts/md2pdf.sh $(if $(filter $(1),$(TOC_DOCS)),--toc) $(1) $$@
 endef
 $(foreach f,$(DOCS),$(eval $(call PDF_RULE,$(f))))
 

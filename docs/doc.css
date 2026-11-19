@@ -55,3 +55,9 @@ figure { margin: 3mm 0 4mm; text-align: center; break-inside: avoid; }
 figure img, p > img { max-width: 100%; height: auto; }
 figcaption { font-size: 8pt; color: #4a5565; margin-top: 1.2mm; text-align: left; }
 img[src$="favicon.svg"] { height: 7mm; width: 7mm; vertical-align: -1.5mm; }
+
+/* table of contents (md2pdf.sh --toc): light grey box, no colour fill that prints badly */
+nav#TOC { margin: 1em 0 2em; padding: 0.6em 1em; border: 1px solid #bbb; background: #f6f6f6; }
+nav#TOC ul { margin: 0.1em 0; padding-left: 1.3em; list-style: none; }
+nav#TOC > ul { padding-left: 0; }
+nav#TOC a { color: inherit; text-decoration: none; }
