@@ -4,24 +4,9 @@
 <meta charset="utf-8">
 <meta http-equiv="refresh" content="30">
 <title>QemuWeb</title>
-<style>
-body { font-family: sans-serif; max-width: 40em; margin: 3em auto; padding: 0 1em; color: #222; }
-table { border-collapse: collapse; }
-th, td { text-align: left; padding: 0.2em 1em 0.2em 0; vertical-align: top; }
-th { font-weight: normal; color: #666; }
-</style>
 </head>
 <body>
 <h1>QemuWeb is under maintenance</h1>
 <p>The service is temporarily unavailable. This page reloads by itself every 30 seconds.</p>
-<!--#if expr="-n v('OIDC_CLAIM_preferred_username')" -->
-<h2>You are signed in</h2>
-<table>
-<tr><th>Login</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_preferred_username" --></td></tr>
-<tr><th>Name</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_name" --></td></tr>
-<tr><th>Email</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_email" --></td></tr>
-<tr><th>Groups</th><td><!--#echo encoding="entity" var="OIDC_CLAIM_grps" --></td></tr>
-</table>
-<!--#endif -->
 </body>
 </html>

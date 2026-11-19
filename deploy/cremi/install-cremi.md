@@ -9,7 +9,7 @@ Debian or Ubuntu (TODO: confirm with `cat /etc/os-release`). Files to copy are i
 | `qemuweb-2-oidc.conf` | Apache site, stage 2: the static page behind OpenID |
 | `qemuweb-3-app.conf` | Apache site, stage 3: QemuWeb behind Apache and OpenID (final site) |
 | `qemuweb-oidc.inc.example` | model of the file that holds the OpenID secrets (kept on the server only) |
-| `maintenance.html`, `goodbye.html` | static pages: the maintenance page (test page of stages 1 and 2, error page of stage 3, maintenance mode), the logout page |
+| `maintenance.html`, `whoami.html`, `goodbye.html` | static pages: the maintenance page (test page of stage 1, error page of stage 3, maintenance mode), the page that shows the OpenID attributes of the user (test page of stage 2), the logout page |
 | `qemuweb.service`, `qemuweb-runner.service` | systemd units (server, local runner) |
 
 **Network.** `qemuweb.emi.u-bordeaux.fr` is an alias of the CREMI https relay `httpsproxy.emi.u-bordeaux.fr`
@@ -26,7 +26,7 @@ tested alone, so that a failure points at one layer only:
 1. **Stage 1**: a static page "QemuWeb is under maintenance" over HTTP and HTTPS, without OpenID. Proves the https
    relay, the names, the certificate and Apache. This site stays useful: it is the one you switch to when you take
    QemuWeb offline (see "Maintenance mode").
-2. **Stage 2**: the same page behind OpenID. Proves `mod_auth_openidc`, the client secrets and the identity header.
+2. **Stage 2**: a static page behind OpenID that shows who you are. Proves `mod_auth_openidc`, the client secrets and the identity header.
 3. **Stage 3**: QemuWeb itself behind Apache (WebSocket, large uploads, maintenance page on error, runners excluded from OpenID).
 
 Then the runner that runs the machines: **A** on this same machine (local runner), **B** on another machine (remote
@@ -104,7 +104,7 @@ sudo openssl x509 -in /etc/apache2/certs/star_emi_u-bordeaux_fr.crt -noout -pubk
 sudo openssl pkey -in /etc/apache2/certs/star_emi_u-bordeaux_fr.key -pubout | openssl sha256
 
 # 6. the maintenance page and the site of stage 1
-sudo a2enmod ssl rewrite include                  # TLS; rewrite: the 503 of every other path; include: SSI of the page
+sudo a2enmod ssl rewrite                          # TLS; rewrite: the 503 of every other path
 # the Debian default site answers unknown names (and the bare IP) with its "It works" page: off
 sudo a2dissite 000-default
 # the global name of the server (otherwise apache2ctl warns AH00558)
@@ -162,8 +162,9 @@ sudo grep -c CHANGE_ME /etc/apache2/qemuweb-oidc.inc    # 0 (and exit status 1: 
 # the CREMI OpenID provider must be reachable from here without the proxy (mod_auth_openidc reads its metadata at startup)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' https://openid.emi.u-bordeaux.fr/.well-known/openid-configuration   # 200
 dpkg -l libapache2-mod-auth-openidc | tail -1     # ii: installed at step 1 (if not, redo step 1 as root: sudo has no apt proxy)
-sudo a2enmod auth_openidc headers                 # OpenID; headers: RequestHeader (identity for the application)
+sudo a2enmod auth_openidc headers include         # OpenID; headers: RequestHeader (identity for the application); include: SSI of whoami.html
 sudo install -m 0644 deploy/cremi/goodbye.html /var/www/qemuweb/goodbye.html
+sudo install -m 0644 deploy/cremi/whoami.html /var/www/qemuweb/whoami.html
 sudo install -m 0644 deploy/cremi/qemuweb-2-oidc.conf /etc/apache2/sites-available/qemuweb.conf
 # the OpenID site takes the place of the maintenance site (both use the same names: never enable the two)
 sudo a2dissite qemuweb-maintenance && sudo a2ensite qemuweb
@@ -172,35 +173,36 @@ sudo apache2ctl configtest && sudo systemctl restart apache2 || { sudo a2dissite
 sudo systemctl is-active apache2                  # active
 
 # 10a. on the server, without a session: a redirection to the CREMI login, not the page
-curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html | grep -iE '^(HTTP|location)'
+curl --noproxy '*' -s -D - -o /dev/null --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/whoami.html | grep -iE '^(HTTP|location)'
 
 # 10b. from another machine inside the CREMI, the same
-#      curl -s -D - -o /dev/null https://v0-qemuweb.emi.u-bordeaux.fr/maintenance.html | grep -iE '^(HTTP|location)'
+#      curl -s -D - -o /dev/null https://v0-qemuweb.emi.u-bordeaux.fr/whoami.html | grep -iE '^(HTTP|location)'
 
 # 10c. in a PRIVATE window of a browser (no cookie of an earlier attempt: an old session cookie or a cached 403/502 breaks the
-#      login), https://qemuweb.emi.u-bordeaux.fr/maintenance.html: CREMI login, then the page. Then, on the server,
-#      the access log: the line of maintenance.html has `user=` followed by your CREMI login
+#      login), https://qemuweb.emi.u-bordeaux.fr/whoami.html: CREMI login, then the page. Then, on the server,
+#      the access log: the line of whoami.html has `user=` followed by your CREMI login
 sudo tail -n 5 /var/log/apache2/qemuweb-access.log
 ```
 
 **Expect (stage 2)**: 10a prints `HTTP/1.1 302 Found` and a `location:` that starts with
 `https://openid.emi.u-bordeaux.fr/`; 10b prints the same. In the browser (10c) you are sent to the CREMI login, then
-see `QemuWeb is under maintenance` and, below it, a block **You are signed in** with your login, name, email and
-groups (the page is filled by the server: see below); the log line of `/maintenance.html` reads `user=<your CREMI login>` (`user=-` on the first, redirected request, which had
+see **You are signed in** with your login, name, email and groups (the page is filled by the server: see
+below); the log line of `/whoami.html` reads `user=<your CREMI login>` (`user=-` on the first, redirected request, which had
 no session). A user without the group `cremi-active` gets `403` after the login.
 
 A good log looks like this (checked on the CREMI machine): the return of the provider, `GET /.openid?state=...&code=...`
-answered `302` with `user=-`, then `GET /maintenance.html` answered `200` with `user=<your CREMI login>`. Two things to
+answered `302` with `user=-`, then `GET /whoami.html` answered `200` with `user=<your CREMI login>`. Two things to
 notice there: the relay talks to Apache in **HTTP/1.0** (a WebSocket needs HTTP/1.1, so the relay must be configured for
 it: see stage 3) and it sends **no `X-Forwarded-For`** (the log shows `"-"`, `%h` is the address of the relay): the real
 address of a client is not available to QemuWeb until the CREMI adds that header.
 
-**Why the page shows the identity.** `maintenance.html` contains a few server side includes (`<!--#echo
+**Why the page shows the identity.** `whoami.html` contains a few server side includes (`<!--#echo
 var="OIDC_CLAIM_preferred_username" -->`, module `include`, enabled at step 6): Apache fills them with the claims that
-mod_auth_openidc keeps in the environment (`OIDC_CLAIM_<name>`), and shows the block only when a login is present. To
+mod_auth_openidc keeps in the environment (`OIDC_CLAIM_<name>`). To
 show another attribute, add a row with its claim name (the list of the variables of a logged-in user is at
-https://services.emi.u-bordeaux.fr/intranet/mesinfos/info.php). Without a user (stage 1, maintenance mode) the block is
-not shown.
+https://services.emi.u-bordeaux.fr/intranet/mesinfos/info.php). The page needs the module `include` (enabled at step 9)
+and is protected by OpenID, so a login is always present; `maintenance.html` stays plain, so that stage 1 depends on
+Apache only.
 
 **Why the log shows the identity.** The site sets the header `X-Remote-User` from the claim `preferred_username`
 (`RequestHeader set X-Remote-User ... env=OIDC_CLAIM_preferred_username`), and the `LogFormat` of the site prints
