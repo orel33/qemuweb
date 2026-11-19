@@ -62,6 +62,9 @@ The server is configured by options only: it reads **no environment variable**.
 | `--session-hours N` | `12` | login lifetime in hours (more than 0, at most 2160), renewed while the user is active |
 | `--runner-grace SECONDS` | `300` | how long the sessions of a remote runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once) |
 | `--trust-proxy VALUE` | `unset` | Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS |
+| `--auth MODE` | `password` | how users are identified: password (QemuWeb login), proxy (identity given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through X-Remote-User, trusted only with the shared X-Proxy-Key) or both |
+| `--proxy-key-file FILE` | `unset` | the key shared with the authenticating front end, one line (mode 0600), sent by it as X-Proxy-Key; required by --auth proxy and --auth both |
+| `--logout-url URL` | `unset` | where the Log out button goes when the identity comes from the authenticating front end (no button without it) |
 | `--no-auth` | `off` | disables authentication: one shared local session, for single-user local work only (default: authentication on) |
 | `--ephemeral` | `off` | marks an ephemeral server of the test scenarios (tests only) |
 | `-h`, `--help` | | this text |
@@ -75,17 +78,20 @@ from `--listen`, `--runtime DIR` and `--exit-on-disconnect`). `scripts/user.sh [
 QemuWeb 0.9.0-beta.5.3 server
 
 Options
-  --listen         3002                                       (default)
-  --runtime        /home/me/qemuweb/runtime                   (default)
-  --users          /home/me/qemuweb/users.json                (default)
-  --runners        /home/me/qemuweb/runners.json              (default)
-  --logs           /home/me/qemuweb/logs                      (default)
-  --session-hours  12                                         (default)
-  --runner-grace   300                                        (default)
-  --trust-proxy    unset                                      (default)
-  --no-auth        off                                        (default)
-  --ephemeral      off                                        (default)
-  Runner socket    /home/me/qemuweb/runtime/runner-3002.sock  (derived)
+  --listen          3002                                       (default)
+  --runtime         /home/me/qemuweb/runtime                   (default)
+  --users           /home/me/qemuweb/users.json                (default)
+  --runners         /home/me/qemuweb/runners.json              (default)
+  --logs            /home/me/qemuweb/logs                      (default)
+  --session-hours   12                                         (default)
+  --runner-grace    300                                        (default)
+  --trust-proxy     unset                                      (default)
+  --auth            password                                   (default)
+  --proxy-key-file  unset                                      (default)
+  --logout-url      unset                                      (default)
+  --no-auth         off                                        (default)
+  --ephemeral       off                                        (default)
+  Runner socket     /home/me/qemuweb/runtime/runner-3002.sock  (derived)
 
 Checking dependencies…
   ✓ Node.js  /usr/bin/node  (v24.22.0, requires ^24.0.0)

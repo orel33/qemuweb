@@ -7,10 +7,13 @@
 // A program describes itself with a spec (server/options.js, runner/options.js):
 //   {program, node, script, summary, options: [...], environment: null | [{names, description}]}
 // and each option is {flag, metavar (null: a flag without value), kind (text | port | number |
-// path | integer), key, default (the value when absent), fallback (the default as shown by --help
+// path | integer | choice), key, default (the value when absent), fallback (the default as shown by --help
 // and, when the value is null, by the startup block), description, value (what a flag without
-// value sets), min, max, expected, convert, exclusive: [flags], showWhenGiven, required (the
+// value sets), choices (kind choice: the allowed values), min, max, expected, convert, exclusive: [flags], showWhenGiven, required (the
 // option must be given), secret (its value is never printed)}.
+//
+// A spec may also have validate(settings), which throws a UsageError for a combination of options
+// that parseArguments cannot see option by option (an option that another one requires).
 //
 // Both programs then print the same things in the same order: the banner, the Options block, the
 // "Checking dependencies…" and "Checking configuration…" blocks (heading, pass, warning,
@@ -39,6 +42,10 @@ const KINDS = {
   path: (option, value) => {
     if (value === '') throw invalid(option.flag, value, 'not empty');
     return path.resolve(value);
+  },
+  choice: (option, value) => {
+    if (!option.choices.includes(value)) throw invalid(option.flag, value, `one of ${option.choices.join(', ')}`);
+    return value;
   },
   port: (option, value) => {
     if (!/^\d{1,5}$/.test(value) || Number(value) < 1 || Number(value) > MAX_PORT) throw invalid(option.flag, value, `1 to ${MAX_PORT}`);
@@ -90,6 +97,7 @@ function parseArguments(spec, argv) {
     const other = (option.exclusive || []).find(flag => settings.given.has(option.flag) && settings.given.has(flag));
     if (other) throw new UsageError(`${option.flag} and ${other} exclude each other`);
   }
+  if (spec.validate) spec.validate(settings);
   return {help: false, settings};
 }
 

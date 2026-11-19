@@ -33,6 +33,26 @@ export function redirectToLogin() {
   location.assign('/login.html');
 }
 
+// The header text of a user: the login, with the display name the authenticating front end gave when there is one.
+export function accountLabel(me) {
+  return me.displayName ? `${me.displayName} (${me.login})` : me.login;
+}
+
+// Whether the Log out button is shown: not without authentication, and for an identity given by the authenticating front end only
+// when --logout-url says where to go.
+export function canLogOut(me) {
+  return me.authMode !== 'off' && (me.via !== 'proxy' || !!me.logoutUrl);
+}
+
+// Log out: ends the QemuWeb login (cookie), then goes to the front end's logout URL for an identity it gave, else to the login page.
+export async function logOut(me) {
+  try { await fetch('/auth/logout', {method: 'POST'}); }
+  finally {
+    if (me.via === 'proxy' && me.logoutUrl) location.assign(me.logoutUrl);
+    else redirectToLogin();
+  }
+}
+
 // Every fetch() of the UI goes through this wrapper: a 401 response means the login
 // session expired or was revoked, so the page returns to the login form. In an observation
 // tab, it adds the X-Observe header to the session API requests (not to /api/admin).

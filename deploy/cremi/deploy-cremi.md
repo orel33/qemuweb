@@ -8,6 +8,7 @@ Debian 13 (trixie), Apache2 and OpenID, on `v0-qemuweb`. The files to copy are i
 | `qemuweb-2-oidc.conf` | Apache site of stage 2 (a page behind OpenID) |
 | `qemuweb-3-app.conf` | Apache site of stage 3 (QemuWeb behind OpenID): the final site |
 | `qemuweb-oidc.inc.example` | model of the OpenID secrets file (kept on the server only) |
+| `qemuweb-proxykey.inc.example` | model of the file with the key shared by Apache and QemuWeb (kept on the server only) |
 | `maintenance.html`, `whoami.html`, `goodbye.html` | static pages: maintenance and error page, OpenID attributes of the user, logout |
 | `qemuweb.service`, `qemuweb-runner.service` | systemd units: server, local runner |
 
@@ -143,20 +144,34 @@ Notes:
 - `whoami.html` is filled by server side includes (module `include`) from the claims `OIDC_CLAIM_<name>`. To show another
   attribute, add a row with its claim name (listed at https://services.emi.u-bordeaux.fr/intranet/mesinfos/info.php).
 - The site sets `X-Remote-User` from `preferred_username`, after removing any `X-Remote-User` and `X-User-*` sent by a
-  browser. It is the value QemuWeb will receive in stage 3.
+  browser. It is the identity QemuWeb will trust in stage 3, together with the shared key.
 - In the log, the relay talks HTTP/1.0 (a WebSocket needs 1.1) and sends no `X-Forwarded-For`: both to ask the CREMI.
 - Logout, to test again: `https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye`.
 
 ### Stage 3: QemuWeb behind Apache
 
-Until task OIDC01 the login is **double**: OpenID (Apache), then the QemuWeb password of `users.json` (step 11). OIDC01
-will make QemuWeb trust `X-Remote-User`.
+QemuWeb trusts the identity of OpenID: no second login (`--auth both`: `proxy` means that the identity is given by the front end, here Apache with `mod_auth_openidc`, through `X-Remote-User`, and `both` keeps the password login too). Apache adds the header `X-Proxy-Key` (a secret shared with
+QemuWeb) to every request it forwards, WebSocket included; QemuWeb believes `X-Remote-User` only on a request that carries
+that key (`--auth both`). A CREMI login that is not in `users.json` is a **student**; the **administrators** are listed in
+`users.json`. The administrator's SSH tunnel (Runner A, step 19) reaches the same port without the key: it keeps the
+QemuWeb password login. A header without the key is ignored, whatever its address.
 
 ```sh
-# 11. application accounts (asks for a password; users.json is 0600). The user name must be a QemuWeb account
+# 10. the key shared by Apache and QemuWeb: one random value, in two root-readable places, never in the repository
+KEY=$(openssl rand -hex 32)
+sudo install -m 0600 -o qemuweb -g qemuweb /dev/null /etc/qemuweb/proxy-key
+echo "$KEY" | sudo tee /etc/qemuweb/proxy-key > /dev/null
+sudo install -m 0600 -o root -g root deploy/cremi/qemuweb-proxykey.inc.example /etc/apache2/qemuweb-proxykey.inc
+sudo sed -i "s/CHANGE_ME/$KEY/" /etc/apache2/qemuweb-proxykey.inc
+unset KEY
+sudo ls -l /etc/qemuweb/proxy-key /etc/apache2/qemuweb-proxykey.inc   # -rw------- qemuweb qemuweb, and -rw------- root root
+sudo grep -c CHANGE_ME /etc/apache2/qemuweb-proxykey.inc              # 0 (and exit status 1: nothing is left to replace)
+
+# 11. administrators (users.json is 0600). Students need no account. LOGIN is your CREMI login: recognised as
+#     administrator through OpenID, without a QemuWeb password; "admin" is the account of the SSH tunnel (asks a password)
 U='./scripts/user.sh --users /etc/qemuweb/users.json'
+$U add LOGIN --role admin --no-password
 $U add admin --role admin
-$U add toto
 $U list
 
 # 12. service (QemuWeb on 127.0.0.1:3002; port 3002 is never opened in the firewall)
@@ -173,14 +188,21 @@ sudo systemctl restart apache2                    # restart: new modules are loa
 sudo systemctl is-active apache2                  # active
 ```
 
-**Check (stage 3)**, in a **private window**: `https://qemuweb.emi.u-bordeaux.fr/` sends you to the CREMI login, then to the
-QemuWeb login (an account of step 11), then to the interface. Without a runner it says that no runner is available: expected
-(Runner A below), and the consoles do not open yet. The access log shows your CREMI login. Failure: Annex A.3.
+**Check (stage 3)**, in a **private window**: `https://qemuweb.emi.u-bordeaux.fr/` sends you to the CREMI login, then
+straight to the interface (no QemuWeb login page): the header shows your login, and **Log out** returns to the CREMI
+logout page. Without a runner it says that no runner is available: expected (Runner A below), and the consoles do not
+open yet. As a student (a CREMI login that is not in `users.json`) there is no Supervision link; as `LOGIN` there is one.
+The access log shows your CREMI login. Failure: Annex A.3.
 
 Notes:
 - Apache proxies to `127.0.0.1:3002` with WebSocket (`upgrade=websocket`) and a one-hour timeout, sends
   `X-Forwarded-Proto: https` (so the login cookie is `Secure`, with `--trust-proxy loopback`), accepts bodies up to 1 GiB
   (session ZIP archives) and shows `maintenance.html` on 502 and 503.
+- `qemuweb.service` runs `--auth both --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
+  goes to the OpenID logout, which ends at `/goodbye`. After a change of an account, no restart is needed.
+- To disable a student, add the login with `$U add LOGIN --no-password` then `$U disable LOGIN`: a disabled login is
+  refused through OpenID too.
+- To change the key: repeat step 10, then `sudo systemctl restart qemuweb` and `sudo systemctl reload apache2`.
 - `/runner/connect` and `/api/runner/register` are outside OpenID (`AuthType None`): a runner has no browser and uses its
   token. The local runner dials the Unix socket of the server, not Apache.
 - If the consoles freeze, or `/runner/connect` fails only through the public name: the relay must pass WebSocket
@@ -275,7 +297,7 @@ sudo journalctl -u qemuweb-runner -n 30 --no-pager -o cat   # "Connected to the 
 sudo journalctl -u qemuweb -n 10 --no-pager -o cat          # the server sees its runner
 
 # 19. try it without Apache and OpenID: an SSH tunnel from the workstation (keep it open), then
-#     http://127.0.0.1:3012 in a browser, log in as toto (QemuWeb password), "Load session ZIP" demo/lan.zip,
+#     http://127.0.0.1:3012 in a browser (no key: the QemuWeb login page), log in as admin (QemuWeb password), "Load session ZIP" demo/lan.zip,
 #     start, open a console
 #     (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app
 
@@ -378,6 +400,9 @@ endpoint; an unreachable provider: metadata error; a provider reachable only thr
 ```sh
 # QemuWeb alone, on its port (401: the application answers, without a session)
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me
+# a forged identity without the key is ignored: still 401 (with a wrong key: 403)
+curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin' http://127.0.0.1:3002/auth/me
+curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin' -H 'X-Proxy-Key: wrong' http://127.0.0.1:3002/auth/me
 
 # without a session: OpenID answers first (302), not the application (401)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/auth/me
@@ -396,7 +421,8 @@ sudo systemctl start qemuweb
 curl -s -o /dev/null -w '%{http_code}\n' https://v0-qemuweb.emi.u-bordeaux.fr/auth/me
 ```
 
-**Expect**: `401`, then `302`, `302`, a `4xx` (the application's answer, not `302`), `401` or `404` (not `302`), then
-`under maintenance` (the page) and `503`; the last command prints `302`.
+**Expect**: `401`, `401`, `403`, then `302`, `302`, a `4xx` (the application's answer, not `302`), `401` or `404` (not `302`), then
+`under maintenance` (the page) and `503`; the last command prints `302`. In the journal, `users.log` (`/var/log/qemuweb/users.log`) shows the refused key as a
+`proxy-refused` line, and the logins of the browser as `"via":"proxy"`.
 
 If a runner path answers `302`, the `AuthType None` block of that path does not apply: check `qemuweb-3-app.conf`.

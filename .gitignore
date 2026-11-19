@@ -21,3 +21,5 @@ deploy/cremi/progsys.conf
 
 # OIDC secrets of the Apache site: kept on the server (/etc/apache2/qemuweb-oidc.inc), never committed
 deploy/cremi/qemuweb-oidc.inc
+# Key shared by Apache and QemuWeb (/etc/apache2/qemuweb-proxykey.inc): kept on the server, never committed
+deploy/cremi/qemuweb-proxykey.inc

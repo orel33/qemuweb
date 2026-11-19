@@ -80,7 +80,7 @@ function bindWorkspace(io, {session, runner}) {
   }
 }
 
-// audit: server/audit.js. currentUser(login) returns the account as it is now ({login, role}),
+// audit: server/audit.js. currentUser(login, via) returns the account as it is now ({login, role}),
 // or null once it is disabled or removed (server/auth). Returns {disconnectUser(login), browsers(login)}.
 function attachSockets(io, manager, {audit, currentUser, control: options = {}}) {
   // The controlling admin's last view, per session ID, kept only while a lock exists there.
@@ -158,7 +158,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
     // account, and the socket is closed once it is disabled, removed, or (for an observer)
     // no longer admin.
     const authorized = () => {
-      const current = currentUser(user.login);
+      const current = currentUser(user.login, user.via);
       if (current && (!observer || current.role === 'admin')) return true;
       socket.emit('node-error', 'Your account is no longer allowed to use this session.');
       socket.disconnect(true);

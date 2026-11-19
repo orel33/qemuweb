@@ -334,7 +334,8 @@ never written; reading the session list or the logs is not logged.
 
 | Event | Target |
 | --- | --- |
-| `login`, `logout` | none. |
+| `login`, `logout` | `via`: `password` or `proxy` (the CREMI deployment, with OpenID: see [deploy/cremi/deploy-cremi.md](../deploy/cremi/deploy-cremi.md) . |
+| `proxy-refused` | `reason`: `wrong proxy key`, `invalid login` or `account disabled`. A request that carries a wrong `X-Proxy-Key` is also answered with 403. |
 | `login-failed` | none; `user` is the login name that was tried (control characters removed, at most 64 characters), whether or not the account exists. |
 | `session-created` | `sessionId`. |
 | `session-adopted` | `sessionId`. The server restarted and a runner that kept its machines reconnected: its session was taken over for its owner. |
@@ -410,6 +411,22 @@ Check the result:
   cookie with `HttpOnly`, `Secure` and `SameSite=Lax`;
 - consoles connect over `wss://` (the Network tab shows a `101 Switching
   Protocols` response for `/socket.io/`).
+
+## Other single sign-on systems
+
+`--auth proxy` (or `both`) is not tied to OpenID: the front end does the login, and QemuWeb only reads `X-Remote-User`,
+guarded by `X-Proxy-Key` (see `deploy/cremi/deploy-cremi.md` for the Apache and OpenID example). QemuWeb needs no change
+for another system; only `--logout-url` differs: the logout address of the front end.
+
+| System | Front end | `--logout-url` |
+| --- | --- | --- |
+| OpenID | Apache `mod_auth_openidc` | `https://HOST/.openid?logout=https://HOST/goodbye` |
+| SAML | Apache `mod_shib` | the Shibboleth logout handler (`/Shibboleth.sso/Logout`) |
+| CAS | Apache `mod_auth_cas` | the logout URL of the CAS server |
+| OpenID, OAuth2 and similar | `oauth2-proxy` with nginx | `/oauth2/sign_out` |
+
+The front end must remove any `X-Remote-User` sent by a browser and add `X-Proxy-Key` to every request it forwards,
+WebSocket upgrades included.
 
 ## Known limits
 

@@ -51,12 +51,19 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
 
 ## Deployment and identity
 
-- **OIDC01: QemuWeb trusts the CREMI OpenID** (follows `DEP01`, the Apache2 deployment): the server accepts
-  `X-Remote-User` (and `X-User-Mail`, `X-User-Groups`, `X-User-DisplayName`) only from the local Apache
-  (`--trust-proxy loopback`, never from a direct connection), creates the session from it, and takes the role of
-  administrators from a group claim. Then the second password (`users.json`, `scripts/user.sh`) goes away; until then
-  the user logs in twice (OpenID, then QemuWeb). The logout must also end the OpenID session
-  (`/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye`).
+- **OpenID: what stays open after OIDC01.** The role of administrators comes only from `users.json`
+  (`scripts/user.sh add LOGIN --role admin --no-password`): `X-User-Groups` is not used by the server, so no
+  group-to-role rule exists yet. A student with no entry in `users.json` cannot be listed in `/admin` (accounts) until it
+  is added with `--no-password`. The key is rotated by hand (`deploy/cremi/deploy-cremi.md`, step 10). The proxy identity
+  has no throttling of its own: the login throttling of milestone 6 is still to do.
+- **OpenID: the SSO session expires during use.** Apache then answers an API call or a Socket.IO connection with a
+  redirection to the CREMI login instead of a 401. Today the interface (`public/api.js`, `public/socket.js`) only
+  redirects to `/login.html` on a 401 (and on the Socket.IO error `Authentication required.`): a redirection to another
+  origin makes the `fetch` fail without a status, so an action shows its error and the Socket.IO connection shows
+  `WebSocket unavailable`; the page does not reload by itself (a manual reload goes through the login again). Idea: in
+  the Apache site, `OIDCUnAuthAction 401` in a `<Location>` for `/api/` and `/socket.io/`, and the interface reloading
+  the page on a 401 when `/auth/me` says `via: proxy` (today a 401 leads to `/login.html`, which in `--auth proxy` is
+  itself a 401). Not done: no code change in OIDC01.
 - **To check on the CREMI machine** (`deploy/cremi/deploy-cremi.md`, not testable from the repository): the https relay
   must pass WebSocket (Socket.IO, `/runner/connect`), 3600 s timeouts and large bodies; `LimitRequestBody` of the site
   (1 GiB) must match what the relay accepts; the OpenID provider must be reachable from Apache without the proxy.
