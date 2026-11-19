@@ -26,6 +26,7 @@
 const {ConsoleControl} = require('./console-control');
 const {normalizeView} = require('../public/view-state');
 const {baseNodeId} = require('../common/console-id');
+const {createTransportRegistry} = require('./ws-transports');
 
 function sessionRoom(session) { return `session:${session.id}`; }
 function observerRoom(session) { return `observers:${session.id}`; }
@@ -81,8 +82,9 @@ function bindWorkspace(io, {session, runner}) {
 }
 
 // audit: server/audit.js. currentUser(login, via) returns the account as it is now ({login, role}),
-// or null once it is disabled or removed (server/auth). Returns {disconnectUser(login), browsers(login)}.
-function attachSockets(io, manager, {audit, currentUser, control: options = {}}) {
+// or null once it is disabled or removed (server/auth). transports is the registry of live connections and their
+// transport (server/ws-transports.js). Returns {disconnectUser(login), browsers(login), connections()}.
+function attachSockets(io, manager, {audit, currentUser, control: options = {}, transports = createTransportRegistry()}) {
   // The controlling admin's last view, per session ID, kept only while a lock exists there.
   const controllerViews = new Map();
   const control = new ConsoleControl({...options, onRelease: (lock, reason) => {
@@ -128,6 +130,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
       socket.disconnect(true);
       return;
     }
+    transports.track(socket, {login: user.login, main: socket.handshake.auth?.main === true, observer});
     // Console access is where an observation really starts: audited here, once per admin and
     // observed login while their sockets stay open.
     // Control ends when the controlling admin's last observer socket on the session closes.
@@ -278,6 +281,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}})
 
   return {
     browsers: login => browsers.get(login) || 0,
+    connections: () => transports.summary(),
     // Closes every socket of a user at once (account disabled or role changed from /admin),
     // so that passive sockets stop receiving console output too.
     disconnectUser(login) {
