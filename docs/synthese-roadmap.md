@@ -53,6 +53,9 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | UXS02 | Session créée à la connexion, une seule action « Reset » à la place de deux boutons confus | 2 |
 | UXS03 | Actions regroupées en catégories claires : Session, Nœuds, Affichage | 2 |
 | UXS04 | Mode édition et mode exécution, un seul endroit décide des contrôles actifs | 4 |
+| NET01 | Couper et rebrancher un câble d'un hôte en marche (panne de lien pour les TP de routage) | 2 |
+| NET02 | Points de sauvegarde d'un hôte ou d'une session : revenir à l'état d'avant une erreur | 4 |
+| NET03 | Ajouter ou retirer une interface d'un hôte sans le redémarrer | 4 |
 | ADM01 | Page d'administration en onglets (sessions, comptes, runners, WebSocket, journaux) | 2 |
 | GRA02 | Plusieurs consoles flottantes dans la vue graphique | 3 |
 | GRA03 | Points restants de la vue graphique : zoom au pincement, invite du shell, tooltips | 2 |

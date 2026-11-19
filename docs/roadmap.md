@@ -350,6 +350,23 @@ personal runner and any guest access exist only for trusted users.
   - Rename in the interface: "Supervision" is the link's text and the page title; keep one word for it everywhere.
   - Unit tests for the tab logic if it is pure (which tab from the fragment, which panels poll); the layout is checked
     by hand.
+- [ ] **NET01** (S) **Cut and restore a cable** on a running host. QEMU's monitor has `set_link <name> off|on`, so a link goes
+  down and up under the guest (the kernel logs "link down" then "link up"), without a reboot and without losing anything.
+  A **Disconnect cable** / **Reconnect cable** pair on the link popover and in Host Settings > Network, distinct from
+  *Remove link* (which unplugs the interface from its switch for good); a broken link is drawn dashed and red. The state is
+  runtime only: a started host has its cables plugged. To verify: which name `set_link` takes for a `-netdev` plus `-device`
+  pair (the NIC's net client name). Natural companion of CAP01 (same monitor plumbing, same buttons); lab use: a link
+  failure and the reconvergence of a routing protocol.
+- [ ] **NET02** (L) **Restore points** for a host or a session: `savevm`, `loadvm` and `delvm` of the monitor store and
+  restore the whole state of a machine (memory, devices, disk) inside its `qcow2` working disk, so a student returns to
+  the state before a mistake in one click. To study: compatibility with the NICs and the consoles after a restore (the
+  VDE switch is not part of a machine's saved state), the disk space of a snapshot and its place in the quotas of
+  milestone 8, whether a session-wide restore point is the sum of its hosts', and the interaction with the ZIP archive of
+  a session (snapshots probably stay out of it).
+- [ ] **NET03** (M) **Add or remove an interface while the host runs**: `netdev_add` plus `device_add` (and the reverse)
+  connect a host to another switch with no restart, instead of today's "interface changes apply at the next start".
+  On the `q35` machine a hot-pluggable port is needed: reserve a few free `pcie-root-port` devices at launch, to verify.
+  Host Settings > Network then applies live when the host runs; the guest kernel must handle the hot-plug (Debian does).
 - [ ] **GRA02** (L) Several floating consoles: up to 4 overlapping windows, cascaded, a click brings one to the front,
   each movable, resizable and closable, built on the 4 existing panes (today only one floating window exists: the
   selected node's pane, `public/graphic-console.js`; a double click on another node reuses it). To decide: the maximum
