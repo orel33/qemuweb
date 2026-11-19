@@ -87,10 +87,8 @@ message says what changed). Keep each entry to a few lines: what, why, and an id
   password accounts are reachable only by the tunnel). Idea: `OIDCUnAuthAction pass`, `X-Proxy-Key` sent only with an
   OpenID identity, and a "CREMI login" link on the login page. Not before the quotas, the HMP allowlist and the login
   throttling of milestone 6; never an admin account.
-- **CREMI relay and WebSocket**: for `qemuweb.emi.u-bordeaux.fr` the relay drops `Upgrade` (a WebSocket request to
-  `/runner/connect` gets a plain `302 /login.html` from the application) while Apache directly passes it (`401`): ask
-  for `proxy_http_version 1.1` and the `Upgrade`/`Connection` headers. Add `upgrade=%{Upgrade}i` to the Apache `LogFormat`
-  and the check of Annex A.3 to the tutorial.
+- **CREMI relay**: WebSocket, upload size and timeouts are now set on httpsproxy (verified: `101` on `/socket.io/`).
+  Still to obtain: `X-Forwarded-For` (the Apache log shows `"-"`) and, for the build VMs, the IPv4 of v0-qemuweb on the squid proxy.
 
 ## Console and terminal
 

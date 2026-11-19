@@ -419,6 +419,9 @@ sudo systemctl start qemuweb
 
 # from another machine inside the CREMI
 curl -s -o /dev/null -w '%{http_code}\n' https://v0-qemuweb.emi.u-bordeaux.fr/auth/me
+
+# through the public relay (httpsproxy), from any machine: a WebSocket upgrade must reach the application
+curl -sS -i --http1.1 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" https://qemuweb.emi.u-bordeaux.fr/runner/connect | head -4
 ```
 
 **Expect**: `401`, `401`, `403`, then `302`, `302`, a `4xx` (the application's answer, not `302`), `401` or `404` (not `302`), then
@@ -426,3 +429,9 @@ curl -s -o /dev/null -w '%{http_code}\n' https://v0-qemuweb.emi.u-bordeaux.fr/au
 `proxy-refused` line, and the logins of the browser as `"via":"proxy"`.
 
 If a runner path answers `302`, the `AuthType None` block of that path does not apply: check `qemuweb-3-app.conf`.
+
+The relay check must print `401` (`Server: nginx`, no `X-Powered-By`). A `302` to `/login.html` means the relay drops the
+`Upgrade` header: its `location` needs `proxy_http_version 1.1`, `Upgrade $http_upgrade`, `Connection $connection_upgrade`
+(with the `map` in its `http` section), `client_max_body_size 1g`, `proxy_request_buffering off`, `proxy_buffering off`,
+`proxy_read_timeout 3600s`, `proxy_send_timeout 3600s` and `X-Forwarded-For $proxy_add_x_forwarded_for`. Once it works,
+the Connections panel of `/admin` shows the transport of every browser (`websocket`, not `polling`).
