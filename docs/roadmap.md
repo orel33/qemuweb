@@ -263,6 +263,15 @@ personal runner and any guest access exist only for trusted users.
 Things noticed with no milestone yet. Move one into a milestone when it is scheduled, delete it when done.
 
 - Merge `docs/remote-runner-test.md` with the deployment documents once the runner choice is settled (see DOC01).
+- An update that changes a file format makes the sessions of the old format unreadable and requires restarting the runner
+  as well as the server (the runner reads the archives). Tell the administrator at startup: the server could compare its
+  version with the runner's hello and say "restart the runner" instead of letting an archive fail with `Invalid
+  session.json in archive.`
+- Standalone local terminals (`CLI01`, size L, independent of the web interface): run machines on the user's own computer
+  without a server and open `xterm` windows or `tmux` panes on their consoles. The runner already exposes `serial0.sock`,
+  `serial1.sock` and `mon.sock` per node, and everything goes through `runner/index.js`. To settle: a mode with no server
+  at all, or terminals attached to the machines of a runner that the server also manages; the local computer only, or
+  a remote runner too (needs a tunnel for the sockets). Not a condition of 1.0.0.
 
 ## Decisions made
 

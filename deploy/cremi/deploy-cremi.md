@@ -11,6 +11,7 @@ Debian 13 (trixie), Apache2 and OpenID, on `v0-qemuweb`. The files to copy are i
 | `qemuweb-proxykey.inc.example` | model of the file with the key shared by Apache and QemuWeb (kept on the server only) |
 | `maintenance.html`, `whoami.html`, `goodbye.html` | static pages: maintenance and error page, OpenID attributes of the user, logout |
 | `qemuweb.service`, `qemuweb-runner.service` | systemd units: server, local runner |
+| `qwctl.sh` | one command to start, stop, restart and inspect the two services (`status`, `restart`, `logs`) |
 
 **Network.** `qemuweb.emi.u-bordeaux.fr` is an alias of the CREMI https relay (`httpsproxy`, 10.252.0.222), which forwards
 to this machine, `v0-qemuweb.emi.u-bordeaux.fr` (10.252.0.117). Apache answers to `v0-qemuweb.emi.u-bordeaux.fr` (aliases
@@ -293,6 +294,16 @@ sudo apache2ctl configtest && sudo systemctl reload apache2
 - It works without OpenID or secrets. Enable one site at a time (`a2dissite` first).
 
 ### Update later
+
+`deploy/cremi/qwctl.sh` starts, stops, restarts and shows the two services (`qemuweb` and `qemuweb-runner`) in one command:
+`./deploy/cremi/qwctl.sh status`, `restart server` (keeps the machines), `restart runner` or `restart` (both: stops every
+machine, it asks first; `-y` skips the question), `logs [server|runner] [LINES]`. The plain commands are below.
+
+After a release that **changes a file format** (the release notes and `docs/json-files.md` say so), the sessions of the
+old format are no longer readable: save what matters first, then `git pull --tags && npm ci` and
+`./deploy/cremi/qwctl.sh restart` (both services: the runner must run the new code too, since it reads the archives; an
+archive rejected with `Invalid session.json in archive.` right after a pull means the runner is still the old one).
+Restarting only the server never applies a change of the runner code.
 
 ```sh
 # 15. a restart deletes the sessions of remote runners; the machines of the local runner survive
