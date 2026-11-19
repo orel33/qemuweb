@@ -27,6 +27,8 @@ if ! prepare_images; then exit 0; fi
 if [[ ! -s "$raw" ]]; then
   [[ -s "$iso" ]] || { echo "Missing source ISO: $iso (run --sources first)." >&2; exit 1; }
   require_commands isoinfo python3 qemu-system-x86_64 qemu-img
+  # Fail in seconds, before any VM starts, when the installer could not reach the mirrors.
+  check_debian_mirrors "$id"
 
   temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
   trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; rm -rf "$temp_dir"' EXIT
@@ -35,21 +37,35 @@ if [[ ! -s "$raw" ]]; then
   cat > "$temp_dir/preseed.cfg" <<'PRESEED'
 # Preseed fixes installer language, disk layout, root login, packages, and the
 # late command that applies QemuWeb-specific guest settings.
+# Every question is answered here, so that the build never waits for a human; the only
+# dialogs left are errors, which watch_vm (lib/common.sh) turns into a failure.
 d-i debian-installer/locale string en_US.UTF-8
+d-i debian-installer/language string en
+d-i debian-installer/country string US
 d-i keyboard-configuration/xkb-keymap select us
 d-i netcfg/choose_interface select auto
 d-i netcfg/get_hostname string qemuweb
 d-i netcfg/get_domain string local
+d-i netcfg/link_wait_timeout string 10
+d-i netcfg/dhcp_timeout string 60
 d-i mirror/country string manual
 d-i mirror/http/hostname string deb.debian.org
 d-i mirror/http/directory string /debian
-d-i mirror/http/proxy string
+PRESEED
+  # The installer VM cannot see this shell's environment: pass the proxy (empty: none).
+  # A proxy on this machine's loopback is reached at 10.0.2.2 from the VM.
+  printf 'd-i mirror/http/proxy string%s\n' "${PROXY_URL:+ $(guest_proxy_url)}" >> "$temp_dir/preseed.cfg"
+  cat >> "$temp_dir/preseed.cfg" <<'PRESEED'
 d-i passwd/root-login boolean true
 d-i passwd/make-user boolean false
+d-i user-setup/allow-password-weak boolean true
+d-i user-setup/encrypt-home boolean false
 d-i passwd/root-password password temporary-root-password
 d-i passwd/root-password-again password temporary-root-password
 d-i time/zone string UTC
 d-i clock-setup/utc boolean true
+d-i clock-setup/ntp boolean false
+d-i partman-auto/disk string /dev/sda
 d-i partman-auto/method string regular
 d-i partman-auto/choose_recipe select atomic
 d-i partman-partitioning/confirm_write_new_label boolean true
@@ -63,6 +79,8 @@ d-i partman/mount_style select traditional
 d-i base-installer/install-recommends boolean false
 d-i apt-setup/use_mirror boolean true
 d-i pkgsel/upgrade select none
+d-i pkgsel/update-policy select none
+d-i pkgsel/install-language-support boolean false
 # QemuNet teaching toolkit: network administration, DNS/DHCP, capture and
 # security, remote/legacy services, Apache, automation, and text-mode tools.
 # Deliberately excluded: PHP, GCC, Emacs, TeX, TShark/Wireshark, IPython,
@@ -86,6 +104,14 @@ useradd -m -s /bin/bash -G sudo toto || true
 printf 'toto:toto\n' | chpasswd
 printf 'qemuweb\n' > /etc/hostname
 mkdir -p /etc/default/grub.d /etc/systemd/network
+# The installer records its build proxy in the target's apt configuration: the
+# image must not keep it, since it is used on other networks.
+for f in /etc/apt/apt.conf /etc/apt/apt.conf.d/*; do
+  if [ -f "$f" ] && grep -qiE 'Acquire::https?::Proxy' "$f"; then
+    sed -i -E '/Acquire::https?::Proxy/Id' "$f"
+    if [ ! -s "$f" ]; then rm -f "$f"; fi
+  fi
+done
 # Keep both local and serial consoles available after boot, and use the legacy
 # IDE disk's first partition as root instead of relying on UUID discovery.
 cat > /etc/default/grub.d/99-qemunet-legacy.cfg <<'GRUB'
@@ -164,18 +190,14 @@ PY
     -nic user,model=e1000 -boot order=c \
     >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
   qemu_pid=$!
-  prepared=0
-  for _ in $(seq 1 1800); do
-    if grep -q QEMUNET_IMAGE_PREPARED "$temp_dir/serial.log" 2>/dev/null; then prepared=1; fi
-    if [[ $prepared == 1 ]] && ! kill -0 "$qemu_pid" 2>/dev/null; then break; fi
-    if ! kill -0 "$qemu_pid" 2>/dev/null; then break; fi
-    sleep 1
-  done
-  if [[ $prepared != 1 ]]; then
-    echo "Debian netinst preparation failed; last serial output:" >&2
-    tail -n 100 "$temp_dir/serial.log" 2>/dev/null || true
-    cat "$temp_dir/qemu.stderr" >&2 || true
-    echo "Preparation files preserved in $temp_dir" >&2
+  echo "  Installing Debian in a VM (serial log: $temp_dir/serial.log)"
+  # Success: the late command printed its marker and the VM powered off. A VM
+  # silent for 15 minutes is stopped (see lib/common.sh for all limits).
+  if ! watch_vm "Debian installer build of $id" "$qemu_pid" "$temp_dir/serial.log" \
+      "$DEBIAN_INSTALLER_DONE" 1 900 DEBIAN_INSTALLER_FAILURES DEBIAN_INSTALLER_PHASES; then
+    qemu_pid=''
+    # Keep the logs, drop the large files.
+    rm -f "$raw.tmp" "$temp_dir/vmlinuz" "$temp_dir/initrd.gz" "$temp_dir/addon.cpio.gz"
     trap - EXIT
     exit 1
   fi
