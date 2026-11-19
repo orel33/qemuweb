@@ -1,5 +1,5 @@
 # Key shared by Apache and QemuWeb, included by the Apache site of stage 3 (deploy-cremi.md, step 10).
 # Copy this file to /etc/apache2/qemuweb-proxykey.inc (root, mode 0600), then replace CHANGE_ME by the key
-# (openssl rand -hex 32); the same key is the only line of /etc/qemuweb/proxy-key (--proxy-key-file of the server).
+# (openssl rand -hex 32); the same key is the line of /etc/qemuweb/proxy-key (--proxy-key-file of the server; a second line is allowed during a rotation, see deploy-cremi.md).
 # The real file never goes in the repository.
 RequestHeader set X-Proxy-Key "CHANGE_ME"

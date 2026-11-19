@@ -4,6 +4,7 @@
 // writes logs/admin.log.
 import {createRunnersPanel} from './admin-runners.js';
 import {createConnectionsPanel} from './admin-connections.js';
+import {handleUnauthorized, setIdentityVia} from './session-expiry.js';
 
 const POLL_MS = 4000;
 const $ = id => document.getElementById(id);
@@ -17,7 +18,7 @@ async function api(path, options = {}) {
     init.body = JSON.stringify(options.body);
   }
   const response = await fetch(`/api/admin${path}`, init);
-  if (response.status === 401) { location.assign('/login.html'); throw new Error('Authentication required.'); }
+  if (response.status === 401) { handleUnauthorized(); throw new Error('Authentication required.'); }
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw new Error(body.error || `HTTP ${response.status}`);
   return body;
@@ -301,6 +302,7 @@ function init() {
   fetch('/auth/me', {cache: 'no-store'}).then(async response => {
     if (!response.ok) return;
     me = await response.json();
+    setIdentityVia(me.via);
     $('account-name').textContent = me.displayName ? `${me.displayName} (${me.login})` : me.login;
     $('auth-off-warning').hidden = me.authMode !== 'off';
     // An identity given by the authenticating front end logs out there (--logout-url); without that URL there is no button.

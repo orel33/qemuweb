@@ -5,7 +5,7 @@
 //   add <login> [--role student|admin] [--no-password]
 //                                        create an account; --no-password: an account that cannot log in with a password,
 //                                        recognised only for its role and its disabled flag when the authenticating front end
-//                                        gives its identity (server --auth proxy|both), e.g. an administrator
+//                                        gives its identity (server --auth proxy), e.g. an administrator
 //   passwd <login>                       change a password (refused for an account without password)
 //   role <login> student|admin           change a role
 //   remove <login>                       delete an account; a live server keeps its session (and its

@@ -206,16 +206,43 @@ Notes:
   goes to the OpenID logout, which ends at `/goodbye`. After a change of an account, no restart is needed.
 - To disable a student, add the login with `$U add "$LOGIN" --no-password` then `$U disable "$LOGIN"`: a disabled login is
   refused through OpenID too.
-- To change the key: repeat step 10, then `sudo systemctl restart qemuweb-server` and `sudo systemctl reload apache2`.
+- To change the key without an interruption, see "Rotate the shared key" below.
+- An expired OpenID session: `/api/`, `/socket.io/` and `/auth/` have `OIDCUnAuthAction 401` in `qemuweb-3-app.conf`, so
+  Apache answers them `401` instead of redirecting to the CREMI login (another origin, which the page cannot follow). The
+  interface then reloads the page once (not twice within 30 seconds), and Apache sends that page request to the login.
 - `/runner/connect` and `/api/runner/register` are outside OpenID (`AuthType None`): a runner has no browser and uses its
   token. The local runner dials the Unix socket of the server, not Apache.
 - If the consoles freeze, or `/runner/connect` fails only through the public name: the relay must pass WebSocket
   (HTTP/1.1, `Upgrade`), 3600 s and large bodies (ask the CREMI). With Apache older than 2.4.47, replace the `ProxyPass /`
   line by `RewriteCond %{HTTP:Upgrade} websocket [NC]` and `RewriteRule ^/?(.*) ws://127.0.0.1:3002/$1 [P,L]`.
 
+### Rotate the shared key
+
+The key file `/etc/qemuweb/proxy-key` accepts one key, or two (one per line, either is valid; a third line, an empty line in
+the middle or a key shorter than 16 characters stops the server at startup). So the key changes without any request refused.
+Run on the server as `qemuweb`; the restarts of the server keep the machines of the local runner.
+
+```sh
+# 1. add the new key as a second line, and restart the server: it accepts both
+NEW=$(openssl rand -hex 32)
+echo "$NEW" | sudo tee -a /etc/qemuweb/proxy-key > /dev/null
+sudo systemctl restart qemuweb-server        # or ./deploy/cremi/qwctl.sh restart server
+# 2. give the new key to Apache, and reload it (no request is cut)
+sudo sed -i "s/X-Proxy-Key \".*\"/X-Proxy-Key \"$NEW\"/" /etc/apache2/qemuweb-proxykey.inc
+unset NEW
+sudo apache2ctl configtest && sudo systemctl reload apache2
+# 3. keep only the new key (the last line), and restart the server again
+sudo sed -i '1d' /etc/qemuweb/proxy-key
+sudo systemctl restart qemuweb-server
+sudo wc -l /etc/qemuweb/proxy-key            # 1
+```
+
+Check afterwards with the first lines of Annex A.3 (a request with a wrong key is still refused: `403`). Step 10 creates the
+first key, a file of one line.
+
 ### Switch an installed server to `--auth proxy`
 
-For a server already running with the password login (service without `--auth`, or `--auth both`): create the key (step 10,
+For a server already running with the password login (service without `--auth`): create the key (step 10,
 if `/etc/qemuweb/proxy-key` does not exist), declare the administrators (step 11), install the site and the service,
 restart. Run on the server as `qemuweb`.
 
@@ -239,7 +266,9 @@ the Supervision link (no QemuWeb login page). The restart keeps the machines of 
 
 ### Emergency: password mode
 
-If OpenID is down, or to test with the tunnel, restart QemuWeb with its own login for the time of the incident:
+`--auth proxy` has no password login: `/auth/login` answers 404, there is no login page, and the SSH tunnel to port 3002
+(no key) gives `401`. If OpenID is down, or to test with the tunnel, restart QemuWeb in `--auth password` mode (its own
+login, the accounts of `users.json` with a password) for the time of the incident:
 
 ```sh
 # on the server, as qemuweb: a drop-in replaces the authentication options (nothing is edited in the repository)
@@ -249,7 +278,7 @@ sudo systemctl edit qemuweb-server      # in the editor, write the three lines b
 #   ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb --users /etc/qemuweb/users.json --runners /etc/qemuweb/runners.json --logs /var/log/qemuweb --session-hours 12 --runner-grace 300 --trust-proxy loopback --auth password
 cd /srv/qemuweb && ./scripts/user.sh --users /etc/qemuweb/users.json add admin --role admin    # asks a password
 sudo systemctl restart qemuweb-server
-# (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app   then http://127.0.0.1:3012, log in as admin
+# (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app   then http://127.0.0.1:3012 (the login page), log in as admin with that password
 # back to normal: remove the drop-in and restart
 sudo rm -r /etc/systemd/system/qemuweb-server.service.d && sudo systemctl daemon-reload && sudo systemctl restart qemuweb-server
 ```
@@ -465,6 +494,9 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me
 curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin' http://127.0.0.1:3002/auth/me
 curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin' -H 'X-Proxy-Key: wrong' http://127.0.0.1:3002/auth/me
 
+# an API path and a Socket.IO path without a session: 401 (OIDCUnAuthAction 401), not a 302 to the CREMI login
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/api/nodes
+curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 'https://v0-qemuweb.emi.u-bordeaux.fr/socket.io/?EIO=4&transport=polling'
 # without a session: OpenID answers first (302), not the application (401)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/auth/me
 # a header sent by a client is not believed: still 302
@@ -481,18 +513,21 @@ sudo systemctl start qemuweb-server
 # from another machine inside the CREMI
 curl -s -o /dev/null -w '%{http_code}\n' https://v0-qemuweb.emi.u-bordeaux.fr/auth/me
 
-# through the public relay (httpsproxy), from any machine: a WebSocket upgrade must reach the application
-curl -sS -i --http1.1 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" https://qemuweb.emi.u-bordeaux.fr/runner/connect | head -4
+# through the public relay (httpsproxy), from any machine: a WebSocket upgrade must reach the runner gateway (401, Content-Length: 0)
+curl -sS -i --http1.1 -H "Connection: Upgrade" -H "Upgrade: websocket" -H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" https://qemuweb.emi.u-bordeaux.fr/runner/connect | head -8
 ```
 
-**Expect**: `401`, `401`, `403`, then `302`, `302`, a `4xx` (the application's answer, not `302`), `401` or `404` (not `302`), then
-`under maintenance` (the page) and `503`; the last command prints `302`. In the journal, `users.log` (`/var/log/qemuweb/users.log`) shows the refused key as a
+**Expect**: `401`, `401`, `403`, then `401`, `401` (API and Socket.IO paths), `302`, `302`, a `4xx` (the application's answer, not `302`), `401` or `404` (not `302`), then
+`under maintenance` (the page) and `503`; the `/auth/me` from another machine prints `302`; the relay check (last command) is described below. In the journal, `users.log` (`/var/log/qemuweb/users.log`) shows the refused key as a
 `proxy-refused` line, and the logins of the browser as `"via":"proxy"`.
 
 If a runner path answers `302`, the `AuthType None` block of that path does not apply: check `qemuweb-3-app.conf`.
 
-The relay check must print `401` (`Server: nginx`, no `X-Powered-By`). A `302` to `/login.html` means the relay drops the
-`Upgrade` header: its `location` needs `proxy_http_version 1.1`, `Upgrade $http_upgrade`, `Connection $connection_upgrade`
+The relay check must print `HTTP/1.1 401` with `Content-Length: 0` and no `X-Powered-By`: the upgrade request reached the runner
+gateway, which refuses it with an empty body. A `401` with `X-Powered-By: Express` and a JSON body
+`{"error":"Authentication required."}` means the relay dropped the `Upgrade` header (an ordinary request reached Express); a `101` or
+any other status is not right either. (In `--auth password` mode, the emergency mode, a dropped `Upgrade` gives a `302` to
+`/login.html` again.) To fix it, its `location` needs `proxy_http_version 1.1`, `Upgrade $http_upgrade`, `Connection $connection_upgrade`
 (with the `map` in its `http` section), `client_max_body_size 1g`, `proxy_request_buffering off`, `proxy_buffering off`,
 `proxy_read_timeout 3600s`, `proxy_send_timeout 3600s` and `X-Forwarded-For $proxy_add_x_forwarded_for`. Once it works,
 the Connections panel of `/admin` shows the transport of every browser (`websocket`, not `polling`).

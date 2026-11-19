@@ -130,7 +130,7 @@ not offer the system. Changing the file does not modify existing hosts (section 
 ### 2.2 `users.json`
 
 `{"schemaVersion": 1, "users": [...]}`, sorted by `login` when written. The file
-may be absent (no account). With `--no-auth` it is not used. With `--auth proxy` or `--auth both` it also lists the
+may be absent (no account). With `--no-auth` it is not used. With `--auth proxy` it also lists the
 administrators (and any account to disable): a login the authenticating front end gives that is not in the file is a student. Re-read when its
 inode, size or date change, so `scripts/user.sh` applies without a restart.
 

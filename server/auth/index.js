@@ -3,11 +3,11 @@
 // Authentication facade, and the one place where the identity of a request is resolved: the rest of
 // the server only uses this interface (HTTP routes, /admin, X-Observe, Socket.IO and console control all read
 // req.user or socket.data.user, {login, role}, plus via: 'proxy', displayName? and mail? for an identity from the authenticating front end.
-//   mode                     'password', 'proxy', 'both' (--auth) or 'off' (--no-auth: one implicit local user)
+//   mode                     'password', 'proxy' (--auth) or 'off' (--no-auth: one implicit local user)
 //   authenticate(login, pw)  -> {login, role} or null (a user from the proxy also has via: 'proxy', displayName?, mail?)
-//   register(app)            /auth/login, /auth/logout and /auth/me
+//   register(app)            /auth/login (404 with --auth proxy: no password login there), /auth/logout and /auth/me
 //   identify                 Express middleware setting req.user: the identity given by the authenticating front end
-//                            (server/auth/proxy.js, only with the right X-Proxy-Key; it wins), else the session cookie
+//                            (server/auth/proxy.js, only with a right X-Proxy-Key) with --auth proxy, else the session cookie with --auth password
 //   requireUser              Express middleware: 401 JSON for the API, login redirect for pages (401 for all in proxy mode)
 //   requireAdmin             Express middleware: 403 unless req.user has the role admin
 //   socketMiddleware         io.use() handler setting socket.data.user the same way
@@ -20,7 +20,7 @@ const path = require('path');
 const express = require('express');
 const {hashPassword, verifyPassword} = require('./passwords');
 const {createUsersStore, LOGIN_PATTERN} = require('./users-store');
-const {readProxyKey, createProxyIdentity} = require('./proxy');
+const {readProxyKeys, createProxyIdentity} = require('./proxy');
 const {COOKIE_NAME, newSecret, signSession, verifySession, parseCookies, sessionCookie} = require('./cookie');
 
 const LOCAL_USER = Object.freeze({login: 'local', role: 'admin'});
@@ -36,17 +36,17 @@ function attemptedLogin(login) {
 }
 
 // `secret` signs the login cookies: a new one per server start (injected only by tests); `proxyKey` is
-// the shared key read from --proxy-key-file (also injected by tests).
+// the keys read from --proxy-key-file, one or two (also injected by tests).
 // userLog (server/audit.js createUserLog) receives login, login-failed, logout and proxy-refused events.
-function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {record() {}}, proxyKey}) {
+function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {record() {}}, proxyKeys}) {
   const mode = settings.authMode;
-  const usesProxy = mode === 'proxy' || mode === 'both';
-  const usesPassword = mode === 'password' || mode === 'both';
+  const usesProxy = mode === 'proxy';
+  const usesPassword = mode === 'password';
   const lifetimeMs = Math.round(settings.sessionHours * 3600 * 1000);
   const store = createUsersStore(settings.usersFile);
   // Unknown logins still cost one scrypt verification, like known ones.
   const dummyHash = hashPassword('qemuweb-unknown-user');
-  const proxy = usesProxy ? createProxyIdentity({key: proxyKey ?? readProxyKey(settings.proxyKeyFile), store, userLog, now}) : null;
+  const proxy = usesProxy ? createProxyIdentity({keys: proxyKeys ?? readProxyKeys(settings.proxyKeyFile), store, userLog, now}) : null;
 
   // A proxy identity has no login request: its first request, and the first one after as long a pause as the
   // cookie lifetime, is logged as a login (users.log), like a password login.
@@ -66,8 +66,8 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
       const found = proxy.resolve(headers);
       if (found.status === 'refused') return {refused: found.code};
       if (found.status === 'ok') { noteProxyLogin(found.user); return {user: found.user}; }
+      return {};
     }
-    if (!usesPassword) return {};
     const session = sessionFromCookies(headers.cookie);
     return session ? {user: session.user, session: session.payload} : {};
   }
@@ -120,8 +120,9 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
   }
 
   function requireUser(req, res, next) {
-    if (req.user || (mode !== 'proxy' && (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/auth/'))) || (mode === 'proxy' && req.path === '/auth/me')) return next();
-    if (mode === 'proxy') return res.status(401).json({error: 'Authentication required.'});
+    if (usesProxy && (req.path === '/login.html' || req.path === '/login.js')) return res.status(404).json({error: 'There is no login page with --auth proxy.'});
+    if (req.user || (usesPassword && (PUBLIC_PATHS.has(req.path) || req.path.startsWith('/auth/'))) || (usesProxy && req.path === '/auth/me')) return next();
+    if (usesProxy) return res.status(401).json({error: 'Authentication required.'});
     if (req.path.startsWith('/api/') || req.path === '/api' || !['GET', 'HEAD'].includes(req.method)) {
       return res.status(401).json({error: 'Authentication required.'});
     }
@@ -136,7 +137,7 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
   function register(app) {
     const json = express.json({limit: '16kb'});
     app.post('/auth/login', json, async (req, res) => {
-      if (!usesPassword) return res.status(404).json({error: 'Password login is not enabled (--auth proxy).'});
+      if (!usesPassword) return res.status(404).json({error: 'There is no password login with --auth proxy: sign in through the authenticating front end.'});
       try {
         const {login, password} = req.body || {};
         const user = await authenticate(login, password);
@@ -145,7 +146,7 @@ function createAuth({settings, now = Date.now, secret = newSecret(), userLog = {
           return res.status(401).json({error: 'Invalid login or password.'});
         }
         userLog.record(user.login, 'login', {via: 'password'});
-        if (mode === 'password') setSessionCookie(req, res, user.login);
+        setSessionCookie(req, res, user.login);
         res.set('Cache-Control', 'no-store');
         res.json({login: user.login, role: user.role});
       } catch (error) {

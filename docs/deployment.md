@@ -438,7 +438,7 @@ them. The browser's Network tab shows a `101 Switching Protocols` for
 
 ## Other single sign-on systems
 
-`--auth proxy` (or `both`) is not tied to OpenID: the front end does the login, and QemuWeb only reads `X-Remote-User`,
+`--auth proxy` is not tied to OpenID: the front end does the login, and QemuWeb only reads `X-Remote-User`,
 guarded by `X-Proxy-Key` (see `deploy/cremi/deploy-cremi.md` for the Apache and OpenID example). QemuWeb needs no change
 for another system; only `--logout-url` differs: the logout address of the front end.
 
@@ -450,7 +450,9 @@ for another system; only `--logout-url` differs: the logout address of the front
 | OpenID, OAuth2 and similar | `oauth2-proxy` with nginx | `/oauth2/sign_out` |
 
 The front end must remove any `X-Remote-User` sent by a browser and add `X-Proxy-Key` to every request it forwards,
-WebSocket upgrades included.
+WebSocket upgrades included. It must also answer an API call (`/api/`), a Socket.IO connection (`/socket.io/`) and `/auth/` without a session with a plain `401`,
+not with a redirection to its login (with `mod_auth_openidc`: `OIDCUnAuthAction 401` in those `<Location>`s, see `deploy/cremi/qemuweb-3-app.conf`): the page then reloads once
+and a page request goes to the login of the front end. The key file may hold two keys (one per line) so that the key can change without an interruption.
 
 ## Known limits
 

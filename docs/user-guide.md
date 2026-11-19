@@ -20,21 +20,22 @@ switches**. Both skip a node whose start, stop or reboot is in progress.
 
 ### How to log in
 
-By default (`--auth password`) a user logs in with a login and a password of `users.json`. At the CREMI, QemuWeb runs
-with `--auth both` behind Apache and the OpenID of the CREMI, and there are two ways in to the same server and the same
-sessions (one session per login, whatever the way in):
+Two modes exist. By default (`--auth password`) a user logs in with a login and a password of `users.json`; this is the mode
+of local tests, of an ad hoc server and of the emergency procedure. At the CREMI, QemuWeb runs with `--auth proxy` behind
+Apache and the OpenID of the CREMI: the front end does the login and there is **no password login at all** (no login page,
+`/auth/login` answers 404). One session per login, whatever the mode.
 
-- **Students: through Apache and OpenID** (`https://qemuweb.emi.u-bordeaux.fr/`). The user logs in once, at the CREMI;
-  QemuWeb then trusts the identity that Apache gives (`X-Remote-User`) and never shows its own login page. The header shows the
+- **Users and administrators: through Apache and OpenID** (`https://qemuweb.emi.u-bordeaux.fr/`). The user logs in once, at the CREMI;
+  QemuWeb then trusts the identity that Apache gives (`X-Remote-User`). The header shows the
   login (and the display name when the front end gives one); **Log out** goes to the OpenID logout (`--logout-url`; no button
-  without it). A login that is not in `users.json` is a **student**: nothing has to be created for a student. It is
-  trusted only on a request that carries the key shared with Apache (`X-Proxy-Key`, `--proxy-key-file`); a header sent
-  without the key is ignored, whatever its address, and a wrong key is refused (403, written to `users.log`).
-- **Administrators: the same way, and also by an SSH tunnel.** An administrator is an account of `users.json` with the role
-  `admin`: through OpenID their CREMI login is recognised as administrator (add it with
-  `scripts/user.sh add LOGIN --role admin --no-password`). For the administration of the server itself, an SSH
-  tunnel to `127.0.0.1:3002` (or a local browser) reaches QemuWeb without the key: the QemuWeb login page, and the password
-  of an account that has one (`scripts/user.sh add admin --role admin`) apply.
+  without it). A login that is not in `users.json` is a **student**: nothing has to be created for a student. An administrator is
+  an account of `users.json` with the role `admin` (add it with `scripts/user.sh add LOGIN --role admin --no-password`). The identity is
+  trusted only on a request that carries a key shared with Apache (`X-Proxy-Key`, `--proxy-key-file`); a request without the
+  key has no identity (401), a header sent without the key is ignored, whatever its address, and a wrong key is refused (403, written to `users.log`).
+- **The SSH tunnel to port 3002 gives 401 in `proxy` mode**, by design: it carries no key. If OpenID is down, restart the server
+  in `password` mode (see "Emergency: password mode" in `deploy/cremi/deploy-cremi.md`) and log in with a password account.
+- **An expired OpenID session.** When the session of the front end expires while the page is open, its API calls answer 401: the page
+  reloads once, and Apache then sends the user to the CREMI login. A second 401 within 30 seconds is not followed by another reload: the usual error is shown.
 
 Logging out of the front end (here OpenID) does not delete the QemuWeb session: the machines keep running, and the next
 login finds the same session (**Delete session** is the only way to remove it, apart from an admin).
@@ -166,8 +167,8 @@ browser's cookie (and, behind OpenID, ends the OpenID session); see [docs/deploy
 | `--users FILE` | `users.json` | Users file. |
 | `--session-hours N` | `12` | Login lifetime, renewed while the user is active. |
 | `--trust-proxy VALUE` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
-| `--auth MODE` | `password` | `password`, `proxy` (the identity is given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through `X-Remote-User`, trusted only with the shared `X-Proxy-Key`) or `both`. |
-| `--proxy-key-file FILE` | unset | The shared key, one line, mode 0600; required by `proxy` and `both`. |
+| `--auth MODE` | `password` | `password`, `proxy` (the identity is given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through `X-Remote-User`, trusted only with a shared `X-Proxy-Key`; no password login then). |
+| `--proxy-key-file FILE` | unset | The key shared with the front end, mode 0600: one line, or two lines during a rotation (either is accepted); required by `proxy`. |
 | `--logout-url URL` | unset | Where **Log out** goes for an identity from the authenticating front end. |
 | `--no-auth` | authentication on | Disables authentication: one shared local session, for single-user local work only. |
 | `--logs DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions, and `users.log`, the user events (JSON lines, mode 0600). |
