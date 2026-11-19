@@ -1,6 +1,6 @@
 [Unit]
 Description=QemuWeb runner (local, runs the machines of this server)
-After=qemuweb.service
+After=qemuweb-server.service
 
 [Service]
 User=qemuweb

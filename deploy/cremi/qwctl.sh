@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Start, stop, restart or inspect the two QemuWeb services of the CREMI server: the server (qemuweb) and the
+# Start, stop, restart or inspect the two QemuWeb services of the CREMI server: the server (qemuweb-server) and the
 # local runner (qemuweb-runner). Run it as the qemuweb account (it uses sudo for systemctl).
 #   ./deploy/cremi/qwctl.sh status [server|runner|all]
 #   ./deploy/cremi/qwctl.sh start|stop|restart [server|runner|all]   (default: all)
@@ -8,7 +8,7 @@
 # stops every machine of the local runner: the script asks first (-y answers yes).
 set -euo pipefail
 
-SERVER=qemuweb
+SERVER=qemuweb-server
 RUNNER=qemuweb-runner
 
 usage() {

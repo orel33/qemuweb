@@ -10,7 +10,7 @@ Debian 13 (trixie), Apache2 and OpenID, on `v0-qemuweb`. The files to copy are i
 | `qemuweb-oidc.inc.example` | model of the OpenID secrets file (kept on the server only) |
 | `qemuweb-proxykey.inc.example` | model of the file with the key shared by Apache and QemuWeb (kept on the server only) |
 | `maintenance.html`, `whoami.html`, `goodbye.html` | static pages: maintenance and error page, OpenID attributes of the user, logout |
-| `qemuweb.service`, `qemuweb-runner.service` | systemd units: server, local runner |
+| `qemuweb-server.service`, `qemuweb-runner.service` | systemd units: server, local runner |
 | `qwctl.sh` | one command to start, stop, restart and inspect the two services (`status`, `restart`, `logs`) |
 
 **Network.** `qemuweb.emi.u-bordeaux.fr` is an alias of the CREMI https relay (`httpsproxy`, 10.252.0.222), which forwards
@@ -178,10 +178,10 @@ $U add "$LOGIN" --role admin --no-password
 $U list
 
 # 12. service (QemuWeb on 127.0.0.1:3002; port 3002 is never opened in the firewall)
-sudo install -m 0644 deploy/cremi/qemuweb.service /etc/systemd/system/qemuweb.service
+sudo install -m 0644 deploy/cremi/qemuweb-server.service /etc/systemd/system/qemuweb-server.service
 sudo systemctl daemon-reload
-sudo systemctl enable --now qemuweb
-sudo journalctl -u qemuweb --since "2 min ago" --no-pager | tail -n 25    # "QemuWeb is ready." "No runner connected."
+sudo systemctl enable --now qemuweb-server
+sudo journalctl -u qemuweb-server --since "2 min ago" --no-pager | tail -n 25    # "QemuWeb is ready." "No runner connected."
 
 # 13. the proxy modules and the site of stage 3 (the maintenance page is already in place)
 sudo a2enmod proxy proxy_http proxy_wstunnel      # reverse proxy, WebSocket (Apache 2.4.47 or later: upgrade=websocket)
@@ -201,11 +201,11 @@ Notes:
 - Apache proxies to `127.0.0.1:3002` with WebSocket (`upgrade=websocket`) and a one-hour timeout, sends
   `X-Forwarded-Proto: https` (so the login cookie is `Secure`, with `--trust-proxy loopback`), accepts bodies up to 1 GiB
   (session ZIP archives) and shows `maintenance.html` on 502 and 503.
-- `qemuweb.service` runs `--auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
+- `qemuweb-server.service` runs `--auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
   goes to the OpenID logout, which ends at `/goodbye`. After a change of an account, no restart is needed.
 - To disable a student, add the login with `$U add "$LOGIN" --no-password` then `$U disable "$LOGIN"`: a disabled login is
   refused through OpenID too.
-- To change the key: repeat step 10, then `sudo systemctl restart qemuweb` and `sudo systemctl reload apache2`.
+- To change the key: repeat step 10, then `sudo systemctl restart qemuweb-server` and `sudo systemctl reload apache2`.
 - `/runner/connect` and `/api/runner/register` are outside OpenID (`AuthType None`): a runner has no browser and uses its
   token. The local runner dials the Unix socket of the server, not Apache.
 - If the consoles freeze, or `/runner/connect` fails only through the public name: the relay must pass WebSocket
@@ -226,9 +226,9 @@ $U add "$LOGIN" --role admin --no-password
 $U list
 sudo install -m 0644 deploy/cremi/qemuweb-3-app.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest && sudo systemctl reload apache2
-sudo install -m 0644 deploy/cremi/qemuweb.service /etc/systemd/system/qemuweb.service
-sudo systemctl daemon-reload && sudo systemctl restart qemuweb
-sleep 3 && sudo journalctl -u qemuweb --since "1 min ago" --no-pager | tail -n 8
+sudo install -m 0644 deploy/cremi/qemuweb-server.service /etc/systemd/system/qemuweb-server.service
+sudo systemctl daemon-reload && sudo systemctl restart qemuweb-server
+sleep 3 && sudo journalctl -u qemuweb-server --since "1 min ago" --no-pager | tail -n 8
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me        # 401: no identity without the key
 curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin' -H 'X-Proxy-Key: wrong' http://127.0.0.1:3002/auth/me   # 403
 ```
@@ -242,15 +242,15 @@ If OpenID is down, or to test with the tunnel, restart QemuWeb with its own logi
 
 ```sh
 # on the server, as qemuweb: a drop-in replaces the authentication options (nothing is edited in the repository)
-sudo systemctl edit qemuweb      # in the editor, write the three lines below, save, quit
+sudo systemctl edit qemuweb-server      # in the editor, write the three lines below, save, quit
 #   [Service]
 #   ExecStart=
 #   ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb --users /etc/qemuweb/users.json --runners /etc/qemuweb/runners.json --logs /var/log/qemuweb --session-hours 12 --runner-grace 300 --trust-proxy loopback --auth password
 cd /srv/qemuweb && ./scripts/user.sh --users /etc/qemuweb/users.json add admin --role admin    # asks a password
-sudo systemctl restart qemuweb
+sudo systemctl restart qemuweb-server
 # (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app   then http://127.0.0.1:3012, log in as admin
 # back to normal: remove the drop-in and restart
-sudo rm -r /etc/systemd/system/qemuweb.service.d && sudo systemctl daemon-reload && sudo systemctl restart qemuweb
+sudo rm -r /etc/systemd/system/qemuweb-server.service.d && sudo systemctl daemon-reload && sudo systemctl restart qemuweb-server
 ```
 
 Delete the `admin` account afterwards (`./scripts/user.sh --users /etc/qemuweb/users.json remove admin`).
@@ -295,7 +295,7 @@ sudo apache2ctl configtest && sudo systemctl reload apache2
 
 ### Update later
 
-`deploy/cremi/qwctl.sh` starts, stops, restarts and shows the two services (`qemuweb` and `qemuweb-runner`) in one command:
+`deploy/cremi/qwctl.sh` starts, stops, restarts and shows the two services (`qemuweb-server` and `qemuweb-runner`) in one command:
 `./deploy/cremi/qwctl.sh status`, `restart server` (keeps the machines), `restart runner` or `restart` (both: stops every
 machine, it asks first; `-y` skips the question), `logs [server|runner] [LINES]`. The plain commands are below.
 
@@ -308,7 +308,7 @@ Restarting only the server never applies a change of the runner code.
 ```sh
 # 15. a restart deletes the sessions of remote runners; the machines of the local runner survive
 #     (for a long update, put the maintenance site first: see "Maintenance mode")
-cd /srv/qemuweb && git pull && npm ci && sudo systemctl restart qemuweb
+cd /srv/qemuweb && git pull && npm ci && sudo systemctl restart qemuweb-server
 # after a change of a site file or of the secrets file
 sudo apache2ctl configtest && sudo systemctl reload apache2
 ```
@@ -356,7 +356,7 @@ sudo install -m 0644 deploy/cremi/qemuweb-runner.service /etc/systemd/system/qem
 sudo systemctl daemon-reload
 sudo systemctl enable --now qemuweb-runner
 sudo journalctl -u qemuweb-runner -n 30 --no-pager -o cat   # "Connected to the server."
-sudo journalctl -u qemuweb -n 10 --no-pager -o cat          # the server sees its runner
+sudo journalctl -u qemuweb-server -n 10 --no-pager -o cat          # the server sees its runner
 
 # 19. in a private window: https://qemuweb.emi.u-bordeaux.fr/ (CREMI login), "Load session ZIP" demo/lan.zip, start, open a console
 #     (without Apache: "Emergency: password mode" above, with the SSH tunnel)
@@ -473,9 +473,9 @@ curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type:
 # runner connection, same (without the WebSocket upgrade; 401 or 404, never 302)
 curl --noproxy '*' -s -o /dev/null -w '%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect
 # the maintenance page: QemuWeb stopped, a path without OpenID gives 503 and the page of maintenance.html
-sudo systemctl stop qemuweb
+sudo systemctl stop qemuweb-server
 curl --noproxy '*' -s -w '\n%{http_code}\n' --resolve v0-qemuweb.emi.u-bordeaux.fr:443:127.0.0.1 https://v0-qemuweb.emi.u-bordeaux.fr/runner/connect | grep -E 'under maintenance|^50'
-sudo systemctl start qemuweb
+sudo systemctl start qemuweb-server
 
 # from another machine inside the CREMI
 curl -s -o /dev/null -w '%{http_code}\n' https://v0-qemuweb.emi.u-bordeaux.fr/auth/me

@@ -143,7 +143,7 @@ root), here for an account `qemuweb` that also runs the server, assuming the
 repository in `/srv/qemuweb` and `qemuweb` in the `kvm` group:
 
 ```ini
-# /etc/systemd/system/qemuweb.service
+# /etc/systemd/system/qemuweb-server.service
 [Unit]
 Description=QemuWeb
 After=network.target
@@ -425,7 +425,7 @@ everything still works, only slower, so nobody notices. Three places tell:
   browser forced to WebSocket (namespace `/ws-test`, administrators only) and
   shows the round trip time, or the reason of the failure; after a failure it
   tries polling and says whether the interface runs in fallback mode;
-- the server output (stderr, so `journalctl -u qemuweb` shows it) gets one line
+- the server output (stderr, so `journalctl -u qemuweb-server` shows it) gets one line
   when a connection is still on polling 20 seconds after it connected, at most
   once per login every 10 minutes:
   `[sockets] alice: still on polling 20 s after connecting (no WebSocket upgrade: check that the reverse proxy forwards Upgrade and Connection)`.

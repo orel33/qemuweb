@@ -1,5 +1,5 @@
 [Unit]
-Description=QemuWeb
+Description=QemuWeb server
 After=network.target
 
 [Service]
