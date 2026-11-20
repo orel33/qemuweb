@@ -111,6 +111,10 @@ function resolveCommands(root) {
       }
     }
   }
+  // Informational: VirtualBox 7.1 and QEMU/KVM cannot hold VT-x/AMD-V at the same time.
+  if (commands.VBOXMANAGE && commands.QEMU_SYSTEM_X86_64) {
+    cli.skipped('VirtualBox and QEMU/KVM hosts cannot run at the same time on this machine: the runner refuses to start one while the other runs');
+  }
   cli.end();
   if (failures.length) throw new Error(`Startup aborted: unavailable commands: ${failures.join(', ')}`);
   if (!availableEngines(commands).length) throw new Error('Startup aborted: no virtualization engine is available; install QEMU (with KVM) or VirtualBox.');

@@ -39,8 +39,6 @@ function createQemu(ctx) {
   function qemuAcceleration(engine, checkAvailability = true) {
     if (engine !== 'qemu') throw new Error('Unknown QEMU acceleration mode.');
     if (!checkAvailability) return 'kvm';
-    const virtualBoxRunning = ctx.hostNodes().some(other => other.machine && other.engine === 'vbox');
-    if (virtualBoxRunning) throw new Error('QEMU/KVM cannot start while a VirtualBox host is running. Stop that host first.');
     try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); }
     catch (_) { throw new Error('QEMU/KVM is unavailable: /dev/kvm is missing or not accessible. Enable KVM or select VirtualBox if it is installed.'); }
     return 'kvm';
