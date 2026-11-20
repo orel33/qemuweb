@@ -11,7 +11,13 @@ function loadRules() {
   const source = fs.readFileSync(path.join(publicDir, 'admin-tabs-rules.js'), 'utf8').replace(/^export /gm, '');
   return vm.runInNewContext(`${source}\n({TABS, tabFromHash, tabForKey, badgeFor, tabLabel, panelsToRefresh})`);
 }
-const {TABS, tabFromHash, tabForKey, badgeFor, tabLabel, panelsToRefresh} = loadRules();
+// The vm context has its own Object and Array prototypes: bring every result into this realm so that strict comparisons work.
+const plain = value => (value === undefined ? undefined : JSON.parse(JSON.stringify(value)));
+const rules = loadRules();
+const TABS = plain(rules.TABS);
+const wrap = fn => (...args) => plain(fn(...args.map(plain)));
+const {tabFromHash, tabForKey, badgeFor, tabLabel, panelsToRefresh} = Object.fromEntries(
+  ['tabFromHash', 'tabForKey', 'badgeFor', 'tabLabel', 'panelsToRefresh'].map(name => [name, wrap(rules[name])]));
 
 test('the tabs are Sessions, Accounts, Runners, WebSocket, Logs, each with a panel id present in admin.html', () => {
   assert.deepEqual(TABS.map(tab => tab.label), ['Sessions', 'Accounts', 'Runners', 'WebSocket', 'Logs']);
