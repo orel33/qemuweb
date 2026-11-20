@@ -9,6 +9,7 @@ import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGener
 import {loadGraphicPositions, renderGraphic} from './graphic-view.js';
 import {refollow} from './observe.js';
 import {parseStartErrors, showStartFailure} from './start-failure.js';
+import {showEngineBadge} from './engine-badge.js';
 
 const confirmDialog = document.getElementById('confirm-dialog');
 const restartChoiceDialog = document.getElementById('restart-choice-dialog');
@@ -283,6 +284,7 @@ export function initNodes() {
     }).catch(error => ({error: error.message}))
   ]).then(([items, sessionSettings, existing, schemes]) => {
     generalSettings.engine = sessionSettings.engine;
+    showEngineBadge(sessionSettings.engine);
     for (const option of defaultEngineSelect.options) {
       option.disabled = !sessionSettings.availableEngines?.includes(option.value);
     }

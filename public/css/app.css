@@ -21,6 +21,8 @@ h1 a:active { transform: translateY(0); box-shadow: inset 0 0 0 1px #79a9d7; }
 h1 a:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { h1 a, h1 a img { transition: none; } h1 a:hover, h1 a:focus-visible, h1 a:hover img, h1 a:focus-visible img { transform: none; } }
 .beta-badge { align-self: flex-start; margin-top: 1px; color: #9dbbdf; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
+.engine-badge { margin-left: -2px; padding: 0 5px; color: #8aa6c4; font-weight: 600; letter-spacing: .04em; border: 1px solid #3c5068; border-radius: 4px; }
+@media (max-width: 520px) { .engine-badge { display: none; } }
 button, select { height: var(--control); padding: 0 11px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
 button { cursor: pointer; }
 .icon-button { display: inline-grid; place-items: center; flex: none; width: var(--control); height: var(--control); padding: 7px; border-color: #405166; background: #202c3a; transition: background .15s, border-color .15s, transform .15s; }

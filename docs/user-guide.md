@@ -189,7 +189,7 @@ interface shows **Authentication disabled**. It is never the default.
 ### Included LAN demo
 
 1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
-2. In the Web interface, choose an engine in **General Settings**, click
+2. In the Web interface, choose an engine in **General Settings** (a small `qemu` or `vbox` badge after BETA in the header shows the engine of the session), click
    **Load**, and under **Examples** click `lan.zip` (or choose
    [`examples/lan.zip`](../examples/lan.zip) with the file picker).
 3. Start the hosts and the switch. Their startup scripts assign `192.168.0.x`
