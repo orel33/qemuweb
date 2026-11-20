@@ -70,5 +70,5 @@ PDF versions are in [docs/pdf/](docs/pdf/).
 
 ## Status
 
-Version 0.9.3, beta. Until the hardening milestone (quotas, command restrictions, runner jail), give accounts
+Version 0.9.4, beta. Until the hardening milestone (quotas, command restrictions, runner jail), give accounts
 only to **trusted users**: any user can run any single-line QEMU monitor command on their own hosts.
