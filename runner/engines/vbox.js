@@ -65,8 +65,16 @@ function createVirtualBox(ctx) {
     return args;
   }
 
+  // The command that puts the startup ISO in the DVD drive (port 1 of 'Guest setup'), or empties the drive. With
+  // --type dvddrive it also creates the drive when the slot has none; it never uses `--medium none` (a detach, which
+  // fails with "No storage device attached to device slot 0 on port 1" when there is no drive).
+  function guestMediumCommand(node) {
+    return ['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive',
+      '--medium', node.guestIsoAttached && node.guestIso ? node.guestIso : 'emptydrive'];
+  }
+
   // existingDisk: the host already has its disk.vdi (loaded from an archive): attach it instead of
-  // creating the differencing disk; the VM is not started and no startup CD-ROM is attached (the start path does it).
+  // creating the differencing disk; the VM is not started.
   function virtualBoxCommands(node, image, {existingDisk = false} = {}) {
     const vmDir = tempFile(node, 'vbox-vm');
     const disk = tempFile(node, 'disk.vdi');
@@ -77,7 +85,9 @@ function createVirtualBox(ctx) {
       ['storagectl', node.vmName, '--name', 'SATA', '--add', image.virtualbox.diskBus, '--controller', image.virtualbox.diskController],
       ['storageattach', node.vmName, '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', disk],
       ['storagectl', node.vmName, '--name', 'Guest setup', '--add', image.virtualbox.cdromBus, '--controller', image.virtualbox.cdromController],
-      ...(node.guestIsoAttached && !existingDisk ? [['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', node.guestIso]] : []),
+      // The DVD drive always exists (empty when there is no startup ISO), so that a later start can change or
+      // empty its medium: VirtualBox cannot detach or replace the medium of a slot that has no drive.
+      guestMediumCommand(node),
       ['modifyvm', node.vmName, '--boot1', 'disk', '--boot2', 'dvd', '--boot3', 'none', '--boot4', 'none'],
       ['startvm', node.vmName, '--type', 'headless']
     ];
@@ -102,8 +112,9 @@ function createVirtualBox(ctx) {
   // after the attach); the registry is then CHECKED for the parent UUID of the saved disk.
   // The disk file stays untouched on failure (Reset discards it). Only files of the node's own
   // directory are written, no medium is deleted by VirtualBox and the base image is never modified.
+  // Returns true when it created the machine (its DVD drive already holds the right medium), false when it existed.
   function ensureVirtualBoxMachine(node, image) {
-    if (virtualBoxMachineExists(node)) return;
+    if (virtualBoxMachineExists(node)) return false;
     const disk = tempFile(node, 'disk.vdi');
     const base = imagePath(image.images.vdi);
     const probe = tempFile(node, 'parent-probe.vdi');
@@ -128,6 +139,7 @@ function createVirtualBox(ctx) {
       }
       for (const args of virtualBoxCommands(node, image, {existingDisk: true})) vbox(node, args);
       dropProbe();
+      return true;
     } catch (error) {
       dropProbe();
       vboxIgnoringFailure(node, ['unregistervm', node.vmName]);
@@ -168,7 +180,7 @@ function createVirtualBox(ctx) {
     throw new Error('The host did not respond to the graceful shutdown request.');
   }
 
-  return {vbox, removeVirtualBoxMachine, ensureVirtualBoxMachine, virtualBoxMachineExists, virtualBoxNetworkArgs, virtualBoxCommands, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff};
+  return {vbox, removeVirtualBoxMachine, ensureVirtualBoxMachine, virtualBoxMachineExists, virtualBoxNetworkArgs, virtualBoxCommands, guestMediumCommand, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff};
 }
 
 module.exports = {createVirtualBox};

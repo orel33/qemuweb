@@ -506,8 +506,8 @@ The VM name is `qemuweb-<pid>-<session>-<node>`; `controlvm`, `showvminfo`,
 | `boot: disk` | `modifyvm --boot1 disk --boot2 dvd --boot3 none --boot4 none` |
 | `image` (VDI) | `createmedium disk --filename <disk.vdi> --diffparent <image> --format VDI` |
 | `diskInterface: sata` | `storagectl --name SATA --add sata --controller IntelAhci`, then `storageattach --port 0 --device 0 --type hdd` |
-| `cdromInterface: ide` | `storagectl --name 'Guest setup' --add ide --controller PIIX4` |
-| `startupDiskEnabled: true` | `genisoimage` as for QEMU, then `storageattach --storagectl 'Guest setup' --port 1 --device 0 --type dvddrive --medium <iso>` |
+| `cdromInterface: ide` | `storagectl --name 'Guest setup' --add ide --controller PIIX4`, then ALWAYS `storageattach --storagectl 'Guest setup' --port 1 --device 0 --type dvddrive --medium emptydrive` (or the ISO, see below): the DVD drive exists from the creation of the machine |
+| `startupDiskEnabled: true` | `genisoimage` as for QEMU, then the DVD drive holds the ISO: `storageattach --storagectl 'Guest setup' --port 1 --device 0 --type dvddrive --medium <iso>`; at every later start the same command puts the new ISO, or `--medium emptydrive` when the startup disk is off. `--medium none` (a detach) is never used: VirtualBox refuses it on a slot with no drive ("No storage device attached to device slot 0 on port 1 of controller 'Guest setup'") |
 | `networkModel` | `--nictype<N> virtio` or `82540EM` (for `e1000`) |
 | interface N, connected | `--nic<N> generic --nicgenericdrv<N> VDE --nicproperty<N> network=<vde>[<port>] --macaddress<N> <MAC, uppercase, no colons> --cableconnected<N> on` |
 | interface N, disconnected | `--nic<N> null` with the same `--macaddress`, `--cableconnected` |
@@ -527,7 +527,7 @@ parent UUID of the saved disk must be the UUID of the base `.vdi`, else "the sav
 another build of the base image"), runs `internalcommands sethduuid` on the saved file inside the node
 directory, registers the base the way the first start does (a differencing probe `parent-probe.vdi`
 in the node directory, `createmedium --diffparent`), CHECKS with `list hdds` that the base UUID is
-registered, then `createvm`/`modifyvm`/`storagectl`/`storageattach` as above (no `createmedium` of the
+registered, then `createvm`/`modifyvm`/`storagectl`/`storageattach` (hard disk and DVD drive) as above (no `createmedium` of the
 disk), and closes and removes the probe. On a failure the probe and the machine go and the saved file
 stays untouched (Reset starts over). No QEMU monitor exists (`mon.sock`).
 

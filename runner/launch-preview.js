@@ -13,7 +13,7 @@ function createLaunchPreview(ctx) {
   const {sessionPaths, getNode, tempFile} = ctx.runtime;
   const {validateNetworkInterfaces, assignNetworkInterfaces} = ctx.nics;
   const {qemuArgs, qemuAcceleration} = ctx.qemu;
-  const {virtualBoxNetworkArgs, virtualBoxCommands} = ctx.vbox;
+  const {virtualBoxNetworkArgs, virtualBoxCommands, guestMediumCommand} = ctx.vbox;
   const {qemuOverlayArgs} = ctx.disks;
 
   function previewLaunch(id, query) {
@@ -71,16 +71,11 @@ function createLaunchPreview(ctx) {
     const isoCommands = attachGuestCdrom
       ? [[ctx.commands.GENISOIMAGE, '-quiet', '-R', '-J', '-V', GUEST_ISO_LABEL, '-o', nextGuestIso, tempFile(node, '.iso-stage')]]
       : [];
-    const vboxDetachCommand = launched && !isQemu && node.activeGuestIso
-      ? [[ctx.commands.VBOXMANAGE, 'storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']]
-      : [];
-    const vboxAttachCommand = launched && !isQemu && attachGuestCdrom
-      ? [[ctx.commands.VBOXMANAGE, 'storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', previewNode.guestIso]]
-      : [];
+    const vboxMediumCommand = launched && !isQemu ? [[ctx.commands.VBOXMANAGE, ...guestMediumCommand(previewNode)]] : [];
     const launchCommands = isQemu
       ? [...(launched ? [] : [[ctx.commands.QEMU_IMG, ...qemuOverlayArgs(image, overlay)]]), [ctx.commands.QEMU_SYSTEM_X86_64, ...qemuArgs(previewNode, image, overlay)]]
       : launched
-        ? [...vboxDetachCommand, [ctx.commands.VBOXMANAGE, 'modifyvm', node.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewNode, image)], ...vboxAttachCommand, [ctx.commands.VBOXMANAGE, 'startvm', node.vmName, '--type', 'headless']]
+        ? [[ctx.commands.VBOXMANAGE, 'modifyvm', node.vmName, '--memory', String(userSettings.memory), '--cpus', String(userSettings.cpus), '--rtcuseutc', userSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(previewNode, image)], ...vboxMediumCommand, [ctx.commands.VBOXMANAGE, 'startvm', node.vmName, '--type', 'headless']]
         : virtualBoxCommands(previewNode, image).map(args => [ctx.commands.VBOXMANAGE, ...args]);
     const socketLabel = filePath => path.join('runtime', path.relative(ctx.runtimeRoot, filePath));
     const storage = isQemu
