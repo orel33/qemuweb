@@ -12,7 +12,7 @@ const os = require('node:os');
 const path = require('node:path');
 const {createVirtualBox} = require('../../runner/engines/vbox');
 const {explainVirtualBoxFailure} = require('../../runner/engines/vbox-errors');
-const {kvmExclusionError} = require('../../runner/engines/kvm-exclusion');
+const {kvmExclusion, BUSY} = require('../../runner/engines/kvm-exclusion');
 
 const PARENT = '/images/alpine.vdi';
 const FAKE = `#!${process.execPath}
@@ -171,15 +171,55 @@ test('a VM that VirtualBox cannot find does not stop the removal of the disk and
   assert.ok(!fs.existsSync(disk));
 });
 
-test('KVM exclusion: VirtualBox and QEMU/KVM hosts of the whole runner refuse each other, naming the hosts', () => {
-  const host = (hostname, engine, acceleration, running) => ({kind: 'host', id: hostname, hostname, engine, qemuAcceleration: acceleration, machine: running ? {} : null});
+const host = (hostname, engine, acceleration, running) => ({kind: 'host', id: `id-${hostname}`, hostname, engine, qemuAcceleration: acceleration, machine: running ? {} : null});
+
+test('KVM exclusion: a VirtualBox start names the QEMU/KVM hosts of the same session only', () => {
   const self = host('me', 'vbox', null, false);
-  const nodes = [self, host('syl', 'qemu', 'kvm', true), host('ren', 'qemu', 'kvm', true), host('idle', 'qemu', 'kvm', false), host('tcg', 'qemu', 'tcg', true), {kind: 'switch', machine: {}}];
-  assert.equal(kvmExclusionError(nodes, self, 'vbox', null), 'A VirtualBox host cannot start while QEMU hosts use KVM on this runner: stop syl, ren first.');
-  assert.equal(kvmExclusionError(nodes.filter(item => item.hostname !== 'syl' && item.hostname !== 'ren'), self, 'vbox', null), null, 'TCG and stopped hosts do not conflict');
+  const own = [self, host('syl', 'qemu', 'kvm', true), host('ren', 'qemu', 'kvm', true), host('idle', 'qemu', 'kvm', false), host('tcg', 'qemu', 'tcg', true), {kind: 'switch', machine: {}}];
+  assert.equal(kvmExclusion(own, own, self, 'vbox', null).message, 'VirtualBox cannot start while your QEMU hosts use KVM: stop syl, ren first.');
+  assert.equal(kvmExclusion(own.filter(item => !['syl', 'ren'].includes(item.hostname)), own, self, 'vbox', null), null, 'TCG and stopped hosts do not conflict');
+  assert.equal(kvmExclusion([self, host('vb', 'vbox', null, true)], [self], self, 'vbox', null), null, 'two VirtualBox hosts coexist');
+});
+
+test('KVM exclusion: the QEMU/KVM start names the VirtualBox hosts of the same session only', () => {
   const qemu = host('q', 'qemu', 'kvm', false);
-  const withVbox = [qemu, host('vb', 'vbox', null, true)];
-  assert.equal(kvmExclusionError(withVbox, qemu, 'qemu', 'kvm'), 'A QEMU/KVM host cannot start while VirtualBox hosts run on this runner: stop vb first.');
-  assert.equal(kvmExclusionError(withVbox, qemu, 'qemu', 'tcg'), null, 'TCG does not use VT-x');
-  assert.equal(kvmExclusionError([self, host('vb', 'vbox', null, true)], self, 'vbox', null), null, 'two VirtualBox hosts coexist');
+  const vb = host('vb', 'vbox', null, true);
+  const mine = [qemu, vb];
+  assert.equal(kvmExclusion(mine, mine, qemu, 'qemu', 'kvm').message, 'A QEMU/KVM host cannot start while your VirtualBox hosts are running: stop vb first.');
+  assert.equal(kvmExclusion(mine, mine, qemu, 'qemu', 'tcg'), null, 'TCG does not use VT-x');
+});
+
+test('KVM exclusion: hosts of another session are never named, whatever their number', () => {
+  const self = host('me', 'vbox', null, false);
+  const ownRunning = host('mine', 'qemu', 'kvm', true);
+  const secret = host('secret-host', 'qemu', 'kvm', true);
+  const others = [secret, host('other-2', 'qemu', 'kvm', true), host('other-3', 'qemu', 'kvm', true)];
+  const leak = text => /secret|other-|id-secret|session|user/i.test(text);
+  // Another session only: one fixed sentence, identical for one host or three.
+  const one = kvmExclusion([self, secret], [self], self, 'vbox', null);
+  const three = kvmExclusion([self, ...others], [self], self, 'vbox', null);
+  assert.equal(one.message, BUSY);
+  assert.equal(three.message, one.message);
+  assert.ok(!leak(one.message));
+  // Both: only the own host is named, then the same "try again later", identical for one or three foreign hosts.
+  const both = kvmExclusion([self, ownRunning, secret], [self, ownRunning], self, 'vbox', null);
+  const bothMany = kvmExclusion([self, ownRunning, ...others], [self, ownRunning], self, 'vbox', null);
+  assert.equal(both.message, 'VirtualBox cannot start while your QEMU hosts use KVM: stop mine first, or try again later.');
+  assert.equal(bothMany.message, both.message);
+  assert.ok(!leak(both.message));
+  // The reverse direction.
+  const qemu = host('q', 'qemu', 'kvm', false);
+  const foreignVbox = host('secret-host', 'vbox', null, true);
+  assert.equal(kvmExclusion([qemu, foreignVbox], [qemu], qemu, 'qemu', 'kvm').message, BUSY);
+  // Only the administrator's diagnostics carry the names.
+  assert.match(both.diagnostics, /secret-host/);
+});
+
+test('the refusal reaches the host Log and the error without any foreign name; the details go to the runner journal', () => {
+  const lifecycleSource = fs.readFileSync(path.join(__dirname, '..', '..', 'runner', 'node-lifecycle.js'), 'utf8');
+  const refuse = lifecycleSource.slice(lifecycleSource.indexOf('function refuseKvmConflict'), lifecycleSource.indexOf('function start('));
+  assert.match(refuse, /console\.error\(`\[runner\] admin diagnostics: \$\{conflict\.diagnostics\}`\)/);
+  assert.match(refuse, /appendLog\(node, `# \$\{conflict\.message\}`\)/);
+  assert.match(refuse, /throw new Error\(conflict\.message\)/);
+  assert.ok(!/diagnostics/.test(refuse.replace(/console\.error[^\n]*\n/, '')), 'diagnostics only go to console.error');
 });

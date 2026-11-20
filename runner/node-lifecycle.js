@@ -8,7 +8,7 @@ const {consoleId} = require('../common/console-id');
 const {readStartupFiles} = require('./media/guest-media');
 const {waitForChildExit} = require('./engines/child-exit');
 const {memoryWarning} = require('./config-warnings');
-const {kvmExclusionError} = require('./engines/kvm-exclusion');
+const {kvmExclusion} = require('./engines/kvm-exclusion');
 
 function createLifecycle(ctx) {
   const {requireSessionEngine, imageById, allocateName, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath} = ctx.catalog;
@@ -22,6 +22,16 @@ function createLifecycle(ctx) {
   const {sendMonitorCommand} = ctx.monitor;
   const {vbox, removeVirtualBoxMachine, virtualBoxNetworkArgs, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff} = ctx.vbox;
 
+  // Refuses a start that would share VT-x with a running host of the other engine. The user reads
+  // a sentence that names only hosts of their own session; the details go to the runner's journal.
+  function refuseKvmConflict(node, engine, acceleration) {
+    const conflict = kvmExclusion(ctx.hostNodes(), ctx.session.nodes.values(), node, engine, acceleration);
+    if (!conflict) return;
+    console.error(`[runner] admin diagnostics: ${conflict.diagnostics}`);
+    appendLog(node, `# ${conflict.message}`);
+    throw new Error(conflict.message);
+  }
+
   function start(nodeId, selectedEngine, imageId, options = {}) {
     const node = getNode(nodeId);
     if (!node) throw new Error('Unknown host configuration.');
@@ -34,11 +44,7 @@ function createLifecycle(ctx) {
     if (!['qemu', 'vbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
     requireSessionEngine(selectedEngine);
     const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
-    const conflict = kvmExclusionError(ctx.hostNodes(), node, selectedEngine, acceleration);
-    if (conflict) {
-      appendLog(node, `# ${conflict}`);
-      throw new Error(conflict);
-    }
+    refuseKvmConflict(node, selectedEngine, acceleration);
     const image = resume ? node.selectedImage : imageById(imageId);
     if (!image) throw new Error('Unknown system in config.json.');
     if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
@@ -111,8 +117,7 @@ function createLifecycle(ctx) {
   function validateRestartPrerequisites(node) {
     requireSessionEngine(node.engine);
     if (node.engine.startsWith('qemu')) qemuAcceleration(node.engine);
-    const conflict = kvmExclusionError(ctx.hostNodes(), node, node.engine, node.engine.startsWith('qemu') ? 'kvm' : null);
-    if (conflict) throw new Error(conflict);
+    refuseKvmConflict(node, node.engine, node.engine.startsWith('qemu') ? 'kvm' : null);
     const image = node.selectedImage;
     if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
     if (node.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);

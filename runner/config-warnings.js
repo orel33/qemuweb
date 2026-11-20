@@ -49,7 +49,7 @@ function memoryWarning({runningMb, hostMb, totalBytes}) {
   const reservedMb = runningMb + hostMb;
   const totalMb = Math.round(totalBytes / 1024 / 1024);
   if (reservedMb <= totalMb * MEMORY_WARNING_RATIO) return null;
-  return `hosts of this runner reserve ${reservedMb} MB of the ${totalMb} MB of this machine; it may swap or an emulator may be killed.`;
+  return `this host asks for ${hostMb} MB and the memory of this machine is almost all reserved by running hosts; it may swap or an emulator may be killed.`;
 }
 
 module.exports = {configWarnings, memoryWarning};

@@ -199,6 +199,11 @@
     <p id="confirm-message"></p>
     <form method="dialog" class="confirm-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-accept" value="confirm">Continue</button></form>
   </dialog>
+  <dialog class="confirm-dialog" id="start-failure-dialog" aria-labelledby="start-failure-title" aria-describedby="start-failure-message">
+    <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><h2 id="start-failure-title">Cannot start host</h2></div>
+    <p id="start-failure-message" role="alert"></p>
+    <form method="dialog" class="confirm-actions"><button value="ok" autofocus>OK</button></form>
+  </dialog>
   <dialog class="confirm-dialog" id="restart-choice-dialog" aria-labelledby="restart-choice-title" aria-describedby="restart-choice-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><h2 id="restart-choice-title">Restart required</h2></div>
     <p id="restart-choice-message"></p>
