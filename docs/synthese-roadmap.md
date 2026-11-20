@@ -11,6 +11,21 @@ De la version 0.9.4 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 
 **Difficulté** (ordre de grandeur de l'effort, hors décisions et tests manuels) : **1** quelques heures · **2** une journée · **3** quelques jours · **4** une à deux semaines, conception délicate · **5** chantier avec étude préalable et risques externes (privilèges, licences, performances).
 
+## Jalons déjà atteints
+
+| Version | Ce qui est livré |
+| --- | --- |
+| 0.9.0-beta.1 à beta.4 | Nommage des sessions et des nœuds, découpage du code en modules, comptes multi-utilisateurs, rôle administrateur |
+| 0.9.0-beta.4.1 à beta.5.1 | Runner local en processus séparé, runners distants (jeton d'enregistrement, WebSocket authentifié, placement, délai de grâce, administration) |
+| 0.9.0-beta.5.2 et 5.3 | Documentation en PDF, vue graphique reconstruite, documentation découpée dans `docs/` |
+| 0.9.0-beta.5.4 | Déploiement au CREMI : Apache et OpenID, mode `--auth proxy`, comptes sans mot de passe, panneau des connexions et test WebSocket |
+| **0.9.0** | Formats de fichiers stabilisés (`schemaVersion` 1), archives d'exemple réécrites, session sauvegardée en `qemuweb-session.zip` ; runner distant validé au CREMI (enregistrement, placement, coupure réseau, révocation) |
+| **0.9.1** | Authentification réduite à `password` et `proxy` (expiration de la session OpenID, deux clés pour une rotation) ; **capture de trafic** : fichier PCAP d'une interface (`filter-dump` de QEMU), bouton et fenêtre Capture, vue `tcpdump` en direct, droits et journal d'audit |
+| **0.9.2** | **Un seul menu Load et un seul Save** (topologie ou session), exemples du serveur (`examples/`), `tcpdump` vérifié au démarrage |
+| **0.9.3** | Page d'administration en onglets ; **moteur VirtualBox réparé** (messages clairs, exclusion de KVM par runner) ; sélecteur **Engine** dans l'en-tête, réglages et disques de travail par moteur (`host.json` format 2) |
+| **0.9.4** | Console ttyS1 : indice quand elle est vide et vérification dans `prepare.sh --list` ; images Alpine et OpenWrt construites **derrière le proxy du CREMI** ; `prepare.sh --hash` signale les images manquantes |
+| *fusionné, non publié* | Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>` : fin de l'erreur « Runtime socket path is too long » (TOD02) |
+
 ## Décisions attendues
 
 | # | Décision | Pour quand |
