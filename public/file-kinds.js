@@ -8,14 +8,15 @@ export function kindOfFileName(name) {
 }
 
 // The text of a file whose bytes do not match the kind its name announces, or '' when they do. A
-// ZIP starts with PK\x03\x04; a topology is UTF-8 text without NUL bytes. `bytes` is the start of the
+// ZIP starts with PK\x03\x04; a topology is UTF-8 text without control characters (so without NUL bytes). `bytes` is the start of the
 // file for a session, the whole file for a topology.
 export function contentProblem(kind, bytes) {
   if (kind === 'session') {
     return bytes.length >= 4 && bytes[0] === 0x50 && bytes[1] === 0x4b && bytes[2] === 3 && bytes[3] === 4
       ? '' : 'This file is not a ZIP archive: it does not start with a ZIP header.';
   }
-  if (bytes.includes(0)) return 'This file is not a topology: it is binary, not text.';
+  // Text has no control character but tab, line feed and carriage return (NUL and the bytes of a ZIP header are binary).
+  if (bytes.some(byte => (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) || byte === 0x7f)) return 'This file is not a topology: it is binary, not text.';
   try { new TextDecoder('utf-8', {fatal: true}).decode(bytes); } catch (_) { return 'This file is not a topology: it is not UTF-8 text.'; }
   return '';
 }

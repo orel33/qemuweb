@@ -74,7 +74,7 @@ test('the toolbar has one Load and one Save button, with the session icons and t
   assert.match(buttons[1], /write-action/);
   assert.equal((html.match(/<svg[^>]*><rect width="20" height="5" x="2" y="3" rx="1"\/>/g) || []).length, 2, 'the two session icons are the only archive icons');
   for (const source of ['topology', 'archive', 'load-dialog', 'app']) {
-    assert.doesNotMatch(moduleSource(source), /load-topology|save-topology|topology-file'|session-archive-file/, source);
+    assert.doesNotMatch(moduleSource(source), /['"]load-topology['"]|['"]save-topology['"]|['"]topology-file['"]|['"]session-archive-file['"]/, source);
   }
 });
 

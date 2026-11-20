@@ -1,7 +1,7 @@
 'use strict';
 
 // The examples of the server: the .topo (topology) and .zip (session) files of the --examples
-// directory, offered by the Load dialog. Read only: nothing here writes, deletes or renames. A
+// directory, offered by the Load dialog. Read only: nothing here modifies the directory. A
 // request names a file by its bare name, never by a path; the name is checked, looked up in a
 // fresh listing, and the file is opened without following a symbolic link and must be a regular
 // file. Only the name, kind, size and description of a file leave the server.
@@ -51,12 +51,16 @@ function topologyDescription(text) {
   return '';
 }
 
+// Whether bytes are not text: a control character other than tab, line feed and carriage return.
+const isBinary = bytes => bytes.some(byte => (byte < 0x20 && byte !== 0x09 && byte !== 0x0a && byte !== 0x0d) || byte === 0x7f);
+
 // Whether the bytes of a file agree with the kind its name announces: a message when they do not.
-// A ZIP starts with PK\x03\x04; a topology is UTF-8 text without NUL bytes. `head` is the start of
+// A ZIP starts with PK\x03\x04; a topology is UTF-8 text without control characters (so without NUL bytes). `head` is the start of
 // the file, the whole of it for a topology.
 function contentError(kind, head) {
   if (kind === 'session') return head.subarray(0, 4).equals(ZIP_MAGIC) ? null : 'This file is not a ZIP archive: it does not start with a ZIP header.';
-  if (head.includes(0)) return 'This file is not a topology: it is binary, not text.';
+  // Text has no control character but tab, line feed and carriage return (NUL and the bytes of a ZIP header are binary).
+  if (isBinary(head)) return 'This file is not a topology: it is binary, not text.';
   try { new TextDecoder('utf-8', {fatal: true}).decode(head); } catch (_) { return 'This file is not a topology: it is not UTF-8 text.'; }
   return null;
 }
@@ -83,7 +87,7 @@ async function readHead(handle, size) {
 // The description of a topology file: its first comment line, empty for a binary file. A UTF-8
 // sequence cut by the end of the head is dropped by the decoder.
 function descriptionOf(head) {
-  if (head.includes(0)) return '';
+  if (isBinary(head)) return '';
   return topologyDescription(new StringDecoder('utf8').write(head));
 }
 
