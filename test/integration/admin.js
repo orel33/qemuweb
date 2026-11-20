@@ -161,7 +161,10 @@ async function run() {
   await Promise.all([aliceSession.connected, aliceConsole.connected, observer.connected]);
   // Connected browser tabs: alice's main socket only (console sockets and observers do not count).
   assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'alice').browsers, 1);
-  assert.deepEqual(Object.keys((await boss.request('/api/admin/users'))[0]).sort(), ['disabled', 'login', 'role']);
+  // The list carries a boolean "has a password" (an account created without one has none), never the hash.
+  const accounts = await boss.request('/api/admin/users');
+  assert.deepEqual(Object.keys(accounts[0]).sort(), ['disabled', 'login', 'password', 'role']);
+  assert.ok(accounts.every(account => typeof account.password === 'boolean'), 'password is a boolean, not the hash');
   assert.deepEqual(await select(observer.socket, aliceSwitch), {ok: true});
   const snapshot = observer.events.find(item => item.event === 'node-snapshot');
   assert.equal(snapshot.payload.nodeId, aliceSwitch);
