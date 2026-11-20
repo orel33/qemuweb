@@ -20,7 +20,7 @@ function createLifecycle(ctx) {
   const {stopSwitch} = ctx.vde;
   const {qemuAcceleration, spawnQemu} = ctx.qemu;
   const {sendMonitorCommand} = ctx.monitor;
-  const {vbox, removeVirtualBoxMachine, ensureVirtualBoxMachine, virtualBoxNetworkArgs, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff} = ctx.vbox;
+  const {vbox, removeVirtualBoxMachine, ensureVirtualBoxMachine, guestMediumCommand, virtualBoxNetworkArgs, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff} = ctx.vbox;
 
   // Refuses a start that would share VT-x with a running host of the other engine. The user reads
   // a sentence that names only hosts of their own session; the details go to the runner's journal.
@@ -93,16 +93,17 @@ function createLifecycle(ctx) {
     node.qemuOptions = qemuOptions;
     node.launchSettings = launchSettings;
     if (node.guestIsoAttached) buildGuestIso(node, tempFile(node, `startup-${node.generation}.iso`));
+    let machineCreated = false;
     if (selectedEngine === 'vbox' && resume) {
-      ensureVirtualBoxMachine(node, image);
+      machineCreated = ensureVirtualBoxMachine(node, image);
       if (!['poweroff', 'aborted'].includes(virtualBoxState(node))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
-      if (node.activeGuestIso) vbox(node, ['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
     }
     if (node.guestIsoAttached) appendLog(node, `# Guest setup ISO attached: ${node.guestIso} (read-only)`);
     if (selectedEngine.startsWith('qemu')) spawnQemu(node, image, resume);
     else if (resume) {
       vbox(node, ['modifyvm', node.vmName, '--memory', String(launchSettings.memory), '--cpus', String(launchSettings.cpus), '--rtcuseutc', launchSettings.clock === 'utc' ? 'on' : 'off', ...virtualBoxNetworkArgs(node, image)]);
-      if (node.guestIsoAttached) vbox(node, ['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', node.guestIso]);
+      // The startup ISO of this start (or an empty drive); a machine just created already has it.
+      if (!machineCreated) vbox(node, guestMediumCommand(node));
       vbox(node, ['startvm', node.vmName, '--type', 'headless']);
       node.machine = {kind: 'vbox', vmDir: tempFile(node, 'vbox-vm')};
     } else spawnVirtualBox(node, image);
