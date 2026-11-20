@@ -245,16 +245,9 @@ What separates a deployment that works from one you can operate calmly.
 
 ## Milestone 7: reliable runners and personal runners
 
-- [ ] **RUN02** (L) Robust runners.
-  - Persist the session-to-runner binding: a restart currently deletes every session of a remote runner (the hello of an
-    untrusted runner is never adopted), although the VMs could keep running as for the local runner.
-  - Let the administrator force the loss of the sessions of a revoked or lost runner, without waiting for
-    `--runner-grace`.
-  - Keep the paused state of the local runner (a remote runner's is in `runners.json`).
-  - Test the re-selection of the console after a runner comes back (`runner-state`) in a real browser: today it is
-    only tested through the socket events of `check-runner-remote`.
-  - Restrict `/runner/connect` and `/api/runner/register` by address when the runners are known.
-- [ ] **RUN03** (L, design first) The **local runner becomes a runner like the others**: same relation to the server as a
+- **RUN02** (robust runners) is **merged into PST01** below: one site on the persistence of the sessions of the server and
+  of the runners. Its points are kept there, as items of the study.
+- [ ] **RUN03** (L, design first, **next architecture step, prepared now**) The **local runner becomes a runner like the others**: same relation to the server as a
   remote runner, only the transport differs (a Unix socket instead of a WebSocket with a token). Today it differs in
   one respect that matters: the server **shares files** with it (`docs/deployment.md`, "Files shared with the
   runner"), and only with the local runner, only when its `hello` announces the server's own runtime directory:
@@ -265,13 +258,13 @@ What separates a deployment that works from one you can operate calmly.
   - **Goal.** The runner owns its directory (for example `/tmp/qw-<login>/runner-<id>`, or the one given with
     `--runtime`), the server owns its own (`users.json`-side data, `runners.json`, logs), and **the server never writes
     in the runner's files**: everything passes through runner commands. One code path for every runner, so what is
-    tested for a remote runner (RUN02, SEC03) is what runs at the CREMI. A server and a runner can then be on two
+    tested for a remote runner (PST01, SEC03) is what runs at the CREMI. A server and a runner can then be on two
     machines, or in two containers, with no shared disk.
   - **Move to the runner** what the server does through files today: the `users/<login>` aliases (a runner command,
     or dropped: they only help administrators; if kept, the runner creates them under its directory and `/admin` shows
     the path), the removal of the sessions of a lost runner (a `session.delete` command when it returns, as for a remote
     one), the pruning of empty session directories (the runner does it for its own directory), and the adoption of the
-    sessions after a restart of the server (the same persisted session-to-runner binding as RUN02: it must work for
+    sessions after a restart of the server (the same persisted session-to-runner binding as PST01 (former RUN02): it must work for
     any runner that proves its identity, the local one included, with the trust decided by the registration and no
     longer by "the Unix socket").
   - **Identity and trust.** The local runner is still the only one allowed on the Unix socket and still has the
@@ -285,12 +278,15 @@ What separates a deployment that works from one you can operate calmly.
   - **Scripts and tools.** `start.sh`, `stop.sh`, `status.sh`, `killall.sh` and `cleanall.sh` work per runtime
     directory: they must handle the server's directory and the runner's directory as two things; the integration tests
     `check-runner`, `check-runner-manual`, `check-load-start`, `admin` assume the shared directory and are rewritten.
-  - **Order.** Study together with RUN02 (binding persisted) and PST01 (what survives a reboot): the three describe the
-    same link between a session and its runner. Deliverable of the design step: a written decision in
-    `docs/architecture.md` validated by the user (what the server may still read, how the aliases are served, the
-    trust model, the migration of the tests), then implementation tasks. No code before the decision.
-- [ ] **PST01** (M, study first) Persistence of sessions: what survives a hard reboot, a power cut, a network cut, a
-  crash of the server or of a runner. A **design study** whose deliverable is a written document (a new section of
+  - **Order.** RUN03 comes **first**: it fixes who owns which files, which PST01 (persistence of the sessions, with the
+    former RUN02) then builds on; both describe the same link between a session and its runner. Deliverable of the
+    design step: a written decision in `docs/architecture.md` validated by the user (what the server may still read,
+    how the aliases are served, the trust model, the migration of the tests), then implementation tasks. No code
+    before the decision.
+- [ ] **PST01** (L, study first, **includes the former RUN02**) Persistence of the sessions of the server and of the runners:
+  what survives a hard reboot, a power cut, a network cut, a crash of the server or of a runner. **Nothing is decided
+  yet**: the study proposes several policies (below) and the user chooses. It follows RUN03, which fixes who owns which
+  files. A **design study** whose deliverable is a written document (a new section of
   `docs/architecture.md`) with a recommendation and the options below, validated by the user **before any code**.
   - **Inventory today.** For each event, what is kept and what is lost: server restart (local runner adopted again,
     remote runner dropped), runner crash or restart (machines gone, session deleted as `runner lost`), reboot of the
@@ -310,7 +306,7 @@ What separates a deployment that works from one you can operate calmly.
     hard cut loses little, the disk cost per session and a quota for it, and the interaction with the observation
     rules and with the paused state of the runner.
   - **Policies for the server**: where the session-to-runner binding is kept (`runners.json` or a new file, shared
-    with RUN02), what happens to a session whose runner does not come back (grace period, then *keep as stopped data*
+    with the former RUN02 items), what happens to a session whose runner does not come back (grace period, then *keep as stopped data*
     or *delete*), the order of the events when both restart together (a reboot), `--runner-grace` per kind of runner
     (a lab workstation that sleeps is not a crashed server), what the user sees (a banner "session restored, machines
     stopped", an explicit Resume) and what the administrator sees in `/admin` (restorable sessions, a Discard button).
@@ -320,10 +316,17 @@ What separates a deployment that works from one you can operate calmly.
   - **Consistency and cleanup**: stale sockets and VDE directories after a hard cut (see TOD02: sockets in a short
     private directory are recreated), PID and lock files, the VirtualBox machines left registered (remove by exact
     name only), disk space reclaimed from abandoned sessions, a retention time.
+  - **Items of the former RUN02**, to settle in the same study: persist the session-to-runner binding (a restart deletes
+    every session of a remote runner today although its VMs could keep running, as for the local runner; the hello of
+    an untrusted runner is never adopted); let the administrator **force the loss** of the sessions of a revoked or lost
+    runner without waiting for `--runner-grace`; keep the paused state of the local runner (a remote runner's is in
+    `runners.json`); test the re-selection of the console after a runner comes back (`runner-state`) in a real browser
+    (only the socket events of `check-runner-remote` are tested today); restrict `/runner/connect` and
+    `/api/runner/register` by address when the runners are known.
   - **Output**: a table "event x policy" with the user-visible result of each, the recommended default policy for the
     CREMI server (a trusted local runner) and for a student's runner, the data format changes it implies (schema
     versions, with the explicit compatibility decision), and the split into implementation tasks (for example the
-    autosave, the restore at start, the binding, the `/admin` controls, `SVC01`'s boot recovery). Related: RUN02,
+    autosave, the restore at start, the binding, the `/admin` controls, `SVC01`'s boot recovery). Related: RUN03 (first),
     SVC01, PRN01, NET02 (checkpoints), HSV01.
 - **PRN01** and **PRN02** (personal runners: server side, and the "My runner" page) are **priority features**: see the top of the roadmap. The design below applies to them.
 - [ ] **PRN03** (M) Base images for a runner: shared directory or HTTP download, workstation sheet.
@@ -845,7 +848,7 @@ Things noticed with no milestone yet. Move one into a milestone when it is sched
 | Question | Decision |
 | --- | --- |
 | Authentication | Two modes, `password` and `proxy` (identity from the front end through `X-Remote-User`, guarded by `X-Proxy-Key`); `both` is removed in AUT01 |
-| Server restart | Local runner: sessions adopted again. Remote runner: sessions dropped today, the binding will be persisted (RUN02) |
+| Server restart | Local runner: sessions adopted again. Remote runner: sessions dropped today, the binding will be persisted (PST01) |
 | Inactive sessions | No expiry: the administrator cleans up by hand from `/admin` |
 | Sessions per user | One, for good; a session lives on the runner that created it and moves by Save then Load ZIP |
 | Personal runners | Created by the user from "My runner"; a new or loaded session goes there when it is online, else to the pool |
