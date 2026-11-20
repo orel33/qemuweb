@@ -7,8 +7,9 @@
 // command each; the runner answers 404 for a node ID that is not in the session.
 const express = require('express');
 const {isCaptureId, interfaceIndex} = require('../../common/capture');
+const {kindOfName, isExampleName} = require('../examples');
 
-const ROUTE_MODULES = ['settings', 'nodes', 'hosts', 'topology', 'archives', 'metrics', 'captures'];
+const ROUTE_MODULES = ['settings', 'nodes', 'hosts', 'topology', 'archives', 'examples', 'metrics', 'captures'];
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
 
 // The users.log event of a request of the owner, or null. Only explicit actions on nodes and
@@ -38,6 +39,7 @@ function userEvent(req) {
     case 'POST /api/nodes/resume-all': return {event: 'node-started', target: {all: true}};
     case 'POST /api/topology': return {event: 'archive-loaded', target: {kind: 'topology'}};
     case 'GET /api/topology': return {event: 'archive-saved', target: {kind: 'topology'}};
+    case 'POST /api/examples/load': return isExampleName(req.body?.name) ? {event: 'archive-loaded', target: {kind: kindOfName(req.body.name), example: req.body.name}} : null;
     case 'POST /api/session-archive/import': return {event: 'archive-loaded', target: {kind: 'session'}};
     case 'POST /api/session-archive/export': return {event: 'archive-saved', target: {kind: 'session'}};
     default: return null;
@@ -47,8 +49,9 @@ function userEvent(req) {
 // runner: the session's runner handle. userLog (server/audit.js createUserLog) receives the
 // owner's node and archive actions, written once the response is sent, with "ok" or the HTTP
 // error status. audit (admin.log) receives the capture actions of an administrator who holds the
-// control lock of the session: who acted and on whose session ({login: owner}).
-function createSessionRouter({session, runner, userLog = {record() {}}, audit = {record() {}}}) {
+// control lock of the session: who acted and on whose session ({login: owner}). examplesDir is
+// the --examples directory (none: no example).
+function createSessionRouter({session, runner, userLog = {record() {}}, audit = {record() {}}, examplesDir = null}) {
   const router = express.Router();
   router.use((req, res, next) => {
     const logged = userEvent(req);
@@ -69,7 +72,7 @@ function createSessionRouter({session, runner, userLog = {record() {}}, audit = 
       res.json(result);
     } catch (error) { res.status(error.status || status).json({error: error.message}); }
   };
-  const context = {app: router, session, runner, handle};
+  const context = {app: router, session, runner, handle, examplesDir};
   for (const name of ROUTE_MODULES) require(`./${name}`).register(context);
   return router;
 }

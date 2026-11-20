@@ -20,7 +20,7 @@ test('server: the defaults are listed, each marked as default, with the derived 
   assert.match(text, /^Options/);
   assert.doesNotMatch(text, /Settings/);
   for (const [name, value] of [['--listen', '3002'], ['--runtime', path.join(root, 'runtime')], ['--users', path.join(root, 'users.json')],
-    ['--runners', path.join(root, 'runners.json')], ['--logs', path.join(root, 'logs')], ['--session-hours', '12'], ['--runner-grace', '300'], ['--trust-proxy', 'unset'], ['--auth', 'password'], ['--proxy-key-file', 'unset'], ['--logout-url', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
+    ['--runners', path.join(root, 'runners.json')], ['--logs', path.join(root, 'logs')], ['--examples', path.join(root, 'examples')], ['--session-hours', '12'], ['--runner-grace', '300'], ['--trust-proxy', 'unset'], ['--auth', 'password'], ['--proxy-key-file', 'unset'], ['--logout-url', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
   assert.match(text, /Runner socket +\/srv\/qemuweb\/runtime\/runner-3002\.sock +\(derived\)/);
@@ -32,10 +32,10 @@ test('server: given options are shown with their source; the environment is igno
   try {
     assert.equal(parseServerArguments([], {root}).port, 3002);
     assert.equal(parseServerArguments([], {root}).authMode, 'password');
-    const settings = parseServerArguments(['--listen', '3003', '--runtime', '/var/lib/qemuweb', '--users', '/etc/qemuweb/users.json', '--runners', '/etc/qemuweb/runners.json', '--logs', '/var/log/qemuweb',
+    const settings = parseServerArguments(['--listen', '3003', '--runtime', '/var/lib/qemuweb', '--users', '/etc/qemuweb/users.json', '--runners', '/etc/qemuweb/runners.json', '--logs', '/var/log/qemuweb', '--examples', '/srv/examples',
       '--session-hours', '8', '--runner-grace', '60', '--trust-proxy', 'loopback', '--auth', 'proxy', '--proxy-key-file', '/etc/qemuweb/proxy-key', '--logout-url', 'https://qw.example/bye', '--ephemeral'], {root});
     const text = blockOf(serverSpec(root), settings, [['Runner socket', '/var/lib/qemuweb/runner-3003.sock']]);
-    for (const [name, value] of [['--listen', '3003'], ['--runtime', '/var/lib/qemuweb'], ['--users', '/etc/qemuweb/users.json'], ['--runners', '/etc/qemuweb/runners.json'], ['--logs', '/var/log/qemuweb'],
+    for (const [name, value] of [['--listen', '3003'], ['--runtime', '/var/lib/qemuweb'], ['--users', '/etc/qemuweb/users.json'], ['--runners', '/etc/qemuweb/runners.json'], ['--logs', '/var/log/qemuweb'], ['--examples', '/srv/examples'],
       ['--session-hours', '8'], ['--runner-grace', '60'], ['--trust-proxy', 'loopback'], ['--auth', 'proxy'], ['--proxy-key-file', '/etc/qemuweb/proxy-key'], ['--logout-url', 'https://qw.example/bye'], ['--ephemeral', 'on']]) {
       assert.match(text, new RegExp(`${name} +${escape(value)} +\\(option\\)`), `${name} option`);
     }

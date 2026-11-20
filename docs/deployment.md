@@ -345,7 +345,7 @@ never written; reading the session list or the logs is not logged.
 | `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it; `null` when the session was dropped), and `reason` when it was dropped: `runner lost` (its runner died) or `creation failed`. |
 | `node-created` | `nodeId`, `kind` (`host` or `switch`). |
 | `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Resume all**, **Stop all** and the removal of every node: `all`). |
-| `archive-loaded`, `archive-saved` | `kind`: `session` (ZIP) or `topology`. |
+| `archive-loaded`, `archive-saved` | `kind`: `session` (ZIP) or `topology`; `example`: the file name when it was loaded from the server's examples. |
 
 Node and archive events come from the user's own explicit requests, with
 `result` `ok` or `error: HTTP <status>`; nodes started by a topology load or at

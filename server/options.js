@@ -2,7 +2,7 @@
 
 // The command line of the server, as a table for common/cli.js (which parses it, prints --help and
 // the Options block): parsed once into a plain settings object that is passed down: {port,
-// runtime, usersFile, runnersFile, logDir, sessionHours, runnerGrace, trustProxy, authMode, proxyKeyFile, logoutUrl, ephemeral, given}. `given` is
+// runtime, usersFile, runnersFile, logDir, examplesDir, sessionHours, runnerGrace, trustProxy, authMode, proxyKeyFile, logoutUrl, ephemeral, given}. `given` is
 // the set of the flags present on the command line. The server reads no environment variable.
 // test/unit/server-startup-report.test.js checks that each option is documented in docs/reference.md.
 const path = require('path');
@@ -38,6 +38,8 @@ function serverSpec(root) {
         description: 'registered remote runners (mode 0600): a hash of the token of each'},
       {flag: '--logs', metavar: 'DIR', kind: 'path', key: 'logDir', default: path.join(root, 'logs'), fallback: 'logs/ of the repository',
         description: 'directory of admin.log and users.log (mode 0700)'},
+      {flag: '--examples', metavar: 'DIR', kind: 'path', key: 'examplesDir', default: path.join(root, 'examples'), fallback: 'examples/ of the repository',
+        description: 'directory of the example topologies (.topo) and sessions (.zip) offered by the Load dialog (read only; a missing directory means no example)'},
       {flag: '--session-hours', metavar: 'N', kind: 'number', key: 'sessionHours', default: DEFAULT_SESSION_HOURS, fallback: String(DEFAULT_SESSION_HOURS),
         max: MAX_SESSION_HOURS, expected: `a number of hours greater than 0 and at most ${MAX_SESSION_HOURS}`,
         description: 'login lifetime in hours (more than 0, at most 2160), renewed while the user is active'},

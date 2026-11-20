@@ -11,11 +11,11 @@ Code layout, tests and documentation. The data paths between the browser, the se
 | `runner/` | The runner, a separate process (`runner/main.js`) serving every session of the machine over the runner protocol: QEMU, VirtualBox, VDE switches, consoles, startup media, archives, metrics. |
 | `server/auth/` | Authentication: users file, password hashes, signed cookie. |
 | `scripts/user.sh`, `scripts/user.js` | User account administration. |
-| `scripts/demo.sh`, `scripts/demo.js` | Web demo with test accounts and `demo/lan.zip`. |
+| `scripts/demo.sh`, `scripts/demo.js` | Web demo with test accounts and `examples/lan.zip`. |
 | `common/` | Code shared by the runner and the server: runner protocol framing, IDs, launch settings, `config.json` validation, `.topo` parsing. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |
-| `demo/` | Example sessions (`.zip`) and topologies (`.topo`): LAN, DMZ and gateway. |
+| `examples/` | Example sessions (`.zip`) and topologies (`.topo`): LAN, DMZ and gateway. The server lists them in the Load dialog (`--examples DIR` selects another directory). |
 
 See [docs/architecture.md](architecture.md) for the data paths between the
 browser, the server, and QEMU, VirtualBox, and VDE.

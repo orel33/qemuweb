@@ -7,18 +7,18 @@ const os = require('os');
 const path = require('path');
 const {readArchive} = require('../../runner/archive-zip');
 
-const demoDir = path.join(__dirname, '../../demo');
-const archives = fs.readdirSync(demoDir).filter(name => name.endsWith('.zip')).sort();
+const examplesDir = path.join(__dirname, '../../examples');
+const archives = fs.readdirSync(examplesDir).filter(name => name.endsWith('.zip')).sort();
 
-test('the demo directory holds session archives', () => {
+test('the examples directory holds session archives', () => {
   assert.ok(archives.length > 0);
 });
 
 for (const name of archives) {
-  test(`demo/${name} is read by the session archive reader and holds a version 1 session`, async t => {
+  test(`examples/${name} is read by the session archive reader and holds a version 1 session`, async t => {
     const stage = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-demo-test-'));
     t.after(() => fs.rmSync(stage, {recursive: true, force: true}));
-    const names = await readArchive(path.join(demoDir, name), stage);
+    const names = await readArchive(path.join(examplesDir, name), stage);
     assert.ok(names.includes('session.json'));
     const session = JSON.parse(fs.readFileSync(path.join(stage, 'session.json'), 'utf8'));
     assert.equal(session.schemaVersion, 1);

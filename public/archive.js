@@ -1,7 +1,9 @@
-// Session ZIP archive save and load dialogs.
-import {graphicLayoutKey, machines, saveViewSettings, store} from './state.js';
+// Session ZIP archive review and load, and the Save dialog (session ZIP, or only the topology). The Load dialog
+// (public/load-dialog.js) picks the file and calls startArchiveLoad.
+import {graphicLayoutKey, saveViewSettings, store} from './state.js';
 import {jsonRequest, sessionLost, requestJson} from './api.js';
-import {showStatusError} from './workspace.js';
+import {downloadTopology} from './topology.js';
+import {saveChoice} from './file-kinds.js';
 
 const archiveDialog = document.getElementById('session-archive-dialog');
 const archiveChoice = document.getElementById('include-working-disks');
@@ -12,7 +14,6 @@ const archiveProgress = document.getElementById('session-archive-progress');
 const archiveProgressText = document.getElementById('session-archive-progress-text');
 const archiveError = document.getElementById('session-archive-error');
 const archiveConfirm = document.getElementById('confirm-session-archive');
-const archiveFile = document.getElementById('session-archive-file');
 const archiveLoadDialog = document.getElementById('session-archive-load-dialog');
 const archiveLoadFileLabel = document.getElementById('session-archive-load-file');
 const archiveLoadSteps = document.getElementById('session-archive-load-steps');
@@ -115,6 +116,11 @@ function importArchive(file, {autoStart, discardDisks}, onProgress, onUploaded) 
     request.send(file);
   });
 }
+// Loads a ZIP of the server's examples from the server's disk: no upload, the server feeds the file to the same import.
+async function importExample(name, {autoStart, discardDisks}, onUploaded) {
+  onUploaded();
+  return requestJson('/api/examples/load', jsonRequest('POST', {name, autoStart, discardDisks}), 'Cannot load session.');
+}
 const archiveLoadCancel = document.getElementById('cancel-session-archive-load');
 const archiveLoadConfirm = document.getElementById('confirm-session-archive-load');
 const archiveLoadOptions = document.getElementById('session-archive-load-options');
@@ -122,10 +128,29 @@ const archiveAutoStart = document.getElementById('load-auto-start');
 const archiveDiscardDisks = document.getElementById('load-discard-disks');
 const archiveDiscardNote = document.getElementById('load-discard-note');
 let selectedArchiveFile = null;
+// The name of the server example being loaded, or null for a file of the user.
+let selectedExample = null;
 let archiveLoadBusy = false;
 let archiveLoadImported = false;
 
 let archiveEstimateRequest = 0;
+const topologyOnlyChoice = document.getElementById('save-topology-only');
+const saveSessionOptions = document.getElementById('save-session-options');
+const topologyOnlyKey = 'qemuweb.save-topology-only';
+// The last choice of "Save only the topology", kept in this browser; the dialog works without it.
+function rememberedTopologyOnly() {
+  try { return localStorage.getItem(topologyOnlyKey) === 'true'; } catch (_) { return false; }
+}
+// Shows the Save dialog for the checkbox: the session ZIP options and estimate, or only the topology download.
+function applySaveChoice() {
+  const choice = saveChoice(topologyOnlyChoice.checked);
+  saveSessionOptions.hidden = !choice.sessionOptions;
+  archiveEstimate.hidden = !choice.sessionOptions;
+  archiveConfirm.textContent = choice.confirmLabel;
+  archiveError.hidden = true;
+  if (choice.sessionOptions) { archiveIntro.textContent = 'Save your current session.'; updateArchiveEstimate(); }
+  else { archiveEstimateRequest++; archiveIntro.textContent = 'Save the hosts, switches and links as a topology text file.'; archiveConfirm.disabled = false; }
+}
 async function updateArchiveEstimate() {
   const request = ++archiveEstimateRequest;
   archiveConfirm.disabled = true;
@@ -147,7 +172,7 @@ async function updateArchiveEstimate() {
 }
 
 const archiveLoadBlockedDialog = document.getElementById('session-archive-load-blocked-dialog');
-function showArchiveLoadBlockedWarning() {
+export function showArchiveLoadBlockedWarning() {
   if (!archiveLoadBlockedDialog.open) archiveLoadBlockedDialog.showModal();
 }
 
@@ -178,9 +203,9 @@ async function loadArchive(file, {autoStart, discardDisks}) {
   let activeStep = 'upload';
   try {
     setLoadStep('upload', 'running', '0%');
-    const result = await importArchive(file, {autoStart, discardDisks},
-      percent => setLoadStep('upload', 'running', `${percent}%`),
-      () => { setLoadStep('upload', 'done'); activeStep = 'restore'; setLoadStep('restore', 'running'); });
+    const uploaded = () => { setLoadStep('upload', 'done', selectedExample ? 'Read by the server from its examples' : ''); activeStep = 'restore'; setLoadStep('restore', 'running'); };
+    const result = selectedExample ? await importExample(selectedExample, {autoStart, discardDisks}, uploaded)
+      : await importArchive(file, {autoStart, discardDisks}, percent => setLoadStep('upload', 'running', `${percent}%`), uploaded);
     archiveLoadImported = true;
     saveViewSettings();
     localStorage.removeItem(graphicLayoutKey);
@@ -203,6 +228,51 @@ async function loadArchive(file, {autoStart, discardDisks}) {
   }
 }
 
+// Opens the review of a session ZIP: reads its summary and checks the base images in the browser, then offers the options.
+// `file` is the file of the user, or the bytes of a server example fetched for the review (then `example` is its name and the
+// load reads the file from the server's disk). Nothing is uploaded until the user presses OK.
+export async function startArchiveLoad(file, {example = null} = {}) {
+  selectedArchiveFile = file;
+  selectedExample = example;
+  archiveLoadImported = false;
+  archiveLoadFileLabel.textContent = file.name;
+  resetLoadSteps();
+  archiveLoadCancel.textContent = 'Cancel';
+  archiveLoadConfirm.hidden = true;
+  archiveLoadOptions.hidden = true;
+  for (const name of ['upload', 'restore']) archiveLoadSteps.querySelector(`[data-step="${name}"]`).hidden = true;
+  archiveLoadDialog.showModal();
+  // Review state: nothing is uploaded until the user chooses the options and presses OK.
+  let summary = null;
+  setLoadStep('read', 'running');
+  try {
+    summary = await readArchiveSummary(file);
+    if (selectedArchiveFile !== file) return;
+    setLoadStep('read', 'done', archiveSummaryText(summary));
+  } catch (_) {
+    if (selectedArchiveFile !== file) return;
+    setLoadStep('read', 'warning', 'Cannot read the archive here; the server will validate it on load.');
+  }
+  let check = null;
+  try {
+    if (!summary) {
+      setLoadStep('check', 'warning', 'Skipped: the server checks the base images on load.');
+    } else {
+      setLoadStep('check', 'running');
+      check = await checkArchiveBaseImages(file, summary);
+      if (selectedArchiveFile !== file) return;
+      setLoadStep('check', check.messages.length ? 'warning' : 'done', check.messages.join('\n') ||
+        (check.noDisks ? 'No working disk: hosts start from the current base images.' : 'Base images are up to date'));
+    }
+  } catch (_) {
+    if (selectedArchiveFile !== file) return;
+    setLoadStep('check', 'warning', 'Cannot check base images; the server will validate them on load.');
+  }
+  if (selectedArchiveFile !== file) return;
+  // Without a readable summary or a check result, the server decides: the options stay available.
+  showLoadReview({hasDisks: summary ? summary.diskHosts.length > 0 : true, staleDisks: !!check?.staleDisks});
+}
+
 export function initArchive() {
   archiveLoadDialog.addEventListener('cancel', event => { if (archiveLoadBusy) event.preventDefault(); });
   archiveLoadDialog.addEventListener('close', () => {
@@ -212,10 +282,15 @@ export function initArchive() {
   document.getElementById('save-session-archive').addEventListener('click', () => {
     archiveChoice.checked = false;
     archiveWorkingDiskWarning.hidden = true;
-    archiveIntro.textContent = 'Save your current session.';
     archiveProgress.hidden = true;
+    archiveError.hidden = true;
+    topologyOnlyChoice.checked = rememberedTopologyOnly();
     archiveDialog.showModal();
-    updateArchiveEstimate();
+    applySaveChoice();
+  });
+  topologyOnlyChoice.addEventListener('change', () => {
+    try { localStorage.setItem(topologyOnlyKey, String(topologyOnlyChoice.checked)); } catch (_) { /* Not remembered. */ }
+    applySaveChoice();
   });
   archiveChoice.addEventListener('change', () => {
     archiveWorkingDiskWarning.hidden = !archiveChoice.checked;
@@ -226,6 +301,12 @@ export function initArchive() {
     archiveConfirm.disabled = true;
     archiveError.hidden = true;
     let writable = null;
+    if (topologyOnlyChoice.checked) {
+      try { await downloadTopology(saveChoice(true).fileName); archiveDialog.close(); }
+      catch (error) { archiveError.textContent = error.message; archiveError.hidden = false; }
+      archiveConfirm.disabled = false;
+      return;
+    }
     try {
       const includeDisks = archiveChoice.checked;
       if (window.showSaveFilePicker) {
@@ -253,55 +334,6 @@ export function initArchive() {
       archiveProgress.hidden = true;
       archiveDialog.removeAttribute('aria-busy');
     }
-  });
-  document.getElementById('load-session-archive').addEventListener('click', () => {
-    if (machines.size) { showArchiveLoadBlockedWarning(); return; }
-    archiveFile.click();
-  });
-  archiveFile.addEventListener('change', async () => {
-    const file = archiveFile.files[0];
-    archiveFile.value = '';
-    if (!file) return;
-    if (machines.size) { showArchiveLoadBlockedWarning(); return; }
-    if (!/\.zip$/i.test(file.name)) { showStatusError('Choose a QemuWeb ZIP archive.'); return; }
-    selectedArchiveFile = file;
-    archiveLoadImported = false;
-    archiveLoadFileLabel.textContent = file.name;
-    resetLoadSteps();
-    archiveLoadCancel.textContent = 'Cancel';
-    archiveLoadConfirm.hidden = true;
-    archiveLoadOptions.hidden = true;
-    for (const name of ['upload', 'restore']) archiveLoadSteps.querySelector(`[data-step="${name}"]`).hidden = true;
-    archiveLoadDialog.showModal();
-    // Review state: nothing is uploaded until the user chooses the options and presses OK.
-    let summary = null;
-    setLoadStep('read', 'running');
-    try {
-      summary = await readArchiveSummary(file);
-      if (selectedArchiveFile !== file) return;
-      setLoadStep('read', 'done', archiveSummaryText(summary));
-    } catch (_) {
-      if (selectedArchiveFile !== file) return;
-      setLoadStep('read', 'warning', 'Cannot read the archive here; the server will validate it on load.');
-    }
-    let check = null;
-    try {
-      if (!summary) {
-        setLoadStep('check', 'warning', 'Skipped: the server checks the base images on load.');
-      } else {
-        setLoadStep('check', 'running');
-        check = await checkArchiveBaseImages(file, summary);
-        if (selectedArchiveFile !== file) return;
-        setLoadStep('check', check.messages.length ? 'warning' : 'done', check.messages.join('\n') ||
-          (check.noDisks ? 'No working disk: hosts start from the current base images.' : 'Base images are up to date'));
-      }
-    } catch (_) {
-      if (selectedArchiveFile !== file) return;
-      setLoadStep('check', 'warning', 'Cannot check base images; the server will validate them on load.');
-    }
-    if (selectedArchiveFile !== file) return;
-    // Without a readable summary or a check result, the server decides: the options stay available.
-    showLoadReview({hasDisks: summary ? summary.diskHosts.length > 0 : true, staleDisks: !!check?.staleDisks});
   });
   archiveLoadCancel.addEventListener('click', () => archiveLoadDialog.close());
   archiveLoadConfirm.addEventListener('click', () => loadArchive(selectedArchiveFile,
