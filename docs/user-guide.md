@@ -80,10 +80,17 @@ line of standard input; otherwise the script prompts for it. Logins use letters,
 
 `admin` is a role of an ordinary account: an admin has their own session and
 works in it normally. At the top right of the header, admins have a button to
-the other page: **Supervision** (`/admin`) from their session or an observed
+the other page: **Admin** (`/admin`) from their session or an observed
 one, **My session** (`/`) from `/admin`. (The view toggle, at the bottom
-right, shows the view it switches to: **Graphic** or **Terminals**.) `/admin` lists every session, the admin's own marked, refreshed
-every few seconds: user, state (**active**: at least one running node, or
+right, shows the view it switches to: **Graphic** or **Terminals**.) `/admin` shows one section at a time, chosen in a tab bar under
+the header: **Sessions** (the default), **Accounts**, **Runners**, **WebSocket** and **Logs**. The tab is kept in the URL fragment
+(`/admin#runners`, `#accounts`, `#websocket`, `#logs`, `#sessions`): a reload or a shared link returns to that tab, and an
+unknown fragment means Sessions. The tabs follow the usual keyboard rules (Left and Right move between tabs, Home and End jump to
+the first and last, Enter or Space activates). Only the visible tab refreshes (every few seconds, and at once when it opens),
+and nothing refreshes while the browser tab is in the background. A badge on a tab label shows a problem without opening it,
+refreshed about every 30 seconds: **Runners** counts the runners offline or paused (amber when one is offline), **WebSocket**
+the connections on polling (amber), **Sessions** the sessions with a running node, **Accounts** the disabled accounts.
+**Sessions** lists every session, the admin's own marked: user, state (**active**: at least one running node, or
 **idle**), creation date, nodes, running VMs, reserved RAM, CPU and last
 activity (the owner's requests and console input; an admin observing does not
 count). Next to each user, a green dot shows **online** when a browser of that
@@ -97,7 +104,7 @@ can:
   student's session, read-only: the same buttons as the student's page, the
   write actions greyed out instead of hidden. A banner of
   distinct colour shows the observed user, previous/next active session, a
-  session list, **Follow**, **Take control** and **My session**; **Supervision**
+  session list, **Follow**, **Take control** and **My session**; **Admin**
   stays in the header.
   The admin sees the consoles live (what the guest echoes, so not a password
   typed without echo), their history and logs, also when the student is
@@ -109,7 +116,7 @@ can:
   view shown. An observation tab never saves its layout in the admin's
   view settings. The target belongs to the tab: another tab can stay on the admin's
   own session. A login without a session (not used since the server started,
-  or deleted) shows a message and a link back to **Supervision**. The server refuses every change from an observer, including
+  or deleted) shows a message and a link back to **Admin**. The server refuses every change from an observer, including
   console input, Clear and resizing.
 - **Take control** of the student's session: an exclusive lock on the whole
   session (Follow is forced on and the student's current view applied first; the

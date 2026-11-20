@@ -1,12 +1,13 @@
-// Supervision page (/admin, administrators only): every session with its metrics, refreshed
-// every few seconds, the actions on sessions (observe, stop all, delete, bulk cleanup),
-// the runners (admin-runners.js), the Socket.IO connections and the WebSocket test (admin-connections.js), account management, and the last entries of admin.log and users.log. Every change goes through /api/admin/*, which checks the role and
-// writes logs/admin.log.
+// Admin page (/admin, administrators only), one tab at a time (admin-tabs.js): every session with its
+// metrics and the actions on sessions (observe, stop all, delete, bulk cleanup), account management,
+// the runners (admin-runners.js), the Socket.IO connections and the WebSocket test (admin-connections.js),
+// and the last entries of admin.log and users.log. Only the visible tab refreshes. Every change goes
+// through /api/admin/*, which checks the role and writes logs/admin.log.
 import {createRunnersPanel} from './admin-runners.js';
 import {createConnectionsPanel} from './admin-connections.js';
+import {createAdminTabs} from './admin-tabs.js';
 import {handleUnauthorized, setIdentityVia} from './session-expiry.js';
 
-const POLL_MS = 4000;
 const $ = id => document.getElementById(id);
 const selected = new Set();
 let me = null;
@@ -129,7 +130,7 @@ async function runAction(errorId, action) {
   showError(errorId, null);
   try { await action(); }
   catch (error) { showError(errorId, error); }
-  await Promise.all([refreshSessions(), refreshAccounts()]);
+  adminTabs.refreshNow();
 }
 
 async function deleteSessions(logins) {
@@ -307,7 +308,7 @@ function init() {
     $('auth-off-warning').hidden = me.authMode !== 'off';
     // An identity given by the authenticating front end logs out there (--logout-url); without that URL there is no button.
     $('logout').hidden = me.authMode === 'off' || (me.via === 'proxy' && !me.logoutUrl);
-    refreshAccounts();
+    if (adminTabs.active() === 'accounts') refreshAccounts();
   });
   $('logout').addEventListener('click', async () => {
     try { await fetch('/auth/logout', {method: 'POST'}); } finally { location.assign(me?.via === 'proxy' && me.logoutUrl ? me.logoutUrl : '/login.html'); }
@@ -353,11 +354,13 @@ function init() {
     } catch (error) { showError('password-error', error); }
   });
   for (const tab of document.querySelectorAll('.admin-log-tabs [data-log]')) tab.addEventListener('click', () => selectLog(tab.dataset.log));
-  refreshSessions();
-  refreshRunners();
-  refreshConnections();
-  refreshLog();
-  setInterval(() => { refreshSessions(); refreshRunners(); refreshConnections(); refreshAccounts({polling: true}); refreshLog({polling: true}); }, POLL_MS);
 }
 
+// The refresh of each tab's panel; a tab never refreshes while it is hidden (admin-tabs.js).
+const adminTabs = createAdminTabs({
+  bar: $('admin-tabs'),
+  refresh: {sessions: refreshSessions, accounts: options => refreshAccounts(options), runners: refreshRunners, websocket: refreshConnections, logs: options => refreshLog(options)},
+  badgeData: {sessions: () => api('/sessions'), accounts: () => api('/users'), runners: () => api('/runners'), websocket: () => api('/connections')},
+  isBusy: () => document.querySelector('dialog[open]') !== null
+});
 init();

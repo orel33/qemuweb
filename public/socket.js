@@ -172,7 +172,7 @@ export function initSockets() {
   });
   socket.on('node-error', showStatusError);
   // The session was deleted (here or in another tab): reload into the new, empty one. An
-  // observed session is gone: say so, with a link back to the supervision page.
+  // observed session is gone: say so, with a link back to the Admin page.
   socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
   socket.on('observe-unavailable', () => observationUnavailable());
   socket.on('console-control', event => { applyControl(event); refreshCaptureAccess(); });
