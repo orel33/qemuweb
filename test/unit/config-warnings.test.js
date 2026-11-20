@@ -71,8 +71,9 @@ test('the start-time memory warning appears above 90 % of the RAM and never befo
   assert.equal(memoryWarning({runningMb: 4096, hostMb: 3000, totalBytes: total}), null, '7096 of 8192 MB');
   assert.equal(memoryWarning({runningMb: 0, hostMb: 7372, totalBytes: total}), null, 'exactly 90 %');
   const text = memoryWarning({runningMb: 6000, hostMb: 1500, totalBytes: total});
-  assert.match(text, /^hosts of this runner reserve 7500 MB of the 8192 MB of this machine/);
-  assert.match(memoryWarning({runningMb: 0, hostMb: 9000, totalBytes: total}), /reserve 9000 MB/);
+  assert.match(text, /^this host asks for 1500 MB and the memory of this machine is almost all reserved by running hosts/);
+  assert.doesNotMatch(text, /6000|7500/, 'no figure about the other hosts of the runner');
+  assert.match(memoryWarning({runningMb: 0, hostMb: 9000, totalBytes: total}), /asks for 9000 MB/);
   for (const bad of [{runningMb: NaN, hostMb: 1, totalBytes: total}, {runningMb: 1, hostMb: undefined, totalBytes: total}, {runningMb: 1, hostMb: 1, totalBytes: 0}]) {
     assert.equal(memoryWarning(bad), null);
   }

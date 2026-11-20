@@ -8,6 +8,7 @@ import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-setti
 import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
 import {loadGraphicPositions, renderGraphic} from './graphic-view.js';
 import {refollow} from './observe.js';
+import {parseStartErrors, showStartFailure} from './start-failure.js';
 
 const confirmDialog = document.getElementById('confirm-dialog');
 const restartChoiceDialog = document.getElementById('restart-choice-dialog');
@@ -204,6 +205,7 @@ export async function startActiveMachine() {
     machine.running = false;
     machine.message = error.message;
     machine.error = error.message;
+    showStartFailure([{host: machine.hostname, message: error.message}]);
   } finally {
     machine.busy = false;
     updateControls();
@@ -238,7 +240,7 @@ export async function rebootActiveMachine() {
   updateControls();
   try {
     await requestJson(nodeUrl(machine.id, 'reboot'), {method: 'POST'}, 'Failed to reboot');
-  } catch (error) { machine.message = error.message; machine.error = error.message; }
+  } catch (error) { machine.message = error.message; machine.error = error.message; showStartFailure([{host: machine.hostname, message: error.message}]); }
   finally { machine.busy = false; updateControls(); }
 }
 export async function resetActiveMachine() {
@@ -311,7 +313,10 @@ export function initNodes() {
     store.exitAllBusy = true; updateControls();
     try {
       const {startErrors} = await requestJson('/api/nodes/resume-all', {method: 'POST'}, 'Failed to resume all hosts and switches');
-      if (startErrors.length) showStatusError(`Some nodes could not start: ${startErrors.join('; ')}`);
+      if (startErrors.length) {
+        showStatusError(`Some nodes could not start: ${startErrors.join('; ')}`);
+        showStartFailure(parseStartErrors(startErrors));
+      }
     } catch (error) { showStatusError(`Cannot resume all hosts and switches: ${error.message}`); }
     finally { store.exitAllBusy = false; updateControls(); }
   };

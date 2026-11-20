@@ -207,8 +207,12 @@ module is still the old one).
   needs the processor's virtualization extensions (VT-x/AMD-V), which QEMU's KVM
   holds while one QEMU host runs, and the reverse. The runner refuses the start
   of a VirtualBox host while a QEMU/KVM host runs on the same runner (any
-  session), and the start of a QEMU/KVM host while a VirtualBox host runs, with a
-  message naming the hosts to stop. The KVM modules may stay loaded: only
+  session), and the start of a QEMU/KVM host while a VirtualBox host runs. The
+  message, shown in a dialog and in the host's Log, names only your own hosts
+  that use the other engine: stop them, or try again later. When the conflict
+  comes from another session it says only that the virtualization hardware of
+  the runner is busy, and never names a host or a user; the names go to the
+  runner's own output (`admin diagnostics:`), which only the administrator reads. The KVM modules may stay loaded: only
   running machines matter. A program the runner cannot see (another runner, a
   libvirt machine, a QEMU started by hand) gives the VirtualBox error "another
   program on this machine holds the virtualization hardware (KVM)": stop it.
@@ -222,7 +226,8 @@ module is still the old one).
   $USER`) and log in again.
 - **Reading a failure.** A host that fails to start shows a short sentence in its
   state line and in its **Log** view: a `# …` line that names the cause and the
-  fix, followed by the original `VBoxManage` message. A failed start removes
+  fix, followed by the original `VBoxManage` message. A failed start also opens a dialog with the same sentence (one dialog for
+  Resume all, listing each host). A failed start removes
   the virtual machine it created, so `VBoxManage list vms` and `VBoxManage list
   hdds` show nothing of it.
 
