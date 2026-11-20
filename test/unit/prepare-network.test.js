@@ -229,7 +229,7 @@ test('OpenWrt script with a proxy: exports before apk, bounded apk and a clear f
 test('OpenWrt script without a proxy: no export; the proxy is not in the text that follows apk', () => {
   withRoot(root => {
     const plain = guestScript(root, 'openwrt', '');
-    assert.doesNotMatch(plain, /_proxy/);
+    assert.doesNotMatch(plain, /^export .*_proxy/m); // the apk feed switch only reads http_proxy, it never sets one
     syntaxOk(root, plain);
     const script = guestScript(root, 'openwrt', 'http://user:secret@10.1.2.3:3128/');
     const after = script.split('\n').slice(indexOfLine(script, 'QEMUWEB_OPENWRT_PHASE_"CONFIG"')).join('\n');
