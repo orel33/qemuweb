@@ -16,6 +16,7 @@ Command: `./scripts/run-tests.sh unit` or `npm test`.
 | `guest-media.test.js` | Validate startup files and resource paths; check that separate read-only ISOs contain the right script and resources when `genisoimage` and `isoinfo` are available. |
 | `host-settings-naming.test.js` | Check automatic host names (from `public/nodes.js`) and the shared Add host/Host Settings dialog. |
 | `image-hash.test.js` | Check base image hashing (`.sha256` files written by `prepare.sh`: used when not older than the image, ignored when older or malformed, asynchronous fallback) and shell quoting of logged commands. |
+| `prepare-hash.test.js` | Check `scripts/prepare.sh --hash` in a temporary project root: `--system` with no image exits 2 with a message on stderr, with only one format it warns and exits 0, with both it records the hashes and a second run reports them up to date; without `--system`, unbuilt systems are listed as skipped and the exit status is 2 only when no system has any image. Nothing is written outside the temporary root. |
 | `launch-settings.test.js` | Validate launch settings and QEMU options against their field limits. |
 | `node-id.test.js` | Check host and switch ID format and kind. |
 | `pud84-ui.test.js` | Check the bottom-left toolbar: Exit All position, and Resume all (green, write action) just before Stop all, Remove all and Delete session. |

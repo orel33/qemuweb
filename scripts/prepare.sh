@@ -40,6 +40,9 @@ The elapsed time of each step and the system total are displayed.
                    and .vdi.sha256 (sha256sum format), without building anything. Every build
                    records them itself; the server uses a hash file that is not older than its
                    image to compare the image with a session archive without reading it.
+                   A missing image is reported ("<sysname>.<format>: no image"). Exit status 2 when
+                   --system names a system without any image, when no system has an image, or when
+                   a hash could not be recorded; a single missing format is only a warning.
 HELP
 }
 
@@ -150,10 +153,15 @@ fi
 # server need not read them. A hash file that is not older than its image is kept as it is.
 write_image_hashes() {
   local system="$1" format image name
+  hash_found=0
   for format in raw vdi; do
     image="$ROOT/images/$system.$format"
     name="$system.$format"
-    if [[ ! -s "$image" ]]; then continue; fi
+    if [[ ! -s "$image" ]]; then
+      if [[ "$hash_only" == true ]]; then echo "  $name: no image"; fi
+      continue
+    fi
+    hash_found=$((hash_found + 1))
     if [[ -e "$image.sha256" && ! "$image.sha256" -ot "$image" ]]; then
       echo "  $name: hash up to date"
     elif (cd "$ROOT/images" && sha256sum "$name" > "$name.sha256.tmp" && mv -f "$name.sha256.tmp" "$name.sha256"); then
@@ -161,12 +169,34 @@ write_image_hashes() {
     else
       rm -f "$image.sha256.tmp"
       echo "prepare.sh: Could not record the hash of $name; the server will compute it." >&2
+      hash_failed=$((hash_failed + 1))
     fi
   done
 }
 
 if [[ "$hash_only" == true ]]; then
-  for id in "${target_ids[@]}"; do write_image_hashes "$id"; done
+  hash_failed=0
+  hash_total=0
+  for id in "${target_ids[@]}"; do
+    if [[ -z "$selected_system" && ! -s "$ROOT/images/$id.raw" && ! -s "$ROOT/images/$id.vdi" ]]; then
+      echo "  $id: not built, skipped"
+      continue
+    fi
+    write_image_hashes "$id"
+    hash_total=$((hash_total + hash_found))
+    if [[ -n "$selected_system" && $hash_found -eq 1 ]]; then
+      for format in raw vdi; do
+        [[ -s "$ROOT/images/$id.$format" ]] || echo "prepare.sh: $id.$format is missing: nothing to hash for it (run: bash scripts/prepare.sh --system $id --force to build both)." >&2
+      done
+    fi
+  done
+  if (( hash_total == 0 )); then
+    if [[ -n "$selected_system" ]]; then
+      fail "Nothing to hash for $selected_system: no image built (run: bash scripts/prepare.sh --system $selected_system)."
+    fi
+    fail 'Nothing to hash: no image built (run: bash scripts/prepare.sh).'
+  fi
+  if (( hash_failed > 0 )); then exit 2; fi
   exit 0
 fi
 
