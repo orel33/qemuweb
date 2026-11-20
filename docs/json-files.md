@@ -12,7 +12,7 @@ QemuWeb (never typed by hand). Braces list allowed values. `†` marks something
 that is not implemented. A *node* is a host or a switch. IDs: a host is
 `h-` + 16 lowercase hex characters, a switch `s-` + 16, a session 16, a remote
 runner `r-` + 8. An unknown keyword is an error in every file below, except where
-stated. `schemaVersion` is never migrated: a file with another value is rejected. Every format is at version 1 at the release of 0.9.0; from 0.9.0 on, every format change increments the number and comes with an explicit decision on compatibility.
+stated. `schemaVersion` is never migrated: a file with another value is rejected. Every format was at version 1 at the release of 0.9.0; from 0.9.0 on, every format change increments the number and comes with an explicit decision on compatibility (see the decision on `host.json` below: version 2, no migration).
 
 All the JSON files written by the project are UTF-8, indented by two spaces and
 end with a newline. `writeJsonAtomic` (`common/json-file.js`) writes a temporary
@@ -52,7 +52,7 @@ Companions needed to understand the JSON files:
 | `images/<name>.raw`, `images/<name>.vdi` | Base images named by `image` in `config.json`. |
 | `images/<name>.raw.sha256`, `.vdi.sha256` | `sha256sum` format, written by `scripts/prepare.sh`; trusted only while not older than the image (`runner/media/image-hash.js`). |
 | `<host>/startup/start.sh` and companions | Startup script and files of a host; in the ZIP when present. |
-| `<host>/disk.qcow2`, `disk.vdi`, `startup-<n>.iso`, `*.sock`, `vde/` | Working disk, ISO, sockets: never JSON; only `disk.qcow2` goes in a ZIP, on request. |
+| `<host>/disk.qcow2`, `disk.vdi`, `startup-<n>.iso`, `*.sock`, `vde/` | Working disks (one per engine), ISO, sockets: never JSON; `disk.qcow2` and `disk.vdi` go in a ZIP, on request. |
 
 ## 2. The files
 
@@ -230,8 +230,11 @@ owner (a ZIP that adds one is refused).
 }
 ```
 
-(Example from `examples/lan.zip`, two of its four hosts.) The engine can be changed
-only while the session has no host. A runner that has only one engine uses it.
+(Example from `examples/lan.zip`, two of its four hosts.) The engine is the engine of the
+session at the time of saving; it can be changed (header select, `session.setEngine`)
+while no host of the session is up or busy, and the hosts keep their data: see 2.7. A
+loaded ZIP's engine becomes the session engine. A runner that has only one engine uses it.
+`schemaVersion` stays 1: this file did not change.
 
 ### 2.6 `<session>/meta.json`
 
@@ -250,49 +253,78 @@ the server sends; never exported, and a ZIP containing it is refused.
 
 ### 2.7 `<host>/host.json`
 
+**Format decision (VBX02): `schemaVersion` 2, no migration.** The host no longer has an
+engine (the engine is the session's and may change), its `config` holds the settings of
+both engines, and a ZIP records one base image identity per working disk. The reader
+accepts only 2 and refuses 1 like any other version (*Invalid configuration for h-...*); an
+`engine`, `disk` or `baseImage` key is an unknown keyword. A session ZIP saved in format 1
+is not readable any more: delete it or rewrite its `host.json` files by hand (remove
+`engine`, set `schemaVersion` to 2, and in a ZIP with disks replace `baseImage` by
+`baseImages`). `examples/*.zip` are rewritten.
+
 | Keyword | Values / validation | Default | Flag |
 |:--|:--|:--|:--|
-| `schemaVersion` | `{1}` | `1` | F |
+| `schemaVersion` | `{2}` | `2` | F |
 | `id` | host ID, equal to its directory name | generated | F |
 | `name` | 1–64 characters, no control character, unique in the session (case-insensitive on import) | `h<n>` | E |
 | `system` | system ID of `config.json` (not `default`) | — | F |
-| `engine` | `{qemu, vbox}`, equal to the session engine | session engine | F |
-| `config` | sparse overrides: only keys among `memory`, `cpus`, `clock`, `startupDiskEnabled`, `serialPorts`, validated like the catalog (2.1); a value equal to the system default is not stored | `{}` | E |
-| `config.serialPorts` | prefix of the system's `serialPorts` | system's | E |
+| `config` | sparse overrides: keys `keyword`, `keyword:qemu` or `keyword:vbox` with `keyword` among `memory`, `cpus`, `clock`, `startupDiskEnabled`, `serialPorts`; each value validated like the catalog (2.1) against the system profile of its engine; an unsuffixed value against the profile of BOTH engines | `{}` | E |
+| `config.serialPorts`, `config.serialPorts:<engine>` | prefix of the system's `serialPorts` for that engine (debian13-legacy: `ttyS0` and `ttyS1` under QEMU, `ttyS0` only under VirtualBox, so an unsuffixed list of two ports is refused) | system's | E |
 | `network.interfaces` | ordered list of 0–4 entries; the only key of `network` | one disconnected | E |
 | `network.interfaces[].switchId` | switch ID of the same session, or `null` | `null` | E |
 | `network.interfaces[].port` | integer 1–32 if connected (unique per switch), `null` otherwise | first free | G |
 | `network.interfaces[].mac` | `xx:xx:xx:xx:xx:xx` lowercase, unique in the session; `02:` + 5 bytes of SHA-256 of `<id>:<index>` | allocated | G |
-| `baseImage` | ZIP only, only for a host saved with its working disk: `{format, size, sha256}` | — | G |
-| `baseImage.format` | `{raw}` for qemu, `{vdi}` for vbox | — | G |
-| `baseImage.size` | integer, bytes of the base image | — | G |
-| `baseImage.sha256` | 64 lowercase hex, SHA-256 of the base image | — | G |
+| `baseImages` | ZIP only, only for a host saved with working disks: one record per disk of the ZIP, keyed by the format of the base image the disk depends on; the keys are exactly the disks present (`raw` for `disk.qcow2`, `vdi` for `disk.vdi`) | — | G |
+| `baseImages.raw`, `baseImages.vdi` | `{size, sha256}` and nothing else: bytes and 64 lowercase hex SHA-256 of the base image file | — | G |
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "h-2ff82cc0d54ff610",
   "name": "grave",
   "system": "debian13-legacy",
-  "engine": "qemu",
-  "config": {"startupDiskEnabled": true},
+  "config": {
+    "startupDiskEnabled": true,
+    "memory:vbox": 2048,
+    "cpus:qemu": 2,
+    "serialPorts:qemu": ["ttyS0", "ttyS1"],
+    "clock:vbox": "localtime"
+  },
   "network": {"interfaces": [
     {"switchId": "s-210a52699538eb60", "port": 4, "mac": "02:a8:8a:35:8d:4c"}
-  ]}
+  ]},
+  "baseImages": {
+    "raw": {"size": 2147483648, "sha256": "<64 hex>"},
+    "vdi": {"size": 1879048192, "sha256": "<64 hex>"}
+  }
 }
 ```
 
+(`baseImages` only in a ZIP saved with `disk.qcow2` and `disk.vdi`.)
+
 Rules:
 
-- There is no profile hash any more. The identity of a base image is its SHA-256
-  and size, recorded as `baseImage` in the ZIP, and only for hosts that carry a
-  working disk (a host without disk starts from whatever image is installed).
+- **Resolution for the current engine E:** `keyword:E` if present, else `keyword`, else the
+  system profile of E (`config.json`, 2.1). Only the runner resolves; `launchSettings` and
+  the startup disk option of a live host are these values.
+- **Writing:** Host Settings (and the startup CD-ROM switch) write only the keys of the
+  current engine, so editing under VirtualBox never changes the QEMU values and an engine
+  switch loses nothing. `keyword:E` is stored only when the value differs from what E
+  would resolve to without that key: the profile default, or the unsuffixed value when
+  there is one (then the profile default is stored explicitly as `keyword:E`). Unsuffixed
+  keys are never written by QemuWeb; they are for files written by hand. Network, name,
+  system and the startup files are engine independent.
+- There is no profile hash. The identity of a base image is its SHA-256 and size, recorded
+  as `baseImages` in the ZIP, and only for hosts that carry working disks (a host without
+  disk starts from whatever image is installed).
 - A disconnected interface has `"switchId": null, "port": null` but keeps its MAC.
-- The importer also accepts a `disk` key and ignores it: it is recomputed from
-  the presence of `<host>/disk.qcow2` in the ZIP.
+- The disks of a ZIP are the members `<host>/disk.qcow2` and `<host>/disk.vdi`; a
+  `disks` key in `host.json` is refused (it is computed from the members).
 - Interface changes, hardware changes and the startup-disk option apply at the
   next start, not by hotplug. The editable startup script is not in this file:
   it is `startup/start.sh` (section 2.10).
+- The switch of the session engine does not rewrite `host.json`: nothing in it depends on
+  the engine.
 
 ### 2.8 `<switch>/switch.json`
 
@@ -339,31 +371,33 @@ HOST debian13-legacy  grave    s1
 ### 2.10 Session archive (ZIP)
 
 `qemuweb-session.zip`, UTF-8 names, stored entries (Deflate only for
-`disk.qcow2`), data descriptors, ZIP64 sizes when needed. Layout (real
+`disk.qcow2` and `disk.vdi`), data descriptors, ZIP64 sizes when needed. Layout (real
 `examples/lan.zip`, one host shown):
 
 ```text
 session.json
 h-2ff82cc0d54ff610/host.json
 h-2ff82cc0d54ff610/startup/start.sh        (and companion files)
-h-2ff82cc0d54ff610/disk.qcow2              (only "save with working disks")
+h-2ff82cc0d54ff610/disk.qcow2              (only "save with working disks", QEMU disk if it exists)
+h-2ff82cc0d54ff610/disk.vdi                (same, VirtualBox disk if it exists)
 s-210a52699538eb60/switch.json
 ```
 
-Never in a ZIP: `meta.json`, ISO, sockets, VirtualBox disks (a VirtualBox session
-cannot save working disks), RAM, running processes.
+A host may carry both disks whichever engine is current; `disk.vdi` is the VirtualBox
+differencing disk. Never in a ZIP: `meta.json`, ISO, sockets, the VirtualBox machine,
+RAM, running processes.
 
 What is rejected on load (`runner/archive-zip.js`, `runner/archive-snapshot.js`):
 
 | Check | Rule |
 |:--|:--|
-| Entry names | only `session.json`, `<id>/host.json` \| `switch.json` \| `disk.qcow2` \| `startup/<path>`; no `..`, absolute, `\` or control character; no duplicate |
+| Entry names | only `session.json`, `<id>/host.json` \| `switch.json` \| `disk.qcow2` \| `disk.vdi` \| `startup/<path>`; no `..`, absolute, `\` or control character; no duplicate |
 | Structure | single volume; sizes, CRC, local and central headers must agree; no hidden or overlapping entry; no comment, no symbolic link |
-| Limits | archive 4 GiB; 10000 entries; metadata files 4 MiB; one disk 64 GiB; total 256 GiB; 64 MiB free space kept |
+| Limits | archive 4 GiB; 10000 entries; metadata files 4 MiB; one working disk 64 GiB; total 256 GiB; 64 MiB free space kept |
 | `session.json` | `schemaVersion` 1, only `engine`, `hosts`, `switches`; engine available on this runner; no duplicate ID |
-| Node files | `id` equals the directory; `host.json` and `switch.json` `schemaVersion` 1, the latter with `kind: vde` |
-| Hosts | `system` exists in this `config.json`; `engine` equals the archive engine; overrides valid; at most 4 interfaces; MACs and (switch, port) unique; a connected interface names a switch of the archive; start script variables resolvable when the startup disk is on |
-| Working disk | `baseImage` present, same format and size and SHA-256 as the local image, else refused (or discarded with "Discard working disks"); QCOW2 must have a raw backing file and the recorded virtual size, then is rebased and checked |
+| Node files | `id` equals the directory; `host.json` `schemaVersion` 2 (1 is refused, with no migration), `switch.json` `schemaVersion` 1 with `kind: vde` |
+| Hosts | only the keys of 2.7 (`engine`, `disk`, `baseImage` are refused); `system` exists in this `config.json`; `config` keys valid (`keyword`, `keyword:qemu`, `keyword:vbox`), each value valid for the profile of its engine (an unsuffixed one for both); at most 4 interfaces; MACs and (switch, port) unique; a connected interface names a switch of the archive; start script variables resolvable when the startup disk is on |
+| Working disks | `baseImages` has exactly one record `{size, sha256}` per disk member (`raw` for `disk.qcow2`, `vdi` for `disk.vdi`), none when there is no disk; each equals the size and SHA-256 of the local base image of that format (a missing local image counts as different), else the whole load is refused, or every disk of the archive is discarded with "Discard working disks" (no partial acceptance). `disk.qcow2` must have a raw backing file and the recorded virtual size, then is rebased and checked; `disk.vdi` must be a differencing VDI (header) of the same disk size whose parent UUID is the local base `.vdi`'s. **A saved VirtualBox disk only loads on a machine whose base `.vdi` is byte-identical**: every conversion to VDI gets a new UUID, so images rebuilt or built elsewhere differ; there is no re-parenting |
 | Session | the current session must be empty (HTTP 409 otherwise) |
 
 On success the runner writes its own `session.json` and `host.json` files; the
@@ -482,8 +516,13 @@ The VM name is `qemuweb-<pid>-<session>-<node>`; `controlvm`, `showvminfo`,
 | `extraOptions` | † not defined for VirtualBox |
 
 `ostype` (`Linux_64`), controller names and chip sets are runner constants, not
-keywords. A VirtualBox session cannot save working disks in a ZIP, and no QEMU
-monitor exists (`mon.sock`).
+keywords. The differencing disk `disk.vdi` is created at the first start under VirtualBox,
+kept (the machine stays registered) until Reset or the removal of the host, and goes in a
+ZIP with the other engine's disk. A `disk.vdi` loaded from a ZIP has no registered machine: the
+next start creates the machine around it (`internalcommands sethduuid` on that file inside
+the node directory, `openmedium` of the base image, `createvm`/`modifyvm`/`storagectl`/
+`storageattach` as above, without `createmedium`), and on a failure leaves the file
+untouched (Reset starts over). No QEMU monitor exists (`mon.sock`).
 
 ### 3.3 `.env` and `.env.local`
 
@@ -524,9 +563,9 @@ when the startup disk is on.
 | Add a host (or topology load) | `<host>/`, `host.json`, `startup/start.sh`; `session.json` |
 | Add a switch | `<switch>/`, `switch.json`; `session.json` |
 | Edit host settings, cabling, rename | `host.json` (rewritten, atomic); `startup/*` for scripts |
-| Change engine | `session.json` (only with no host) |
+| Change engine | `session.json`; nothing else is written or removed (only while no host is up or busy) |
 | Start a host | `disk.qcow2` or `disk.vdi` (first start), `startup-N.iso`, sockets; `host.json` unchanged |
-| Stop or Reset | sockets removed; Reset also removes the working disk; JSON unchanged |
+| Stop or Reset | sockets removed; Reset also removes the working disk of the current engine only; JSON unchanged |
 | Start a switch | `vde/`, `mgmt.sock`; removed at stop |
 | Save session (ZIP) | `session.json` rewritten; the ZIP is built in the session directory and streamed, then removed; with working disks, running nodes are stopped first |
 | Load session (ZIP) | staging directory, then `<node>/` directories moved in, `session.json` and node JSON rewritten by the runner |
@@ -546,5 +585,5 @@ every operation and no existing file is rewritten by the edit itself.
 - Resume reuses the system, the engine, the QEMU options captured at the first
   start and the working disk (which only stores differences from the old image);
   only `memory`, `cpus`, `clock` and `serialPorts` are applied again.
-- Only a ZIP records the image identity (`baseImage`, for hosts with a working
-  disk). `.sha256` sidecars let the runner compare it without reading the image.
+- Only a ZIP records the image identity (`baseImages`, for hosts with working
+  disks). `.sha256` sidecars let the runner compare it without reading the image.

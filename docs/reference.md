@@ -11,7 +11,7 @@ web interface is described in the [user guide](user-guide.md).
 | [`.env`](../.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
 | `users.json` | User accounts (see [Users and sessions](user-guide.md#users-and-sessions)); ignored by Git. |
-| `runtime/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks, and sockets. The ID is random. |
+| `runtime/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks (`<host>/disk.qcow2` for QEMU and `<host>/disk.vdi` for VirtualBox, up to one per engine), and sockets. The ID is random. |
 | `runtime/users/<login>` | Link to the user's session directory, for administrators. |
 | `runtime/runner-<port>.sock` | Socket (mode 0600) that the runner, which runs the machines, dials to reach the server. |
 

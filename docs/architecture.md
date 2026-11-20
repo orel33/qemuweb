@@ -244,6 +244,8 @@ The server is split into layers with one-way dependencies:
 | `runner/endpoint.js` | The runner side of a connection: requests in arrival order, events, console output coalescing and backpressure. |
 | `runner/commands/` | Commands by area (nodes, hosts, settings, topology, archives, consoles); their results are the JSON bodies of the HTTP API. |
 | `runner/session.js` | One session as the runner holds it: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date). |
+| `runner/engine-switch.js` | Changing the session engine with hosts present: refused while a host is up or busy, then each host selects the settings (resolved from its `host.json` config) and the working disk of the new engine; nothing is deleted. |
+| `runner/archive-disks.js`, `runner/media/vdi.js` | Working disks of a ZIP on load: `baseImages` identities per disk format, and the VDI header check. |
 | `runner/session-runner.js` | The runtime of one session; `stopAllNodes` stops every host then every switch and keeps the nodes; `startAllNodes` starts every stopped switch then every stopped host (Resume all and the automatic start of a loaded session); both skip nodes with an action in progress. |
 | `runner/context.js` | Per-session context: session, commands, paths, `hostNodes()` of every session of the runner, console flow, events. |
 | `runner/archive-snapshot.js`, `runner/archive-zip.js` | What a session ZIP contains, and the ZIP format itself. |
@@ -286,7 +288,8 @@ order. State that several modules reassign lives on the `store` object of
 | `node-dialogs.js` | Add switch and Clone dialogs. |
 | `host-settings.js` | Host Settings dialog, also used to add a host. |
 | `startup-media.js` | Startup tab: `start.sh` template, startup disk and extra files. |
-| `general-settings.js` | General Settings dialog. |
+| `general-settings.js` | General Settings dialog (naming scheme, console font). |
+| `engine-select.js` | The **Session Engine** select of the header: the pure rules (value, disabled, reason), live freeze while a host is up or busy, change request, notes of Host Settings. |
 | `topology.js` | The Load Topology dialog (same structure as Load Session) and the `.topo` download, and the start of the saved view. |
 | `load-menu.js`, `load-steps.js`, `file-kinds.js` | The Load button's upward menu (From User Files, From Server (Examples) with its small dialog) and the check of a chosen file by extension and content; the steps list and the Close step (which removes the previous session with `removeAllNodes` of `nodes.js`, once, when Load is pressed after the file was read and checked) shared by the Load Session and Load Topology dialogs; and the pure rules (kind and routing of a file, the Save status line, the warning, the timing of the closing, menu item states). |
 | `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
@@ -407,8 +410,13 @@ Checked on the QEMU of `.env.local` before writing the code:
 [`config.json`](../config.json) defines system profiles and base image paths.
 `scripts/prepare.sh` downloads and prepares those images in `images/`: RAW for
 QEMU and VDI for VirtualBox. At runtime, each host gets its own working disk
-under `runtime/sessions/<id>/` without changing the base image. QEMU uses a QCOW2
-disk backed by RAW; VirtualBox uses a differential VDI. `session.json`,
+PER ENGINE under `runtime/sessions/<id>/<host>/` without changing the base image:
+QEMU uses `disk.qcow2` (QCOW2 backed by RAW), VirtualBox `disk.vdi` (a differencing
+VDI). Both may coexist in a node directory and each engine uses only its own
+(`runner/media/disks.js`). Each is created at the first start under its engine and kept
+across stops (QEMU reuses the file; the VirtualBox machine stays registered and the
+start is a `startvm`); a disk loaded from a ZIP has no registered VirtualBox machine,
+so the first start creates the machine around it (`ensureVirtualBoxMachine`). `session.json`,
 `host.json`, `switch.json`, startup scripts, and sockets also live in `runtime/`.
 The JSON files are specified in [json-files.md](json-files.md).
 `runtime/users/<login>` links to the user's session directory. The session ID
@@ -416,7 +424,7 @@ stays random and never contains the login, which keeps socket paths short and
 logins out of archives.
 
 Stopping a host keeps its working disk for a later start. Resetting recreates
-the disk from the base image. Removing a node or stopping the server cleans
+the disk of the current engine from the base image (the other engine's disk is kept). Removing a node or stopping the server cleans
 up its temporary files. A ZIP export can preserve a session explicitly; a
 `.topo` file describes only hosts, switches, and their connections.
 
@@ -435,7 +443,8 @@ pair (`test/unit/runner-pair.js`).
 | --- | --- |
 | Node records (configuration, runtime state, run log, serial buffer, disks, startup files, launch settings, NIC assignment) | Runner (source of truth) |
 | `runtime/sessions/<id>/`: `session.json`, `meta.json`, `host.json`, `switch.json`, `startup/`, working disks, sockets, hostname aliases | Runner |
-| Session engine (`qemu`/`vbox`) | Runner (in `session.json`) |
+| Session engine (`qemu`/`vbox`), changed by `session.setEngine` (409 while a host is up or busy; answer and `session.settings` list `unavailableHosts`) | Runner (in `session.json`) |
+| Settings of a host for both engines (`config` keys `keyword`, `keyword:qemu`, `keyword:vbox`) | Runner (in `host.json`) |
 | System catalog (`config.json`), executables, `/dev/kvm`, resource sampling | Runner |
 | Login → session ID, owner, creation date, last activity, archive lock, HTTP routers, Socket.IO rooms, console control, view states, audit logs | Control plane |
 | `runtime/users/<login>` alias, `runtime/server-<port>.*` records | Control plane (local filesystem only) |
@@ -521,7 +530,7 @@ Nodes (args mirror the HTTP bodies and queries): `nodes.list`,
 
 Catalog and files: `catalog.systems`, `topology.preview {text, engine}`,
 `topology.load {text, engine, autostart}`, `topology.export`,
-`archive.estimate {includeDisks}`, `archive.check {engine, baseImages}`,
+`archive.estimate {includeDisks}` (answer: `workingDisks {qemu, vbox}`), `archive.check {baseImages}` (`{system: {raw?, vdi?}}`),
 `archive.export {includeDisks}` (result `{stream, size}`, then the ZIP on that
 stream), `archive.import {stream, query, contentType, declaredBytes}`
 (the CP sends the uploaded ZIP on that stream as it arrives, with the HTTP
