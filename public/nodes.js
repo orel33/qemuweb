@@ -259,6 +259,17 @@ export async function resetActiveMachine() {
   finally { machine.busy = false; updateControls(); }
 }
 
+// Removes every host and switch of the session (the Remove all button, and the Load dialog before a session replaces
+// the current one); throws the server's error message.
+export async function removeAllNodes() {
+  store.exitAllBusy = true; updateControls();
+  try {
+    const result = await requestJson('/api/nodes', {method: 'DELETE'}, 'Failed to remove all hosts and switches');
+    for (const id of result.removed) machines.delete(id);
+    showPage();
+  } finally { store.exitAllBusy = false; updateControls(); }
+}
+
 export function initNodes() {
   Promise.all([
     fetch('/api/systems').then(response => response.json()),
@@ -316,12 +327,7 @@ export function initNodes() {
   exitAllButton.onclick = async () => {
     if (exitAllButton.disabled) return;
     if (!await confirmAction('Remove all hosts and switches', 'Remove all hosts and switches from this session?\n\nAll working disks will be deleted and their changes lost.', 'Remove all')) return;
-    store.exitAllBusy = true; updateControls();
-    try {
-      const result = await requestJson('/api/nodes', {method: 'DELETE'}, 'Failed to remove all hosts and switches');
-      for (const id of result.removed) machines.delete(id);
-      showPage();
-    } catch (error) { showStatusError(`Cannot remove all hosts and switches: ${error.message}`); }
-    finally { store.exitAllBusy = false; updateControls(); }
+    try { await removeAllNodes(); }
+    catch (error) { showStatusError(`Cannot remove all hosts and switches: ${error.message}`); }
   };
 }

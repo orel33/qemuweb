@@ -135,7 +135,6 @@ let archiveLoadImported = false;
 
 let archiveEstimateRequest = 0;
 const topologyOnlyChoice = document.getElementById('save-topology-only');
-const saveSessionOptions = document.getElementById('save-session-options');
 const topologyOnlyKey = 'qemuweb.save-topology-only';
 // The last choice of "Save only the topology", kept in this browser; the dialog works without it.
 function rememberedTopologyOnly() {
@@ -144,12 +143,14 @@ function rememberedTopologyOnly() {
 // Shows the Save dialog for the checkbox: the session ZIP options and estimate, or only the topology download.
 function applySaveChoice() {
   const choice = saveChoice(topologyOnlyChoice.checked);
-  saveSessionOptions.hidden = !choice.sessionOptions;
-  archiveEstimate.hidden = !choice.sessionOptions;
+  // Nothing is hidden: the dialog keeps its size. The disk option is disabled and the estimate line says why.
+  archiveChoice.disabled = !choice.sessionOptions;
+  archiveChoice.parentElement.title = choice.optionNote;
+  if (!choice.sessionOptions) { archiveChoice.checked = false; archiveWorkingDiskWarning.hidden = true; }
   archiveConfirm.textContent = choice.confirmLabel;
   archiveError.hidden = true;
   if (choice.sessionOptions) { archiveIntro.textContent = 'Save your current session.'; updateArchiveEstimate(); }
-  else { archiveEstimateRequest++; archiveIntro.textContent = 'Save the hosts, switches and links as a topology text file.'; archiveConfirm.disabled = false; }
+  else { archiveEstimateRequest++; archiveIntro.textContent = 'Save the hosts, switches and links as a topology text file.'; archiveEstimate.textContent = choice.estimate; archiveConfirm.disabled = false; }
 }
 async function updateArchiveEstimate() {
   const request = ++archiveEstimateRequest;
@@ -169,11 +170,6 @@ async function updateArchiveEstimate() {
     if (request !== archiveEstimateRequest) return;
     archiveEstimate.textContent = ''; archiveError.textContent = error.message; archiveError.hidden = false;
   }
-}
-
-const archiveLoadBlockedDialog = document.getElementById('session-archive-load-blocked-dialog');
-export function showArchiveLoadBlockedWarning() {
-  if (!archiveLoadBlockedDialog.open) archiveLoadBlockedDialog.showModal();
 }
 
 // The review state: the options and OK, shown once the archive was read and its base images checked.

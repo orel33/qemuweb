@@ -26,9 +26,30 @@ export function loadFlow(kind) {
   return kind === 'session' ? 'archive' : kind === 'topology' ? 'topology' : null;
 }
 
-// Whether a load of this kind needs an empty session (a session ZIP does, a topology does not).
-export function needsEmptySession(kind) {
-  return kind === 'session';
+// Whether loading a file of this kind first needs the user's confirmation to remove what the session holds: a
+// session ZIP replaces the session, so it does when the session is not empty; a topology is added to it and never does.
+export function needsReplaceConfirmation(kind, nodeCount) {
+  return kind === 'session' && nodeCount > 0;
+}
+
+// "2 hosts", "1 host", "no host".
+export function countPhrase(count, singular, plural = `${singular}s`) {
+  return count === 0 ? `no ${singular}` : `${count} ${count === 1 ? singular : plural}`;
+}
+
+// The text of the confirmation shown before a session replaces the current one.
+export function replaceMessage(hosts, switches) {
+  return `Your current session has ${countPhrase(hosts, 'host')} and ${countPhrase(switches, 'switch', 'switches')}. Loading a session replaces it: they will be stopped and removed (working disks included) before the new session is loaded. To keep a copy, cancel and use Save first.`;
+}
+
+// The label of an example in the dropdown: "name · Topology|Session · size".
+export function exampleOptionLabel(example) {
+  return `${example.name} · ${kindLabel(example.kind)} · ${formatSize(example.size)}`;
+}
+
+// Whether Load example is enabled: an example of the list is chosen (not the placeholder).
+export function canLoadExample(value, examples) {
+  return typeof value === 'string' && value !== '' && examples.some(example => example.name === value);
 }
 
 export const kindLabel = kind => (kind === 'session' ? 'Session' : 'Topology');
@@ -40,10 +61,11 @@ export function formatSize(bytes) {
   return `${(bytes / 1073741824).toFixed(2)} GB`;
 }
 
-// What the Save dialog shows: with "Save only the topology" the working disk options, the size
-// estimate and the progress are hidden and the .topo text is downloaded; otherwise the session ZIP.
+// What the Save dialog does for the checkbox "Save only the topology": the dialog keeps its size, so nothing
+// is hidden. With it, the working disk option is disabled (with its reason) and the estimate line says there is
+// no disk, and the .topo text is downloaded; otherwise the session ZIP.
 export function saveChoice(topologyOnly) {
   return topologyOnly
-    ? {sessionOptions: false, confirmLabel: 'Download .topo', fileName: 'network.topo'}
-    : {sessionOptions: true, confirmLabel: 'Download ZIP', fileName: 'qemuweb-session.zip'};
+    ? {sessionOptions: false, estimate: 'Topology file: no disks', optionNote: 'Not used for a topology file', confirmLabel: 'Download topology', fileName: 'network.topo'}
+    : {sessionOptions: true, estimate: null, optionNote: '', confirmLabel: 'Download ZIP', fileName: 'qemuweb-session.zip'};
 }

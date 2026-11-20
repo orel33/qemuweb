@@ -513,10 +513,36 @@ body[data-view-driven="true"] .view-control { pointer-events: none; opacity: .45
 .save-choice { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
 .load-file-label { display: grid; gap: 6px; margin: 0 0 16px; font-size: 13px; color: #d7e4f2; }
 .load-file-label input { max-width: 100%; }
-#load-examples h3 { margin: 0 0 8px; font-size: 14px; color: #9daec0; }
-.example-list { margin: 0 0 16px; padding: 0; list-style: none; display: grid; gap: 6px; max-height: 40vh; overflow-y: auto; }
-.example-item { width: 100%; display: grid; grid-template-columns: 1fr auto auto; gap: 2px 10px; align-items: baseline; text-align: left; padding: 8px 10px; }
-.example-name { font-weight: 600; overflow-wrap: anywhere; }
-.example-kind, .example-size { font-size: 12px; color: #9daec0; }
-.example-description { grid-column: 1 / -1; font-size: 12px; color: #b8c7d8; overflow-wrap: anywhere; }
+#load-examples { margin: 0 0 16px; }
+#load-examples select { max-width: 100%; }
+#load-examples button { margin-top: 4px; }
+.example-description { margin: 8px 0 12px; font-size: 12px; color: #b8c7d8; overflow-wrap: anywhere; min-height: 1.4em; }
+#load-replace-text { margin-top: 0; }
+#load-replace-status { color: #9daec0; font-size: 13px; }
 #load-error { margin: 0 0 14px; color: #ffb2b4; font-size: 13px; }
+
+/* Fixed size: the Save and Load dialogs never change height between their states. What comes and goes keeps its
+   slot (visibility instead of display), and the Load body shows its two states in one grid cell. Where the screen is
+   too small the dialog scrolls inside instead. */
+#session-archive-dialog, #load-dialog { max-height: 94vh; overflow-y: auto; }
+#confirm-session-archive { min-width: 9.5em; }
+#session-archive-estimate { min-height: 1.5em; }
+#session-archive-estimate:empty::before { content: "\00a0"; }
+#archive-working-disk-warning { min-height: 2.8em; }
+#archive-working-disk-warning[hidden] { display: flex; visibility: hidden; }
+#session-archive-progress[hidden] { display: block; visibility: hidden; }
+#session-archive-error { min-height: 3em; margin-top: 0; }
+#session-archive-error[hidden] { display: block; visibility: hidden; }
+label:has(#include-working-disks:disabled) { color: #7f93a8; }
+#load-body { display: grid; min-height: 16rem; }
+#load-picker, #load-replace { grid-area: 1 / 1; align-self: start; }
+#load-picker[hidden] { display: block; visibility: hidden; }
+#load-replace { align-self: stretch; display: flex; flex-direction: column; }
+#load-replace[hidden] { display: flex; visibility: hidden; }
+#load-replace .confirm-actions { margin-top: auto; }
+#load-examples[hidden] { display: block; visibility: hidden; }
+#load-replace-status { min-height: 1.4em; }
+#load-replace-status[hidden] { display: block; visibility: hidden; }
+#load-actions[hidden] { display: flex; visibility: hidden; }
+#load-error { min-height: 2.6em; }
+#load-error[hidden] { display: block; visibility: hidden; }
