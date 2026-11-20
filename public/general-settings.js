@@ -1,6 +1,7 @@
 // General Settings dialog: session engine, naming scheme and console font.
 import {generalSettings, saveGeneralSettings, store} from './state.js';
 import {jsonRequest, requestJson} from './api.js';
+import {refreshSystems} from './systems.js';
 import {applyConsoleAppearance, fitTerminals, panes} from './terminal.js';
 
 let consoleAppearanceChangedWhileOpen = false;
@@ -35,6 +36,7 @@ export function initGeneralSettings() {
     try {
       const body = await requestJson('/api/general-settings', jsonRequest('PUT', {engine}), 'Cannot change session engine');
       generalSettings.engine = body.engine;
+      await refreshSystems();
     } catch (error) {
       defaultEngineSelect.value = generalSettings.engine;
       engineSettingsError.textContent = error.message;
