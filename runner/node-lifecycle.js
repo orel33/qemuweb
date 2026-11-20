@@ -20,7 +20,7 @@ function createLifecycle(ctx) {
   const {stopSwitch} = ctx.vde;
   const {qemuAcceleration, spawnQemu} = ctx.qemu;
   const {sendMonitorCommand} = ctx.monitor;
-  const {vbox, removeVirtualBoxMachine, virtualBoxNetworkArgs, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff} = ctx.vbox;
+  const {vbox, removeVirtualBoxMachine, ensureVirtualBoxMachine, virtualBoxNetworkArgs, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff} = ctx.vbox;
 
   // Refuses a start that would share VT-x with a running host of the other engine. The user reads
   // a sentence that names only hosts of their own session; the details go to the runner's journal.
@@ -94,6 +94,7 @@ function createLifecycle(ctx) {
     node.launchSettings = launchSettings;
     if (node.guestIsoAttached) buildGuestIso(node, tempFile(node, `startup-${node.generation}.iso`));
     if (selectedEngine === 'vbox' && resume) {
+      ensureVirtualBoxMachine(node, image);
       if (!['poweroff', 'aborted'].includes(virtualBoxState(node))) throw new Error('VirtualBox must be powered off before replacing guest startup media.');
       if (node.activeGuestIso) vbox(node, ['storageattach', node.vmName, '--storagectl', 'Guest setup', '--port', '1', '--device', '0', '--type', 'dvddrive', '--medium', 'none']);
     }
@@ -251,12 +252,15 @@ function createLifecycle(ctx) {
     const image = node.selectedImage || {};
     node.machine = null;
     node.activeConfig = null;
-    if (node.engine === 'vbox' && node.everStarted && node.selectedImage) {
-      removeVirtualBoxMachine(node, image, {poweroff: !!current});
-    } else if (current) {
+    if (current && current.kind !== 'vbox') {
       appendLog(node, '$ force kill qemu-system-x86_64: SIGKILL');
       current.kill('SIGKILL');
       try { await waitForChildExit(current, 5000); } catch (_) {}
+    }
+    // The node may hold a VirtualBox machine and disk even when the session engine is QEMU now.
+    const vdi = tempFile(node, 'disk.vdi');
+    if (current?.kind === 'vbox' || fs.existsSync(vdi) || fs.existsSync(tempFile(node, 'vbox-vm'))) {
+      removeVirtualBoxMachine(node, image, {poweroff: current?.kind === 'vbox', files: [vdi]});
     }
     cleanupRunFiles(node, image);
     removeConsoleSockets(node);

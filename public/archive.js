@@ -3,7 +3,7 @@
 import {graphicLayoutKey, machines, saveViewSettings, store} from './state.js';
 import {jsonRequest, sessionLost, requestJson} from './api.js';
 import {downloadTopology} from './topology.js';
-import {closeWarning, nodeCounts, saveChoice, saveStatusLine} from './file-kinds.js';
+import {archiveDisksPhrase, closeWarning, nodeCounts, saveChoice, saveStatusLine, workingDisksNote} from './file-kinds.js';
 import {closePreviousSession, createSteps, warningSlot} from './load-steps.js';
 
 const archiveDialog = document.getElementById('session-archive-dialog');
@@ -51,10 +51,13 @@ async function archiveJson(file, entry) {
 // Reads session.json and the list of working disks from the ZIP, without uploading it.
 async function readArchiveSummary(file) {
   const entries = await archiveEntries(file);
-  const diskHosts = [...entries.keys()].map(name => /^(h-[0-9a-f]{16})\/disk\.qcow2$/.exec(name)?.[1]).filter(Boolean);
+  // The hosts that carry a working disk, and how many disks of each engine (disk.qcow2, disk.vdi).
+  const diskNames = [...entries.keys()].map(name => /^(h-[0-9a-f]{16})\/disk\.(qcow2|vdi)$/.exec(name)).filter(Boolean);
+  const diskHosts = [...new Set(diskNames.map(match => match[1]))];
+  const diskCounts = {qemu: diskNames.filter(match => match[2] === 'qcow2').length, vbox: diskNames.filter(match => match[2] === 'vdi').length};
   const session = await archiveJson(file, entries.get('session.json'));
   const hosts = await Promise.all(session.hosts.map(id => archiveJson(file, entries.get(`${id}/host.json`))));
-  return {entries, diskHosts, session, startupDisks: countStartupDisks(hosts, [...entries.keys()])};
+  return {entries, diskHosts, diskCounts, session, startupDisks: countStartupDisks(hosts, [...entries.keys()])};
 }
 // host.json only records startupDiskEnabled when it differs from the system profile, which the browser
 // does not know: an absent value counts as a startup disk when the host has startup files in the archive.
@@ -62,22 +65,25 @@ function countStartupDisks(hosts, names) {
   return hosts.filter(host => typeof host.config?.startupDiskEnabled === 'boolean'
     ? host.config.startupDiskEnabled : names.some(name => name.startsWith(`${host.id}/startup/`))).length;
 }
-function archiveSummaryText({session, diskHosts, startupDisks}) {
-  const disks = diskHosts.length ? `${countLabel(diskHosts.length, 'working disk')} (qcow2)` : 'no working disk (qcow2)';
+function archiveSummaryText({session, diskCounts, startupDisks}) {
+  const disks = archiveDisksPhrase(diskCounts);
   return [`${countLabel(session.hosts.length, 'host')} and ${countLabel(session.switches.length, 'switch', 'switches')}`,
     `${startupDisks} with startup disk`, disks].join(' · ');
 }
 // Warns before upload when a working disk depends on a base image that changed since the archive was
-// saved. Only hosts with a working disk record that image (host.json "baseImage"); without disks
-// nothing depends on the images.
-async function checkArchiveBaseImages(file, {entries, diskHosts, session}) {
+// saved. Only hosts with a working disk record the images (host.json "baseImages", one per disk format);
+// without disks nothing depends on the images.
+async function checkArchiveBaseImages(file, {entries, diskHosts}) {
   if (!diskHosts.length) return {messages: [], staleDisks: false, changed: false, noDisks: true};
   const hosts = await Promise.all(diskHosts.map(id => archiveJson(file, entries.get(`${id}/host.json`))));
   const baseImages = {};
   for (const host of hosts) {
-    if (host.baseImage && !baseImages[host.system]) baseImages[host.system] = host.baseImage;
+    for (const [format, identity] of Object.entries(host.baseImages || {})) {
+      baseImages[host.system] ||= {};
+      baseImages[host.system][format] ||= identity;
+    }
   }
-  const result = await requestJson('/api/session-archive/check', jsonRequest('POST', {engine: session.engine, baseImages}), 'Cannot check base images.');
+  const result = await requestJson('/api/session-archive/check', jsonRequest('POST', {baseImages}), 'Cannot check base images.');
   const messages = [];
   let staleDisks = false;
   for (const id of result.changed) {
@@ -159,7 +165,7 @@ async function updateArchiveEstimate() {
     const data = await response.json();
     if (request !== archiveEstimateRequest) return;
     if (!response.ok) throw new Error(data.error || 'Cannot estimate session archive.');
-    archiveEstimate.textContent = `Estimated compressed ZIP: ${(data.bytes / 1e6).toFixed(2)} MB`;
+    archiveEstimate.textContent = `Estimated compressed ZIP: ${(data.bytes / 1e6).toFixed(2)} MB${includeDisks ? `. ${workingDisksNote(data.workingDisks)}` : ''}`;
     archiveConfirm.disabled = false;
   } catch (error) {
     if (request !== archiveEstimateRequest) return;

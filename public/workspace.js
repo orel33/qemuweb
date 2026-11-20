@@ -9,6 +9,7 @@ import {renderQemuOptions} from './host-settings.js';
 import {renderGraphic, setGraphicView} from './graphic-view.js';
 import {controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
 import {publishView} from './socket.js';
+import {updateEngineSelect} from './engine-select.js';
 
 let workspaceError = null;
 const resourceMetrics = new Map();
@@ -399,7 +400,7 @@ export function renderTabs() {
     close.type = 'button';
     close.className = 'machine-close write-action';
     close.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
-    close.title = machine.kind === 'switch' ? 'Remove switch' : 'Remove host and delete its working disk';
+    close.title = machine.kind === 'switch' ? 'Remove switch' : 'Remove host and delete its working disk(s)';
     close.setAttribute('aria-label', `${machine.kind === 'switch' ? 'Remove switch' : 'Remove host'} ${machine.hostname}`);
     close.onclick = () => closeMachine(machine.id);
     if (machine.kind === 'host' && machine.pendingRestart) {
@@ -415,6 +416,7 @@ export function renderTabs() {
   markDisabledControls();
 }
 export function updateControls() {
+  updateEngineSelect();
   renderGraphic();
   const machine = activeMachine();
   exitAllButton.disabled = store.exitAllBusy || !machines.size || [...machines.values()].some(item => item.busy);

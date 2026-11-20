@@ -55,7 +55,7 @@ async function archiveView(file) {
     const read = (id, name) => JSON.parse(fs.readFileSync(path.join(stage, id, name), 'utf8'));
     return {
       engine: metadata.engine,
-      diskHosts: paths.filter(name => name.endsWith('/disk.qcow2')).map(name => name.split('/')[0]),
+      diskHosts: paths.filter(name => /\/disk\.(?:qcow2|vdi)$/.test(name)).map(name => name.split('/')[0]),
       nodes: Object.fromEntries([
         ...metadata.switches.map(id => [id, {kind: 'switch', name: read(id, 'switch.json').name}]),
         ...metadata.hosts.map(id => {

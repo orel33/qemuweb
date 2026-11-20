@@ -26,6 +26,8 @@ try {
 
 export const store = {
   images: [],
+  // Engines the runner has (GET /api/general-settings), for the Session Engine select.
+  availableEngines: [],
   namingSchemes: null,
   activeId: null,
   activePaneIndex: 0,

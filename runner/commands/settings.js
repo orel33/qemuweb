@@ -7,21 +7,20 @@ const {selectedProfile, profileSerialPorts} = require('../../common/system-confi
 const {statusError} = require('./errors');
 
 const commands = {
-  'session.settings': ({session, runner}) => ({sessionId: session.id, engine: session.engine, availableEngines: runner.availableEngines}),
+  'session.settings': ({session, runner}) => ({sessionId: session.id, engine: session.engine, availableEngines: runner.availableEngines,
+    unavailableHosts: runner.unavailableHosts(), hostsInUse: runner.hostsInUse()}),
 
   'session.setEngine': ({session, runner, emit}, {body}) => {
     const engine = body?.engine;
     if (!['qemu', 'vbox'].includes(engine) || Object.keys(body || {}).some(key => key !== 'engine')) throw new Error('Invalid session engine.');
     if (!runner.availableEngines.includes(engine)) throw new Error('VirtualBox is unavailable on this server.');
     if (engine !== session.engine) {
-      if ([...session.nodes.values()].some(node => node.kind === 'host')) {
-        throw statusError('Delete existing hosts before changing the session engine.', 409);
-      }
-      session.saveMetadata(engine);
-      session.engine = engine;
+      if (runner.hostsInUse()) throw statusError('Stop all hosts before changing the engine.', 409);
+      runner.switchEngine(engine);
       emit('general-settings-changed', {sessionId: session.id, engine});
+      emit('nodes-changed', {nodeId: null});
     }
-    return {sessionId: session.id, engine: session.engine};
+    return {sessionId: session.id, engine: session.engine, unavailableHosts: runner.unavailableHosts()};
   },
 
   'catalog.systems': ({session, runner}) => {

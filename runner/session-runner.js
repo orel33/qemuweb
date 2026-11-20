@@ -31,6 +31,7 @@ const {createHostConfig} = require('./host-config');
 const {createLaunchPreview} = require('./launch-preview');
 const {createLifecycle} = require('./node-lifecycle');
 const {createResources} = require('./resources');
+const {createEngineSwitch} = require('./engine-switch');
 
 const SAMPLING_INTERVAL_MS = 2000;
 
@@ -61,6 +62,7 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
   ctx.preview = createLaunchPreview(ctx);
   ctx.lifecycle = createLifecycle(ctx);
   ctx.resources = createResources(ctx);
+  ctx.engineSwitch = createEngineSwitch(ctx);
   const {catalog, runtime, guestIso, nics, vde, hostConfig, lifecycle, serial} = ctx;
   const {previewLaunch} = ctx.preview;
   const {monitor} = ctx.monitor;
@@ -88,6 +90,11 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     hostConfiguration: hostConfig.hostConfiguration,
     hostConfigurationResponse: hostConfig.hostConfigurationResponse,
     previewLaunch,
+    // Session engine change (runner/engine-switch.js)
+    hostsInUse: ctx.engineSwitch.hostsInUse,
+    switchEngine: ctx.engineSwitch.switchEngine,
+    unavailableHosts: ctx.engineSwitch.unavailableHosts,
+    selectEngine: ctx.engineSwitch.selectEngine,
 
     // Lifecycle
     start: lifecycle.start,

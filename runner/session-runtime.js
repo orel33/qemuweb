@@ -82,6 +82,9 @@ function createSessionRuntime(ctx) {
         qemuAcceleration: null,
         qemuOptions: null,
         launchSettings: null,
+        // The sparse config of host.json (keys per engine, see common/system-config.js); launchSettings
+        // and guestIsoAttached are its values resolved for the current engine.
+        hostConfig: {},
         selectedImage: null,
         hostname: null,
         hostnameAliasPath: null,

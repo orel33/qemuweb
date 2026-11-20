@@ -23,7 +23,9 @@ const commands = {
   'archive.estimate': (context, {includeDisks}) => {
     const {hosts, switches, logicalBytes, allocatedBytes, estimatedBytes: bytes, runningHosts} = snapshotOf(context).archiveSources(includeDisks, includeDisks);
     return {bytes, logicalBytes, allocatedBytes, hosts: hosts.length, switches: switches.length, includeDisks, runningHosts,
-      hasWorkingDisks: hosts.some(item => item.disk), format: ARCHIVE_NAME};
+      hasWorkingDisks: hosts.some(item => item.disks.length), format: ARCHIVE_NAME,
+      // How many hosts carry a disk of each engine (the Save dialog says which engines' disks go in).
+      workingDisks: {qemu: hosts.filter(item => item.disks.includes('raw')).length, vbox: hosts.filter(item => item.disks.includes('vdi')).length}};
   },
 
   // Builds the archive in the session directory, then sends it on a new stream once the
@@ -50,16 +52,20 @@ const commands = {
       const {sources, hosts} = includeDisks ? archiveSources(includeDisks) : prepared;
       // session.json is the definition of the session, as it is: nothing in it is specific to the live session.
       session.saveMetadata();
-      // A host with a working disk records the identity of the base image that disk depends on, in its host.json.
-      const format = session.engine === 'vbox' ? 'vdi' : 'raw';
+      // A host with working disks records, in its host.json, the identity of the base image each disk
+      // depends on (raw for disk.qcow2, vdi for disk.vdi).
       const exportSources = [];
       for (const item of sources) {
         const host = hosts.find(entry => item.name === `${entry.id}/host.json`);
-        if (host?.disk) {
+        if (host?.disks.length) {
           const file = path.join(session.runtimeDir, `${exportName}.${host.id}.json`);
           exportFiles.push(file);
-          const baseImage = {format, ...await runner.fileSha256Async(runner.imagePath(runner.imageById(host.system).images[format]))};
-          writeJsonAtomic(file, {...JSON.parse(fs.readFileSync(item.file, 'utf8')), baseImage});
+          const baseImages = {};
+          for (const format of host.disks) {
+            const {size, sha256} = await runner.fileSha256Async(runner.imagePath(runner.imageById(host.system).images[format]));
+            baseImages[format] = {size, sha256};
+          }
+          writeJsonAtomic(file, {...JSON.parse(fs.readFileSync(item.file, 'utf8')), baseImages});
           exportSources.push({...item, file});
         } else exportSources.push(item);
       }
@@ -74,17 +80,21 @@ const commands = {
     }
   },
 
-  // Lets the load dialog warn before upload: returns the systems whose current base image
-  // differs from the identity recorded for them (by the hosts that have a working disk).
+  // Lets the load dialog warn before upload: returns the systems for which a current base image
+  // differs from the identity recorded for it (by the hosts that have a working disk).
+  // body.baseImages: {<system>: {raw?: {size, sha256}, vdi?: {size, sha256}}}.
   'archive.check': async ({runner}, {body}) => {
-    const {engine, baseImages} = body || {};
-    if (!['qemu', 'vbox'].includes(engine) || !baseImages || typeof baseImages !== 'object' || Array.isArray(baseImages)) throw new Error('Invalid archived session.');
-    const format = engine === 'vbox' ? 'vdi' : 'raw', changed = [];
-    for (const [id, expected] of Object.entries(baseImages)) {
+    const {baseImages} = body || {};
+    if (!baseImages || typeof baseImages !== 'object' || Array.isArray(baseImages)) throw new Error('Invalid archived session.');
+    const changed = [];
+    for (const [id, formats] of Object.entries(baseImages)) {
       const image = runner.imageById(id);
-      if (!image || !expected || expected.format !== format) { changed.push(id); continue; }
-      const actual = await runner.fileSha256Async(runner.imagePath(image.images[format]));
-      if (actual.size !== expected.size || actual.sha256 !== expected.sha256) changed.push(id);
+      if (!image || !formats || typeof formats !== 'object' || Array.isArray(formats) || Object.keys(formats).some(format => !['raw', 'vdi'].includes(format))) { changed.push(id); continue; }
+      for (const [format, expected] of Object.entries(formats)) {
+        let actual = null;
+        try { actual = await runner.fileSha256Async(runner.imagePath(image.images[format])); } catch (_) { /* not installed */ }
+        if (!expected || !actual || actual.size !== expected.size || actual.sha256 !== expected.sha256) { changed.push(id); break; }
+      }
     }
     return {changed};
   },
