@@ -230,14 +230,23 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .capture-dialog { width: min(720px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); }
 .capture-dialog[open] { display: flex; flex-direction: column; gap: 10px; }
 .capture-dialog p { margin: 0; white-space: normal; }
-.capture-toggle { height: 40px; font-size: 15px; font-weight: 700; }
-.capture-toggle[data-recording="true"] { border-color: #ff6b6b; background: #4a1f24; color: #ffd0d0; }
+.capture-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.capture-row .capture-field { flex: 1 1 260px; flex-wrap: nowrap; }
+.capture-tools { display: flex; gap: 6px; }
+.capture-tool { display: grid; place-items: center; width: 40px; height: 40px; padding: 0; border: 1px solid #45586d; border-radius: 6px; background: #1a2633; color: #d7e1ee; }
+.capture-tool svg { width: 20px; height: 20px; }
+.capture-tool:not(:disabled):hover { background: #304256; }
+.capture-tool:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+.capture-tool:disabled { opacity: 0.45; cursor: not-allowed; }
+#capture-play:not(:disabled) { color: #57dc91; }
+#capture-stop:not(:disabled) { color: #ff777d; }
+#capture-download:not(:disabled) { color: #7fd0e8; }
 .capture-state { color: #d7e1ee; font-size: 13px; }
 .capture-hint { color: #9fb1c7; font-size: 12px; }
 .capture-field { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #d7e1ee; font-size: 13px; }
 .capture-field select, .capture-field input { flex: 1 1 220px; min-width: 0; height: var(--control-small); padding: 0 8px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 13px system-ui, sans-serif; }
 .capture-field input { font-family: ui-monospace, monospace; }
-.capture-saved { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #7ae4a3; font-size: 13px; }
+.capture-saved { color: #7ae4a3; font-size: 13px; }
 .capture-saved[hidden] { display: none; }
 .capture-live-head { display: flex; align-items: center; justify-content: space-between; margin-top: 4px; }
 .capture-live { box-sizing: border-box; height: 240px; margin: 0; padding: 8px; overflow: auto; border: 1px solid #35404c; border-radius: 4px; background: #0b0f14; color: #d7e1ee; font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; white-space: pre; }

@@ -251,21 +251,22 @@ not connected are shown disabled, with the reason as the tooltip.
 - **Start and stop.** Click the **Capture** button (the heartbeat line icon) in the bar of the
   terminal pane of the host (it is not shown for a switch). The dialog names the host; choose
   the **interface** (each one shows the switch it is connected to, such as "Ethernet 0 · to
-  switch lan"; the connected one is preselected) and click **Start capture**. The same button
-  reads **Stop capture** while it records, with the size. In the Graphic view you can also
+  switch lan"; the connected one is preselected) and click the **Play** button (Start capture)
+  next to it. **Stop** (the square) ends the capture, **Download** (the arrow) gives the file; a
+  disabled button says why in its tooltip and in the line under the row. In the Graphic view you can also
   click a link and use **Capture…** in its popover: it opens the dialog on that host and
   interface. Several interfaces of a host can be recorded one after the other; each start
   records one file. A capture recording in another tab of your session shows a red dot on this
   button, and a red **REC** mark on the node and the link in the Graphic view.
-- **Saved at once.** When the capture stops, whether you press **Stop capture** or it ends by
-  itself (size limit, host stopped), the dialog saves `eth0-<date>.pcap` through your
-  browser's normal download (a capture still recording is cut after its last whole packet) and
-  shows "Saved: …" with **Download again** for as long as the dialog stays open. Open the file
-  with Wireshark (`File → Open`) or `tcpdump -r`.
+- **Saved at once.** When the capture stops, whether you press **Stop** or it ends by itself
+  (size limit, host stopped), the dialog saves `eth0-<date>.pcap` through your browser's normal
+  download and shows "Saved: …". **Download** gives the file of the selected interface at any
+  time, also while it records: you get what was captured so far (cut after its last whole
+  packet) and the capture goes on. Open the file with Wireshark (`File → Open`) or `tcpdump -r`.
 - **A capture lives only while the dialog is open.** Closing the dialog (Esc, **Close**, a
   click outside) deletes the capture files; if a capture is still recording, you are asked
-  first ("Closing stops and discards the running capture. Close anyway?"): press **Stop
-  capture** first to save it. Closing or reloading the browser tab does the same on the server,
+  first ("Closing stops and discards the running capture. Close anyway?"): press **Stop**
+  first to save it. Closing or reloading the browser tab does the same on the server,
   so nothing keeps recording unseen. If you open the dialog on a host that another tab of your
   session is capturing (or an administrator who took control), it shows "Recording in another
   tab" without Start or Stop, and closing your dialog leaves that capture alone.

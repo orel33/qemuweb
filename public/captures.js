@@ -80,6 +80,33 @@ export function captureButtonState(machine, captures) {
   return {hidden: false, disabled: false, recording, title};
 }
 
+// The three buttons of the Capture dialog for interface `index` of a host: Play (start), Stop and
+// Download. Each blocker is null when the button is enabled, else the reason it is disabled (also its
+// tooltip). `captures` are the host's captures; `owner(capture)` says 'mine', 'other' or 'free'
+// (captureOwnership). `file` is the capture Download gives: the latest of this interface that this
+// dialog or another tab holds (nothing from a leftover), also while it records: the runner cuts the
+// download after its last whole packet.
+export function captureControls(machine, captures, index, owner) {
+  const here = captures.filter(item => item.index === index);
+  const recording = here.find(item => item.state !== 'stopped') || null;
+  const elsewhere = !!recording && owner(recording) === 'other';
+  const files = here.filter(item => owner(item) !== 'free').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
+  const file = files.at(-1) || null;
+  const rights = canCapture() ? null : 'Read-only observation: take control of the session to capture.';
+  let play = null;
+  if (recording) play = elsewhere ? 'This capture belongs to another window.' : 'This interface is already being captured.';
+  else play = captureBlocker(machine, index);
+  let stop = null;
+  if (!recording) stop = 'Nothing is recording on this interface.';
+  else if (rights) stop = rights;
+  else if (elsewhere) stop = 'This capture belongs to another window: only that window can stop it.';
+  let download = null;
+  if (rights) download = rights;
+  else if (!file) download = 'No capture file yet: start a capture.';
+  else if (file.bytes <= 24) download = 'Nothing was captured yet.';
+  return {recording, elsewhere, file, play, stop, download};
+}
+
 // A capture that ended is saved through the browser's download once, when it holds a packet (a
 // PCAP header alone is 24 bytes). `saved` is the set of the capture IDs already saved.
 export function shouldAutoDownload(capture, saved) {

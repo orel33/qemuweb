@@ -12,7 +12,7 @@ function load({canCapture = true, captures = [], limits = {maxPerNode: 4}} = {})
   const source = moduleSource('captures');
   const context = {canCapture: () => canCapture, capturesOf: () => captures, isRecording: capture => capture.state !== 'stopped', limits};
   vm.createContext(context);
-  vm.runInContext(['hostCaptureBlocker', 'captureBlocker', 'formatBytes', 'interfaceLabel', 'preselectInterface', 'captureButtonState', 'shouldAutoDownload', 'captureOwnership', 'staleCaptures', 'closePlan'].map(name => functionSource(source, name)).join('\n'), context);
+  vm.runInContext(['hostCaptureBlocker', 'captureBlocker', 'formatBytes', 'interfaceLabel', 'preselectInterface', 'captureButtonState', 'shouldAutoDownload', 'captureOwnership', 'staleCaptures', 'closePlan', 'captureControls'].map(name => functionSource(source, name)).join('\n'), context);
   return context;
 }
 const host = (extra = {}) => ({id: 'h-1', kind: 'host', engine: 'qemu', running: true, busy: false, pendingRestart: false, interfaces: ['s-1', null], ...extra});
@@ -118,20 +118,68 @@ test('closing the dialog stops and deletes what it started, deletes leftovers, l
   assert.deepEqual(closePlan([{id: 'x', state: 'stopped'}], new Set(), new Set()).stop, [], 'nothing recording: no question');
 });
 
+test('Play, Stop and Download are enabled by the state of the selected interface, with the reason when not', () => {
+  const owners = {mine: () => 'mine', other: () => 'other'};
+  const rec = (extra = {}) => ({id: 'a', index: 0, state: 'recording', bytes: 5000, startedAt: '2026-01-01T00:00:00Z', ...extra});
+  const done = (extra = {}) => ({id: 'b', index: 0, state: 'stopped', bytes: 5000, startedAt: '2026-01-01T00:00:00Z', ...extra});
+  // Idle, connected: only Play.
+  let controls = load().captureControls(host(), [], 0, owners.mine);
+  assert.deepEqual([controls.play, controls.stop === null, controls.download === null], [null, false, false]);
+  assert.match(controls.stop, /Nothing is recording/);
+  assert.match(controls.download, /No capture file yet/);
+  // Recording, mine: Stop and Download (what was captured so far), no Play.
+  controls = load({captures: [rec()]}).captureControls(host(), [rec()], 0, owners.mine);
+  assert.deepEqual([controls.stop, controls.download], [null, null]);
+  assert.match(controls.play, /already being captured/);
+  assert.equal(controls.file.id, 'a');
+  // Recording, only its header so far: Download waits.
+  assert.match(load({captures: [rec({bytes: 24})]}).captureControls(host(), [rec({bytes: 24})], 0, owners.mine).download, /Nothing was captured yet/);
+  // Finished: Play again and Download, not Stop.
+  controls = load({captures: [done()]}).captureControls(host(), [done()], 0, owners.mine);
+  assert.deepEqual([controls.play, controls.download], [null, null]);
+  assert.match(controls.stop, /Nothing is recording/);
+  // Another tab records: Play and Stop say why, Download is allowed.
+  controls = load({captures: [rec()]}).captureControls(host(), [rec()], 0, owners.other);
+  assert.match(controls.play, /another window/);
+  assert.match(controls.stop, /only that window can stop it/);
+  assert.equal(controls.download, null);
+  assert.equal(controls.elsewhere, true);
+  // The other interface has no file: Download off; its Play is the CAP01 reason when unconnected.
+  controls = load({captures: [rec()]}).captureControls(host(), [rec()], 1, owners.mine);
+  assert.match(controls.play, /not connected/);
+  assert.match(controls.download, /No capture file yet/);
+  // The reasons of CAP01 reach Play: stopped host, observer without control (which also blocks Stop and Download).
+  assert.match(load().captureControls(host({running: false}), [], 0, owners.mine).play, /stopped/);
+  controls = load({canCapture: false, captures: [rec()]}).captureControls(host(), [rec()], 0, owners.mine);
+  assert.match(controls.stop, /Read-only observation/);
+  assert.match(controls.download, /Read-only observation/);
+  // A leftover nobody leases is no file to download.
+  assert.match(load({captures: [done()]}).captureControls(host(), [done()], 0, () => 'free').download, /No capture file yet/);
+  // The latest file of the interface is the one downloaded.
+  const files = [done({id: 'old', startedAt: '2026-01-01T00:00:00Z'}), done({id: 'new', startedAt: '2026-01-01T00:05:00Z'})];
+  assert.equal(load({captures: files}).captureControls(host(), files, 0, owners.mine).file.id, 'new');
+});
+
 test('the Capture dialog and the pane button are wired in the page; the old places are gone', () => {
   const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
-  for (const id of ['capture-dialog', 'capture-interface', 'capture-filter', 'capture-toggle', 'capture-state', 'capture-note', 'capture-saved', 'capture-download-again', 'capture-live', 'capture-live-clear', 'capture-confirm', 'capture-confirm-cancel', 'capture-confirm-close', 'capture-status', 'close-capture-dialog', 'pane-capture-icon']) {
+  for (const id of ['capture-dialog', 'capture-interface', 'capture-filter', 'capture-play', 'capture-stop', 'capture-download', 'capture-state', 'capture-note', 'capture-saved', 'capture-stop-icon', 'capture-download-icon', 'capture-live', 'capture-live-clear', 'capture-confirm', 'capture-confirm-cancel', 'capture-confirm-close', 'capture-status', 'close-capture-dialog', 'pane-capture-icon']) {
     assert.match(html, new RegExp(`id="${id}"`), id);
   }
   assert.match(html, /<dialog class="confirm-dialog capture-dialog"/);
   assert.match(html, /The filter applies to the live view only; the PCAP file stays whole\./);
   assert.match(html, /Closing stops and discards the running capture\. Close anyway\?/);
-  for (const gone of ['capture-controls', 'show-captures', 'captures-dialog', 'captures-list', 'close-captures', 'capture-tab-', 'capture-all-files', 'data-view="capture"']) assert.doesNotMatch(html, new RegExp(gone), `${gone} was removed`);
+  for (const gone of ['capture-controls', 'show-captures', 'captures-dialog', 'captures-list', 'close-captures', 'capture-tab-', 'capture-all-files', 'data-view="capture"', 'capture-toggle', 'capture-download-again']) assert.doesNotMatch(html, new RegExp(gone), `${gone} was removed`);
   const dialog = moduleSource('capture-dialog');
   assert.match(dialog, /captureBlocker\(machine, current\.index\)/, 'the dialog reuses the CAP01 reasons');
   assert.match(dialog, /Closing the window stops and discards the capture\. Press Stop first to save it\./);
   assert.match(dialog, /dialog\.addEventListener\('cancel', event => \{ event\.preventDefault\(\); requestClose\(\); \}\)/, 'Esc asks first');
   assert.match(dialog, /emitOnSession\('capture-lease'/);
+  assert.match(html, /title="Start capture" aria-label="Start capture"/);
+  assert.match(html, /title="Stop capture" aria-label="Stop capture"/);
+  assert.match(html, /title="Download capture \(\.pcap\)" aria-label="Download capture \(\.pcap\)"/);
+  assert.match(html, /<symbol id="capture-stop-icon" viewBox="0 0 24 24"><rect width="18" height="18" x="3" y="3" rx="2"\/>/);
+  assert.match(html, /href="#pane-play-icon"/);
+  assert.doesNotMatch(html.match(/<dialog class="confirm-dialog capture-dialog"[\s\S]*?<\/dialog>/)[0], /#pane-stop-icon/, 'the power icon of the node is not the Stop of a capture');
   assert.match(dialog, /Recording\$\{elsewhere \? ' in another tab' : ''\}/);
   assert.doesNotMatch(dialog, /setPaneView|All captures/);
   assert.match(moduleSource('capture-button'), /createCaptureButton/);

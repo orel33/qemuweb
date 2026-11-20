@@ -5,7 +5,7 @@
 // it started (the server does the same when the tab's socket closes: server/capture-lease.js).
 // The rules and the requests are those of captures.js; nothing is decided here.
 import {machines} from './state.js';
-import {canCapture, captureBlocker, captureOwnership, capturesOf, closePlan, deleteCapture, downloadCapture, formatBytes, interfaceLabel, isRecording, loadCaptures, nameOf, onCapturesChanged, preselectInterface, shouldAutoDownload, staleCaptures, startCapture, stopCapture} from './captures.js';
+import {canCapture, captureControls, captureOwnership, capturesOf, closePlan, deleteCapture, downloadCapture, formatBytes, interfaceLabel, isRecording, loadCaptures, nameOf, onCapturesChanged, preselectInterface, shouldAutoDownload, staleCaptures, startCapture, stopCapture} from './captures.js';
 import {addLiveNote, clearLive, startLive, stopLive} from './capture-live.js';
 import {emitOnSession} from './socket.js';
 
@@ -15,18 +15,19 @@ const dialog = byId('capture-dialog');
 const title = byId('capture-dialog-title');
 const select = byId('capture-interface');
 const filter = byId('capture-filter');
-const toggle = byId('capture-toggle');
+const playButton = byId('capture-play');
+const stopButton = byId('capture-stop');
+const downloadButton = byId('capture-download');
 const stateLine = byId('capture-state');
 const note = byId('capture-note');
 const savedLine = byId('capture-saved');
-const savedName = byId('capture-saved-name');
 const status = byId('capture-status');
 const confirmRow = byId('capture-confirm');
 
 // The host, the selected interface, and what this dialog session knows: the captures it started
 // (`mine`, stopped and deleted at close), the ones the other tabs lease (`leased`, left alone), the
 // ones it saw recording (`watched`, saved when they end), the ones already saved, and the last
-// saved file ("Download again").
+// saved file ("Saved: …").
 const freshSession = (nodeId, index) => ({nodeId, index, mine: new Set(), leased: new Set(), watched: new Set(), saved: new Set(), lastSaved: null});
 let current = freshSession(null, 0);
 let optionsSignature = '';
@@ -107,6 +108,9 @@ function renderInterfaces(machine, captures) {
   select.value = String(current.index);
 }
 
+// The state of the three buttons for the selected interface (captureControls, captures.js).
+const controls = () => captureControls(machines.get(current.nodeId), capturesOf(current.nodeId), current.index, ownerOf);
+
 function render() {
   clearTimeout(timer);
   if (!dialog.open) return;
@@ -116,19 +120,18 @@ function render() {
   const captures = capturesOf(machine.id);
   if (current.index >= (machine.interfaces || []).length) current.index = preselectInterface(machine, captures);
   renderInterfaces(machine, captures);
-  const recording = captures.find(item => item.index === current.index && isRecording(item));
-  const blocker = captureBlocker(machine, current.index);
-  toggle.textContent = recording ? 'Stop capture' : 'Start capture';
-  toggle.dataset.recording = String(!!recording);
-  const elsewhere = !!recording && ownerOf(recording) === 'other';
-  toggle.disabled = elsewhere || (recording ? !!(blocker && /Read-only/.test(blocker)) : !!blocker);
-  toggle.title = elsewhere ? 'This capture belongs to another window: only that window can stop it' : recording ? 'Stop capturing and save the file' : blocker || 'Start capturing this interface';
-  stateLine.textContent = recording ? `Recording${elsewhere ? ' in another tab' : ''} · ${formatBytes(recording.bytes)}` : blocker || 'Not recording';
+  const {recording, elsewhere, play, stop, download} = controls();
+  // A disabled button keeps its reason as the tooltip; the line below the row says it too.
+  for (const [button, label, blocker] of [[playButton, 'Start capture', play], [stopButton, 'Stop capture', stop], [downloadButton, 'Download capture (.pcap)', download]]) {
+    button.disabled = !!blocker;
+    button.title = blocker || label;
+  }
+  stateLine.textContent = recording ? `Recording${elsewhere ? ' in another tab' : ''} · ${formatBytes(recording.bytes)}` : play || 'Not recording';
   note.textContent = captures.some(item => isRecording(item) && current.mine.has(item.id))
     ? 'Closing the window stops and discards the capture. Press Stop first to save it.'
     : 'Records what this interface sends and receives. Pressing Stop saves the file: open it in Wireshark.';
   savedLine.hidden = !current.lastSaved;
-  if (current.lastSaved) savedName.textContent = `Saved: ${current.lastSaved.file}`;
+  if (current.lastSaved) savedLine.textContent = `Saved: ${current.lastSaved.file}`;
   // The size of a running capture is not pushed: look again while one is recording.
   if (captures.some(isRecording)) timer = setTimeout(() => loadCaptures(machine.id), POLL_MS);
 }
@@ -186,12 +189,11 @@ function discard() {
   });
 }
 
-async function toggleCapture() {
+// Play: a new capture of the selected interface (finished leftovers are deleted first).
+async function playCapture() {
   const {nodeId, index} = current;
-  const recording = capturesOf(nodeId).find(item => item.index === index && isRecording(item));
-  toggle.disabled = true;
+  playButton.disabled = true;
   await run(async () => {
-    if (recording) { await stopCapture(nodeId, recording.id); return; }
     await deleteFinished(nodeId);
     current.lastSaved = null;
     const capture = await startCapture(nodeId, index);
@@ -201,16 +203,34 @@ async function toggleCapture() {
     emitOnSession('capture-lease', {nodeId, captureId: capture.id}, result => { if (result?.error) addLiveNote(result.error); });
   });
   refresh();
+  if (!stopButton.disabled) stopButton.focus();
+}
+
+// Stop: the capture ends and sync() saves it.
+async function stopCurrent() {
+  const recording = capturesOf(current.nodeId).find(item => item.index === current.index && isRecording(item));
+  if (!recording) return;
+  stopButton.disabled = true;
+  await run(() => stopCapture(current.nodeId, recording.id));
+  refresh();
+  if (!playButton.disabled) playButton.focus();
+}
+
+// Download: what was captured so far, also while it records (the capture goes on).
+function downloadCurrent() {
+  const {file} = controls();
+  if (file) run(() => downloadCapture(current.nodeId, file));
 }
 
 export function initCaptureDialog() {
   select.addEventListener('change', () => { current.index = Number(select.value); refresh(); });
   filter.addEventListener('change', refresh);
   filter.addEventListener('keydown', event => { if (event.key === 'Enter') refresh(); });
-  toggle.addEventListener('click', toggleCapture);
-  byId('capture-download-again').addEventListener('click', () => { if (current.lastSaved) run(() => downloadCapture(current.nodeId, current.lastSaved)); });
+  playButton.addEventListener('click', playCapture);
+  stopButton.addEventListener('click', stopCurrent);
+  downloadButton.addEventListener('click', downloadCurrent);
   byId('capture-live-clear').addEventListener('click', clearLive);
-  byId('capture-confirm-cancel').addEventListener('click', () => { confirmRow.hidden = true; toggle.focus(); });
+  byId('capture-confirm-cancel').addEventListener('click', () => { confirmRow.hidden = true; (stopButton.disabled ? playButton : stopButton).focus(); });
   byId('capture-confirm-close').addEventListener('click', () => dialog.close());
   byId('close-capture-dialog').addEventListener('click', requestClose);
   // Esc and a click outside ask the same question as the Close button.
