@@ -228,7 +228,7 @@ function loaded(t, options = {}) {
     runtime: {tempFile: (_, name) => path.join(ctx.runtimeDir, name), appendLog: (_, line) => ctx.log.push(String(line)),
       execLogged: (_, command, args, opts) => { ctx.log.push(`$ ${[command, ...args].join(' ')}`); return require('node:child_process').execFileSync(command, args, opts); }},
     catalog: {imagePath: () => base}, disks: {cleanupRunFiles() {}}, commands: {VBOXMANAGE: path.join(ctx.dir, 'VBoxManage')},
-    session: {nodes: new Map()}
+    session: {nodes: new Map([['s1', ctx.sw]])}
   });
   const disk = path.join(ctx.runtimeDir, 'disk.vdi');
   fs.writeFileSync(disk, vdi({type: 4, uuid: '0a19a6ce-c842-4786-bd8b-e0a78f4802c5', parent: parent || BASE_UUID}));
