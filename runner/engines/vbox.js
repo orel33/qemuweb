@@ -2,15 +2,46 @@
 
 // VirtualBox engine: VBoxManage commands, launch, state.
 const fs = require('fs');
+const path = require('path');
 const {execFileSync} = require('child_process');
+const {explainVirtualBoxFailure, failureText, firstErrorLine} = require('./vbox-errors');
 
 function createVirtualBox(ctx) {
-  const {tempFile, execLogged} = ctx.runtime;
+  const {tempFile, execLogged, appendLog} = ctx.runtime;
   const {imagePath} = ctx.catalog;
   const {cleanupRunFiles} = ctx.disks;
 
+  // Runs VBoxManage. A failure is written to the host's Log (the explanation of a known cause, then
+  // the VBoxManage text) and thrown with a short message for the interface.
   function vbox(node, args) {
-    return execLogged(node, ctx.commands.VBOXMANAGE, args, {stdio: 'pipe'});
+    try { return execLogged(node, ctx.commands.VBOXMANAGE, args, {stdio: 'pipe'}); }
+    catch (error) {
+      const text = failureText(error);
+      const explanation = explainVirtualBoxFailure(text);
+      if (explanation) appendLog(node, `# ${explanation}`);
+      appendLog(node, text);
+      throw new Error(explanation || `VirtualBox: ${firstErrorLine(text)}`, {cause: error});
+    }
+  }
+
+  // A cleanup step: its failure is expected (the VM may not exist yet) and is not reported.
+  function vboxIgnoringFailure(node, args) {
+    try { execLogged(node, ctx.commands.VBOXMANAGE, args, {stdio: 'pipe'}); } catch (_) { /* nothing to clean */ }
+  }
+
+  // Unregisters the VM and removes what the node created: its differencing disk(s) and VM folder.
+  // Never passes --delete to unregistervm (VirtualBox would also delete the registered parent, the
+  // base image), and removes the disk by path, only inside the node's own run directory.
+  function removeVirtualBoxMachine(node, image, {poweroff = false} = {}) {
+    if (poweroff) vboxIgnoringFailure(node, ['controlvm', node.vmName, 'poweroff']);
+    vboxIgnoringFailure(node, ['unregistervm', node.vmName]);
+    const runDir = path.resolve(node.runtimeDir) + path.sep;
+    for (const file of image.runFiles || []) {
+      if (!path.resolve(file).startsWith(runDir)) { appendLog(node, `# Not removing ${file}: outside the host's run directory`); continue; }
+      vboxIgnoringFailure(node, ['closemedium', 'disk', file]);
+      fs.rmSync(file, {force: true});
+    }
+    fs.rmSync(tempFile(node, 'vbox-vm'), {recursive: true, force: true});
   }
 
   function virtualBoxNetworkArgs(node, image) {
@@ -59,11 +90,8 @@ function createVirtualBox(ctx) {
       for (const args of virtualBoxCommands(node, image)) vbox(node, args);
       node.machine = {kind: 'vbox', vmDir};
     } catch (error) {
-      try { vbox(node, ['controlvm', node.vmName, 'poweroff']); } catch (_) {}
-      try { vbox(node, ['unregistervm', node.vmName]); } catch (_) {}
-      for (const file of image.runFiles || []) { try { vbox(node, ['closemedium', 'disk', file, '--delete']); } catch (_) {} }
+      removeVirtualBoxMachine(node, image, {poweroff: true});
       cleanupRunFiles(node, image);
-      fs.rmSync(vmDir, {recursive: true, force: true});
       throw error;
     }
   }
@@ -84,7 +112,7 @@ function createVirtualBox(ctx) {
     throw new Error('The host did not respond to the graceful shutdown request.');
   }
 
-  return {vbox, virtualBoxNetworkArgs, virtualBoxCommands, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff};
+  return {vbox, removeVirtualBoxMachine, virtualBoxNetworkArgs, virtualBoxCommands, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff};
 }
 
 module.exports = {createVirtualBox};

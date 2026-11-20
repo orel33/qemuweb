@@ -62,9 +62,9 @@ The server listens only on `127.0.0.1`. To use it from another machine, forward
 the port over SSH (`ssh -L 3002:127.0.0.1:3002 <server>`) or put it behind
 nginx with TLS: see [docs/deployment.md](deployment.md).
 
-VirtualBox is optional: install it separately to provide `VBoxManage`. The
-VirtualBox engine is disabled in the Web interface when `VBoxManage` is
-unavailable.
+VirtualBox is optional: install it separately to provide `VBoxManage` (see
+[VirtualBox](#virtualbox)). The VirtualBox engine is disabled in the Web
+interface when `VBoxManage` is unavailable.
 
 ## Starting the server and the runner by hand
 
@@ -195,6 +195,36 @@ Console** lists the console sockets (`serial0.sock`, `serial1.sock`) and the
 monitor socket. Alpine, OpenWrt and
 VirtualBox hosts have a single console. Debian images prepared before this
 feature have no login on `ttyS1`: run `scripts/prepare.sh` again.
+
+## VirtualBox
+
+QemuWeb is checked with VirtualBox 7.1 (`virtualbox-7.1` from Oracle), on a
+machine whose `vboxdrv` kernel module matches `VBoxManage --version`. After a
+kernel or VirtualBox update, run `sudo /sbin/vboxconfig` (and reboot if the
+module is still the old one).
+
+- **VirtualBox and KVM cannot run at the same time.** VirtualBox 7.1 on x86
+  needs the processor's virtualization extensions (VT-x/AMD-V), which QEMU's KVM
+  holds while one QEMU host runs, and the reverse. The runner refuses the start
+  of a VirtualBox host while a QEMU/KVM host runs on the same runner (any
+  session), and the start of a QEMU/KVM host while a VirtualBox host runs, with a
+  message naming the hosts to stop. The KVM modules may stay loaded: only
+  running machines matter. A program the runner cannot see (another runner, a
+  libvirt machine, a QEMU started by hand) gives the VirtualBox error "another
+  program on this machine holds the virtualization hardware (KVM)": stop it.
+  To use both engines, run them one after the other, or use a machine or a
+  runner dedicated to VirtualBox. Placing a VirtualBox session on a runner free
+  of KVM hosts is not automatic yet.
+- **The group `vboxusers` is not required** when `VBoxHeadless` is setuid root,
+  as in the Oracle package, even though `/dev/vboxdrv` is `root:root 0600`
+  (`/etc/udev/rules.d/60-vboxdrv.rules`). If a start says "VirtualBox cannot
+  open /dev/vboxdrv", add yourself to the group (`sudo usermod -aG vboxusers
+  $USER`) and log in again.
+- **Reading a failure.** A host that fails to start shows a short sentence in its
+  state line and in its **Log** view: a `# …` line that names the cause and the
+  fix, followed by the original `VBoxManage` message. A failed start removes
+  the virtual machine it created, so `VBoxManage list vms` and `VBoxManage list
+  hdds` show nothing of it.
 
 ## Troubleshooting
 

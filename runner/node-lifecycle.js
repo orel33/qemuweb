@@ -8,6 +8,7 @@ const {consoleId} = require('../common/console-id');
 const {readStartupFiles} = require('./media/guest-media');
 const {waitForChildExit} = require('./engines/child-exit');
 const {memoryWarning} = require('./config-warnings');
+const {kvmExclusionError} = require('./engines/kvm-exclusion');
 
 function createLifecycle(ctx) {
   const {requireSessionEngine, imageById, allocateName, qemuOptionsFor, launchSettingsFor, limitSerialPorts, imagePath} = ctx.catalog;
@@ -19,7 +20,7 @@ function createLifecycle(ctx) {
   const {stopSwitch} = ctx.vde;
   const {qemuAcceleration, spawnQemu} = ctx.qemu;
   const {sendMonitorCommand} = ctx.monitor;
-  const {vbox, virtualBoxNetworkArgs, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff} = ctx.vbox;
+  const {vbox, removeVirtualBoxMachine, virtualBoxNetworkArgs, spawnVirtualBox, virtualBoxState, waitForVirtualBoxPowerOff} = ctx.vbox;
 
   function start(nodeId, selectedEngine, imageId, options = {}) {
     const node = getNode(nodeId);
@@ -33,9 +34,10 @@ function createLifecycle(ctx) {
     if (!['qemu', 'vbox'].includes(selectedEngine)) throw new Error('Unknown engine.');
     requireSessionEngine(selectedEngine);
     const acceleration = selectedEngine.startsWith('qemu') ? qemuAcceleration(selectedEngine) : null;
-    if (selectedEngine === 'vbox') {
-      const qemuWithKvm = ctx.hostNodes().some(other => other.kind === 'host' && other.machine && other.engine.startsWith('qemu') && other.qemuAcceleration === 'kvm');
-      if (qemuWithKvm) throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
+    const conflict = kvmExclusionError(ctx.hostNodes(), node, selectedEngine, acceleration);
+    if (conflict) {
+      appendLog(node, `# ${conflict}`);
+      throw new Error(conflict);
     }
     const image = resume ? node.selectedImage : imageById(imageId);
     if (!image) throw new Error('Unknown system in config.json.');
@@ -109,9 +111,8 @@ function createLifecycle(ctx) {
   function validateRestartPrerequisites(node) {
     requireSessionEngine(node.engine);
     if (node.engine.startsWith('qemu')) qemuAcceleration(node.engine);
-    else if (ctx.hostNodes().some(other => other !== node && other.machine && other.engine === 'qemu' && other.qemuAcceleration === 'kvm')) {
-      throw new Error('VirtualBox cannot start while a QEMU/KVM host is running. Stop that host first.');
-    }
+    const conflict = kvmExclusionError(ctx.hostNodes(), node, node.engine, node.engine.startsWith('qemu') ? 'kvm' : null);
+    if (conflict) throw new Error(conflict);
     const image = node.selectedImage;
     if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
     if (node.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
@@ -170,12 +171,7 @@ function createLifecycle(ctx) {
   function discardNodeDisk(node) {
     const image = node.selectedImage;
     if (node.engine === 'vbox') {
-      vbox(node, ['unregistervm', node.vmName]);
-      for (const file of image.runFiles || []) {
-        try { vbox(node, ['closemedium', 'disk', file, '--delete']); }
-        catch (error) { appendLog(node, `# VirtualBox medium already unregistered: ${error.message}`); }
-      }
-      fs.rmSync(tempFile(node, 'vbox-vm'), {recursive: true, force: true});
+      removeVirtualBoxMachine(node, image);
     }
     cleanupRunFiles(node, image);
     node.activeGuestIso = null;
@@ -251,12 +247,7 @@ function createLifecycle(ctx) {
     node.machine = null;
     node.activeConfig = null;
     if (node.engine === 'vbox' && node.everStarted && node.selectedImage) {
-      if (current) { try { vbox(node, ['controlvm', node.vmName, 'poweroff']); } catch (_) {} }
-      try { vbox(node, ['unregistervm', node.vmName]); } catch (_) {}
-      for (const file of image.runFiles || []) {
-        try { vbox(node, ['closemedium', 'disk', file, '--delete']); } catch (_) {}
-      }
-      fs.rmSync(tempFile(node, 'vbox-vm'), {recursive: true, force: true});
+      removeVirtualBoxMachine(node, image, {poweroff: !!current});
     } else if (current) {
       appendLog(node, '$ force kill qemu-system-x86_64: SIGKILL');
       current.kill('SIGKILL');
