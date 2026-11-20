@@ -2,8 +2,9 @@
 
 // Process tree of QemuWeb servers: each server, each runner (a process of its own, started by
 // scripts/start.sh, scripts/runner.sh or a unit; "waiting for a server" when none runs on its port) and
-// the QEMU, vde_switch and vdeterm processes below it, grouped by session and labelled with the
-// account, the node name and its system. Read-only: it only looks at /proc, ps and runtime/.
+// the QEMU, vde_switch and vdeterm processes below it and its VirtualBox VMs (VBoxHeadless, found by
+// the VM name, see scripts/status-vbox.js), grouped by session and labelled with the
+// account, the node name and its system. Read-only: it only looks at /proc, ps, runtime/ and, for VirtualBox, `VBoxManage showvminfo`.
 //   scripts/status.sh                  servers recorded in this project's runtime/server-<port>.pid, else those started elsewhere
 //   scripts/status.sh --all            every QemuWeb server of the current user, in any directory
 //   scripts/status.sh --pid PID        one server by PID (also --server-pid)
@@ -14,6 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
+const {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('./status-vbox');
 
 const ROOT = path.resolve(__dirname, '..');
 const SESSION_PATH = /(\/[^\s,]*?\/sessions)\/([0-9a-f]{16})(?:\/([hs]-[0-9a-f]{16}))?/;
@@ -28,7 +30,7 @@ function parseArguments(argv) {
     else if ((arg === '--pid' || arg === '--server-pid') && /^\d+$/.test(argv[i + 1] || '')) options.pid = Number(argv[++i]);
     else if (arg === '--watch' || arg === '-w') options.watch = /^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? Number(argv[++i]) : 2;
     else if (arg === '-h' || arg === '--help') {
-      const lines = fs.readFileSync(__filename, 'utf8').split("\n").slice(2, 13);
+      const lines = fs.readFileSync(__filename, 'utf8').split("\n").slice(2, 14);
       console.log(lines.map(line => line.replace(/^\/\/ ?/, '')).join('\n'));
       process.exit(0);
     } else { console.error(`Usage: scripts/status.sh [--all | --pid PID] [--details] [--watch|-w [SECONDS]] [--no-color]`); process.exit(2); }
@@ -45,7 +47,7 @@ function processTable() {
     if (!match) continue;
     const [, pid, ppid, pgid, uid, seconds, rss, cpu, args] = match;
     table.set(Number(pid), {pid: Number(pid), ppid: Number(ppid), pgid: Number(pgid), uid: Number(uid), seconds: Number(seconds),
-      rssKb: Number(rss), cpu: Number(cpu), args, children: []});
+      rssKb: Number(rss), cpu: Number(cpu), args, children: [], vbox: parseVBoxHeadless(args)});
   }
   for (const entry of table.values()) table.get(entry.ppid)?.children.push(entry);
   return table;
@@ -112,8 +114,18 @@ function findServers(table, options) {
 const descendants = entry => entry.children.flatMap(child => [child, ...descendants(child)]);
 // The machine processes below a runner: QEMU, VirtualBox, vde_switch and vdeterm. Its other
 // children (the sed that start.sh puts on its output, zombies) are not machines.
-const isMachineProcess = entry => !/<defunct>/.test(entry.args) && /^(qemu-system|VBox|vde_switch$|vdeterm$)/.test(path.basename(entry.args.split(' ')[0]));
-const machineProcesses = entry => descendants(entry).filter(isMachineProcess);
+const isMachineProcess = entry => !/<defunct>/.test(entry.args) && /^(qemu-system|VBoxHeadless$|vde_switch$|vdeterm$)/.test(path.basename(entry.args.split(' ')[0]));
+// A VirtualBox VM is detached from the runner (it belongs to the VirtualBox daemon): it is found
+// by its name, which carries the runner's pid (scripts/status-vbox.js), not by the process tree.
+const showVmInfo = uuid => execFileSync('VBoxManage', ['showvminfo', uuid, '--machinereadable'], {encoding: 'utf8', timeout: 3000});
+function machineProcesses(table, runner) {
+  const vms = vboxProcessesOf(table.values(), runner.pid);
+  for (const vm of vms) {
+    vm.vbox.sessionsDir = runnerSessionsDir(runner.args, projectRoot(runner));
+    vm.vbox.memoryMb = readVirtualBoxMemory(vm.vbox.uuid, showVmInfo);
+  }
+  return [...new Set([...descendants(runner).filter(isMachineProcess), ...vms.filter(vm => !/<defunct>/.test(vm.args))])];
+}
 
 // Colours and cell formatting.
 function styles(enabled) {
@@ -151,7 +163,9 @@ function measureCpu(table, servers) {
   const pids = new Set();
   for (const {entry} of servers) pids.add(entry.pid);
   for (const entry of table.values()) {
-    if (entry.uid === process.getuid() && isRunner(entry)) for (const item of [entry, ...descendants(entry)]) pids.add(item.pid);
+    if (entry.uid === process.getuid() && isRunner(entry)) {
+      for (const item of [entry, ...descendants(entry), ...vboxProcessesOf(table.values(), entry.pid)]) pids.add(item.pid);
+    }
   }
   let now = sampleTicks(pids);
   if (!previousSample) {
@@ -171,12 +185,12 @@ function measureCpu(table, servers) {
 const percent = cpu => (cpu === undefined ? null : `${cpu < 10 ? cpu.toFixed(1) : Math.round(cpu)}% CPU`);
 
 // "N hosts, M switches" for a list of processes.
-const machineCount = items => `${plural(items.filter(item => /qemu-system/.test(item.args)).length, 'host')}, ` +
+const machineCount = items => `${plural(items.filter(item => item.vbox || /qemu-system/.test(item.args)).length, 'host')}, ` +
   plural(items.filter(item => /(^|\/)vde_switch /.test(item.args)).length, 'switch', 'switches');
 
-// Memory in use over memory given to the QEMU machines of a list of processes.
+// Memory in use over memory given to the machines (QEMU and VirtualBox) of a list of processes.
 function memoryTotals(items) {
-  const given = items.reduce((sum, item) => sum + Number(/(?:^| )-m (\d+)(?: |$)/.exec(item.args)?.[1] || 0), 0);
+  const given = items.reduce((sum, item) => sum + (hostMemoryMb(item) || 0), 0);
   return `${megabytes(items.reduce((sum, item) => sum + item.rssKb, 0))} / ${given} MB`;
 }
 
@@ -214,6 +228,7 @@ function owners(sessionsDir) {
 
 // Where a process belongs: {sessionId, nodeId, sessionsDir}, found in its arguments or working directory.
 function locate(entry) {
+  if (entry.vbox) return {sessionsDir: entry.vbox.sessionsDir, sessionId: entry.vbox.sessionId, nodeId: entry.vbox.nodeId};
   const match = SESSION_PATH.exec(entry.args) || SESSION_PATH.exec(readLink(`/proc/${entry.pid}/cwd`));
   return match ? {sessionsDir: match[1], sessionId: match[2], nodeId: match[3] || null} : null;
 }
@@ -231,15 +246,15 @@ function processText(entry, style) {
 function nodeItem(processes, style, details) {
   const where = locate(processes[0]);
   const info = where ? nodeInfo(where.sessionsDir, where.sessionId, where.nodeId) : {};
-  const qemu = processes.find(item => /(^|\/)qemu-system/.test(item.args.split(' ')[0]));
+  const qemu = processes.find(item => item.vbox || /(^|\/)qemu-system/.test(item.args.split(' ')[0]));
   const vde = processes.find(item => /(^|\/)vde_switch$/.test(item.args.split(' ')[0]));
   const label = info.name ? `${style.bold(info.name)}${info.system ? style.dim(` · ${info.system}`) : ''}` : style.dim(where?.nodeId || '?');
   if (qemu) {
-    const memory = /(?:^| )-m (\d+)(?: |$)/.exec(qemu.args);
+    const memory = hostMemoryMb(qemu);
     const used = megabytes(qemu.rssKb);
-    const rest = [`pid ${qemu.pid}`, memory ? `${used} / ${memory[1]} MB` : used, percent(qemu.cpu)].filter(Boolean).join(' · ');
+    const rest = [`pid ${qemu.pid}`, memory ? `${used} / ${memory} MB` : used, percent(qemu.cpu)].filter(Boolean).join(' · ');
     const others = processes.filter(item => item !== qemu);
-    return {rank: 1, name: info.name || '', text: `${style.vm('host (qemu)'.padEnd(12))} ${label} · ${style.dim(rest)}`,
+    return {rank: 1, name: info.name || '', text: `${style.vm(hostTag(qemu).padEnd(12))} ${label} · ${style.dim(rest)}`,
       children: others.map(item => ({text: processText(item, style)}))};
   }
   const main = vde || processes[0];
@@ -315,11 +330,11 @@ function runnerServerRoot(entry) {
 
 // A runner is a process of its own, never a child of the server. It keeps its sessions while the
 // server is away, so it is not an orphan: it waits for a server.
-function standaloneRunnerReport(entry, servers, style, details) {
+function standaloneRunnerReport(table, entry, servers, style, details) {
   const port = runnerPort(entry);
   const dialled = runnerServerRoot(entry);
   const connected = port !== null && servers.some(server => server.port === port && server.root === dialled);
-  const machines = machineProcesses(entry);
+  const machines = machineProcesses(table, entry);
   const label = connected ? 'Runner' : 'Runner (waiting for a server)';
   return [`${runnerLine(entry, machines, style, label)}${port ? style.dim(` · port ${port}`) : ''}`,
     ...render(sessionItems(machines, path.join(ROOT, 'runtime', 'sessions'), style, details))];
@@ -343,7 +358,7 @@ function report(options) {
     // Without --all, only the runners of this project and of the servers shown.
     const dialled = runnerServerRoot(entry);
     if (!options.all && dialled !== ROOT && !servers.some(server => server.root === dialled)) continue;
-    lines.push('', ...standaloneRunnerReport(entry, servers, style, options.details));
+    lines.push('', ...standaloneRunnerReport(table, entry, servers, style, options.details));
   }
   if (!servers.length && !lines.some(line => line.includes('Runner ('))) {
     lines.push('', options.pid ? 'No such server.' : options.all

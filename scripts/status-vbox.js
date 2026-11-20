@@ -1,0 +1,66 @@
+'use strict';
+
+// VirtualBox hosts for scripts/status.js. A VirtualBox VM is not a child of the runner:
+// `VBoxManage startvm` hands it to the VirtualBox daemon, which starts a detached
+//   VBoxHeadless --comment <vm name> --startvm <uuid> ...
+// The VM name is built by the runner (runner/session-runtime.js): qemuweb-<runner pid>-<session id>-<node id>.
+// That name ties a process to its runner, its session and its node; a VM with another name
+// (one of the user's own) is never shown. Pure functions, no I/O except readVirtualBoxMemory.
+const path = require('path');
+
+const VM_NAME = /^qemuweb-(\d+)-([0-9a-f]{16})-(h-[0-9a-f]{16})$/;
+
+// {name, uuid, runnerPid, sessionId, nodeId} for the command line of a QemuWeb VBoxHeadless, else null.
+function parseVBoxHeadless(args) {
+  const words = String(args).split(' ');
+  if (path.basename(words[0]) !== 'VBoxHeadless') return null;
+  const name = words[words.indexOf('--comment') + 1] || '';
+  const uuid = words[words.indexOf('--startvm') + 1] || '';
+  const match = words.includes('--comment') && VM_NAME.exec(name);
+  if (!match) return null;
+  return {name, uuid, runnerPid: Number(match[1]), sessionId: match[2], nodeId: match[3]};
+}
+
+// The VirtualBox host processes of one runner, among every process of the machine.
+function vboxProcessesOf(entries, runnerPid) {
+  return [...entries].filter(entry => entry.vbox && entry.vbox.runnerPid === runnerPid);
+}
+
+// The sessions directory of a runner: its --runtime, else the folder of the socket it dials
+// (--connect), else runtime/ of its project.
+function runnerSessionsDir(args, projectRoot) {
+  const runtime = / --runtime (\S+)/.exec(args)?.[1];
+  if (runtime) return path.join(runtime, 'sessions');
+  const socket = /(\S*runner-\d+\.sock)/.exec(args)?.[1];
+  return path.join(socket ? path.dirname(socket) : path.join(projectRoot, 'runtime'), 'sessions');
+}
+
+// "memory=512" of `VBoxManage showvminfo --machinereadable`, in MB, or null.
+function memoryFromShowVmInfo(text) {
+  const match = /^memory=(\d+)$/m.exec(String(text));
+  return match ? Number(match[1]) : null;
+}
+
+// The memory given to a host, in MB: QEMU's -m, or the VirtualBox VM's configured memory.
+function hostMemoryMb(entry) {
+  if (entry.vbox) return entry.vbox.memoryMb ?? null;
+  const match = /(?:^| )-m (\d+)(?: |$)/.exec(entry.args);
+  return match ? Number(match[1]) : null;
+}
+
+// The engine tag of a host line: "host (qemu)" or "host (vbox)".
+const hostTag = entry => (entry.vbox ? 'host (vbox)' : 'host (qemu)');
+
+// Reads (once per VM) the configured memory of a VM, read-only. `run(uuid)` returns the text of
+// showvminfo and throws when VBoxManage is unavailable.
+const memoryCache = new Map();
+function readVirtualBoxMemory(uuid, run) {
+  if (!memoryCache.has(uuid)) {
+    let memory = null;
+    try { memory = memoryFromShowVmInfo(run(uuid)); } catch (_) { /* VBoxManage unavailable */ }
+    memoryCache.set(uuid, memory);
+  }
+  return memoryCache.get(uuid);
+}
+
+module.exports = {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory};
