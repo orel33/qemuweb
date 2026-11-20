@@ -148,7 +148,7 @@
       group.sort((a, b) => (vertical ? a.other.x - b.other.x : a.other.y - b.other.y) || a.order - b.order);
       const length = vertical ? CARD_WIDTH : CARD_HEIGHT;
       const step = group.length < 2 ? 0 : Math.min(52, (length - 56) / (group.length - 1));
-      group.forEach((item, index) => { item.offset = (index - (group.length - 1) / 2) * step; });
+      group.forEach((item, index) => { item.offset = (index - (group.length - 1) / 2) * step; item.index = index; });
     }
   }
 
@@ -178,6 +178,7 @@
       link.path = `M ${a.x} ${a.y} C ${a.x + n1[0] * reach} ${a.y + n1[1] * reach}, ${b.x + n2[0] * reach} ${b.y + n2[1] * reach}, ${b.x} ${b.y}`;
       link.hostLabel = labelAt(a, n1);
       link.portLabel = labelAt(b, n2);
+      link.addressLabel = addressLabelAt(a, n1, link.hostEnd.index);
       delete link.hostEnd; delete link.switchEnd;
     }
   }
@@ -186,6 +187,30 @@
   function labelAt(point, normal) {
     if (normal[0] !== 0) return {x: point.x + normal[0] * 8, y: point.y - 7, anchor: normal[0] > 0 ? 'start' : 'end'};
     return {x: point.x, y: point.y + (normal[1] < 0 ? -8 : 17), anchor: 'middle'};
+  }
+
+  // Where the address of the host end of a link goes: on the other side of the interface label (below it
+  // on a left or right edge, farther out on a top or bottom edge), and for the second, fourth... link of a
+  // top or bottom edge one row farther, because the links of one edge are only 52 px apart and an address
+  // is wider than that.
+  function addressLabelAt(point, normal, index = 0) {
+    if (normal[0] !== 0) return {x: point.x + normal[0] * 8, y: point.y + 17, anchor: normal[0] > 0 ? 'start' : 'end'};
+    const row = (index % 2) * 12;
+    return {x: point.x, y: normal[1] < 0 ? point.y - 20 - row : point.y + 29 + row, anchor: 'middle'};
+  }
+
+  // ---- Guest addresses -----------------------------------------------------------------------
+  // What the guest reports about itself (machine.addresses = {"<nic index>": ["ip/prefix"]}, from the
+  // runner: docs/guest-agent.md). Informational only and drawn as text; the runner validated it already,
+  // and the same pattern is checked again here. Nothing is shown for a stopped host.
+  const ADDRESS = /^[0-9a-f:.]{2,45}\/\d{1,3}$/i;
+  function addressesOf(machine, nicIndex) {
+    const list = machine.running ? machine.addresses?.[nicIndex] : null;
+    return Array.isArray(list) ? list.filter(text => typeof text === 'string' && ADDRESS.test(text)).slice(0, 4) : [];
+  }
+  // The text under an interface label: the first address, and how many others there are.
+  function addressText(list) {
+    return list.length ? `${list[0]}${list.length > 1 ? ` +${list.length - 1}` : ''}` : '';
   }
 
   // ---- Graph ---------------------------------------------------------------------------------
@@ -248,7 +273,7 @@
   }
 
   // The text lines of a node card (and its tooltip): what the machine is, what it has, how it
-  // is connected. No IP address: none is known without a guest agent.
+  // is connected, with the addresses the guest agent reports (addressesOf).
   function describe(node, graph) {
     const machine = node.machine;
     const isSwitch = machine.kind === 'switch';
@@ -263,7 +288,8 @@
       : (machine.interfaces || []).map((switchId, index) => {
         const sw = byId(switchId);
         const port = machine.networkInterfaces?.[index]?.port;
-        return `eth${index}: ${sw ? `${sw.hostname}${port == null ? '' : ` port ${port}`}` : 'not connected'}`;
+        const addresses = addressesOf(machine, index);
+        return `eth${index}: ${sw ? `${sw.hostname}${port == null ? '' : ` port ${port}`}` : 'not connected'}${addresses.length ? ` · ${addresses.join(' ')}` : ''}`;
       });
     return {
       kind: isSwitch ? 'VDE switch' : (machine.osHint || 'Host'),
@@ -325,7 +351,13 @@
     const sw = graph.nodes.find(node => node.id === link.switchId).machine;
     const text = (label, content) => element('text', {x: label.x, y: label.y, 'text-anchor': label.anchor, class: 'link-label'}, content);
     group.append(text(link.hostLabel, `eth${link.nicIndex}`), text(link.portLabel, link.port == null ? 'port?' : `#${link.port}`));
-    group.append(element('title', {}, `${host.hostname} eth${link.nicIndex} ↔ ${sw.hostname}${link.port == null ? '' : ` port ${link.port}`}`));
+    const addresses = addressesOf(host, link.nicIndex);
+    if (addresses.length) group.append(element('text', {x: link.addressLabel.x, y: link.addressLabel.y, 'text-anchor': link.addressLabel.anchor, class: 'link-label link-address'}, addressText(addresses)));
+    const mac = host.networkInterfaces?.[link.nicIndex]?.mac;
+    const details = [`${host.hostname} eth${link.nicIndex} ↔ ${sw.hostname}${link.port == null ? '' : ` port ${link.port}`}`];
+    if (addresses.length) details.push(...addresses);
+    if (typeof mac === 'string' && /^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(mac)) details.push(`MAC ${mac}`);
+    group.append(element('title', {}, details.join('\n')));
     if (recording?.link(link.hostId, link.nicIndex)) {
       group.classList.add('is-recording');
       group.append(recordingMark((link.x1 + link.x2) / 2, (link.y1 + link.y2) / 2));
@@ -366,5 +398,5 @@
     svg.dataset.zoom = view.k < 0.6 ? 'far' : 'near';
   }
 
-  return {CARD_WIDTH, CARD_HEIGHT, buildGraph, boundsOf, describe, draw, applyView, stateOf};
+  return {CARD_WIDTH, CARD_HEIGHT, buildGraph, boundsOf, describe, draw, applyView, stateOf, addressesOf, addressText};
 });

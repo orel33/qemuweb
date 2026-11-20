@@ -42,7 +42,7 @@ export function nextMachineName(kind) {
 export async function addHost({id = `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled = false, select = true}) {
   const image = store.images.find(item => item.id === imageId);
   const body = await requestJson('/api/hosts', jsonRequest('POST', {id, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled}), 'Cannot create host');
-  const machine = {id, kind: 'host', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, serialPorts: body.settings?.serialPorts ?? ['ttyS0'], running: false, hasLaunched: false, message: 'Host ready to start', logs: [], serial: '', serial2: '', monitorOutput: ''};
+  const machine = {id, kind: 'host', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, serialPorts: body.settings?.serialPorts ?? ['ttyS0'], running: false, hasLaunched: false, addresses: {}, message: 'Host ready to start', logs: [], serial: '', serial2: '', monitorOutput: ''};
   machines.set(id, machine);
   if (select) selectMachine(id);
   else renderGraphic();
@@ -107,6 +107,7 @@ function machineFromSession(session) {
     interfaces: (session.networkInterfaces || []).map(nic => nic.switchId),
     networkInterfaces: session.networkInterfaces || [],
     running: session.running, hasLaunched: session.hasLaunched, pendingRestart: !!session.pendingRestart,
+    addresses: session.addresses || {},
     serialPorts: session.serialPorts ?? ['ttyS0'],
     message: session.message,
     error: /^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null,
@@ -121,6 +122,7 @@ function mergeSession(session) {
   current.running = session.running;
   current.hasLaunched = session.hasLaunched;
   current.pendingRestart = !!session.pendingRestart;
+  current.addresses = session.addresses || {};
   current.serialPorts = session.serialPorts ?? ['ttyS0'];
   current.message = session.message;
   current.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;

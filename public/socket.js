@@ -7,6 +7,7 @@ import {followEngineChange, scheduleSessionSync, syncSessionsFromServer} from '.
 import {sessionLost} from './api.js';
 import {liveConnectionLost, receiveLiveData, receiveLiveEnd} from './capture-live.js';
 import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
+import {renderGraphic} from './graphic-view.js';
 import {applyControl, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
 let socket = null;
@@ -120,6 +121,7 @@ function attachPaneSocket(pane) {
     const machine = machines.get(event.nodeId);
     if (!machine || pane.machineId !== event.nodeId) return;
     machine.running = event.running;
+    if (!event.running) machine.addresses = {};
     if (event.hasLaunched !== undefined) machine.hasLaunched = event.hasLaunched;
     if (event.pendingRestart !== undefined) machine.pendingRestart = event.pendingRestart;
     if (event.serialPorts !== undefined) machine.serialPorts = event.serialPorts;
@@ -153,6 +155,13 @@ export function initSockets() {
     refreshCaptureRules();
   });
   socket.on('captures', setCaptures);
+  // The addresses the guest reports for each interface (runner/guest-agent.js), drawn in the Graphic view.
+  socket.on('guest-info', event => {
+    const machine = event && machines.get(event.nodeId);
+    if (!machine) return;
+    machine.addresses = event.addresses !== null && typeof event.addresses === 'object' ? event.addresses : {};
+    renderGraphic();
+  });
   socket.on('capture-live-data', receiveLiveData);
   socket.on('capture-live-end', receiveLiveEnd);
   socket.on('disconnect', liveConnectionLost);
