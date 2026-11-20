@@ -40,7 +40,8 @@
       "label": "Alpine Linux 3.24",
       "memory": 512,
       "image:qemu": "images/alpine.raw",
-      "image:vbox": "images/alpine.vdi"
+      "image:vbox": "images/alpine.vdi",
+      "guestAgent:qemu": true
     },
     "debian13-cloud": {
       "basedOn": "default",
@@ -48,14 +49,16 @@
       "memory": 1024,
       "image:qemu": "images/debian13-cloud.raw",
       "image:vbox": "images/debian13-cloud.vdi",
-      "serialPorts:qemu": ["ttyS0", "ttyS1"]
+      "serialPorts:qemu": ["ttyS0", "ttyS1"],
+      "guestAgent:qemu": true
     },
     "openwrt": {
       "basedOn": "default",
       "label": "OpenWrt 25.12 x86-64",
       "memory": 256,
       "image:qemu": "images/openwrt.raw",
-      "image:vbox": "images/openwrt.vdi"
+      "image:vbox": "images/openwrt.vdi",
+      "guestAgent:qemu": true
     }
   }
 }

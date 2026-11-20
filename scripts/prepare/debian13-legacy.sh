@@ -86,12 +86,12 @@ d-i pkgsel/install-language-support boolean false
 # security, remote/legacy services, Apache, automation, and text-mode tools.
 # Deliberately excluded: PHP, GCC, Emacs, TeX, TShark/Wireshark, IPython,
 # and Matplotlib.
-d-i pkgsel/include string linux-image-amd64 bash sudo procps nano bash-completion curl wget unzip moreutils rsyslog iproute2 net-tools iputils-ping traceroute netcat-openbsd tcpdump bridge-utils vlan iptables dnsutils dnsmasq dnsmasq-utils isc-dhcp-client isc-dhcp-server nmap dsniff python3-scapy openssl gnutls-bin openvpn openssh-client openssh-server inetutils-telnet inetutils-telnetd tnftp inetutils-ftpd apache2 lynx python3 expect
+d-i pkgsel/include string linux-image-amd64 bash sudo procps nano bash-completion curl wget unzip moreutils rsyslog iproute2 net-tools iputils-ping traceroute netcat-openbsd tcpdump bridge-utils vlan iptables dnsutils dnsmasq dnsmasq-utils isc-dhcp-client isc-dhcp-server nmap dsniff python3-scapy openssl gnutls-bin openvpn openssh-client openssh-server inetutils-telnet inetutils-telnetd tnftp inetutils-ftpd apache2 lynx python3 expect qemu-guest-agent
 tasksel tasksel/first multiselect standard
 popularity-contest popularity-contest/participate boolean false
 d-i grub-installer/only_debian boolean true
 d-i grub-installer/bootdev string /dev/sda
-d-i preseed/late_command string cp /legacy-setup.sh /target/tmp/legacy-setup.sh; cp /guest-start.sh /target/tmp/guest-start.sh; cp /qemuweb-start.service /target/tmp/qemuweb-start.service; in-target /bin/sh /tmp/legacy-setup.sh
+d-i preseed/late_command string cp /legacy-setup.sh /target/tmp/legacy-setup.sh; cp /guest-start.sh /target/tmp/guest-start.sh; cp /qemuweb-start.service /target/tmp/qemuweb-start.service; cp /qemu-ga.conf /target/tmp/qemu-ga.conf; in-target /bin/sh /tmp/legacy-setup.sh
 d-i finish-install/reboot_in_progress note
 d-i debian-installer/exit/poweroff boolean true
 PRESEED
@@ -138,6 +138,10 @@ systemctl enable serial-getty@ttyS0.service serial-getty@ttyS1.service getty@tty
 install -m 755 /tmp/guest-start.sh /usr/local/sbin/qemuweb-guest-start
 install -m 644 /tmp/qemuweb-start.service /etc/systemd/system/qemuweb-start.service
 systemctl enable qemuweb-start.service
+# The QEMU guest agent (installed with the packages above, started by its udev rule when QemuWeb adds the
+# channel) may only answer read-only network queries.
+install -D -m 644 /tmp/qemu-ga.conf /etc/qemu/qemu-ga.conf
+dpkg -s qemu-guest-agent >/dev/null
 # Refresh boot artifacts after changing GRUB and console/kernel settings.
 update-grub
 update-initramfs -u -k all
@@ -154,11 +158,12 @@ SETUP
   chmod +x "$temp_dir/legacy-setup.sh"
   cp "$ROOT/scripts/prepare/resources/guest-start.sh" "$temp_dir/guest-start.sh"
   cp "$ROOT/scripts/prepare/resources/qemuweb-start.service" "$temp_dir/qemuweb-start.service"
+  cp "$ROOT/scripts/prepare/resources/qemu-ga.conf" "$temp_dir/qemu-ga.conf"
   python3 - "$temp_dir" <<'PY'
 import gzip, os, stat, sys
 from pathlib import Path
 root = Path(sys.argv[1])
-files = [('preseed.cfg', 0o100644), ('legacy-setup.sh', 0o100755), ('guest-start.sh', 0o100755), ('qemuweb-start.service', 0o100644)]
+files = [('preseed.cfg', 0o100644), ('legacy-setup.sh', 0o100755), ('guest-start.sh', 0o100755), ('qemuweb-start.service', 0o100644), ('qemu-ga.conf', 0o100644)]
 out = bytearray()
 ino = 1
 for name, mode in files:

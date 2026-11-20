@@ -29,10 +29,9 @@ test('every shipped system has a boolean guestAgent for each engine', () => {
   }
 });
 
-test('guestAgent:qemu is true only on the systems whose image has qemu-guest-agent, and VirtualBox is false everywhere', () => {
+test('guestAgent:qemu is true for the four systems (their builds install the agent), and VirtualBox is false everywhere', () => {
   const catalog = readCatalog(configPath);
-  assert.equal(selectedProfile(catalog, 'debian13-legacy', 'qemu').guestAgent, true);
-  for (const id of ['debian13-cloud', 'alpine', 'openwrt']) assert.equal(selectedProfile(catalog, id, 'qemu').guestAgent, false, id);
+  for (const id of ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt']) assert.equal(selectedProfile(catalog, id, 'qemu').guestAgent, true, id);
   for (const id of ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt']) assert.equal(selectedProfile(catalog, id, 'vbox').guestAgent, false, `${id}/vbox`);
 });
 
@@ -49,12 +48,14 @@ test('the unsuffixed key and the other engine are resolved by the suffix scheme'
   const catalog = catalogWith(systems => {
     systems.default.guestAgent = false;
     delete systems.default['guestAgent:qemu']; delete systems.default['guestAgent:vbox'];
+    delete systems.alpine['guestAgent:qemu'];
     systems.alpine.guestAgent = true;
     systems.alpine['guestAgent:vbox'] = false;
   });
   assert.equal(selectedProfile(catalog, 'alpine', 'qemu').guestAgent, true, 'the unsuffixed value applies to QEMU');
   assert.equal(selectedProfile(catalog, 'alpine', 'vbox').guestAgent, false, 'the suffixed value wins on VirtualBox');
-  assert.equal(selectedProfile(catalog, 'openwrt', 'qemu').guestAgent, false);
+  assert.equal(selectedProfile(catalog, 'openwrt', 'qemu').guestAgent, true, 'its own suffixed value');
+  assert.equal(selectedProfile(catalog, 'openwrt', 'vbox').guestAgent, false, 'inherited from default');
 });
 
 test('a system without any guestAgent value is refused (the default profile must give one)', () => {

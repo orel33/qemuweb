@@ -223,6 +223,14 @@ prints a line such as `debian13-legacy  ttyS1 login: yes`, `... no (rebuild: ...
 or `... unknown` (`debugfs` missing, unreadable image or unexpected partition
 table).
 
+**Addresses on the Graphic view (guest agent).** The addresses a running host reports are read from the QEMU
+guest agent (`qemu-guest-agent`, `qemu-ga` on OpenWrt) through a virtio-serial channel QemuWeb adds to
+the QEMU command line for the systems that have `guestAgent:qemu` in `config.json`. The four systems have it, but
+only the images prepared with this version contain the agent (and its `/etc/qemu/qemu-ga.conf`, which
+allows nothing but the network query): Debian 13 Legacy already had the package, Debian 13 Cloud, Alpine and OpenWrt
+need `bash scripts/prepare.sh --system <id> --force`. An image without the agent simply shows no address.
+VirtualBox hosts show none.
+
 ## VirtualBox
 
 QemuWeb is checked with VirtualBox 7.1 (`virtualbox-7.1` from Oracle), on a

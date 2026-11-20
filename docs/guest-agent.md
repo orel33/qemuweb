@@ -74,7 +74,7 @@ Read in `runner/engines/qemu.js` and measured:
 `guest-info` shows 43 commands enabled on a default install (Alpine 42): **including** `guest-exec`,
 `guest-file-*`, `guest-set-user-password`, `guest-shutdown` and `guest-ssh-add-authorized-keys`. See section 6.
 
-How `scripts/prepare` installs it (**read** from the build scripts, applied in the M4 commit): the
+How `scripts/prepare` installs it (implemented in this version, **not run**: the images are rebuilt by the user): the
 Debian legacy preseed lists packages in `pkgsel/include` (add `qemu-guest-agent` explicitly, today it only
 comes from the installer's QEMU detection); the Debian cloud cloud-init has a `packages:` list (add it);
 Alpine has the `apk --root "$target" add` line (add it, then `ln -s` the OpenRC service in
@@ -239,15 +239,16 @@ Out of scope for the measurement (VirtualBox must not be started); written from 
 `guestAgent:qemu` and `guestAgent:vbox`, booleans, resolved by the existing suffix scheme
 (`common/system-config.js`: `key:engine`, then `key`, then the parent). The keyword says that the **image**
 contains the agent of that engine: it is a capability of the image, so it is not in `editableKeys`, not in Host
-Settings, not in `host.json`. `systems.default` sets both to false and a profile that ends without a boolean is
-refused at start. Alternatives considered: a string naming the agent (`"qemu-ga"`) was dropped because nothing
+Settings, not in `host.json`. `systems.default` sets both to false, the four systems set `guestAgent:qemu` true (their builds in
+`scripts/prepare` install the agent; an image built before has the channel but no agent, which shows no address),
+and a profile that ends without a boolean is refused at start. Alternatives considered: a string naming the agent (`"qemu-ga"`) was dropped because nothing
 branches on the name; a host-level switch was dropped because a student cannot add a package to the image from the
 page. Files that know the profile keys: `common/system-config.js` (the `keywords` set and `validateProfile`),
 `runner/catalog.js` and `runner/commands/settings.js` (expose it as `guestAgent` for the session's engine),
 `docs/json-files.md`, `test/unit/guest-agent-config.test.js`. `CONFIG_SCHEMA_VERSION` is now 2: a `config.json`
 of version 1 is refused at start (beta: no migration; a custom file is edited by hand).
 
-## 11. Design and tasks
+## 11. Design and tasks (implemented in GAG01; the table lists what was done)
 
 | Task | Size |
 |:--|:--|
@@ -268,4 +269,7 @@ of version 1 is refused at start (beta: no migration; a custom file is edited by
 - Polling cost under 30 busy sessions is an estimate.
 - The boot-time figures are noisy; the channel's cost is below the noise.
 - A student with root can stop the agent, replace it, or lie: the address is a display hint, nothing more.
-- VirtualBox: nothing measured.
+- VirtualBox: nothing measured. An Alpine or OpenWrt image that now has the agent enabled, started under VirtualBox
+  (no virtio-serial channel), logs a failed start of the agent at each boot; harmless, not measured.
+- The builds in `scripts/prepare` were changed but not run: the first rebuild of each image must be checked
+  (`guest-info` lists only the three allowed commands; the address shows on the Graphic view).
