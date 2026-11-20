@@ -84,7 +84,7 @@ async function archiveView(file) {
     const read = (id, name) => JSON.parse(fs.readFileSync(path.join(stage, id, name), 'utf8'));
     return {
       engine: metadata.engine,
-      disks: paths.filter(name => name.endsWith('/disk.qcow2')).length,
+      disks: paths.filter(name => /\/disk\.(?:qcow2|vdi)$/.test(name)).length,
       nodes: Object.fromEntries([
         ...metadata.switches.map(id => [id, {kind: 'switch', name: read(id, 'switch.json').name}]),
         ...metadata.hosts.map(id => {
@@ -156,7 +156,7 @@ async function checkArchives(importer, reimporter, systems) {
 
   // Only hosts with a working disk record a base image identity: lan.zip has none, so
   // neither the check nor the import reads images/<system>.raw.
-  const check = await importer.request('/api/session-archive/check', {method: 'POST', body: {engine: expected.engine, baseImages: {}}});
+  const check = await importer.request('/api/session-archive/check', {method: 'POST', body: {baseImages: {}}});
   assert.deepEqual(check, {changed: []});
   console.log('Load: examples/lan.zip base image check: nothing to compare (no working disk)');
 

@@ -40,6 +40,22 @@ export function saveStatusLine(hosts, switches) {
   return hosts + switches === 0 ? 'Your current session is empty.' : `Save your current session: ${countsText(hosts, switches)}.`;
 }
 
+// The Save dialog's note on the working disks it includes: {qemu, vbox} is the number of hosts that have a
+// disk of each engine (disk.qcow2, disk.vdi). Both kinds go in the ZIP when they exist.
+export function workingDisksNote({qemu = 0, vbox = 0} = {}) {
+  if (qemu && vbox) return 'QEMU and VirtualBox disks are both included.';
+  if (qemu) return 'QEMU disks are included (no VirtualBox disk exists).';
+  if (vbox) return 'VirtualBox disks are included (no QEMU disk exists).';
+  return 'No working disk exists yet.';
+}
+
+// The working disks of an archive for the Load dialog: {qemu, vbox} counts of disk.qcow2 and disk.vdi files.
+export function archiveDisksPhrase({qemu = 0, vbox = 0} = {}) {
+  if (!qemu && !vbox) return 'no working disk';
+  const parts = [qemu ? `${qemu} qcow2` : '', vbox ? `${vbox} vdi` : ''].filter(Boolean).join(', ');
+  return `${countPhrase(qemu + vbox, 'working disk')} (${parts})`;
+}
+
 // The orange warning of the Load Session and Load Topology dialogs: the previous session is always closed.
 // Empty for an empty session (its slot keeps its height).
 export function closeWarning(hosts, switches) {

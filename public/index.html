@@ -10,7 +10,7 @@
 </head>
 <body>
   <header>
-    <h1><a href="https://github.com/orel33/qemuweb" target="_blank" rel="noopener noreferrer"><img src="/favicon.svg" width="26" height="26" alt="">QemuWeb</a><span class="beta-badge" aria-label="Beta version">BETA</span><span class="beta-badge engine-badge" id="engine-badge" role="status" hidden></span></h1>
+    <h1><a href="https://github.com/orel33/qemuweb" target="_blank" rel="noopener noreferrer"><img src="/favicon.svg" width="26" height="26" alt="">QemuWeb</a><span class="beta-badge" aria-label="Beta version">BETA</span><span class="engine-picker" id="engine-picker" hidden><label for="session-engine">Session Engine:</label><select id="session-engine" disabled><option value="qemu">QEMU - KVM</option><option value="vbox">VirtualBox</option></select></span></h1>
     <nav class="header-nav" aria-label="Views">
       <a id="nav-admin" class="nav-button act-amber" href="/admin" title="Admin: sessions, accounts, runners" hidden><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="7" height="9" x="3" y="3" rx="1"/><rect width="7" height="5" x="14" y="3" rx="1"/><rect width="7" height="9" x="14" y="12" rx="1"/><rect width="7" height="5" x="3" y="16" rx="1"/></svg><span>Admin</span></a>
     </nav>
@@ -79,13 +79,11 @@
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
     <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
     <div class="create-fields">
-      <label class="create-field">Session engine<select id="default-engine"><option value="qemu">QEMU · KVM</option><option value="vbox">VirtualBox</option></select></label>
       <label class="create-field">Automatic naming<select id="naming-scheme"></select></label>
       <label class="create-field">Console font<select id="console-font-family"><option value="system">Ubuntu Sans Mono (GNOME Terminal)</option><option value="consolas">Consolas</option><option value="menlo">Menlo</option><option value="liberation">Liberation Mono</option><option value="default">Browser default monospace</option></select></label>
       <label class="create-field">Console font size<select id="console-font-size"><option value="11">11 px</option><option value="12">12 px</option><option value="13">13 px</option><option value="14">14 px</option><option value="15">15 px</option><option value="16">16 px</option><option value="17">17 px</option><option value="18">18 px</option><option value="20">20 px</option><option value="22">22 px</option><option value="24">24 px</option></select></label>
     </div>
     <p id="general-settings-error" role="alert" hidden></p>
-    <p id="engine-settings-error" role="alert" hidden></p>
   </dialog>
   <dialog class="qemu-options" id="qemu-options-panel" aria-labelledby="settings-title">
     <form id="host-settings-form" novalidate>
@@ -102,6 +100,7 @@
     </div>
     </div>
     <p id="options-status" role="alert" hidden></p>
+    <p id="settings-engine-note" class="settings-engine-note"></p>
     <section class="settings-tab-panel" id="host-panel-general" role="tabpanel" aria-labelledby="host-tab-general" data-settings-panel="general"><div id="settings-fixed"></div></section>
     <section class="settings-tab-panel" id="host-panel-resources" role="tabpanel" aria-labelledby="host-tab-resources" data-settings-panel="resources" hidden><div id="settings-hardware"></div><div id="settings-editable"></div></section>
     <section class="settings-tab-panel" id="host-panel-storage" role="tabpanel" aria-labelledby="host-tab-storage" data-settings-panel="storage" hidden>

@@ -5,11 +5,12 @@ import {isConsoleView, panes, selectPaneConsole, syncConsoleScroll} from './term
 import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedView, resumeAllButton, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
-import {defaultEngineSelect, generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
+import {generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
 import {loadGraphicPositions, renderGraphic} from './graphic-view.js';
 import {refollow} from './observe.js';
 import {parseStartErrors, showStartFailure} from './start-failure.js';
-import {showEngineBadge} from './engine-badge.js';
+import {engineName, bindEngineSelect, unavailableHostsWarning, updateEngineSelect} from './engine-select.js';
+import {refreshSystems} from './systems.js';
 
 const confirmDialog = document.getElementById('confirm-dialog');
 const restartChoiceDialog = document.getElementById('restart-choice-dialog');
@@ -124,6 +125,7 @@ function mergeSession(session) {
   current.message = session.message;
   current.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(session.message || '') ? session.message : null;
   current.networkInterfaces = session.networkInterfaces || [];
+  current.hasDifferentialDisk = session.hasDifferentialDisk ?? current.hasDifferentialDisk;
   if (session.kind === 'host' && session.settings) { current.settings = session.settings; current.settingsLoaded = true; }
   if (!(qemuOptionsPanel.open && settingsMachine()?.id === session.id)) {
     const image = store.images.find(item => item.id === session.imageId);
@@ -247,7 +249,7 @@ export async function rebootActiveMachine() {
 export async function resetActiveMachine() {
   const machine = activeMachine();
   if (!machine || !machine.hasLaunched || machine.busy) return;
-  if (!await confirmAction('Reset host', `Reset ${machine.hostname}?\n\nThis host will restart from its base image. Its current disk will be deleted, so all changes made in this host will be lost.\n\nOther hosts will not be affected.`, 'Reset host')) return;
+  if (!await confirmAction('Reset host', `Reset ${machine.hostname}?\n\nThis host will restart from its base image. Its current ${engineName(machine.engine)} disk will be deleted, so all changes made in this host with this engine will be lost. The disk of the other engine, if any, is kept.\n\nOther hosts will not be affected.`, 'Reset host')) return;
   if (machines.get(machine.id) !== machine || machine.busy) return;
   machine.busy = true;
   machine.operation = 'resetting';
@@ -273,7 +275,32 @@ export async function removeAllNodes() {
   } finally { store.exitAllBusy = false; updateControls(); }
 }
 
+// The page follows a change of the session engine (made here or in another tab): the system list,
+// the hosts (settings and disk state of the new engine) and the select are read again. Returns
+// the warning about the hosts that cannot start with the new engine ('' if none).
+export async function followEngineChange(engine = generalSettings.engine) {
+  generalSettings.engine = engine;
+  const [, settings, existing] = await Promise.all([
+    refreshSystems(),
+    requestJson('/api/general-settings', {cache: 'no-store'}, 'Session settings unavailable'),
+    requestJson('/api/nodes', {cache: 'no-store'}, 'Cannot read the hosts')
+  ]);
+  store.availableEngines = settings.availableEngines || [];
+  for (const session of existing) mergeSession(session);
+  renderTabs();
+  updateControls();
+  updateEngineSelect();
+  return unavailableHostsWarning(settings.unavailableHosts);
+}
+
 export function initNodes() {
+  bindEngineSelect({
+    onChanged: async body => {
+      const warning = await followEngineChange(body.engine);
+      if (warning) showStatusError(warning);
+    },
+    onError: message => showStatusError(`Cannot change the session engine: ${message}`)
+  });
   Promise.all([
     fetch('/api/systems').then(response => response.json()),
     fetch('/api/general-settings').then(async response => { const body = await response.json(); if (!response.ok) throw new Error(body.error || 'Session settings unavailable'); return body; }),
@@ -284,10 +311,7 @@ export function initNodes() {
     }).catch(error => ({error: error.message}))
   ]).then(([items, sessionSettings, existing, schemes]) => {
     generalSettings.engine = sessionSettings.engine;
-    showEngineBadge(sessionSettings.engine);
-    for (const option of defaultEngineSelect.options) {
-      option.disabled = !sessionSettings.availableEngines?.includes(option.value);
-    }
+    store.availableEngines = sessionSettings.availableEngines || [];
     loadGraphicPositions(sessionSettings.sessionId);
     store.images = items;
     store.namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {host: 'h', switch: 's'}}};
@@ -298,15 +322,17 @@ export function initNodes() {
     namingSchemeSelect.replaceChildren(...Object.entries(store.namingSchemes).map(([id, scheme]) => new Option(scheme.label, id)));
     if (!store.namingSchemes[generalSettings.namingScheme]) generalSettings.namingScheme = store.namingSchemes.classicLong ? 'classicLong' : 'classic';
     namingSchemeSelect.value = generalSettings.namingScheme;
-    defaultEngineSelect.value = generalSettings.engine;
     showGeneralSettings.disabled = false;
     document.getElementById('new-switch').disabled = false;
     imageSelect.replaceChildren(...items.map(image => { const option = document.createElement('option'); option.value = image.id; option.textContent = image.label; return option; }));
     document.getElementById('new-host').disabled = !items.length;
     for (const session of existing) mergeSession(session);
     showPage();
+    updateEngineSelect();
     restoreSavedView();
     refollow();
+    const warning = unavailableHostsWarning(sessionSettings.unavailableHosts);
+    if (warning) showStatusError(warning);
   }).catch(error => { restoreSavedView(); showStatusError(`System list unavailable: ${error.message}`); });
   // Starts every stopped switch, then every stopped host (no confirmation); the state events
   // refresh the UI, and a node that cannot start shows its "Start failed" state.

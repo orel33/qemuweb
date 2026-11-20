@@ -68,8 +68,9 @@ test('the launch preview of a new VirtualBox host works for every system from it
 });
 
 test('the page reads the system list again when the engine changes, and the route is never cached', () => {
-  assert.match(moduleSource('general-settings'), /generalSettings\.engine = body\.engine;[\s\S]{0,200}await refreshSystems\(\);/);
-  assert.match(moduleSource('socket'), /defaultEngineSelect\.value = event\.engine;[\s\S]{0,200}refreshSystems\(\)/);
+  assert.match(moduleSource('nodes'), /export async function followEngineChange\(engine = generalSettings\.engine\) \{[\s\S]{0,200}refreshSystems\(\),/);
+  assert.match(moduleSource('nodes'), /onChanged: async body => \{\s*const warning = await followEngineChange\(body\.engine\);/);
+  assert.match(moduleSource('socket'), /followEngineChange\(event\.engine\)/);
   const systems = moduleSource('systems');
   assert.match(systems, /requestJson\('\/api\/systems', \{cache: 'no-store'\}/);
   assert.match(systems, /store\.images = items;/);

@@ -189,15 +189,53 @@ interface shows **Authentication disabled**. It is never the default.
 ### Included LAN demo
 
 1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
-2. In the Web interface, choose an engine in **General Settings** (a small `qemu` or `vbox` badge after BETA in the header shows the engine of the session), click
+2. In the Web interface, choose the engine in the **Session Engine** select of the header (see
+   [The session engine](#the-session-engine)), click
    **Load**, and under **Examples** click `lan.zip` (or choose
    [`examples/lan.zip`](../examples/lan.zip) with the file picker).
 3. Start the hosts and the switch. Their startup scripts assign `192.168.0.x`
    addresses to the four hosts. Open their consoles and `ping` between them.
 
 The archive contains settings and startup scripts but no working disks, so hosts
-start from fresh images. [`examples/`](../examples/) also contains DMZ and gateway sessions
+start from fresh images. Its settings apply to either engine.
+ [`examples/`](../examples/) also contains DMZ and gateway sessions
 (`dmz0.zip`, `dmz1.zip`, `gw0.zip`, `gw1.zip`).
+
+### The session engine
+
+The header shows **Session Engine:** followed by a select (**QEMU - KVM** or
+**VirtualBox**) on the line of the title. It is the engine of the whole session; the
+engine select that was in General Settings is gone (General Settings keeps the
+naming scheme and the console font).
+
+- **While a host is up or busy** (a machine running, or an action in progress:
+  starting, stopping, rebooting, resetting, loading) the select is **frozen**; hover
+  it: *Stop all hosts to change the engine*. It follows the hosts live. The server
+  refuses the change too (HTTP 409, *Stop all hosts before changing the engine.*),
+  even from a page that was out of date. A running switch does not block it.
+- When the server has only one engine the select is disabled; an engine the server
+  does not have is a disabled option (*VirtualBox is unavailable on this server*).
+  An administrator observing a user sees that user's engine, read-only. The Admin
+  page has no select. At narrow widths only the select is shown, the label stays for
+  screen readers.
+- **Changing the engine keeps everything.** Hosts, names, network interfaces,
+  switches, startup scripts and files stay. Each host keeps its hardware settings
+  (memory, processors, clock, serial ports, startup disk) **for both engines**: Host
+  Settings shows and edits those of the current engine (a note says so, *These
+  settings are for QEMU - KVM; the VirtualBox settings of this host are kept
+  separately*), so editing under VirtualBox never changes the QEMU values, and they
+  are there when you switch back. A system with no base image in the new engine's
+  format (a `.vdi` for VirtualBox, a `.raw` for QEMU) stays in the session: after the
+  change a message names such hosts (*alpine: no VirtualBox image on this server*) and
+  they fail to start with the usual message. A topology (`.topo`) has no engine and
+  uses the current one; loading a session ZIP makes its engine the session engine.
+- **Working disks are per engine.** A host may own a QEMU disk (`disk.qcow2`) and a
+  VirtualBox disk (`disk.vdi`) at the same time; each is created from the matching
+  base image at the first start under that engine and is used only by that engine.
+  Switching never deletes either. **Reset** deletes the disk of the current engine only
+  (its confirmation says which); removing a host deletes its disks. Neither engine
+  converts a disk to the other format, and the two engines never run at once (KVM and
+  VT-x exclusion).
 
 ### Sessions and topologies
 
@@ -209,7 +247,9 @@ start from fresh images. [`examples/`](../examples/) also contains DMZ and gatew
   checkbox **Save only the topology (.topo)** says (unchecked by default, remembered
   in the browser). Unchecked, it exports hosts, switches, settings, and startup
   scripts as the session ZIP `qemuweb-session.zip`, with the **Include working disks**
-  option and a dimmed size estimate. Checked, the disk option is greyed out, there is
+  option and a dimmed size estimate. With the option on, the ZIP carries the working disks
+  that exist, `disk.qcow2` and `disk.vdi` of every host, whatever the current engine, and the
+  estimate counts them and says which: *QEMU and VirtualBox disks are both included.* Checked, the disk option is greyed out, there is
   no estimate, and the topology text file `network.topo` is downloaded. The dialog
   keeps the same size whatever the choice and the state (nothing jumps).
 - **Load** opens a menu above the button: **From User Files** opens the file picker
@@ -239,12 +279,16 @@ start from fresh images. [`examples/`](../examples/) also contains DMZ and gatew
 - Choosing a ZIP (a file or an example) opens a review dialog: it summarizes the archive (hosts,
   switches, hosts with a startup disk, working disks) and warns when a base image
   changed since the session was saved and the archive contains working disks
-  (qcow2) for it: those disks cannot be reused, so **Discard working disks** is
-  then checked and locked. Two options apply on **OK**: **Start hosts and
+  (qcow2 or vdi) for it: those disks cannot be reused, so **Discard working disks** is
+  then checked and locked, and it discards the disks of both engines. Two options apply on **OK**: **Start hosts and
   switches after loading** (default) and **Discard working disks** (greyed when the
   archive has none); **Cancel** uploads nothing. Each host with a
-  working disk records, in its `host.json`, the base image it depends on (format, size
-  and SHA-256). Hosts without a working disk simply start from the current image,
+  working disk records, in its `host.json`, the base image each disk depends on (size and
+  SHA-256, one record per disk format). A saved VirtualBox disk only loads on a machine
+  whose base `.vdi` is byte-identical to the one it was made on (every conversion to VDI
+  gets a new identity), as a saved qcow2 needs the same raw image; otherwise the warning
+  above and **Discard working disks** apply. A session saved by an earlier version (format 1)
+  is not readable any more: delete it or rewrite its `host.json` files by hand. Hosts without a working disk simply start from the current image,
   without a warning (image builds are not reproducible, so the hash differs from one
   machine to another).
 - A `.topo` text file describes only hosts, switches, and their links,

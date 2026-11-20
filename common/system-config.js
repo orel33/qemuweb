@@ -27,6 +27,54 @@ function validateOverrides(overrides, profile = null) {
   return overrides;
 }
 
+// Host config keys: `keyword` (both engines), `keyword:qemu` or `keyword:vbox` (that engine only).
+function parseConfigKey(key) {
+  const match = /^([^:]+)(?::([^:]+))?$/.exec(key);
+  if (!match || !editableKeys.includes(match[1]) || (match[2] && !engines.includes(match[2]))) {
+    throw new Error('Host config may only override memory, cpus, clock, startupDiskEnabled and serialPorts, optionally suffixed with :qemu or :vbox.');
+  }
+  return {keyword: match[1], engine: match[2] || null};
+}
+
+// Checks the config of a host.json. profiles is {qemu, vbox}: the system's profile per engine. A
+// suffixed value is checked against the profile of its engine, an unsuffixed one against both.
+function validateHostConfig(config, profiles) {
+  if (!isObject(config)) throw new Error('Host config must be an object.');
+  for (const [key, value] of Object.entries(config)) {
+    const {keyword, engine} = parseConfigKey(key);
+    for (const target of engine ? [engine] : engines) {
+      try { validateOverrides({[keyword]: value}, profiles[target]); }
+      catch (error) { throw new Error(`${key}: ${error.message}`, {cause: error}); }
+    }
+  }
+  return config;
+}
+
+// The values a host uses on an engine: `keyword:<engine>`, else `keyword`, else the profile's.
+function resolveHostConfig(config, profile, engine) {
+  const defaults = {...profile, serialPorts: profileSerialPorts(profile)};
+  return Object.fromEntries(editableKeys.map(key => {
+    const value = config[`${key}:${engine}`] ?? config[key] ?? defaults[key];
+    return [key, structuredClone(value)];
+  }));
+}
+
+// The config after the user set `values` on an engine: only that engine's keys change. A value is
+// stored (as `keyword:<engine>`) only when the engine would not resolve to it without that key.
+function applyHostValues(config, values, profile, engine) {
+  validateOverrides(values, profile);
+  const defaults = {...profile, serialPorts: profileSerialPorts(profile)};
+  const result = {...config};
+  for (const key of editableKeys) {
+    if (values[key] === undefined) continue;
+    const own = `${key}:${engine}`;
+    const inherited = config[key] ?? defaults[key];
+    if (JSON.stringify(values[key]) === JSON.stringify(inherited)) delete result[own];
+    else result[own] = structuredClone(values[key]);
+  }
+  return result;
+}
+
 function validateProfile(profile, id, engine) {
   if (profile.type !== 'linux' || profile.arch !== 'x86_64' || profile.mode !== 'text' ||
       typeof profile.label !== 'string' || !profile.label.trim()) throw new Error(`Invalid Linux/x86_64/text profile: ${id}/${engine}.`);
@@ -105,12 +153,4 @@ function selectedProfile(catalog, system, engine) {
   return profiles[engine];
 }
 
-function sparseOverrides(profile, values) {
-  validateOverrides(values, profile);
-  const defaults = {...profile, serialPorts: profileSerialPorts(profile)};
-  const same = key => JSON.stringify(values[key]) === JSON.stringify(defaults[key]);
-  return Object.fromEntries(editableKeys.filter(key => values[key] !== undefined && !same(key))
-    .map(key => [key, values[key]]));
-}
-
-module.exports = {readCatalog, selectedProfile, validateOverrides, sparseOverrides, profileSerialPorts, editableKeys};
+module.exports = {readCatalog, selectedProfile, validateOverrides, profileSerialPorts, editableKeys, engines, parseConfigKey, validateHostConfig, resolveHostConfig, applyHostValues};

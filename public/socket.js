@@ -2,10 +2,8 @@
 import {generalSettings, machines, store} from './state.js';
 import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderConsoleView, renderLogView, selectPaneConsole, syncConsoleScroll, updatePaneViewControls, viewChannel} from './terminal.js';
 import {captureView, renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
-import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
-import {defaultEngineSelect} from './general-settings.js';
-import {refreshSystems} from './systems.js';
-import {showEngineBadge} from './engine-badge.js';
+import {updateEngineSelect} from './engine-select.js';
+import {followEngineChange, scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {sessionLost} from './api.js';
 import {liveConnectionLost, receiveLiveData, receiveLiveEnd} from './capture-live.js';
 import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
@@ -125,6 +123,7 @@ function attachPaneSocket(pane) {
     machine.message = event.message;
     machine.error = /^Start failed:|^QEMU error|^VDE error|^VDE terminal stopped|^Serial console disconnected|^QEMU stopped \((?!0)\)|^VDE stopped \((?!0)\)/.test(event.message || '') ? machine.message : null;
     renderTabs();
+    updateEngineSelect();
     if (machine.id === store.activeId) updateControls();
     updatePaneViewControls();
   });
@@ -162,10 +161,9 @@ export function initSockets() {
   });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
-      generalSettings.engine = event.engine;
-      defaultEngineSelect.value = event.engine;
-      showEngineBadge(event.engine);
-      refreshSystems().catch(error => showStatusError(`System list unavailable: ${error.message}`));
+      followEngineChange(event.engine)
+        .then(warning => { if (warning) showStatusError(warning); })
+        .catch(error => showStatusError(`System list unavailable: ${error.message}`));
     }
   });
   socket.on('node-renamed', event => { const machine = machines.get(event.nodeId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === store.activeId) updateControls(); } });

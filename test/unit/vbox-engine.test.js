@@ -23,7 +23,7 @@ const args = process.argv.slice(2);
 fs.appendFileSync(path.join(dir, 'calls.jsonl'), JSON.stringify(args) + '\\n');
 const plan = JSON.parse(fs.readFileSync(path.join(dir, 'plan.json'), 'utf8'));
 if (args[0] === 'createmedium') fs.writeFileSync(args[args.indexOf('--filename') + 1], 'diff');
-if (plan.failOn === args[0] && (!plan.failOnce || !fs.existsSync(path.join(dir, 'failed')))) {
+if ([].concat(plan.failOn).includes(args[0]) && (!plan.failOnce || !fs.existsSync(path.join(dir, 'failed')))) {
   fs.writeFileSync(path.join(dir, 'failed'), '');
   process.stderr.write(plan.message + '\\n');
   process.exit(1);
@@ -222,4 +222,60 @@ test('the refusal reaches the host Log and the error without any foreign name; t
   assert.match(refuse, /appendLog\(node, `# \$\{conflict\.message\}`\)/);
   assert.match(refuse, /throw new Error\(conflict\.message\)/);
   assert.ok(!/diagnostics/.test(refuse.replace(/console\.error[^\n]*\n/, '')), 'diagnostics only go to console.error');
+});
+
+// A disk.vdi loaded from a session archive has no VirtualBox machine around it (VBX02). The machine is created
+// around that file at the next start. This path was written without a real VirtualBox (see docs/json-files.md).
+test('a machine that exists is left alone', t => {
+  const {engine, node, image, calls, runtimeDir} = setup(t);
+  fs.writeFileSync(path.join(runtimeDir, 'disk.vdi'), 'loaded');
+  engine.ensureVirtualBoxMachine(node, image);
+  assert.deepEqual(calls(), [['showvminfo', 'qw-test', '--machinereadable']]);
+});
+
+test('a loaded disk gets a new machine: new disk UUID, base opened, machine created and the disk attached, not started', t => {
+  const {engine, node, image, calls, runtimeDir} = setup(t, {failOn: 'showvminfo', nodeOptions: {guestIsoAttached: true, guestIso: '/tmp/startup.iso'}});
+  const disk = path.join(runtimeDir, 'disk.vdi');
+  fs.writeFileSync(disk, 'loaded');
+  engine.ensureVirtualBoxMachine(node, image);
+  assert.deepEqual(calls().map(args => args[0] === 'internalcommands' ? args.slice(0, 2).join(' ') : args[0]),
+    ['showvminfo', 'internalcommands sethduuid', 'openmedium', 'createvm', 'modifyvm', 'storagectl', 'storageattach', 'storagectl', 'modifyvm']);
+  const all = calls();
+  assert.deepEqual(all[1], ['internalcommands', 'sethduuid', disk], 'only the node\'s own disk file gets a new identity');
+  assert.deepEqual(all[2], ['openmedium', 'disk', PARENT]);
+  assert.ok(all.every(args => args[0] !== 'createmedium' && args[0] !== 'startvm'), 'no new differencing disk, no start');
+  assert.deepEqual(all[6], ['storageattach', 'qw-test', '--storagectl', 'SATA', '--port', '0', '--device', '0', '--type', 'hdd', '--medium', disk]);
+  assert.ok(!all.some(args => args.includes('dvddrive')), 'the startup CD-ROM is attached by the start path, not here');
+  assert.ok(!all.flat().includes('--delete'));
+  assert.equal(fs.readFileSync(disk, 'utf8'), 'loaded', 'the loaded disk is untouched');
+});
+
+test('when the machine cannot be created around a loaded disk, the machine goes, the disk stays, and the message says how to recover', t => {
+  for (const step of ['internalcommands', 'createvm', 'storageattach']) {
+    const {engine, node, image, calls, runtimeDir} = setup(t, {failOn: ['showvminfo', step], message: 'VBoxManage: error: Cannot register the medium'});
+    const disk = path.join(runtimeDir, 'disk.vdi');
+    fs.writeFileSync(disk, 'loaded');
+    assert.throws(() => engine.ensureVirtualBoxMachine(node, image), error => /Cannot attach the saved VirtualBox disk/.test(error.message) && /Use Reset/.test(error.message), step);
+    assert.ok(calls().some(args => args[0] === 'unregistervm' && args.length === 2), `${step}: the machine is unregistered, without --delete`);
+    assert.ok(!calls().flat().includes('--delete'), step);
+    assert.equal(fs.readFileSync(disk, 'utf8'), 'loaded', `${step}: the saved disk stays in the node directory`);
+    assert.ok(!fs.existsSync(path.join(runtimeDir, 'vbox-vm')), `${step}: the VM folder is removed`);
+    assert.ok(!calls().some(args => args[0] === 'closemedium'), `${step}: no medium is closed or deleted`);
+  }
+});
+
+test('without the disk file there is nothing to attach', t => {
+  const {engine, node, image, calls} = setup(t, {failOn: 'showvminfo'});
+  assert.throws(() => engine.ensureVirtualBoxMachine(node, image), /The current host disk was not found/);
+  assert.deepEqual(calls().map(args => args[0]), ['showvminfo']);
+});
+
+test('removing a machine can be given the disk to remove explicitly, still only inside the run directory', t => {
+  const {engine, node, image, calls, runtimeDir, dir} = setup(t);
+  const inside = path.join(runtimeDir, 'disk.vdi'), outside = path.join(dir, 'other.vdi');
+  fs.writeFileSync(inside, 'x'); fs.writeFileSync(outside, 'x');
+  engine.removeVirtualBoxMachine(node, {...image, runFiles: []}, {files: [inside, outside]});
+  assert.ok(!fs.existsSync(inside));
+  assert.ok(fs.existsSync(outside), 'a file outside the run directory is never removed');
+  assert.ok(!calls().flat().includes('--delete'));
 });

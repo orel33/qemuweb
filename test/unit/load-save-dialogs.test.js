@@ -265,3 +265,20 @@ test('no import statement of the Load and Save modules spans several lines', () 
     assert.doesNotMatch(moduleSource(name), /^import \{[^}\n]*$/m, name);
   }
 });
+
+test('the Save dialog says which engines disks are included; the Load dialog counts the disks of each engine', async () => {
+  const {workingDisksNote, archiveDisksPhrase} = await load();
+  assert.equal(workingDisksNote({qemu: 2, vbox: 1}), 'QEMU and VirtualBox disks are both included.');
+  assert.equal(workingDisksNote({qemu: 1, vbox: 0}), 'QEMU disks are included (no VirtualBox disk exists).');
+  assert.equal(workingDisksNote({qemu: 0, vbox: 3}), 'VirtualBox disks are included (no QEMU disk exists).');
+  assert.equal(workingDisksNote({qemu: 0, vbox: 0}), 'No working disk exists yet.');
+  assert.equal(workingDisksNote(undefined), 'No working disk exists yet.');
+  assert.equal(archiveDisksPhrase({qemu: 0, vbox: 0}), 'no working disk');
+  assert.equal(archiveDisksPhrase({qemu: 1, vbox: 0}), '1 working disk (1 qcow2)');
+  assert.equal(archiveDisksPhrase({qemu: 2, vbox: 1}), '3 working disks (2 qcow2, 1 vdi)');
+  assert.equal(archiveDisksPhrase({qemu: 0, vbox: 1}), '1 working disk (1 vdi)');
+  const archive = moduleSource('archive');
+  assert.match(archive, /\/\^\(h-\[0-9a-f\]\{16\}\)\\\/disk\\\.\(qcow2\|vdi\)\$\//, 'the Load dialog reads both disk kinds');
+  assert.match(archive, /\$\{workingDisksNote\(data\.workingDisks\)\}/, 'the estimate line carries the note');
+  assert.match(archive, /Object\.entries\(host\.baseImages \|\| \{\}\)/, 'the base image check sends the identity of each disk format');
+});

@@ -4,7 +4,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const path = require('node:path');
-const {readCatalog, selectedProfile, validateOverrides, sparseOverrides, profileSerialPorts} = require('../../common/system-config');
+const {readCatalog, selectedProfile, validateOverrides, applyHostValues, profileSerialPorts} = require('../../common/system-config');
 const {validateLaunchSettings, launchSettingFields} = require('../../common/launch-settings');
 
 const catalog = readCatalog(path.join(__dirname, '..', '..', 'config.json'));
@@ -34,10 +34,10 @@ test('the old numeric serialConsoles key is no longer accepted', () => {
   assert.throws(() => validateLaunchSettings({memory: 512, cpus: 1, clock: 'utc', serialConsoles: 2}), /Unknown launch setting/);
 });
 
-test('sparseOverrides keeps serialPorts only when it differs from the system default', () => {
-  assert.deepEqual(sparseOverrides(debian, {serialPorts: ['ttyS0', 'ttyS1']}), {});
-  assert.deepEqual(sparseOverrides(debian, {serialPorts: ['ttyS0']}), {serialPorts: ['ttyS0']});
-  assert.deepEqual(sparseOverrides(alpine, {serialPorts: ['ttyS0']}), {});
+test('applyHostValues keeps serialPorts only when it differs from the system default', () => {
+  assert.deepEqual(applyHostValues({}, {serialPorts: ['ttyS0', 'ttyS1']}, debian, 'qemu'), {});
+  assert.deepEqual(applyHostValues({}, {serialPorts: ['ttyS0']}, debian, 'qemu'), {'serialPorts:qemu': ['ttyS0']});
+  assert.deepEqual(applyHostValues({}, {serialPorts: ['ttyS0']}, alpine, 'qemu'), {});
 });
 
 test('launch settings validate serialPorts', () => {

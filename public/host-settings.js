@@ -7,6 +7,7 @@ import {engineSelect} from './node-dialogs.js';
 import {clearStartupTemplateError, defaultStartScript, renderGuestMedia, renderStartupTemplateValues, showStartupTemplateError, validateStartScriptDraft} from './startup-media.js';
 import {renderGraphic} from './graphic-view.js';
 import {renderConsoleSettings} from './host-console-settings.js';
+import {engineSettingsNote} from './engine-select.js';
 
 let optionsRequest = 0;
 let hostSettingsDraft = null;
@@ -164,6 +165,7 @@ export async function renderQemuOptions() {
   settingsExtraOptions.textContent = '';
   optionsCommands.textContent = '';
   networkControls.hidden = false;
+  document.getElementById('settings-engine-note').textContent = engineSettingsNote(machine.engine);
   renderNicControls(machine);
   try {
     const body = await requestJson(launchOptionsUrl(machine, getMachineSettings(machine)), undefined, 'Settings unavailable');

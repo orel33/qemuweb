@@ -98,20 +98,21 @@ const commands = {
     const previousMedia = readStartupFiles(startupDirectory(node));
     const nextMedia = validateBootFiles({script, resources: media.resources});
     const mediaChanged = JSON.stringify(nextMedia) !== JSON.stringify(previousMedia);
-    let mediaWritten = false;
+    let mediaWritten = false, written;
     if (name !== previousName) setNodeHostname(node, name);
     try {
       if (mediaChanged) {
         writeStartupFiles(startupDirectory(node), nextMedia);
         mediaWritten = true;
       }
-      writeJsonAtomic(tempFile(node, 'host.json'),
-        hostConfiguration(node, settings, interfaces, body.startupDiskEnabled, name));
+      written = hostConfiguration(node, settings, interfaces, body.startupDiskEnabled, name);
+      writeJsonAtomic(tempFile(node, 'host.json'), written);
     } catch (error) {
       if (mediaWritten) writeStartupFiles(startupDirectory(node), previousMedia);
       if (name !== previousName) setNodeHostname(node, previousName);
       throw error;
     }
+    node.hostConfig = written.config;
     node.launchSettings = settings;
     node.networkInterfaces = interfaces;
     node.guestMedia = readStartupFiles(startupDirectory(node));

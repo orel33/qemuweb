@@ -11,6 +11,8 @@ const CHUNK = 1024 * 1024;
 const MAX32 = 0xffffffff;
 const MAX_LOGICAL_DISK = 64 * 1024 * 1024 * 1024;
 const MAX_LOGICAL_TOTAL = 256 * 1024 * 1024 * 1024;
+// Working disks: the only compressed entries (and the only ones written sparse on import).
+const isDisk = name => /\/disk\.(?:qcow2|vdi)$/.test(name);
 const crcTable = Array.from({length: 256}, (_, n) => {
   let c = n;
   for (let i = 0; i < 8; i++) c = c & 1 ? (c >>> 1) ^ 0xedb88320 : c >>> 1;
@@ -65,9 +67,9 @@ async function writeArchive(destination, sources) {
     if (stat && (!stat.isFile() || stat.isSymbolicLink())) throw new Error(`Not a regular file: ${source}`);
     const size = data ? data.length : stat.size;
     if (!Number.isSafeInteger(size) || size < 0) throw new Error(`Invalid archive file size: ${name}`);
-    if (name.endsWith('/disk.qcow2') && size > MAX_LOGICAL_DISK) throw new Error('QCOW2 logical size exceeds 64 GiB limit.');
+    if (isDisk(name) && size > MAX_LOGICAL_DISK) throw new Error('Working disk size exceeds 64 GiB limit.');
     const zip64 = size >= MAX32;
-    const method = name.endsWith('/disk.qcow2') ? 8 : 0;
+    const method = isDisk(name) ? 8 : 0;
     const flags = 0x0808; // UTF-8 + data descriptor.
     const nameBytes = Buffer.from(name, 'utf8');
     const extra = zip64 ? zip64Extra(size, 0) : Buffer.alloc(0);
@@ -165,7 +167,7 @@ async function readArchive(filename, stage) {
       const name = rawName.toString('utf8');
       if (!Buffer.from(name).equals(rawName)) throw new Error('Invalid UTF-8 ZIP path.');
       safeName(name);
-      if (method === 8 && !name.endsWith('/disk.qcow2')) throw new Error('Only working disks may be compressed.');
+      if (method === 8 && !isDisk(name)) throw new Error('Only working disks may be compressed.');
       if ((name === 'session.json' || /\/(?:host|switch)\.json$/.test(name)) && size > 4 * 1024 * 1024) {
         throw new Error(`Session metadata exceeds 4 MiB limit: ${name}`);
       }
@@ -203,14 +205,14 @@ async function readArchive(filename, stage) {
     for (let i = 1; i < spans.length; i++) if (spans[i][0] !== spans[i - 1][1]) throw new Error('Overlapping or hidden ZIP entries.');
     if (spans.at(-1)?.[1] !== centralOffset || p !== central.length || !entries.has('session.json')) throw new Error('Invalid session ZIP directory.');
     const logicalTotal = [...entries.values()].reduce((sum, item) => sum + item.size, 0);
-    if (logicalTotal > MAX_LOGICAL_TOTAL || [...entries].some(([name, item]) => name.endsWith('/disk.qcow2') && item.size > MAX_LOGICAL_DISK)) throw new Error('Session archive logical disk size exceeds supported limit.');
+    if (logicalTotal > MAX_LOGICAL_TOTAL || [...entries].some(([name, item]) => isDisk(name) && item.size > MAX_LOGICAL_DISK)) throw new Error('Session archive logical disk size exceeds supported limit.');
     async function consume(name, destination) {
       const item = entries.get(name);
       if (!item) throw new Error(`Missing archive file: ${name}`);
       let crc = 0xffffffff, copied = 0;
       const output = destination ? fs.openSync(destination, 'wx', 0o600) : null;
       const chunks = destination ? null : [];
-      const sparse = !!destination && name.endsWith('/disk.qcow2');
+      const sparse = !!destination && isDisk(name);
       let input = item.compressed ? fs.createReadStream(filename, {start: item.dataOffset, end: item.dataOffset + item.compressed - 1, highWaterMark: CHUNK}) : Readable.from([]);
       if (item.method === 8) {
         const inflator = zlib.createInflateRaw();
@@ -235,11 +237,11 @@ async function readArchive(filename, stage) {
     if (session.size > 4 * 1024 * 1024 || session.method !== 0) throw new Error('Invalid session metadata entry.');
     const names = [...entries.keys()];
     for (const name of names) {
-      if (name !== 'session.json' && !/^[hs]-[0-9a-f]{16}\/(?:host\.json|switch\.json|disk\.qcow2|startup\/.+)$/.test(name)) {
+      if (name !== 'session.json' && !/^[hs]-[0-9a-f]{16}\/(?:host\.json|switch\.json|disk\.qcow2|disk\.vdi|startup\/.+)$/.test(name)) {
         throw new Error(`Unexpected session archive file: ${name}`);
       }
     }
-    const required = names.reduce((sum, name) => sum + (name.endsWith('/disk.qcow2') ? entries.get(name).compressed : entries.get(name).size), 0);
+    const required = names.reduce((sum, name) => sum + (isDisk(name) ? entries.get(name).compressed : entries.get(name).size), 0);
     const free = fs.statfsSync(stage);
     if (required + 64 * 1024 * 1024 > free.bavail * free.bsize) throw new Error('Insufficient disk space to load session archive.');
     for (const name of names) {

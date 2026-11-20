@@ -1,7 +1,7 @@
 'use strict';
 
 // host.json content and the host configuration returned to the web layer.
-const {selectedProfile, sparseOverrides} = require('../common/system-config');
+const {selectedProfile, applyHostValues} = require('../common/system-config');
 const {writeJsonAtomic} = require('../common/json-file');
 const {HOST_SCHEMA_VERSION} = require('../common/schema-versions');
 const {readStartupFiles} = require('./media/guest-media');
@@ -19,18 +19,20 @@ function createHostConfig(ctx) {
       id: node.id,
       name,
       system: node.selectedImage.id,
-      engine: node.engine,
-      config: sparseOverrides(profile, {...settings, startupDiskEnabled}),
+      // Only the current engine's keys change; the other engine's settings stay as they were.
+      config: applyHostValues(node.hostConfig, {...settings, startupDiskEnabled}, profile, node.engine),
       network: {interfaces}
     };
   }
 
   function persistHostConfiguration(node) {
-    writeJsonAtomic(tempFile(node, 'host.json'), hostConfiguration(node));
+    const data = hostConfiguration(node);
+    writeJsonAtomic(tempFile(node, 'host.json'), data);
+    node.hostConfig = data.config;
   }
 
   function hostConfigurationResponse(node) {
-    return {...hostConfiguration(node), systemId: node.selectedImage.id, settings: node.launchSettings,
+    return {...hostConfiguration(node), engine: node.engine, systemId: node.selectedImage.id, settings: node.launchSettings,
       networkInterfaces: node.networkInterfaces, startupDiskEnabled: node.guestIsoAttached,
       guestMedia: readStartupFiles(startupDirectory(node)), interfaces: node.networkInterfaces.map(nic => nic.switchId),
       running: !!node.machine, hasLaunched: node.everStarted, pendingRestart: pendingRestart(node),

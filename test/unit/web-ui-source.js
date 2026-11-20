@@ -5,7 +5,7 @@ const path = require('node:path');
 const publicDir = path.join(__dirname, '..', '..', 'public');
 
 // ES modules of the Web UI, in the order app.js initializes them.
-const modules = ['app', 'account', 'state', 'api', 'systems', 'engine-badge', 'session-expiry', 'terminal', 'startup-media', 'general-settings', 'graphic-view', 'graphic-edit', 'graphic-console', 'topology', 'workspace',
+const modules = ['app', 'account', 'state', 'api', 'systems', 'engine-select', 'session-expiry', 'terminal', 'startup-media', 'general-settings', 'graphic-view', 'graphic-edit', 'graphic-console', 'topology', 'workspace',
   'start-failure', 'nodes', 'file-kinds', 'load-steps', 'archive', 'load-menu', 'node-dialogs', 'host-settings', 'host-console-settings', 'captures', 'capture-dialog', 'capture-button', 'capture-live', 'socket', 'observe'];
 
 function read(file) {

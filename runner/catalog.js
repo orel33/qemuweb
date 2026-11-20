@@ -10,7 +10,7 @@ const {readCatalog, selectedProfile, profileSerialPorts} = require('../common/sy
 function createCatalog(ctx) {
   function requireSessionEngine(engine) {
     if (!ctx.availableEngines.includes(engine)) throw new Error(`${engine === 'vbox' ? 'VirtualBox' : 'QEMU'} is unavailable on this server.`);
-    if (engine !== ctx.session.engine) throw new Error(`Engine ${engine} differs from this session's ${ctx.session.engine} engine. Change General Settings before adding hosts.`);
+    if (engine !== ctx.session.engine) throw new Error(`Engine ${engine} differs from this session's ${ctx.session.engine} engine. Change the Session Engine in the page header first.`);
   }
 
   function imageById(id) {
