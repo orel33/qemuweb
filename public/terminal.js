@@ -24,6 +24,15 @@ const consoleViewLabel = (view, machine) => {
 // The replay buffer of a machine's console channel.
 export const consoleBuffer = (machine, channel) => (channel === 1 ? machine.serial2 : machine.serial) || '';
 
+// Shows the empty-state hint of a ttyS1 view until the console has received a byte.
+export function updateConsoleHint(pane) {
+  const machine = pane.machineId && machines.get(pane.machineId);
+  const hint = pane.element.querySelector('.terminal-hint');
+  if (!hint) return;
+  hint.textContent = ConsoleHint.TEXT;
+  hint.hidden = !ConsoleHint.shouldShow({view: pane.view, attached: !!machine && pane.selectedConsoleId === paneConsoleId(pane), received: !!machine && consoleBuffer(machine, 1).length > 0});
+}
+
 // Selects the pane's console on its socket; the snapshot answers with the console's buffer.
 export function selectPaneConsole(pane, callback) {
   pane.token = ++store.selectionToken;
@@ -122,6 +131,7 @@ export function renderConsoleView(pane) {
   const generation = ++pane.replayGeneration;
   pane.replayPending = '';
   pane.replaying = !!machine;
+  updateConsoleHint(pane);
   pane.terminal.write('', () => {
     if (generation !== pane.replayGeneration || !isConsoleView(pane.view) || pane.machineId !== (machine?.id || null)) return;
     pane.terminal.reset();
@@ -181,6 +191,7 @@ export function setPaneView(pane, view) {
   else if (view === 'log') renderLogView(pane);
   else showPaneConsole(pane);
   pane.clearButton.disabled = !isConsoleView(view);
+  updateConsoleHint(pane);
   viewChanged();
   if (pane.index === store.activePaneIndex) updateControls();
   requestAnimationFrame(() => { fitTerminal(pane); pane.terminal.focus(); });
@@ -233,6 +244,7 @@ export function updatePaneViewControls() {
     }
     pane.viewButtons.forEach(button => button.setAttribute('aria-pressed', String(button.dataset.view === pane.view)));
     updatePaneViewMenuIcon(pane);
+    updateConsoleHint(pane);
     if (pane.view === 'monitor' && pane.monitorAvailable !== available) renderMonitorView(pane);
     pane.monitorAvailable = available;
   }

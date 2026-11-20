@@ -393,6 +393,9 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .terminal-empty-logo:hover { filter: drop-shadow(0 0 14px #5da9f088); transform: translate(-50%, -50%) rotate(-6deg) scale(1.08); }
 @media (prefers-reduced-motion: reduce) { .terminal-empty-logo { transition: none; } .terminal-empty-logo:hover { transform: translate(-50%, -50%); } }
 .console-pane[data-empty="true"] .terminal-scroll { display: none; }
+/* Empty-state text of the Console (ttyS1) view (public/console-hint.js): it never takes a click, a selection or the focus. */
+.terminal-hint { position: absolute; top: 50%; left: 50%; z-index: 1; width: min(32em, calc(100% - 32px)); margin: 0; transform: translate(-50%, -50%); color: #8899aa; font-size: 12px; line-height: 1.5; text-align: center; pointer-events: none; user-select: none; -webkit-user-select: none; }
+.terminal-hint[hidden] { display: none; }
 .terminal { flex: 1; min-width: 0; min-height: 0; overflow: hidden; font-family: var(--console-font-family); font-size: var(--console-font-size); }
 .terminal .xterm { font-family: var(--console-font-family); font-size: var(--console-font-size); }
 .terminal .xterm-viewport { overflow-x: hidden; overflow-y: scroll; scrollbar-width: none; }

@@ -1,6 +1,6 @@
 // Socket.IO wiring: per-pane console sockets and the shared notification socket.
 import {generalSettings, machines, store} from './state.js';
-import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderConsoleView, renderLogView, selectPaneConsole, syncConsoleScroll, updatePaneViewControls, viewChannel} from './terminal.js';
+import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderConsoleView, renderLogView, selectPaneConsole, syncConsoleScroll, updateConsoleHint, updatePaneViewControls, viewChannel} from './terminal.js';
 import {captureView, renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
 import {updateEngineSelect} from './engine-select.js';
 import {followEngineChange, scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
@@ -69,6 +69,7 @@ function attachPaneSocket(pane) {
     if (channel === 1) machine.serial2 = snapshot.serial || '';
     else machine.serial = snapshot.serial || '';
     if (isChannelView(pane, channel)) renderConsoleView(pane);
+    updateConsoleHint(pane);
     if (pane.view === 'log') renderLogView(pane);
     if (machine.id === store.activeId) updateControls();
     renderTabs();
@@ -80,6 +81,7 @@ function attachPaneSocket(pane) {
     const channel = ConsoleId.consoleChannel(event.nodeId);
     if (channel === 1) machine.serial2 = event.serial || '';
     else machine.serial = event.serial || '';
+    updateConsoleHint(pane);
     if (!isChannelView(pane, channel)) return;
     const generation = ++pane.replayGeneration;
     pane.replaying = true;
@@ -97,6 +99,7 @@ function attachPaneSocket(pane) {
     const channel = ConsoleId.consoleChannel(event.nodeId);
     if (channel === 1) machine.serial2 = (machine.serial2 + event.data).slice(-262144);
     else machine.serial = (machine.serial + event.data).slice(-262144);
+    updateConsoleHint(pane);
     if (!isChannelView(pane, channel)) return;
     if (pane.replaying) pane.replayPending += event.data;
     else pane.terminal.write(event.data, () => syncConsoleScroll(pane));
