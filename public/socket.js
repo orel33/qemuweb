@@ -5,6 +5,7 @@ import {captureView, renderTabs, showPage, showStatusError, updateControls} from
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
 import {refreshSystems} from './systems.js';
+import {showEngineBadge} from './engine-badge.js';
 import {sessionLost} from './api.js';
 import {liveConnectionLost, receiveLiveData, receiveLiveEnd} from './capture-live.js';
 import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
@@ -163,6 +164,7 @@ export function initSockets() {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;
       defaultEngineSelect.value = event.engine;
+      showEngineBadge(event.engine);
       refreshSystems().catch(error => showStatusError(`System list unavailable: ${error.message}`));
     }
   });

@@ -2,6 +2,7 @@
 import {generalSettings, saveGeneralSettings, store} from './state.js';
 import {jsonRequest, requestJson} from './api.js';
 import {refreshSystems} from './systems.js';
+import {showEngineBadge} from './engine-badge.js';
 import {applyConsoleAppearance, fitTerminals, panes} from './terminal.js';
 
 let consoleAppearanceChangedWhileOpen = false;
@@ -36,6 +37,7 @@ export function initGeneralSettings() {
     try {
       const body = await requestJson('/api/general-settings', jsonRequest('PUT', {engine}), 'Cannot change session engine');
       generalSettings.engine = body.engine;
+      showEngineBadge(generalSettings.engine);
       await refreshSystems();
     } catch (error) {
       defaultEngineSelect.value = generalSettings.engine;
