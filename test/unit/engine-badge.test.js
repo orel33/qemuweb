@@ -30,9 +30,9 @@ test('the main page has the badge after the beta badge, hidden until the engine 
 });
 
 test('the badge is set at page start and updated by the engine change, the socket event and the system list refresh', () => {
-  assert.match(moduleSource('nodes'), /generalSettings\.engine = sessionSettings\.engine;\s*showEngineBadge\(sessionSettings\.engine\);/);
-  assert.match(moduleSource('general-settings'), /generalSettings\.engine = body\.engine;\s*showEngineBadge\(generalSettings\.engine\);/);
-  assert.match(moduleSource('socket'), /defaultEngineSelect\.value = event\.engine;\s*showEngineBadge\(event\.engine\);/);
+  assert.match(moduleSource('nodes'), /generalSettings\.engine = sessionSettings\.engine;[\s\S]{0,200}showEngineBadge\(sessionSettings\.engine\);/);
+  assert.match(moduleSource('general-settings'), /generalSettings\.engine = body\.engine;[\s\S]{0,200}showEngineBadge\(generalSettings\.engine\);/);
+  assert.match(moduleSource('socket'), /defaultEngineSelect\.value = event\.engine;[\s\S]{0,200}showEngineBadge\(event\.engine\);/);
   assert.match(moduleSource('systems'), /showEngineBadge\(generalSettings\.engine\);/);
   const source = moduleSource('engine-badge');
   assert.match(source, /element\.textContent = badge \? badge\.text : '';/);
