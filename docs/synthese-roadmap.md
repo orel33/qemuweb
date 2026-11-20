@@ -49,6 +49,7 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | Code | Tâche | Difficulté |
 | --- | --- | --- |
 | HSV01 | Onglet « Services » d'un hôte : DHCP, DNS, web, FTP, telnet… à cocher, appliqués au redémarrage | 4 |
+| FIL01 | Un seul bouton Load et un seul Save (topologie `.topo` ou session `.zip`), avec les fichiers d'exemple du serveur | 3 |
 | UXS01 | Conception écrite de l'interface autour de la session, validée par l'utilisateur | 2 |
 | UXS02 | Session créée à la connexion, une seule action « Reset » à la place de deux boutons confus | 2 |
 | UXS03 | Actions regroupées en catégories claires : Session, Nœuds, Affichage | 2 |

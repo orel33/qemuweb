@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (0.9.1)
+## Where we are (0.9.2)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
@@ -24,6 +24,7 @@ monitor command on their own hosts, and there are no quotas and no jail.
 | CREMI | Apache and OpenID front end, `--auth proxy` (shared `X-Proxy-Key`), accounts without password, Connections panel and WebSocket test in `/admin` | 0.9.0-beta.5.4 |
 | Stabilisation | File formats back to `schemaVersion` 1, demo archives rewritten, session ZIP named `qemuweb-session.zip`; remote runner validated at the CREMI (registration, placement, network cut, revocation) | **0.9.0** |
 | Auth and capture | `--auth password|proxy` only (expired SSO session, two shared keys for a rotation); traffic capture: PCAP of a host interface through QEMU's `filter-dump`, a Capture button and dialog in the pane bar (Play, Stop, Download, live view inside, saved at once, discarded at close) | **0.9.1** |
+| Files and dependencies | One **Load** menu (From User Files, From Server examples) and one **Save**; Load Session and Load Topology share one dialog style and always close the previous session; `examples/` (renamed from `demo/`) with `--examples`; `tcpdump` a declared dependency of the runner (`TCPDUMP` in `.env`) | **0.9.2** |
 
 Formats: from 0.9.0, every change of a format increments its number and comes with an explicit decision on
 compatibility.
@@ -326,6 +327,36 @@ personal runner and any guest access exist only for trusted users.
 
 ## Milestone 10: Graphic view and finishing
 
+- [x] **FIL01** (M) Delivered (0.9.2). **One Load and one Save** for topologies and sessions, with the server's examples (the `demo/` directory becomes `examples/`). Today the bottom-left
+  toolbar has four buttons for files: **Load topology**, **Save topology**, **Load session ZIP** and **Save session ZIP**,
+  and loading only opens a file of the user's own computer, so the shipped examples (`examples/*.topo`, `examples/*.zip`: `lan`,
+  `gw0`, `gw1`, `dmz`, `dmz0`, `dmz1`) must be fetched from the repository first. Wanted (user proposal): **two buttons that keep
+  the icons of Load session and Save session**, and the two topology buttons go away.
+  - **Load.** One dialog with a file picker that accepts `.topo` and `.zip`, and under it a list **Examples** of the
+    files of the examples directory (name, size, a one-line description if the file has one). The kind is told by the extension and
+    checked on the content (a ZIP starts with `PK`, a topology is text): a mismatch is refused with a clear message. A `.zip`
+    goes on into the existing review dialog (summary, warnings about changed base images, **Start hosts and switches after
+    loading**, **Discard working disks**); a `.topo` goes through the existing topology load. A click on a server file loads it exactly
+    as an uploaded one (same validation, same warnings, same placement on a runner). Keep the rule that a session can only be
+    loaded into an empty one, and say it in the dialog (with a shortcut to the reset of UXS02 once it exists).
+  - **Save.** One dialog with the checkbox **Save only the topology (.topo)**, unchecked by default. Unchecked: the existing session
+    ZIP options (include working disks, the size estimate, the progress) and `qemuweb-session.zip`. Checked: the disk options
+    disappear and the topology text file is downloaded. The last choice may be remembered in the browser.
+  - **Server.** `GET /api/examples` lists the regular files with the extensions `.topo` and `.zip` of the directory, sorted, and a
+    load route takes only a **file name** (no path), checks it against that listing and feeds the file to the existing
+    load pipeline from disk instead of an upload; the remote runner path streams it as now. The directory is `examples/` of the
+    repository by default (renamed from `demo/`: *demo* names a demonstration, and `scripts/demo.sh` keeps its name), and an option `--examples DIR` (documented in `docs/reference.md`) lets an administrator point it
+    elsewhere, for example a shared folder where a teacher puts the subjects of a lab (a first step of the "course subjects" idea
+    of the section after 1.0.0).
+  - **Safety.** File names only (no `/`, no `..`, no hidden files), no symlinks, regular files, the same size limits as an upload,
+    the listing read again at each request (no cache of paths), read-only for the user, and the load is the user's own so the
+    rights and the audit are those of a normal load. A missing directory means an empty list, not an error.
+  - **Interface.** The examples list appears only when it has files. The toolbar loses two buttons; the tooltips, the documents and
+    the tests that name the four old buttons follow. Do it before UXS03 (the grouping of the actions), which then puts Load and
+    Save in the **Session** group.
+  - **Tests.** The listing and its filters, the name validation (traversal, symlink, odd characters), the kind detection by content,
+    the route rights, the loading from disk through the existing pipeline; the dialogs by hand. Documents: user guide,
+    reference (`--examples`).
 - [ ] **UXS01** to **UXS04** Rework the user interface around the session, which is confusing today. First a short
   design (UXS01, S: a written proposal with a sketch of the toolbar, agreed with the user), then three tasks.
   Today the bottom-left toolbar (`public/index.html`) puts in one row: Load/Save topology, Load/Save session ZIP, New host,
@@ -603,6 +634,13 @@ commit message.
   of letting an archive fail with `Invalid session.json in archive.` after a format change.
 - [ ] **TOD07** `register --runtime` is only needed when the runner's directory differs from `runtime/` of the repository:
   say it in the registration output.
+- [ ] **TOD08** `scripts/status.sh` (`scripts/status.js`) shows how many **threads** each process uses. A QEMU machine has several even
+  with one virtual processor (the main loop, `CPU n/KVM`, `call_rcu`, an I/O worker), so a tool like `htop` shows more lines than
+  there are machines and the count surprises. Read it from `/proc/<pid>/status` (`Threads:`) next to the CPU and memory of each
+  QEMU, `vde_switch`, runner and server line; add the total of a session and of a server; with `--details` also list the thread
+  names of each QEMU (`/proc/<pid>/task/*/comm`, grouped: `CPU 0/KVM`, `call_rcu`, `worker`...). Same idea in a short form for the
+  `machines:` line of `deploy/cremi/qwctl.sh status` (`4 qemu, 16 threads`). Read-only, no new dependency; update the `--help`
+  text, `docs/reference.md` and the unit test of the status output if there is one.
 
 ## Backlog
 
