@@ -23,10 +23,11 @@ function createSessionRuntime(ctx) {
       socketPath: path.join(runtimeDir, NODE_FILES.serial0),
       socketPath1: path.join(runtimeDir, NODE_FILES.serial1),
       monitorPath: path.join(runtimeDir, NODE_FILES.monitor),
+      guestAgentPath: path.join(runtimeDir, NODE_FILES.qga),
       socketDir: kind === 'switch' ? path.join(runtimeDir, NODE_FILES.vde) : null,
       mgmtPath: kind === 'switch' ? path.join(runtimeDir, NODE_FILES.mgmt) : null
     };
-    const tooLong = [paths.socketPath, paths.socketPath1, paths.monitorPath, paths.mgmtPath].find(name => name && Buffer.byteLength(name) > SOCKET_LIMIT);
+    const tooLong = [paths.socketPath, paths.socketPath1, paths.monitorPath, paths.guestAgentPath, paths.mgmtPath].find(name => name && Buffer.byteLength(name) > SOCKET_LIMIT);
     if (tooLong) {
       // The startup check (prepareRuntime) refuses such a directory first; this is the net under it.
       throw new Error(runtimeTooLong(ctx.runtimeRoot || path.dirname(path.dirname(runtimeDir))) ||
@@ -110,6 +111,8 @@ function createSessionRuntime(ctx) {
         activeGuestIso: null,
         guestIsoFiles: new Set(),
         networkInterfaces: [],
+        // {"<nic index>": ["10.0.0.1/24"]} as reported by the guest (runner/guest-agent.js); informational only.
+        guestAddresses: {},
         activeConfig: null,
         switchTerminal: null
       });
@@ -156,7 +159,7 @@ function createSessionRuntime(ctx) {
 
   // Removes the console and monitor sockets QEMU leaves behind.
   function removeConsoleSockets(node) {
-    for (const file of [node.socketPath, node.socketPath1, node.monitorPath]) {
+    for (const file of [node.socketPath, node.socketPath1, node.monitorPath, node.guestAgentPath]) {
       try { fs.unlinkSync(file); } catch (_) {}
     }
   }
@@ -201,6 +204,7 @@ function createSessionRuntime(ctx) {
       pendingRestart: pendingRestart(node),
       serialPorts: serialPortsOf(node),
       hasDifferentialDisk: !!node.runDisk && fs.existsSync(node.runDisk),
+      addresses: node.guestAddresses || {},
       message: stateMessage(node)
     }));
   }

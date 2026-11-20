@@ -27,9 +27,10 @@ const MAX_LOGIN = 32;
 const TMPFS_MAGIC = 0x01021994;
 const LOW_SPACE_BYTES = 5 * 1024 ** 3;
 const HEX16 = '0123456789abcdef';
-// The socket files of a node directory (runner/session-runtime.js builds its paths from them); a switch
+// The socket files of a node directory (runner/session-runtime.js builds its paths from them; qga.sock is the
+// QEMU guest agent channel of a host, runner/guest-agent.js); a switch
 // also has mgmt.sock and the VDE directory, where vde_switch creates its control socket.
-const NODE_FILES = {serial0: 'serial0.sock', serial1: 'serial1.sock', monitor: 'mon.sock', mgmt: 'mgmt.sock', vde: 'vde'};
+const NODE_FILES = {serial0: 'serial0.sock', serial1: 'serial1.sock', monitor: 'mon.sock', qga: 'qga.sock', mgmt: 'mgmt.sock', vde: 'vde'};
 const VDE_CONTROL = 'ctl';
 
 function currentIdentity() {
@@ -77,7 +78,7 @@ function socketPathsBelowRuntime() {
   const files = [];
   for (const prefix of ['h', 's']) {
     const node = path.join(session, `${prefix}-${HEX16}`);
-    files.push(...[NODE_FILES.serial0, NODE_FILES.serial1, NODE_FILES.monitor].map(name => path.join(node, name)));
+    files.push(...[NODE_FILES.serial0, NODE_FILES.serial1, NODE_FILES.monitor, NODE_FILES.qga].map(name => path.join(node, name)));
     if (prefix === 's') files.push(path.join(node, NODE_FILES.mgmt), path.join(node, NODE_FILES.vde, VDE_CONTROL));
   }
   files.push('runner-65535.sock');

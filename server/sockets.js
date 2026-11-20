@@ -78,7 +78,7 @@ function bindWorkspace(io, {session, runner}) {
     });
   }
   runner.events.on('state', state => io.to(sessionRoom(session)).emit('nodes-changed', state));
-  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed', 'captures']) {
+  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed', 'captures', 'guest-info']) {
     runner.events.on(event, payload => io.to(sessionRoom(session)).emit(event, payload));
   }
 }

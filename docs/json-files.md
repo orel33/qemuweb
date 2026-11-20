@@ -58,7 +58,11 @@ Companions needed to understand the JSON files:
 
 ### 2.1 `config.json` — system catalog
 
-Top level: `{"schemaVersion": 1, "systems": {...}}` and nothing else.
+Top level: `{"schemaVersion": 2, "systems": {...}}` and nothing else.
+
+**Format decision (GAG01): `schemaVersion` 2, no migration.** Every profile now ends with a boolean `guestAgent` for each
+engine and `systems.default` must give them, so a `config.json` of version 1 (or without those keys) is refused at start;
+edit a custom file by hand (set `"schemaVersion": 2`, add `"guestAgent:qemu": false, "guestAgent:vbox": false` to `default`).
 `systems.default` is mandatory and abstract (never offered). Every other system
 has `"basedOn": "default"` (or another system) and must resolve a non-empty
 `image` for both engines. A system ID matches `^[A-Za-z0-9_-]{1,32}$`.
@@ -105,7 +109,7 @@ Minimal real example (the shipped file has five systems; two shown):
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "systems": {
     "default": {
       "type": "linux", "arch": "x86_64", "mode": "text", "label": "Default Linux",

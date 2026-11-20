@@ -113,6 +113,7 @@ function createLifecycle(ctx) {
     node.activeConfig = activeConfiguration(node);
     publishState(node, selectedEngine === 'qemu' ? `QEMU/${node.qemuAcceleration.toUpperCase()} · ${image.label} starting…` : `VirtualBox · ${image.label} starting…`);
     connectSerial(node);
+    ctx.guestAgent.watch(node, image);
     return node;
   }
 
@@ -222,6 +223,7 @@ function createLifecycle(ctx) {
         }
       }
       closeSerial(node);
+      ctx.guestAgent.unwatch(node);
       if (node.machine === current) node.machine = null;
       node.activeConfig = null;
       removeConsoleSockets(node);
@@ -249,6 +251,7 @@ function createLifecycle(ctx) {
     ctx.captureLive.stopNode(node.id);
     ctx.capture.nodeRemoved(node);
     closeSerial(node);
+    ctx.guestAgent.unwatch(node);
     const current = node.machine;
     const image = node.selectedImage || {};
     node.machine = null;

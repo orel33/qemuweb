@@ -19,6 +19,13 @@ function createQemu(ctx) {
     ];
     // The next -serial is COM2, ttyS1 in the guest.
     if (node.launchSettings.serialPorts.length >= 2) common.push('-serial', `unix:${node.socketPath1},server=on,wait=off`);
+    // The QEMU guest agent channel (docs/guest-agent.md): only for a system whose image carries the agent. It
+    // must be declared at boot (a PCI device cannot be hot-added on q35). The socket is read by
+    // runner/guest-agent.js, which sends one fixed read-only command.
+    if (image?.guestAgent) {
+      common.push('-chardev', `socket,id=qga,path=${node.guestAgentPath},server=on,wait=off`,
+        '-device', 'virtio-serial-pci', '-device', 'virtserialport,chardev=qga,name=org.qemu.guest_agent.0');
+    }
     // QEMU PC boot notation: c = first hard disk.
     const args = [...common, '-drive', `file=${overlay},if=${settings.diskInterface},format=qcow2,media=disk`, '-boot', `order=${settings.bootDisk}`];
     if (node.guestIsoAttached && node.guestIso) args.push('-drive', `file=${node.guestIso},if=ide,index=2,media=cdrom,readonly=on,format=raw`);
@@ -52,6 +59,8 @@ function createQemu(ctx) {
     }
     image.runFiles = [overlay];
     node.runDisk = overlay;
+    // Only this user may connect to the agent socket (the mode of a socket follows the umask).
+    if (image?.guestAgent) fs.chmodSync(node.runtimeDir, 0o700);
     const args = qemuArgs(node, image, overlay);
     appendLog(node, `$ ${[ctx.commands.QEMU_SYSTEM_X86_64, ...args].map(shellQuote).join(' ')}`);
     const child = spawn(ctx.commands.QEMU_SYSTEM_X86_64, args, {stdio: ['ignore', 'pipe', 'pipe']});
@@ -63,6 +72,7 @@ function createQemu(ctx) {
         node.machine = null;
         node.activeConfig = null;
         node.everStarted = !!node.runDisk;
+        ctx.guestAgent.unwatch(node);
         removeConsoleSockets(node);
         ctx.capture.hostStopped(node, child);
         publishState(node, `QEMU error: ${error.message}`);
@@ -70,7 +80,7 @@ function createQemu(ctx) {
     });
     child.once('exit', code => {
       removeConsoleSockets(node);
-      if (node.machine === child) { node.machine = null; node.activeConfig = null; }
+      if (node.machine === child) { node.machine = null; node.activeConfig = null; ctx.guestAgent.unwatch(node); }
       ctx.capture.hostStopped(node, child);
       if (node.stopping || node.action === 'reboot' || node.action === 'reset' || node.action === 'destroy') return;
       publishState(node, `QEMU stopped (${code})`);

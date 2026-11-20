@@ -244,9 +244,8 @@ refused at start. Alternatives considered: a string naming the agent (`"qemu-ga"
 branches on the name; a host-level switch was dropped because a student cannot add a package to the image from the
 page. Files that know the profile keys: `common/system-config.js` (the `keywords` set and `validateProfile`),
 `runner/catalog.js` and `runner/commands/settings.js` (expose it as `guestAgent` for the session's engine),
-`docs/json-files.md`, `test/unit/guest-agent-config.test.js`. `CONFIG_SCHEMA_VERSION` stays 1: a `config.json`
-written for an older build is refused at start with a message naming the missing key (beta: no compatibility
-path).
+`docs/json-files.md`, `test/unit/guest-agent-config.test.js`. `CONFIG_SCHEMA_VERSION` is now 2: a `config.json`
+of version 1 is refused at start (beta: no migration; a custom file is edited by hand).
 
 ## 11. Design and tasks
 
