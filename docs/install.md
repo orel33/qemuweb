@@ -105,7 +105,7 @@ Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, and OpenWrt 25.12.
 bash scripts/prepare.sh                      # all systems
 bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt
 bash scripts/prepare.sh --list               # show prepared images and the state of their SHA-256 files (ok, old, missing)
-bash scripts/prepare.sh --hash               # record image hashes without building
+bash scripts/prepare.sh --hash               # record image hashes without building (reports missing images)
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/  # behind an HTTP proxy
 bash scripts/prepare.sh --system <id> --follow  # also show the last 20 lines of the build log
@@ -123,7 +123,9 @@ Each build also records `images/<system>.raw.sha256` and `.vdi.sha256` (the outp
 uses a hash file that is not older than its image to compare the image with a session
 archive without reading several gigabytes; a missing, malformed or older file is ignored
 and the image is hashed instead (asynchronously). `bash scripts/prepare.sh --hash`
-records them for existing images without rebuilding anything. Restore an image from
+records them for existing images without rebuilding anything: it prints `<system>.<format>: no image`
+for a missing one, and exits with status 2 when `--system` names a system without any image
+(or when no system has an image, or a hash cannot be written); one missing format is only a warning. Restore an image from
 `images/backups/` together with its `.sha256` file, since an older image is not detected
 when its newer hash file is left in place.
 
