@@ -66,20 +66,15 @@
       <div class="create-actions"><button id="cancel-clone" type="button">Cancel</button><button id="confirm-clone" type="submit">OK</button></div>
     </form>
   </dialog>
-  <dialog class="qemu-options create-dialog" id="topology-dialog" aria-labelledby="topology-title">
-    <div class="settings-heading"><h2 id="topology-title">Load topology</h2></div>
-    <form id="topology-form">
-      <div class="create-fields">
-        <span id="topology-file-name"></span>
-        <span id="topology-counts"></span>
-        <div id="topology-options" class="create-fields" style="padding-top: 0">
-          <label class="create-autostart"><input id="topology-autostart" type="checkbox" checked>Autostart</label>
-          <label class="create-autostart"><input id="topology-close-previous" type="checkbox">Close previous sessions (discard their disks)</label>
-        </div>
-      </div>
-      <p id="topology-error" role="alert" hidden></p>
-      <div class="create-actions"><button id="cancel-topology" type="button">Cancel</button><button id="confirm-topology" type="submit">Load</button></div>
-    </form>
+  <dialog class="confirm-dialog load-review" id="topology-dialog" aria-labelledby="topology-title">
+    <h2 id="topology-title">Load Topology</h2>
+    <p class="load-review-file" id="topology-file-name"></p>
+    <ol id="topology-steps" class="archive-steps"></ol>
+    <div id="topology-options" class="archive-options" hidden>
+      <label><input type="checkbox" id="topology-autostart" checked> Start hosts and switches after loading</label>
+    </div>
+    <div id="topology-warning" class="archive-warning load-review-warning" role="note" hidden></div>
+    <div class="confirm-actions"><button id="cancel-topology" type="button">Cancel</button><button id="confirm-topology" type="button" disabled>Load</button></div>
   </dialog>
   <dialog class="qemu-options create-dialog" id="general-settings-panel" aria-labelledby="general-settings-title">
     <div class="settings-heading"><h2 id="general-settings-title">General Settings</h2><button id="close-general-settings" type="button">Close</button></div>
@@ -171,50 +166,33 @@
   </dialog>
   <dialog class="confirm-dialog" id="session-archive-dialog" aria-labelledby="session-archive-title">
     <h2 id="session-archive-title">Save</h2>
-    <p id="session-archive-intro">Save your current session.</p>
+    <p id="session-archive-intro" role="status"></p>
     <label class="save-choice"><input id="save-topology-only" type="checkbox"> Save only the topology (.topo)</label>
     <label><input id="include-working-disks" type="checkbox"> Include working disks</label>
     <div id="archive-working-disk-warning" class="archive-warning" role="note" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span>All hosts and switches will be stopped before saving.</span></div>
     <p id="session-archive-estimate" role="status"></p>
     <div id="session-archive-progress" role="status" aria-live="polite" hidden><div class="archive-progress"><span class="archive-progress-spinner" aria-hidden="true"></span><span id="session-archive-progress-text">Creating archive…</span></div><div class="archive-progress-track" aria-hidden="true"></div></div>
     <p id="session-archive-error" role="alert" hidden></p>
-    <div class="confirm-actions"><button id="cancel-session-archive" type="button">Cancel</button><button id="confirm-session-archive" type="button">Download ZIP</button></div>
+    <div class="confirm-actions"><button id="cancel-session-archive" type="button">Cancel</button><button id="confirm-session-archive" type="button">Download</button></div>
   </dialog>
-  <dialog class="confirm-dialog" id="load-dialog" aria-labelledby="load-dialog-title">
-    <h2 id="load-dialog-title">Load</h2>
-    <div id="load-body">
-    <div id="load-picker">
-      <label class="load-file-label">File (.topo or .zip)<input id="load-file" type="file" accept=".topo,.zip"></label>
-      <section id="load-examples" hidden>
-        <label class="load-file-label">Examples<select id="load-example-select"><option value="" disabled selected>Choose an example...</option></select></label>
-        <p id="load-example-description" class="example-description"></p>
-        <button id="load-example-button" type="button" disabled>Load example</button>
-      </section>
-    </div>
-    <div id="load-replace" hidden>
-      <p id="load-replace-text" role="alert"></p>
-      <p id="load-replace-status" role="status" hidden></p>
-      <div class="confirm-actions"><button id="load-replace-cancel" type="button">Cancel</button><button id="load-replace-continue" type="button">Continue</button></div>
-    </div>
-    </div>
+  <dialog class="confirm-dialog" id="examples-dialog" aria-labelledby="examples-title">
+    <h2 id="examples-title">Load from the server</h2>
+    <label class="load-file-label">Examples<select id="load-example-select"><option value="" disabled selected>Choose an example...</option></select></label>
+    <p id="load-example-description" class="example-description"></p>
     <p id="load-error" role="alert" hidden></p>
-    <div class="confirm-actions" id="load-actions"><button id="close-load-dialog" type="button">Cancel</button></div>
+    <div class="confirm-actions"><button id="close-examples" type="button">Cancel</button><button id="load-example-button" type="button" disabled>Load example</button></div>
   </dialog>
-  <dialog class="confirm-dialog" id="session-archive-load-dialog" aria-labelledby="session-archive-load-title">
-    <h2 id="session-archive-load-title">Load session</h2>
-    <p id="session-archive-load-file"></p>
-    <ol id="session-archive-load-steps" class="archive-steps">
-      <li data-step="read" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label">Read archive</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
-      <li data-step="check" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label">Check base images</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
-      <li data-step="upload" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label">Upload archive</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
-      <li data-step="restore" data-state="pending"><span class="archive-step-icon" aria-hidden="true"></span><span class="archive-step-text"><span class="archive-step-label">Restore session</span><span class="archive-step-detail" hidden></span></span><span class="archive-step-state"></span></li>
-    </ol>
+  <dialog class="confirm-dialog load-review" id="session-archive-load-dialog" aria-labelledby="session-archive-load-title">
+    <h2 id="session-archive-load-title">Load Session</h2>
+    <p class="load-review-file" id="session-archive-load-file"></p>
+    <ol id="session-archive-load-steps" class="archive-steps"></ol>
     <div id="session-archive-load-options" class="archive-options" hidden>
       <label><input type="checkbox" id="load-auto-start" checked> Start hosts and switches after loading</label>
       <label><input type="checkbox" id="load-discard-disks"> Discard working disks</label>
       <p id="load-discard-note" class="archive-option-note" hidden></p>
     </div>
-    <div class="confirm-actions"><button id="cancel-session-archive-load" type="button">Cancel</button><button id="confirm-session-archive-load" type="button" hidden>OK</button></div>
+    <div id="session-archive-load-warning" class="archive-warning load-review-warning" role="note" hidden></div>
+    <div class="confirm-actions"><button id="cancel-session-archive-load" type="button">Cancel</button><button id="confirm-session-archive-load" type="button" disabled>Load</button></div>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
@@ -269,7 +247,7 @@
   </section>
   <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
     <button id="show-general-settings" class="icon-button write-action" type="button" disabled title="General Settings" aria-label="General Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
-    <button id="load-session-archive" class="icon-button write-action" type="button" title="Load a topology or a session" aria-label="Load a topology or a session"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2M20 8v11a2 2 0 0 1-2 2h-2m-7-6 3-3 3 3m-3-3v9"/></svg></button>
+    <button id="load-session-archive" class="icon-button write-action" type="button" aria-haspopup="menu" aria-expanded="false" aria-controls="load-menu" title="Load a topology or a session" aria-label="Load a topology or a session"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2M20 8v11a2 2 0 0 1-2 2h-2m-7-6 3-3 3 3m-3-3v9"/></svg></button>
     <button id="save-session-archive" class="icon-button write-action" type="button" title="Save the topology or the session" aria-label="Save the topology or the session"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h.343M20 8v11a2 2 0 0 1-2 2h-.343M9 18l3 3 3-3m-3-6v9"/></svg></button>
     <button id="new-host" class="icon-button write-action" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true"></svg></button>
     <button id="new-switch" class="icon-button write-action" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true"></svg></button>
@@ -283,6 +261,11 @@
     <button id="toggle-switch-consoles" class="icon-button view-control" type="button" aria-pressed="true" title="Hide switch consoles" aria-label="Hide switch consoles"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7Z"/><circle cx="12" cy="12" r="3"/></svg></button>
     <button id="toggle-graphic-view" class="nav-button act-blue view-control" type="button" title="Show Graphic view" aria-label="Show Graphic view"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg><span>Graphic</span></button>
   </nav>
+  <input id="load-file" type="file" accept=".topo,.zip" hidden>
+  <div id="load-menu" class="load-menu" role="menu" aria-label="Load" hidden>
+    <button id="load-from-files" type="button" role="menuitem">From User Files</button>
+    <button id="load-from-server" type="button" role="menuitem">From Server (Examples)</button>
+  </div>
   <script src="/socket.io/socket.io.js"></script>
   <script src="/vendor/lib/xterm.js"></script>
   <script src="/vendor-addon-fit/lib/addon-fit.js"></script>

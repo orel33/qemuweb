@@ -58,7 +58,7 @@ function register({app, session, runner, examplesDir}) {
       const body = req.body || {};
       example = await openExample(examplesDir, body.name);
       if (example.kind === 'topology') {
-        const options = booleans(body, ['autostart', 'closePrevious']);
+        const options = booleans(body, ['autostart']);
         if (body.engine !== undefined && typeof body.engine !== 'string') throw new ExampleError('Invalid engine.', 400);
         const {text, handle} = example;
         example = null;

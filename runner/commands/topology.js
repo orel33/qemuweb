@@ -17,23 +17,22 @@ function validateTopologyRequest({session, runner}, body) {
 const commands = {
   'topology.preview': (context, {body}) => {
     const {topology} = validateTopologyRequest(context, body);
-    return {hosts: topology.hosts.length, switches: topology.switches.length};
+    return {hosts: topology.hosts.length, switches: topology.switches.length, links: topology.hosts.reduce((count, host) => count + host.switches.length, 0)};
   },
 
   'topology.load': async (context, {body}) => {
     const {session, runner, emit} = context;
     const {getNode, setNodeHostname, persistSwitchConfiguration, persistHostConfiguration,
       startupDirectory, imageById, launchSettingsFor, assignNetworkInterfaces,
-      validateNetworkInterfaces, startSwitch, start, publishState, destroyNode, exitAllNodes} = runner;
+      validateNetworkInterfaces, startSwitch, start, publishState, destroyNode} = runner;
     const {defaultStartupScript, writeStartupScript, readStartupFiles} = runner.media;
     const created = [];
     try {
       const {topology, engine} = validateTopologyRequest(context, body);
-      const {autostart = false, closePrevious = false} = body || {};
-      if (typeof autostart !== 'boolean' || typeof closePrevious !== 'boolean') throw new Error('Invalid topology options.');
-      const used = new Set(closePrevious ? [] : [...session.nodes.values()].map(node => node.hostname?.toLowerCase()));
+      const {autostart = false} = body || {};
+      if (typeof autostart !== 'boolean') throw new Error('Invalid topology options.');
+      const used = new Set([...session.nodes.values()].map(node => node.hostname?.toLowerCase()));
       for (const entry of [...topology.switches, ...topology.hosts]) if (used.has(entry.name.toLowerCase())) throw new Error(`Name already exists: ${entry.name}.`);
-      if (closePrevious) await exitAllNodes();
       const switchIds = new Map();
       for (const sw of topology.switches) {
         const id = newEntityId('switch');

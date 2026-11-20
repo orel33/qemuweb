@@ -196,26 +196,35 @@ start from fresh images. [`examples/`](../examples/) also contains DMZ and gatew
 
 - One **Load** button and one **Save** button (bottom left, with the session
   icons) handle both a topology and a session.
-- **Save** opens one dialog with the checkbox **Save only the topology (.topo)**,
-  unchecked by default. Unchecked, it exports hosts, switches, settings, and
-  startup scripts as the session ZIP `qemuweb-session.zip`, with the
-  **Include working disks** option and the size estimate. Checked, the disk
-  option is greyed out, the estimate line reads "Topology file: no disks" and the
-  topology text file `network.topo` is downloaded. The dialog keeps the same size
-  whatever the choice and the state (nothing jumps). The choice of the checkbox is
-  remembered in the browser.
-- **Load** opens one dialog with a file picker for a `.topo` or a `.zip` file,
-  and under it the **Examples** dropdown when the server has some (each option
-  reads *name · Topology or Session · size*; the first comment line of a topology
-  is shown under the dropdown; **Load example** starts the load of the chosen
-  one). The kind is the extension, confirmed by the content
-  (a ZIP starts with `PK`, a topology is UTF-8 text without control characters): a `.zip` that is text or a
-  `.topo` that is binary is refused with a message. A topology is added to the
-  current session. A session replaces it: when the current session is not empty,
-  the dialog says how many hosts and switches it has and asks **Cancel** or
-  **Continue**; **Continue** removes every host and switch (working disks
-  included, as **Remove all hosts and switches** does; use **Save** first to keep a
-  copy) and goes on with the review of the session; if the removal fails nothing is loaded.
+- **Save** opens one dialog. One status line gives the size of the session
+  (*Save your current session: 4 hosts and 2 switches.*, or *Your current session is empty.*
+  with **Download** disabled), and the same **Download** button is used whatever the
+  checkbox **Save only the topology (.topo)** says (unchecked by default, remembered
+  in the browser). Unchecked, it exports hosts, switches, settings, and startup
+  scripts as the session ZIP `qemuweb-session.zip`, with the **Include working disks**
+  option and a dimmed size estimate. Checked, the disk option is greyed out, there is
+  no estimate, and the topology text file `network.topo` is downloaded. The dialog
+  keeps the same size whatever the choice and the state (nothing jumps).
+- **Load** opens a menu above the button: **From User Files** opens the file picker
+  (a `.topo` or a `.zip`), **From Server (Examples)** opens a dropdown of the
+  server's examples (each option reads *name · Topology or Session · size*, the first
+  comment line of a topology is shown under it, **Load example** goes on); the item
+  is disabled, with *No examples on the server*, when there is none. The kind is the
+  extension, confirmed by the content (a ZIP starts with `PK`, a topology is UTF-8
+  text without control characters): a `.zip` that is text or a `.topo` that is binary
+  is refused with a message. A ZIP goes to the **Load Session** dialog, a topology to
+  the **Load Topology** dialog; both have the same layout: the file name, the steps
+  (the summary read from the file, then *Close previous session* and the load), the
+  options (**Start hosts and switches after loading**; for a session also **Discard
+  working disks**), an orange warning and **Cancel** / **Load**.
+- **Loading always closes the previous session.** When the current session is not
+  empty, the orange warning says *Your current session (4 hosts and 2 switches) will
+  be closed and its working disks discarded.* Nothing is removed when the dialog
+  opens, nor while the file is read and checked (an unreadable or invalid file
+  never destroys the session): the hosts and switches are removed, as **Remove all
+  hosts and switches** does, only when you press **Load**, then the file is
+  loaded. If the load then fails, the dialog says so and that the session is empty.
+  **Cancel** anywhere changes nothing. Use **Save** first to keep a copy.
 - The **Examples** are the `.topo` and `.zip` files of the server's `examples/`
   directory (the `--examples DIR` option of the server; a missing directory means
   no example). They are read only, listed afresh at each opening of the dialog,

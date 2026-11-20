@@ -190,13 +190,13 @@ test('the runner refusal of a session example (not empty, bad archive) is return
 
 test('loading a topology example sends its text to topology.load with the options of the dialog', async t => {
   const {call, runner, userLog} = await serve(t, {dir: populated(t)});
-  const response = await call('POST', '/api/examples/load', {name: 'lan.topo', engine: 'qemu', autostart: true, closePrevious: false});
+  const response = await call('POST', '/api/examples/load', {name: 'lan.topo', engine: 'qemu', autostart: true});
   assert.equal(response.status, 200);
   assert.deepEqual(await response.json(), {created: 2, errors: []});
-  assert.deepEqual(runner.sent, [['topology.load', {body: {text: TOPO, engine: 'qemu', autostart: true, closePrevious: false}}]]);
+  assert.deepEqual(runner.sent, [['topology.load', {body: {text: TOPO, engine: 'qemu', autostart: true}}]]);
   await settle();
   assert.deepEqual(userLog.entries, [['toto', 'archive-loaded', {kind: 'topology', example: 'lan.topo'}, 'ok']]);
-  for (const bad of [{autostart: 'yes'}, {closePrevious: 1}, {engine: 3}]) {
+  for (const bad of [{autostart: 'yes'}, {engine: 3}]) {
     assert.equal((await call('POST', '/api/examples/load', {name: 'lan.topo', ...bad})).status, 400, JSON.stringify(bad));
   }
   assert.equal(runner.sent.length, 1);

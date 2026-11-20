@@ -287,13 +287,13 @@ order. State that several modules reassign lives on the `store` object of
 | `host-settings.js` | Host Settings dialog, also used to add a host. |
 | `startup-media.js` | Startup tab: `start.sh` template, startup disk and extra files. |
 | `general-settings.js` | General Settings dialog. |
-| `topology.js` | The topology load review dialog and the `.topo` download, and the start of the saved view. |
-| `load-dialog.js`, `file-kinds.js` | The Load dialog (file picker, the Examples dropdown, kind check by content, the confirmation before a session replaces the current one, which reuses `removeAllNodes` of `nodes.js`) and its pure rules (kind of a file, flow of a kind, when to confirm, option labels, what the Save checkbox does). |
+| `topology.js` | The Load Topology dialog (same structure as Load Session) and the `.topo` download, and the start of the saved view. |
+| `load-menu.js`, `load-steps.js`, `file-kinds.js` | The Load button's upward menu (From User Files, From Server (Examples) with its small dialog) and the check of a chosen file by extension and content; the steps list and the Close step (which removes the previous session with `removeAllNodes` of `nodes.js`, once, when Load is pressed after the file was read and checked) shared by the Load Session and Load Topology dialogs; and the pure rules (kind and routing of a file, the Save status line, the warning, the timing of the closing, menu item states). |
 | `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
 | `captures.js`, `capture-dialog.js`, `capture-button.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the reasons, the interface labels, the preselection, the pane button state and the rules of ownership, saving and cleanup. `capture-dialog.js` is the Capture dialog (interface, live filter, Start/Stop, automatic save, live area), `capture-button.js` the pane bar button, and the link popover opens the dialog. `capture-live.js` is the live text area of the dialog (the last 2000 lines); there is no Capture view of a pane. |
 | `graphic-console.js` | Floating console of the Graphic view: the console workspace shown as a movable, resizable window over the graph, with the selected node's pane only. |
 | `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
-| `archive.js` | The Save dialog (session ZIP, or only the topology with a checkbox) and the review and load of a session ZIP. |
+| `archive.js` | The Save dialog (one status line and one Download button; session ZIP, or only the topology with a checkbox) and the Load Session dialog (review and load of a session ZIP). |
 | `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
 | `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |
 
@@ -520,7 +520,7 @@ Nodes (args mirror the HTTP bodies and queries): `nodes.list`,
 `host.setGuestMedia`, `host.buildGuestCdrom`, `host.attachGuestCdrom`.
 
 Catalog and files: `catalog.systems`, `topology.preview {text, engine}`,
-`topology.load {text, engine, autostart, closePrevious}`, `topology.export`,
+`topology.load {text, engine, autostart}`, `topology.export`,
 `archive.estimate {includeDisks}`, `archive.check {engine, baseImages}`,
 `archive.export {includeDisks}` (result `{stream, size}`, then the ZIP on that
 stream), `archive.import {stream, query, contentType, declaredBytes}`
