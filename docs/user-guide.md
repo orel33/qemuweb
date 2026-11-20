@@ -201,6 +201,13 @@ start from fresh images. Its settings apply to either engine.
  [`examples/`](../examples/) also contains DMZ and gateway sessions
 (`dmz0.zip`, `dmz1.zip`, `gw0.zip`, `gw1.zip`).
 
+Debian hosts have two serial ports: the pane view selector offers **Console
+(ttyS0)** and **Console (ttyS1)**, so two commands can run at once. While nothing
+has arrived on ttyS1, its pane shows a muted hint ("Nothing received yet. Press
+Enter. ..."). If it stays, the image was prepared before 17 November 2026 and has
+no login on ttyS1: rebuild it with `bash scripts/prepare.sh --system <id> --force`
+(`bash scripts/prepare.sh --list` tells which images have it).
+
 ### The session engine
 
 The header shows **Engine:** followed by a select (**QEMU - KVM** or

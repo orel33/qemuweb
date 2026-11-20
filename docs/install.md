@@ -196,8 +196,15 @@ second. Choose what a pane shows with its view selector: **Console (ttyS0)**,
 the program running on the other console keeps running. **Host Settings →
 Console** lists the console sockets (`serial0.sock`, `serial1.sock`) and the
 monitor socket. Alpine, OpenWrt and
-VirtualBox hosts have a single console. Debian images prepared before this
-feature have no login on `ttyS1`: run `scripts/prepare.sh` again.
+VirtualBox hosts have a single console. Debian images prepared before 17
+November 2026 have no login on `ttyS1`, so its pane stays empty. Until the
+first byte arrives, the **Console (ttyS1)** pane shows a hint saying so
+("Nothing received yet. Press Enter. ..."): if it stays, rebuild the image with
+`bash scripts/prepare.sh --system <id> --force`. `bash scripts/prepare.sh --list`
+reads each Debian raw image offline and read-only (with `debugfs`, no root) and
+prints a line such as `debian13-legacy  ttyS1 login: yes`, `... no (rebuild: ...)`
+or `... unknown` (`debugfs` missing, unreadable image or unexpected partition
+table).
 
 ## VirtualBox
 
