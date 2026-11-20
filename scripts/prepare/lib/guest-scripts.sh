@@ -147,7 +147,30 @@ echo QEMUWEB_OPENWRT_PHASE_"APK"
 # stop apk after 3 minutes when the busybox of the image has timeout, and fail with a clear message.
 apk_run=apk
 if command -v timeout >/dev/null 2>&1; then apk_run='timeout 180 apk'; fi
-$apk_run -U add tcpdump nano || { echo 'OpenWrt preparation: apk could not install tcpdump and nano from the package feeds (check the proxy)' >&2; exit 1; }
+# OpenWrt's wget (uclient-fetch) fails on https through an HTTP proxy ("unexpected end of file", error 8, seen
+# behind the CREMI squid). apk verifies the signature of every index and package, so the feeds are fetched over
+# plain http through the proxy, and the repository lists of the image are put back afterwards: the finished
+# image keeps its https feeds and no proxy.
+feeds_saved=0
+if [ -n "${http_proxy:-}" ]; then
+  rm -rf /tmp/qemuweb-apk-feeds && mkdir /tmp/qemuweb-apk-feeds
+  for f in /etc/apk/repositories.d/*.list /etc/apk/repositories; do
+    [ -f "$f" ] || continue
+    cp "$f" "/tmp/qemuweb-apk-feeds/$(echo "$f" | tr / _)"
+    sed -i 's#^https://#http://#' "$f"
+  done
+  feeds_saved=1
+fi
+restore_feeds() {
+  [ "$feeds_saved" = 1 ] || return 0
+  for f in /etc/apk/repositories.d/*.list /etc/apk/repositories; do
+    [ -f "$f" ] || continue
+    saved="/tmp/qemuweb-apk-feeds/$(echo "$f" | tr / _)"
+    if [ -f "$saved" ]; then cp "$saved" "$f"; fi
+  done
+}
+$apk_run -U add tcpdump nano || { echo 'OpenWrt preparation: apk could not install tcpdump and nano from the package feeds (check the proxy)' >&2; restore_feeds; exit 1; }
+restore_feeds
 echo QEMUWEB_OPENWRT_PHASE_"CONFIG"
 # The stock image has no hostname command, while the default start.sh uses it.
 # Provide the get/set form needed by the guest startup script and lab console.
