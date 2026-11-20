@@ -10,11 +10,17 @@ const cli = require('../common/cli');
 const requiredKeys = ['VDE_SWITCH', 'VDETERM', 'GENISOIMAGE', 'NODE', 'PYTHON3'];
 const engineKeys = {qemu: ['QEMU_SYSTEM_X86_64', 'QEMU_IMG'], vbox: ['VBOXMANAGE']};
 const engineNames = {qemu: 'QEMU', vbox: 'VirtualBox'};
-const optionalKeys = [...engineKeys.qemu, ...engineKeys.vbox];
+// tcpdump serves the live view of the Capture dialog only (runner/capture-live.js): without it the
+// runner starts and the capture itself, written by QEMU, keeps working.
+const toolKeys = ['TCPDUMP'];
+const optionalKeys = [...engineKeys.qemu, ...engineKeys.vbox, ...toolKeys];
+// Directories searched after PATH: tcpdump lives in an sbin directory a user's PATH often lacks.
+const extraDirectories = {TCPDUMP: ['/usr/sbin', '/sbin', '/usr/local/sbin']};
 const commandLabels = {
   QEMU_SYSTEM_X86_64: 'QEMU',
   QEMU_IMG: 'QEMU disk tools',
   VBOXMANAGE: 'VirtualBox',
+  TCPDUMP: 'tcpdump',
   VDE_SWITCH: 'VDE switch',
   VDETERM: 'VDE terminal',
   GENISOIMAGE: 'ISO image tool',
@@ -46,14 +52,14 @@ function executable(file) {
   catch (_) { return false; }
 }
 
-function findCommand(value) {
+function findCommand(value, extraDirs = []) {
   if (!value) throw new Error('no command configured');
   if (path.isAbsolute(value)) {
     if (!executable(value)) throw new Error(`not executable: ${value}`);
     return value;
   }
   if (!/^[a-zA-Z0-9_.+-]+$/.test(value)) throw new Error('expected a command name in PATH or an absolute path');
-  for (const directory of (process.env.PATH || '').split(path.delimiter)) {
+  for (const directory of [...(process.env.PATH || '').split(path.delimiter), ...extraDirs]) {
     if (!directory) continue;
     const candidate = path.join(directory, value);
     if (executable(candidate)) return candidate;
@@ -77,7 +83,7 @@ function resolveCommands(root) {
     const source = local[key] ? '.env.local' : process.env[key] ? 'environment' : '.env';
     const setting = `${key}=${configured ?? ""}, ${source}`;
     try {
-      const resolved = findCommand(configured);
+      const resolved = findCommand(configured, extraDirectories[key]);
       // vdeterm treats its first argument as a management socket and has no version flag.
       if (key !== 'VDETERM') {
         const result = spawnSync(resolved, ['--version'], {encoding: 'utf8', timeout: 5000, maxBuffer: 65536});
@@ -100,7 +106,8 @@ function resolveCommands(root) {
       } else {
         commands[key] = null;
         const engine = Object.keys(engineKeys).find(name => engineKeys[name].includes(key));
-        cli.skipped(`${label}  unavailable (${error.message}); ${engineNames[engine]} hosts disabled  (${setting})`);
+        const effect = engine ? `${engineNames[engine]} hosts disabled` : 'the live view of captures is unavailable';
+        cli.skipped(`${label}  unavailable (${error.message}); ${effect}  (${setting})`);
       }
     }
   }
@@ -115,4 +122,4 @@ function availableEngines(commands) {
   return Object.keys(engineKeys).filter(engine => engineKeys[engine].every(key => commands[key]));
 }
 
-module.exports = {resolveCommands, availableEngines};
+module.exports = {resolveCommands, availableEngines, findCommand};

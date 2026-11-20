@@ -9,7 +9,7 @@ const {EventEmitter} = require('node:events');
 const {PassThrough} = require('node:stream');
 const test = require('node:test');
 const {validateFilter, FILTER_MAX, MAX_LIVE} = require('../../common/capture');
-const {createCaptureLive, findTcpdump} = require('../../runner/capture-live');
+const {createCaptureLive} = require('../../runner/capture-live');
 const {attachCaptureLive} = require('../../server/capture-live');
 const {commands} = require('../../runner/commands/captures');
 
@@ -31,16 +31,6 @@ test('the filter is one tcpdump expression: allowed characters, length limit, no
   }
   assert.throws(() => validateFilter('a;b'), /characters a tcpdump expression does not use/);
   assert.throws(() => validateFilter('-w x'), /cannot start with "-"/);
-});
-
-test('findTcpdump looks in the PATH of the runner', t => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-tcpdump-'));
-  t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
-  assert.notEqual(findTcpdump({PATH: dir}), path.join(dir, 'tcpdump'), 'no such file yet');
-  fs.writeFileSync(path.join(dir, 'tcpdump'), '#!/bin/sh\n', {mode: 0o755});
-  assert.equal(findTcpdump({PATH: `/nonexistent:${dir}`}), path.join(dir, 'tcpdump'));
-  fs.chmodSync(path.join(dir, 'tcpdump'), 0o644);
-  assert.notEqual(findTcpdump({PATH: dir}), path.join(dir, 'tcpdump'), 'not executable');
 });
 
 // A fake tcpdump: what it is given on stdin it keeps; its output is written by the test, which
@@ -194,6 +184,19 @@ test('refusals: bad identifiers, bad filters, a missing capture, too many views,
   const missing = setupLive({tcpdump: null});
   t.after(missing.cleanup);
   assert.throws(() => missing.live.start(missing.node, {liveId: LIVE, captureId: CAP}), error => error.status === 409 && /tcpdump is not installed/.test(error.message));
+});
+
+test('without an injected locate, the command resolved by the start-up check is used', t => {
+  const fixture = setupLive();
+  t.after(fixture.cleanup);
+  const spawned = [];
+  const withCommands = commandsObject => createCaptureLive({...fixture.ctx, commands: commandsObject}, {spawnProcess: (command, args) => { spawned.push([command, args]); return fakeChild(); }});
+  const live = withCommands({TCPDUMP: '/opt/tools/tcpdump'});
+  live.start(fixture.node, {liveId: LIVE, captureId: CAP});
+  assert.deepEqual(spawned, [['/opt/tools/tcpdump', ['-l', '-n', '-r', '-']]]);
+  live.stopNode();
+  assert.throws(() => withCommands({TCPDUMP: null}).start(fixture.node, {liveId: LIVE, captureId: CAP}), error => error.status === 409 && /tcpdump is not installed/.test(error.message));
+  assert.equal(spawned.length, 1, 'nothing is spawned when the command is missing');
 });
 
 test('a tcpdump that fails or cannot start ends the view with its message', async t => {

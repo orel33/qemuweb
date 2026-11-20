@@ -373,8 +373,8 @@ when tcpdump fails or is missing (an immediate error for a missing one), when th
 (`capture-live-stop`), when its socket closes, when the node is
 removed, and when the control connection closes; every case kills the tcpdump process (SIGTERM,
 then SIGKILL after 2 s). At most 4 views per session; output waits while the connection is
-congested (`ctx.flow`, as for consoles). `tcpdump` is found in the runner's `PATH` and the `sbin`
-directories (`runner/capture-live.js findTcpdump`).
+congested (`ctx.flow`, as for consoles). `tcpdump` is the command the start-up check resolved
+(`ctx.commands.TCPDUMP`, `runner/preflight.js`: the runner's `PATH`, then the `sbin` directories).
 
 The optional filter is **one** argument, after `--`: at most 200 characters, only
 `A-Za-z0-9`, space and `. : / _ - ( ) [ ] & | ! < > = + * % ^ ,`, not starting with `-`

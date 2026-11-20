@@ -126,7 +126,7 @@ The runner is an ordinary unprivileged process; every path is a parameter.
 
 | Variable | Default | Effect |
 | --- | --- | --- |
-| `QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE` | names in `.env` | names or paths of the external programs: `.env.local`, then the environment, then the default of `.env`. The runner disables an engine whose programs are missing. |
+| `QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE, TCPDUMP` | names in `.env` | names or paths of the external programs: `.env.local`, then the environment, then the default of `.env`. The runner disables an engine whose programs are missing; a missing `tcpdump` (searched in `PATH`, then `/usr/sbin` and `/sbin`) only disables the live view of captures. |
 
 The `Checking dependencies…` block shows, for each external program, the path found and the variable that
 named it with its source (for example `QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env`). The server runs no
@@ -148,6 +148,7 @@ Checking dependencies…
   ✓ QEMU           /usr/bin/qemu-system-x86_64  (QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env)
   ✓ VDE switch     /usr/bin/vde_switch  (VDE_SWITCH=vde_switch, .env)
   …
+  ✓ tcpdump        /usr/bin/tcpdump  (TCPDUMP=tcpdump, .env)
 
 Checking configuration…
   ✓ config.json  9 systems
