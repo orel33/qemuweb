@@ -91,3 +91,18 @@ test('a missing required command still aborts the start-up, tcpdump or not', t =
   fs.rmSync(path.join(bin, 'vdeterm'));
   assert.throws(() => resolveCommands(root), /Startup aborted: unavailable commands: VDETERM/);
 });
+
+test('VirtualBox found together with QEMU: an informational line says KVM and VirtualBox hosts exclude each other', t => {
+  const both = withRunnerFixture(t, {tools: ['VBoxManage']});
+  resolveCommands(both.root);
+  const line = both.lines.find(item => /cannot run at the same time/.test(item));
+  assert.ok(line, both.lines.join('\n'));
+  assert.match(line, /^ {2}- VirtualBox and QEMU\/KVM hosts/, 'neutral mark, not a failure or a warning');
+  assert.ok(!both.lines.some(item => item.includes('✗')), 'no failure line');
+});
+
+test('without VirtualBox the exclusion line is not printed', t => {
+  const {lines, root} = withRunnerFixture(t);
+  resolveCommands(root);
+  assert.ok(!lines.some(item => /cannot run at the same time/.test(item)), lines.join('\n'));
+});
