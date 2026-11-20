@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# Cleans the default runtime/ of this project (not another --runtime directory).
+# Cleans the default runtime directories of this account, /tmp/qw-<login>/ (not another --runtime directory).
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-RUNTIME="$ROOT/runtime"
+source "$ROOT/scripts/lib/runtime.sh"
+RUNTIME="$(default_account_root)"
 IMAGES="$ROOT/images"
 SOURCES="$ROOT/sources"
 DRY_RUN=0
@@ -31,7 +32,7 @@ clean_directory() {
   while IFS= read -r -d '' entry; do
     if (( DRY_RUN )); then echo "Would remove: $entry"
     else rm -rf -- "$entry"; fi
-  done < <(find "$directory" -mindepth 1 -maxdepth 1 ! -name .gitkeep -print0)
+  done < <(find "$directory" -mindepth 1 -maxdepth 1 -print0)
 }
 
 clean_directory "$RUNTIME"

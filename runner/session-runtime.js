@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
 const {entityKind} = require('../common/node-id');
+const {NODE_FILES, SOCKET_LIMIT, runtimeTooLong} = require('../common/runtime-dir');
 const {shellQuote} = require('../common/shell-quote');
 const {writeJsonAtomic} = require('../common/json-file');
 const {SWITCH_SCHEMA_VERSION} = require('../common/schema-versions');
@@ -19,14 +20,17 @@ function createSessionRuntime(ctx) {
       // Node IDs are unique within a session only (an archive keeps them), so the
       // VirtualBox VM name, global to the machine, also carries the session ID.
       vmName: ctx.session.id ? `qemuweb-${process.pid}-${ctx.session.id}-${id}` : `qemuweb-${process.pid}-${id}`,
-      socketPath: path.join(runtimeDir, 'serial0.sock'),
-      socketPath1: path.join(runtimeDir, 'serial1.sock'),
-      monitorPath: path.join(runtimeDir, 'mon.sock'),
-      socketDir: kind === 'switch' ? path.join(runtimeDir, 'vde') : null,
-      mgmtPath: kind === 'switch' ? path.join(runtimeDir, 'mgmt.sock') : null
+      socketPath: path.join(runtimeDir, NODE_FILES.serial0),
+      socketPath1: path.join(runtimeDir, NODE_FILES.serial1),
+      monitorPath: path.join(runtimeDir, NODE_FILES.monitor),
+      socketDir: kind === 'switch' ? path.join(runtimeDir, NODE_FILES.vde) : null,
+      mgmtPath: kind === 'switch' ? path.join(runtimeDir, NODE_FILES.mgmt) : null
     };
-    if ([paths.socketPath, paths.socketPath1, paths.monitorPath, paths.mgmtPath].some(name => name && Buffer.byteLength(name) > 107)) {
-      throw new Error('Runtime socket path is too long; move the project to a shorter directory.');
+    const tooLong = [paths.socketPath, paths.socketPath1, paths.monitorPath, paths.mgmtPath].find(name => name && Buffer.byteLength(name) > SOCKET_LIMIT);
+    if (tooLong) {
+      // The startup check (prepareRuntime) refuses such a directory first; this is the net under it.
+      throw new Error(runtimeTooLong(ctx.runtimeRoot || path.dirname(path.dirname(runtimeDir))) ||
+        `Runtime socket path ${tooLong} is longer than ${SOCKET_LIMIT} bytes. Use a shorter --runtime.`);
     }
     return paths;
   }

@@ -11,11 +11,11 @@ web interface is described in the [user guide](user-guide.md).
 | [`.env`](../.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
 | `users.json` | User accounts (see [Users and sessions](user-guide.md#users-and-sessions)); ignored by Git. |
-| `runtime/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks (`<host>/disk.qcow2` for QEMU and `<host>/disk.vdi` for VirtualBox, up to one per engine), and sockets. The ID is random. |
-| `runtime/users/<login>` | Link to the user's session directory, for administrators. |
-| `runtime/runner-<port>.sock` | Socket (mode 0600) that the runner, which runs the machines, dials to reach the server. |
+| `<runtime>/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks (`<host>/disk.qcow2` for QEMU and `<host>/disk.vdi` for VirtualBox, up to one per engine), and sockets. The ID is random. |
+| `<runtime>/users/<login>` | Link to the user's session directory, for administrators. |
+| `<runtime>/runner-<port>.sock` | Socket (mode 0600) that the runner, which runs the machines, dials to reach the server. |
 
-`runtime/` is temporary: a node's files are removed with the node or when
+`<runtime>` is the runtime directory (below): a node's files are removed with the node or when
 the server stops. `./scripts/start.sh` (`npm start`) runs the server and a runner (`runner/main.js`)
 as two processes and stops both together; if the runner dies, the server closes its sessions and
 `start.sh` ends (nothing is restarted: that is systemd's job in a deployment). A runner started by
@@ -42,11 +42,44 @@ with their arguments, so the process is the Node.js one (`./scripts/status.sh`, 
   (failure, the program then stops with `Startup aborted`) and `-` (not applicable).
 
 The port and the runtime directory are options (there is no environment variable for them). The server and the runner started
-with the same `--runtime` (`runtime/` of the repository by default) share that directory: the server creates
+with the same `--runtime` (by default the same private directory of the port, see below) share that directory: the server creates
 `runner-<port>.sock` in it and the runner looks for it there. The server cleans the empty sessions and
 aliases only of the local runner (the one on the Unix socket) whose `hello` announces the same runtime
 directory; a runner with another `--runtime`, and every remote runner, is never touched, whatever its
 `hello` says.
+
+### Runtime directory
+
+Every Unix socket of QemuWeb lives under the runtime directory, and a socket path is limited to 107 bytes. The
+default is therefore a short private directory in `/tmp`, one per account and per server port
+(`common/runtime-dir.js` is the only place of the rule; the scripts ask it):
+
+| Process | Default |
+|---|---|
+| Server and local runner | `/tmp/qw-<login>/<port>`, the port being the server's `--listen` (the runner's `--port`, or the port in the name of the `--connect` socket); `/tmp/qw-<login>/3002` by default |
+| Remote runner (`runner.sh run`) without `--runtime` or a `runtime` in its runner file | `/tmp/qw-<login>/runner` |
+
+`<login>` is the operating system account that runs the process (`id -un`), each character outside `A-Za-z0-9._-`
+replaced by `_`; an empty name, or one of more than 32 characters, is replaced by the numeric user ID. `--runtime DIR`
+replaces the default and is used as given (there is no environment variable). Two servers on two ports of one
+account never share a directory.
+
+The default directories are created with mode 0700. If `/tmp/qw-<login>` or the port directory exists already, the
+program REFUSES it, with no fallback and no change to it, unless it is a real directory (not a symbolic link) owned by
+the same user and closed to group and others: `/tmp` is shared, and anyone could create that name first. Remove it, or
+choose another place with `--runtime`. A directory given with `--runtime` is only created.
+
+Both programs check the length at startup, before any session exists. A `--runtime` that is too long is refused with
+the longest path built and the maximum length (49 bytes: `<runtime>/sessions/<16 hex>/<h- or s- and 16 hex>/serial1.sock`
+must stay within 107 bytes); the default cannot reach it unless the login is absurdly long (worst case 46 bytes: a 32
+character login and a 5 digit port). They also print one warning, never an error, when the filesystem of the directory
+is a tmpfs (memory) or has less than 5 GB free, because the working disks of the sessions live there.
+
+**Sessions do not survive a reboot of the machine with the default directory**: `/tmp` is emptied, and the next start
+begins with a clean, empty session. Sessions are disposable: **Save session** (ZIP) is how work is kept.
+`--runtime DIR` on a persistent disk (the CREMI services use `/var/lib/qemuweb`) keeps them. A server that stops
+removes the directory of its port when nothing is left in it. An old `runtime/` in the project is no longer used:
+delete it by hand.
 
 ### Server: `./scripts/server.sh [options]`
 
@@ -55,7 +88,7 @@ The server is configured by options only: it reads **no environment variable**.
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--listen PORT` | `3002` | TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-PORT.sock, the socket its runner dials |
-| `--runtime DIR` | `runtime/ of the repository` | runtime directory: sessions of a local runner, users/ aliases, server-PORT.pid and .session, and the socket DIR/runner-PORT.sock |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory: sessions of a local runner, users/ aliases, server-PORT.pid and .session, and the socket DIR/runner-PORT.sock; the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets) |
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
 | `--runners FILE` | `runners.json of the repository` | registered remote runners (mode 0600): a hash of the token of each |
 | `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
@@ -80,7 +113,7 @@ QemuWeb 0.9.4 server
 
 Options
   --listen          3002                                       (default)
-  --runtime         /home/me/qemuweb/runtime                   (default)
+  --runtime         /tmp/qw-me/3002                   (default)
   --users           /home/me/qemuweb/users.json                (default)
   --runners         /home/me/qemuweb/runners.json              (default)
   --logs            /home/me/qemuweb/logs                      (default)
@@ -93,7 +126,7 @@ Options
   --logout-url      unset                                      (default)
   --no-auth         off                                        (default)
   --ephemeral       off                                        (default)
-  Runner socket     /home/me/qemuweb/runtime/runner-3002.sock  (derived)
+  Runner socket     /tmp/qw-me/3002/runner-3002.sock  (derived)
 
 Checking dependencies…
   ✓ Node.js  /usr/bin/node  (v24.22.0, requires ^24.0.0)
@@ -103,11 +136,11 @@ Checking configuration…
   ✓ users.json  3 accounts
   ✓ runners.json  1 registered runner
   ✓ logs directory  /home/me/qemuweb/logs  (mode 0700)
-  ✓ runtime directory  /home/me/qemuweb/runtime  (writable)
+  ✓ runtime directory  /tmp/qw-me/3002  (writable)
 
 QemuWeb is ready.
   Web interface      http://127.0.0.1:3002
-  Sessions           /home/me/qemuweb/runtime/sessions (<runtime>/users/<login> links)
+  Sessions           /tmp/qw-me/3002/sessions (<runtime>/users/<login> links)
   Stop               Ctrl+C or ./scripts/stop.sh
 ```
 
@@ -119,7 +152,7 @@ The runner is an ordinary unprivileged process; every path is a parameter.
 | --- | --- | --- |
 | `--port PORT` | `3002` | port of the server to reach: the runner dials `DIR/runner-PORT.sock`, DIR being its `--runtime` |
 | `--connect SOCKET` | `none` | Unix socket of the server, instead of `--port` (the two exclude each other) |
-| `--runtime DIR` | `runtime/ of the repository` | where the runner keeps its sessions (`DIR/sessions/<id>/`) and looks for the server socket `DIR/runner-PORT.sock`; the server cleans the empty sessions it leaves there only with the same `--runtime` |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | where the runner keeps its sessions (`DIR/sessions/<id>/`) and looks for the server socket `DIR/runner-PORT.sock`; the server cleans the empty sessions it leaves there only with the same `--runtime`; default: the private directory of that port in /tmp, lost at a reboot |
 | `--config FILE` | `config.json of the repository` | system catalog (images, memory, QEMU options) |
 | `--exit-on-disconnect` | `off` | stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect every 2 seconds) |
 | `-h`, `--help` | | this text |
@@ -139,10 +172,10 @@ QemuWeb 0.9.4 runner
 
 Options
   --port                3002                                       (default)
-  --runtime             /home/me/qemuweb/runtime                   (default)
+  --runtime             /tmp/qw-me/3002                   (default)
   --config              /home/me/qemuweb/config.json               (default)
   --exit-on-disconnect  off                                        (default)
-  Server socket         /home/me/qemuweb/runtime/runner-3002.sock  (derived)
+  Server socket         /tmp/qw-me/3002/runner-3002.sock  (derived)
 
 Checking dependencies…
   ✓ QEMU           /usr/bin/qemu-system-x86_64  (QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env)
@@ -153,7 +186,7 @@ Checking dependencies…
 Checking configuration…
   ✓ config.json  9 systems
 
-Waiting for the server at /home/me/qemuweb/runtime/runner-3002.sock…
+Waiting for the server at /tmp/qw-me/3002/runner-3002.sock…
 Connected to the server.
 ```
 
@@ -191,7 +224,7 @@ only for this machine unless `--insecure` is given (with a warning).
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--runtime DIR` | `runtime/ of the repository` | where the runner keeps its sessions (DIR/sessions/<id>/); default: the "runtime" of the runner file, else this |
+| `--runtime DIR` | `/tmp/qw-<login>/runner` | where the runner keeps its sessions (DIR/sessions/<id>/); default: the "runtime" of the runner file, else a private directory in /tmp (lost at a reboot) |
 | `--config FILE` | `config.json of the repository` | system catalog (images, memory, QEMU options) |
 | `--url URL` | `the runner file` | server URL (https://host); default: the one that register wrote in the runner file |
 | `--ca FILE` | `none` | PEM file of the certificate authority that signed the server certificate (self-signed); default: the one of the runner file, else the system ones |
@@ -208,7 +241,7 @@ only for this machine unless `--insecure` is given (with a warning).
 | `--name NAME` | `the runner ID` | name shown in /admin/runners (up to 64 characters) |
 | `--ca FILE` | `none` | PEM file of the certificate authority that signed the server certificate (self-signed); kept in the runner file |
 | `--insecure` | `off` | accepts a plain http:// or ws:// server URL that is not on this machine (the token and the traffic are then readable on the network) |
-| `--runtime DIR` | `runtime/ of the repository` | sessions directory the runner will use, kept in the runner file; default: runtime/ of the repository where it runs |
+| `--runtime DIR` | `/tmp/qw-<login>/runner` | sessions directory the runner will use, kept in the runner file; default: not kept, the runner then uses a private directory in /tmp |
 | `--runner-config FILE` | `~/.config/qemuweb-runner/runner.json` | where to write the runner file (directory 0700, file 0600) |
 | `-h`, `--help` | | this text |
 
@@ -224,9 +257,9 @@ The environment variables are those of the local runner above. The tokens are ne
 | `scripts/server.sh` | Start the server alone (`[options]`, `--help` lists them), the counterpart of `runner.sh`: a front end to `node server/main.js` (see [Server and runner command line](#server-and-runner-command-line)). Ctrl+C stops it. |
 | `scripts/runner.sh [options]` | Start a runner (`--port PORT` for the server to reach, default 3002; `--runtime DIR`; `--exit-on-disconnect`), the counterpart of `server.sh`. `runner.sh register` and `runner.sh run` are the form for a runner on another machine (see Remote runner). It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
 | `scripts/stop.sh [--listen PORT] [--runtime DIR]` | Stop the server started on that port (default 3002); a runner started alone keeps running. |
-| `scripts/killall.sh [--dry-run]` | Stop this project's servers, runner processes, QEMU processes, VDE switches and terminals, and VirtualBox VMs, including orphans (only the VMs named `qemuweb-…` whose settings file is under this project's `runtime/`; they are powered off and unregistered, never deleted with `--delete`). |
-| `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show (default `runtime/` only) the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. QEMU hosts show as `host (qemu)` and VirtualBox hosts as `host (vbox)`: a VirtualBox VM is not a child of the runner, so it is found by its VM name (`qemuweb-<runner pid>-<session>-<node>`, the `VBoxHeadless --comment <name>` process) and its configured memory is read with `VBoxManage showvminfo`; VMs of any other name are never shown. `--watch` refreshes it. |
-| `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove the default `runtime/` files and optionally images or downloads; `logs/` is always kept. |
+| `scripts/killall.sh [--dry-run]` | Stop this project's servers and runner processes, then the QEMU processes, VDE switches and terminals, and VirtualBox VMs of the default runtime directories of this account (`/tmp/qw-<login>/`, every checkout of the account), including orphans (only the VMs named `qemuweb-…` whose settings file is under it; they are powered off and unregistered, never deleted with `--delete`). |
+| `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show (by default the servers started from this checkout) the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. QEMU hosts show as `host (qemu)` and VirtualBox hosts as `host (vbox)`: a VirtualBox VM is not a child of the runner, so it is found by its VM name (`qemuweb-<runner pid>-<session>-<node>`, the `VBoxHeadless --comment <name>` process) and its configured memory is read with `VBoxManage showvminfo`; VMs of any other name are never shown. `--watch` refreshes it. |
+| `scripts/cleanall.sh [--dry-run] [--images] [--sources]` | Run `killall.sh`, then remove the files of the default runtime directories (`/tmp/qw-<login>/`) and optionally images or downloads; `logs/` is always kept. |
 | `scripts/demo.sh [--listen PORT]` | Start the application on port N (default 3003) with a temporary users file (`admin`, `toto`, `tutu`, passwords equal to logins) and `examples/lan.zip` loaded and started for `toto` and `tutu`. Ctrl+C stops it. See [test/tests.md](../test/tests.md#manual-tests-of-the-web-interface). |
 | `make docs` | Build the PDF of every Markdown document (`README.md`, `docs/*.md`, `test/tests.md`, `deploy/cremi/deploy-cremi.md`) in `docs/pdf/`; only those whose source, style or diagrams changed (`npm run docs` is the same). |
 | `scripts/md2pdf.sh IN.md OUT.pdf` | Build one PDF: pandoc turns the Markdown into HTML with the style `docs/doc.css`, headless Chrome prints it. |

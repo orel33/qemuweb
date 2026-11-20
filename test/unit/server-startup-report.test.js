@@ -7,6 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const cli = require('../../common/cli');
 const {serverSpec, parseServerArguments} = require('../../server/options');
+const {defaultRuntime} = require('../../common/runtime-dir');
 const {runnerSpec, runSpec, registerSpec, parseRunnerArguments, serverSocket} = require('../../runner/options');
 
 const root = path.join(path.sep, 'srv', 'qemuweb');
@@ -16,14 +17,14 @@ const blockOf = (spec, settings, derived) => cli.formatOptions(cli.startupRows(s
 
 test('server: the defaults are listed, each marked as default, with the derived runner socket', () => {
   const spec = serverSpec(root);
-  const text = blockOf(spec, parseServerArguments([], {root}), [['Runner socket', '/srv/qemuweb/runtime/runner-3002.sock']]);
+  const text = blockOf(spec, parseServerArguments([], {root}), [['Runner socket', path.join(defaultRuntime(3002), 'runner-3002.sock')]]);
   assert.match(text, /^Options/);
   assert.doesNotMatch(text, /Settings/);
-  for (const [name, value] of [['--listen', '3002'], ['--runtime', path.join(root, 'runtime')], ['--users', path.join(root, 'users.json')],
+  for (const [name, value] of [['--listen', '3002'], ['--runtime', defaultRuntime(3002)], ['--users', path.join(root, 'users.json')],
     ['--runners', path.join(root, 'runners.json')], ['--logs', path.join(root, 'logs')], ['--examples', path.join(root, 'examples')], ['--session-hours', '12'], ['--runner-grace', '300'], ['--trust-proxy', 'unset'], ['--auth', 'password'], ['--proxy-key-file', 'unset'], ['--logout-url', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
-  assert.match(text, /Runner socket +\/srv\/qemuweb\/runtime\/runner-3002\.sock +\(derived\)/);
+  assert.match(text, new RegExp(`Runner socket +${escape(path.join(defaultRuntime(3002), 'runner-3002.sock'))} +\\(derived\\)`));
 });
 
 test('server: given options are shown with their source; the environment is ignored', () => {
@@ -65,13 +66,15 @@ test('server command line: every option, anything else or an invalid value refus
 test('runner: defaults, the Options block, the socket to dial and the command line', () => {
   const spec = runnerSpec(root);
   const defaults = parseRunnerArguments([], {root});
-  assert.equal(serverSocket(defaults), '/srv/qemuweb/runtime/runner-3002.sock');
+  assert.equal(serverSocket(defaults), path.join(defaultRuntime(3002), 'runner-3002.sock'));
+  assert.equal(parseRunnerArguments(['--port', '3010'], {root}).runtime, defaultRuntime(3010), 'the default follows the port');
+  assert.equal(parseRunnerArguments(['--connect', '/x/runner-3011.sock'], {root}).runtime, defaultRuntime(3011), 'or the port of the socket it dials');
   const text = blockOf(spec, defaults, [['Server socket', serverSocket(defaults)]]);
-  for (const [name, value] of [['--port', '3002'], ['--runtime', '/srv/qemuweb/runtime'], ['--config', '/srv/qemuweb/config.json'], ['--exit-on-disconnect', 'off']]) {
+  for (const [name, value] of [['--port', '3002'], ['--runtime', defaultRuntime(3002)], ['--config', '/srv/qemuweb/config.json'], ['--exit-on-disconnect', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
   assert.doesNotMatch(text, /--connect/, '--connect is listed only when given');
-  assert.match(text, /Server socket +\/srv\/qemuweb\/runtime\/runner-3002\.sock +\(derived\)/);
+  assert.match(text, new RegExp(`Server socket +${escape(path.join(defaultRuntime(3002), 'runner-3002.sock'))} +\\(derived\\)`));
   const given = parseRunnerArguments(['--port', '4100', '--runtime', '/rt', '--config', '/c.json', '--exit-on-disconnect'], {root});
   assert.equal(serverSocket(given), '/rt/runner-4100.sock');
   assert.match(blockOf(spec, given, []), /--exit-on-disconnect +on +\(option\)/);
@@ -88,7 +91,7 @@ test('runner run and register: their own tables, required options, a masked toke
   const parse = (spec, argv) => cli.parseArguments(spec, argv).settings;
   const run = runSpec(root);
   const defaults = parse(run, []);
-  assert.deepEqual([defaults.url, defaults.ca, defaults.insecure, defaults.runtime], [null, null, false, path.join(root, 'runtime')]);
+  assert.deepEqual([defaults.url, defaults.ca, defaults.insecure, defaults.runtime], [null, null, false, null]);
   assert.match(defaults.runnerConfig, /qemuweb-runner[\\/]runner\.json$/);
   const given = parse(run, ['--url', 'https://q.example.org', '--ca', '/ca.pem', '--insecure', '--runner-config', '/r.json']);
   assert.deepEqual([given.url, given.ca, given.insecure, given.runnerConfig], ['https://q.example.org', '/ca.pem', true, '/r.json']);

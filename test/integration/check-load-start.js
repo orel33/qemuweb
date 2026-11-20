@@ -11,11 +11,13 @@ const os = require('node:os');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
+const {defaultRuntime} = require('../../common/runtime-dir');
 const {readArchive} = require('../../runner/archive-zip');
 
 const root = path.resolve(__dirname, '../..');
 const archiveFile = path.join(root, 'examples', 'lan.zip');
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-check-load-start-'));
+let runtimeDir = null; // the default runtime directory of the server's port (common/runtime-dir.js)
 let child;
 let client;
 let testUsers;
@@ -78,7 +80,7 @@ function sessionView(nodes) {
 // Processes whose command line mentions the session's runtime directory, by executable name
 // (same /proc scan as admin.js).
 function sessionProcesses(id) {
-  const dir = path.join(root, 'runtime', 'sessions', id);
+  const dir = path.join(runtimeDir, 'sessions', id);
   const found = [];
   for (const name of fs.readdirSync('/proc').filter(entry => /^\d+$/.test(entry))) {
     try {
@@ -122,6 +124,7 @@ async function run() {
   }
 
   const port = await freePort();
+  runtimeDir = defaultRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'loader'}]);
   child = spawnServer({port, usersFile: testUsers.file});
@@ -191,7 +194,7 @@ async function cleanup(failed) {
     if (client?.cookie && sessionId) {
       await client.request('/api/session', {method: 'DELETE'});
       await waitFor('session processes to exit', () => sessionProcesses(sessionId).length === 0, 20000);
-      assert.equal(fs.existsSync(path.join(root, 'runtime', 'sessions', sessionId)), false, `runtime/sessions/${sessionId} remains.`);
+      assert.equal(fs.existsSync(path.join(runtimeDir, 'sessions', sessionId)), false, `${runtimeDir}/sessions/${sessionId} remains.`);
       if (!failed) console.log('Load start: session deleted, its processes and runtime directory are gone');
     }
   } catch (error) {

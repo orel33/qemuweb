@@ -12,6 +12,7 @@ const fs = require('fs');
 const net = require('net');
 const path = require('path');
 const {Connection} = require('../common/runner-protocol');
+const {SOCKET_LIMIT, runtimeTooLong} = require('../common/runtime-dir');
 const {RunnerClient} = require('./runner-client');
 
 function createRunnerGateway({root, runtimeRoot, port, registry}) {
@@ -21,7 +22,7 @@ function createRunnerGateway({root, runtimeRoot, port, registry}) {
 
   // Refuses to take over the socket of a live server on the same port; removes a stale one.
   async function prepareSocket() {
-    if (Buffer.byteLength(socketPath) > 107) throw new Error('Runner socket path is too long; move the project to a shorter directory.');
+    if (Buffer.byteLength(socketPath) > SOCKET_LIMIT) throw new Error(runtimeTooLong(runtimeRoot) || `Runner socket path ${socketPath} is longer than ${SOCKET_LIMIT} bytes. Use a shorter --runtime.`);
     if (!fs.existsSync(socketPath)) return;
     const alive = await new Promise(resolve => {
       const probe = net.createConnection(socketPath);

@@ -4,18 +4,18 @@
 // scripts/start.sh, scripts/runner.sh or a unit; "waiting for a server" when none runs on its port) and
 // the QEMU, vde_switch and vdeterm processes below it and its VirtualBox VMs (VBoxHeadless, found by
 // the VM name, see scripts/status-vbox.js), grouped by session and labelled with the
-// account, the node name and its system. Read-only: it only looks at /proc, ps, runtime/ and, for VirtualBox, `VBoxManage showvminfo`.
-//   scripts/status.sh                  servers recorded in this project's runtime/server-<port>.pid, else those started elsewhere
+// account, the node name and its system. Read-only: it only looks at /proc, ps, the runtime directories and, for VirtualBox, `VBoxManage showvminfo`.
+//   scripts/status.sh                  servers of this project (this checkout), else those started elsewhere
 //   scripts/status.sh --all            every QemuWeb server of the current user, in any directory
 //   scripts/status.sh --pid PID        one server by PID (also --server-pid)
 //   scripts/status.sh --watch|-w [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
 //   scripts/status.sh --details        also list the processes of each switch (vde_switch, vdeterm); d toggles it with --watch
 //   scripts/status.sh --no-color       plain text (also when NO_COLOR is set or stdout is not a terminal)
-// It looks only at the default runtime/ of this project (a server started with another --runtime is found by --all).
+// A server's port and runtime directory are read from its command line (default: /tmp/qw-<login>/<port>).
 const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
-const {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('./status-vbox');
+const {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, dialledRuntime, runnerSessionsDir, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('./status-vbox');
 
 const ROOT = path.resolve(__dirname, '..');
 const SESSION_PATH = /(\/[^\s,]*?\/sessions)\/([0-9a-f]{16})(?:\/([hs]-[0-9a-f]{16}))?/;
@@ -68,44 +68,32 @@ function projectRoot(entry) {
   return readLink(`/proc/${entry.pid}/cwd`);
 }
 
-// Servers to show, as {entry, root, port}.
+// Servers to show, as {entry, root, port, runtime}: the port and the runtime directory come from the command line
+// of the server (--listen, default 3002; --runtime, else the default directory of the port).
 function findServers(table, options) {
   const found = new Map();
-  const add = (entry, root, port) => { if (entry && !found.has(entry.pid)) found.set(entry.pid, {entry, root, port}); };
-  const recordedPort = (root, pid) => {
-    try {
-      for (const name of fs.readdirSync(path.join(root, 'runtime'))) {
-        const match = /^server-(\d+)\.pid$/.exec(name);
-        if (match && Number(fs.readFileSync(path.join(root, 'runtime', name), 'utf8')) === pid) return Number(match[1]);
-      }
-    } catch (_) { /* No record. */ }
-    return null;
+  const add = (entry, root) => {
+    if (entry && !found.has(entry.pid)) found.set(entry.pid, {entry, root, port: Number(/ --listen (\d+)( |$)/.exec(entry.args)?.[1] || 3002), runtime: runtimeOfProcess(entry.args)});
   };
   const scanAll = () => {
     for (const entry of table.values()) {
       if (entry.uid !== process.getuid() || !isServer(entry)) continue;
       const root = projectRoot(entry);
-      if (root && fs.existsSync(path.join(root, 'server', 'session-manager.js'))) add(entry, root, recordedPort(root, entry.pid));
+      if (root && fs.existsSync(path.join(root, 'server', 'session-manager.js'))) add(entry, root);
     }
   };
   if (options.pid) {
     const entry = table.get(options.pid);
     if (!entry || !isServer(entry)) { console.error(`PID ${options.pid} is not a QemuWeb server.`); process.exit(1); }
     const root = projectRoot(entry);
-    add(entry, root, recordedPort(root, entry.pid));
+    add(entry, root);
   } else if (options.all) {
     scanAll();
   } else {
-    let names = [];
-    try { names = fs.readdirSync(path.join(ROOT, 'runtime')); } catch (_) { /* No runtime directory. */ }
-    for (const name of names) {
-      const match = /^server-(\d+)\.pid$/.exec(name);
-      if (!match) continue;
-      const pid = Number(fs.readFileSync(path.join(ROOT, 'runtime', name), 'utf8'));
-      const entry = table.get(pid);
-      if (entry && isServer(entry) && readLink(`/proc/${pid}/cwd`) === ROOT) add(entry, ROOT, Number(match[1]));
+    for (const entry of table.values()) {
+      if (entry.uid === process.getuid() && isServer(entry) && projectRoot(entry) === ROOT) add(entry, ROOT);
     }
-    // Nothing recorded for this project: show the servers started from other directories.
+    // No server of this project: show the servers started from other directories.
     if (!found.size) { scanAll(); options.fellBack = found.size > 0; }
   }
   return [...found.values()].sort((a, b) => a.entry.pid - b.entry.pid);
@@ -121,7 +109,7 @@ const showVmInfo = uuid => execFileSync('VBoxManage', ['showvminfo', uuid, '--ma
 function machineProcesses(table, runner) {
   const vms = vboxProcessesOf(table.values(), runner.pid);
   for (const vm of vms) {
-    vm.vbox.sessionsDir = runnerSessionsDir(runner.args, projectRoot(runner));
+    vm.vbox.sessionsDir = runnerSessionsDir(runner.args);
     vm.vbox.memoryMb = readVirtualBoxMemory(vm.vbox.uuid, showVmInfo);
   }
   return [...new Set([...descendants(runner).filter(isMachineProcess), ...vms.filter(vm => !/<defunct>/.test(vm.args))])];
@@ -321,23 +309,16 @@ function runnerPort(entry) {
   return match ? Number(match[1]) : null;
 }
 
-// The project directory of the server a runner dials: the one holding the --connect socket
-// (runtime/runner-<port>.sock), else the runner's own project (--port).
-function runnerServerRoot(entry) {
-  const socket = /(\S*runner-\d+\.sock)/.exec(entry.args)?.[1];
-  return socket ? path.dirname(path.dirname(socket)) : projectRoot(entry);
-}
 
 // A runner is a process of its own, never a child of the server. It keeps its sessions while the
 // server is away, so it is not an orphan: it waits for a server.
 function standaloneRunnerReport(table, entry, servers, style, details) {
   const port = runnerPort(entry);
-  const dialled = runnerServerRoot(entry);
-  const connected = port !== null && servers.some(server => server.port === port && server.root === dialled);
+  const connected = port !== null && servers.some(server => server.port === port && server.runtime === dialledRuntime(entry.args));
   const machines = machineProcesses(table, entry);
   const label = connected ? 'Runner' : 'Runner (waiting for a server)';
   return [`${runnerLine(entry, machines, style, label)}${port ? style.dim(` · port ${port}`) : ''}`,
-    ...render(sessionItems(machines, path.join(ROOT, 'runtime', 'sessions'), style, details))];
+    ...render(sessionItems(machines, runnerSessionsDir(entry.args), style, details))];
 }
 
 function report(options) {
@@ -346,24 +327,23 @@ function report(options) {
   const servers = findServers(table, options);
   measureCpu(table, servers);
   const lines = [`${style.bold('QemuWeb processes')} of ${process.env.USER || process.getuid()} at ${new Date().toTimeString().slice(0, 8)}`];
-  if (options.fellBack) lines.push('', style.dim(`No server is recorded in ${path.join(ROOT, 'runtime')}: showing the QemuWeb servers of this user started elsewhere.`));
+  if (options.fellBack) lines.push('', style.dim('No server of this project is running: showing the QemuWeb servers of this user started elsewhere.'));
   const runners = [...table.values()].filter(entry => entry.uid === process.getuid() && isRunner(entry));
   for (const server of servers) {
     lines.push('', ...serverReport(server, style));
-    if (server.port && !runners.some(entry => runnerPort(entry) === server.port && runnerServerRoot(entry) === server.root)) {
+    if (server.port && !runners.some(entry => runnerPort(entry) === server.port && dialledRuntime(entry.args) === server.runtime)) {
       lines.push(style.dim('   no runner connected: start one with ./scripts/runner.sh'));
     }
   }
   for (const entry of runners) {
     // Without --all, only the runners of this project and of the servers shown.
-    const dialled = runnerServerRoot(entry);
-    if (!options.all && dialled !== ROOT && !servers.some(server => server.root === dialled)) continue;
+    if (!options.all && projectRoot(entry) !== ROOT && !servers.some(server => server.runtime === dialledRuntime(entry.args))) continue;
     lines.push('', ...standaloneRunnerReport(table, entry, servers, style, options.details));
   }
   if (!servers.length && !lines.some(line => line.includes('Runner ('))) {
     lines.push('', options.pid ? 'No such server.' : options.all
       ? 'No QemuWeb server is running.'
-      : `No QemuWeb server is recorded in ${path.join(ROOT, 'runtime')}. Use --all to look for servers in other directories.`);
+      : `No QemuWeb server of this project is running. Use --all to look for servers in other directories.`);
   }
   return lines.join('\n');
 }

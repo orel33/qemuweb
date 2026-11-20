@@ -1,15 +1,14 @@
 'use strict';
 
 // The manual mode: the server run alone (`node server/main.js`) spawns nothing and answers 503 until a
-// runner, started by hand (runner/main.js --connect), dials runtime/runner-<port>.sock. A session
+// runner, started by hand (runner/main.js --connect), dials <runtime>/runner-<port>.sock (the default runtime directory of the port). A session
 // runs on that runner (VDE switch); the runner and its switch SURVIVE a SIGKILL of the server;
 // a new server on the same port is joined again by the runner, and the user finds the SAME
 // session, adopted (`session-adopted` in users.log), with its switch still running; a second
 // runner is refused; SIGTERM on the runner leaves no process and no session directory.
 // The runner keeps its sessions in its own short temporary runtime directory (which also makes
 // the server's runtime/ differ from the runner's: the server must create no alias). VDE only: no
-// system image or KVM is needed. Run it from a short project path (the Unix socket path of
-// runtime/runner-<port>.sock is limited to 107 bytes).
+// system image or KVM is needed.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -20,9 +19,11 @@ const {spawn} = require('node:child_process');
 const {setTimeout: delay} = require('node:timers/promises');
 const {USERS_LOG} = require('../../server/audit');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
+const {defaultRuntime} = require('../../common/runtime-dir');
 
 const root = path.join(__dirname, '..', '..');
-const runtime = path.join(root, 'runtime');
+// The default runtime directory of the server's port (/tmp/qw-<login>/<port>), set once the port is chosen.
+let runtime = null;
 const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
 const sockets = [];
 const runners = [];
@@ -103,6 +104,7 @@ const adminRunners = boss => boss.request('/api/admin/runners');
 
 async function run() {
   const port = await freePort();
+  runtime = defaultRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
   scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-rm-'));
   const runnerRuntime = path.join(scratch, 'rt');

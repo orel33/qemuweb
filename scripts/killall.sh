@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# Stops what belongs to this project and cleans its default runtime/ (not another --runtime directory).
+# Stops the servers and runners of this project, then every machine (QEMU, VDE, VirtualBox) in the default
+# runtime directories of this account (/tmp/qw-<login>/, shared by all its checkouts; not another --runtime directory).
 set -euo pipefail
 
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd -P)"
-RUNTIME="$ROOT/runtime"
+source "$ROOT/scripts/lib/runtime.sh"
+RUNTIME="$(default_account_root)"
 DRY_RUN=0
 if [[ ${1:-} == --dry-run && $# == 1 ]]; then
   DRY_RUN=1

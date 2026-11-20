@@ -15,9 +15,11 @@ const http = require('node:http');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
+const {defaultRuntime} = require('../../common/runtime-dir');
 
 const root = path.join(__dirname, '..', '..');
-const runtime = path.join(root, 'runtime');
+// The default runtime directory of the server's port (/tmp/qw-<login>/<port>), set once the port is chosen.
+let runtime = null;
 const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
 let child;
 let testUsers;
@@ -91,6 +93,7 @@ async function startSwitch(client, name) {
 
 async function run() {
   const port = await freePort();
+  runtime = defaultRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
   const socketPath = path.join(runtime, `runner-${port}.sock`);
   testUsers = await createTestUsers([{login: 'carol'}]);

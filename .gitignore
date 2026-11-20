@@ -7,8 +7,6 @@ sources/*
 !sources/*/
 sources/*/*
 !sources/*/.gitkeep
-runtime/*
-!runtime/.gitkeep
 dist/
 preview/
 users.json

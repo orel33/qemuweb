@@ -39,8 +39,8 @@ trap 'exit 130' INT TERM
 printf '\n== QemuWeb demo on port %s ==\n' "$port"
 node scripts/demo.js prepare "$demo_dir/users.json"
 # The same two commands as scripts/start.sh (server and runner), with the temporary users file and a
-# temporary runtime directory: the sockets of a node must fit in 107 bytes, which the runtime/ of a
-# project kept in a deep directory does not allow. The directory is deleted when the demo stops.
+# temporary runtime directory (its own sessions, deleted when the demo stops; the default
+# /tmp/qw-<login>/<port> would be shared with a start.sh on the same port).
 mkdir -p "$demo_dir/runtime"
 ./scripts/start.sh --listen "$port" --runtime "$demo_dir/runtime" --users "$demo_dir/users.json" &
 demo_server_pid=$!

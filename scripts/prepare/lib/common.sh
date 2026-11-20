@@ -6,7 +6,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 # separate so preparation scripts can be rerun safely.
 IMAGES="$ROOT/images"
 SOURCES="$ROOT/sources"
-RUNTIME="$ROOT/runtime"
+# Scratch directory of the image builds (kept on failure), not the runtime directory of the sessions.
+RUNTIME="$SOURCES/.prepare"
 mkdir -p "$IMAGES" "$SOURCES" "$RUNTIME"
 
 parse_prepare_mode() {

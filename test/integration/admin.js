@@ -12,10 +12,12 @@ const http = require('node:http');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
+const {defaultRuntime} = require('../../common/runtime-dir');
 const {setDisabled} = require('../../server/auth/users-store');
 
 const root = path.join(__dirname, '..', '..');
 const newId = kind => `${kind === 'switch' ? 's' : 'h'}-${crypto.randomBytes(8).toString('hex')}`;
+let runtimeDir = null; // the default runtime directory of the server's port (common/runtime-dir.js)
 let child;
 let testUsers;
 let serverOutput = '';
@@ -71,7 +73,7 @@ async function expectStatus(client, route, method, status, {body, headers} = {})
 
 // PIDs whose command line mentions the session's runtime directory (vde_switch, vdeterm).
 function sessionProcesses(sessionId) {
-  const dir = path.join(root, 'runtime', 'sessions', sessionId);
+  const dir = path.join(runtimeDir, 'sessions', sessionId);
   const pids = [];
   for (const name of fs.readdirSync('/proc').filter(entry => /^\d+$/.test(entry))) {
     try {
@@ -84,6 +86,7 @@ function sessionProcesses(sessionId) {
 
 async function run() {
   const port = await freePort();
+  runtimeDir = defaultRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'boss', role: 'admin'}, {login: 'alice'}, {login: 'bob'}, {login: 'carol'}, {login: 'dave'}]);
   // A log directory the server must create itself, inside the temporary users directory.
@@ -309,7 +312,7 @@ async function run() {
   const deleted = await boss.request('/api/admin/sessions/delete', {method: 'POST', body: {logins: ['alice', 'bob']}});
   assert.deepEqual(deleted, {deleted: ['alice', 'bob'], failed: []});
   for (const {sessionId} of [aliceSettings, bobSettings]) {
-    assert.equal(fs.existsSync(path.join(root, 'runtime', 'sessions', sessionId)), false, `runtime/sessions/${sessionId} remains`);
+    assert.equal(fs.existsSync(path.join(runtimeDir, 'sessions', sessionId)), false, `${runtimeDir}/sessions/${sessionId} remains`);
     await waitFor(`processes of ${sessionId} to exit`, () => sessionProcesses(sessionId).length === 0, 5000);
   }
   await waitFor('session-deleted at bob', () => bobSession.events.some(item => item.event === 'session-deleted'));
@@ -345,7 +348,7 @@ async function run() {
   await expectStatus(new QemuWebClient(baseUrl), '/auth/login', 'POST', 401, {body: {login: 'erin', password: 'second-password'}});
   assert.ok(!(await boss.request('/api/admin/users')).some(user => user.login === 'erin'));
   assert.ok(!(await boss.request('/api/admin/sessions')).some(session => session.login === 'erin'));
-  assert.equal(fs.existsSync(path.join(root, 'runtime', 'sessions', erinSettings.sessionId)), false);
+  assert.equal(fs.existsSync(path.join(runtimeDir, 'sessions', erinSettings.sessionId)), false);
   await waitFor('erin\'s processes to exit', () => sessionProcesses(erinSettings.sessionId).length === 0, 5000);
   await expectStatus(boss, '/api/admin/users/boss', 'PATCH', 403, {body: {disabled: true}});
   await expectStatus(boss, '/api/admin/users/boss', 'PATCH', 403, {body: {role: 'student'}});
