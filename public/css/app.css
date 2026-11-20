@@ -1,4 +1,4 @@
-:root { --control: 38px; --control-small: 30px; --control-field: 32px; --header-height: 63px; --banner-height: 40px; --console-font-family: "Ubuntu Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; --console-font-size: 17px; }
+:root { --control: 38px; --control-small: 30px; --control-field: 32px; --header-height: 63px; --banner-height: 40px; --header-font: 15px system-ui, sans-serif; --header-text: #b8c7d8; --console-font-family: "Ubuntu Sans Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace; --console-font-size: 17px; }
 :root[data-console-font="consolas"] { --console-font-family: Consolas, "Liberation Mono", monospace; }
 :root[data-console-font="menlo"] { --console-font-family: Menlo, Monaco, monospace; }
 :root[data-console-font="liberation"] { --console-font-family: "Liberation Mono", monospace; }
@@ -22,12 +22,12 @@ h1 a:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 @media (prefers-reduced-motion: reduce) { h1 a, h1 a img { transition: none; } h1 a:hover, h1 a:focus-visible, h1 a:hover img, h1 a:focus-visible img { transform: none; } }
 .beta-badge { align-self: flex-start; margin-top: 1px; color: #9dbbdf; font-size: 10px; font-weight: 700; letter-spacing: .08em; }
 .settings-engine-note { margin: 6px 0 0; color: #8aa6c4; font-size: 12px; }
-.engine-picker { display: inline-flex; flex: none; align-items: center; gap: 6px; margin-left: 4px; font-size: 12px; font-weight: 400; letter-spacing: 0; color: #8aa6c4; position: relative; top: 2px; /* the 12px text sits on the baseline of the 18px title */ }
+.engine-picker { display: inline-flex; flex: none; align-items: center; gap: 8px; margin-left: 4px; color: var(--header-text); font: var(--header-font); letter-spacing: 0; }
 .engine-picker[hidden] { display: none; }
 .engine-picker label { white-space: nowrap; }
-.engine-picker select { height: 22px; padding: 0 4px; font-size: 12px; color: #c4d6ea; background: #1d2a39; border-color: #3c5068; }
+.engine-picker select { font: var(--header-font); color: var(--header-text); }
 .engine-picker select:disabled { opacity: .75; cursor: not-allowed; }
-@media (max-width: 640px) { .engine-picker label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } .engine-picker select { max-width: 104px; font-size: 11px; } }
+@media (max-width: 640px) { .engine-picker label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; } .engine-picker select { max-width: 104px; } }
 button, select { height: var(--control); padding: 0 11px; color: inherit; background: #243244; border: 1px solid #506176; border-radius: 6px; }
 button { cursor: pointer; }
 .icon-button { display: inline-grid; place-items: center; flex: none; width: var(--control); height: var(--control); padding: 7px; border-color: #405166; background: #202c3a; transition: background .15s, border-color .15s, transform .15s; }
@@ -423,7 +423,7 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 #login-error { margin: 0; color: #ffb4a8; }
 .account[hidden] { display: none; }
 .account { display: inline-flex; flex: none; align-items: center; gap: 8px; }
-.account-name { max-width: 180px; overflow: hidden; color: #b8c7d8; text-overflow: ellipsis; white-space: nowrap; }
+.account-name { max-width: 180px; overflow: hidden; color: var(--header-text); font: var(--header-font); text-overflow: ellipsis; white-space: nowrap; }
 .auth-off-warning { flex: none; padding: 4px 8px; border: 1px solid #b1452f; border-radius: 6px; color: #ffd2c8; background: #4a1f17; font-size: 12px; font-weight: 700; }
 /* Administration: Admin link, observation banner and console control banner. */
 .admin-link { color: #f2c46d; text-decoration: none; padding: 6px 9px; border: 1px solid #6a5730; border-radius: 6px; white-space: nowrap; }

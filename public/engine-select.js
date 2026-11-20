@@ -1,4 +1,4 @@
-// The Session Engine select of the header, next to the title: the engine of the session the page
+// The Engine select of the header, next to the title: the engine of the session the page
 // shows (the observed one while an administrator observes). It is frozen while a host is up or
 // busy; the server refuses the change in that case too. Engines the runner does not have are
 // disabled; with a single engine the select is disabled.

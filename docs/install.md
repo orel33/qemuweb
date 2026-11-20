@@ -64,7 +64,7 @@ nginx with TLS: see [docs/deployment.md](deployment.md).
 
 VirtualBox is optional: install it separately to provide `VBoxManage` (see
 [VirtualBox](#virtualbox)). The VirtualBox engine is disabled in the Web
-interface when `VBoxManage` is unavailable (the **Session Engine** select of the header, next to the
+interface when `VBoxManage` is unavailable (the **Engine** select of the header, next to the
 title, offers it only when the server has `VBoxManage`).
 
 ## Starting the server and the runner by hand
@@ -219,7 +219,7 @@ module is still the old one).
   program on this machine holds the virtualization hardware (KVM)": stop it.
   To use both engines, run them one after the other, or use a machine or a
   runner dedicated to VirtualBox. **Switching the engine** of a session is done in the
-  header (**Session Engine**), only while no host of the session is up or busy; the hosts,
+  header (**Engine**), only while no host of the session is up or busy; the hosts,
   their settings for both engines and the working disk of each engine (`disk.qcow2`,
   `disk.vdi`) are kept, so a session can alternate between QEMU and VirtualBox. A host
   whose system has no `.vdi` image (`scripts/prepare.sh`) stays in the session and cannot
