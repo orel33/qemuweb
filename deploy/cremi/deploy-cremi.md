@@ -363,8 +363,11 @@ sudo usermod -aG kvm qemuweb
 sudo -u qemuweb sh -c 'test -w /dev/kvm && echo kvm-ok'
 ```
 
-**17. Base image.** Building it on this machine fails behind the CREMI proxy, so it is built on the **workstation** and
-copied. On the workstation, in the repository (the second command records the SHA-256 files that `rsync` copies; `-a`
+**17. Base image.** `prepare.sh` builds the images of the four systems (Debian 13 Legacy, Debian 13 Cloud, Alpine, OpenWrt)
+on this machine behind the CREMI proxy, which it reads from `https_proxy` (see "Outbound path" in `cremi-architecture.md`);
+to check a build, run for example `bash scripts/prepare.sh --system alpine --force --follow` on the server. If a build
+fails (the report names the unreachable host and the log directory) or the Debian ISO host answers `503`, the **fallback**
+is to build the image on the **workstation** and copy it. On the workstation, in the repository (the second command records the SHA-256 files that `rsync` copies; `-a`
 keeps the dates, `-S` keeps the file sparse):
 
 ```sh

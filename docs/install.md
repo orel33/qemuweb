@@ -138,10 +138,13 @@ the downloads. The proxy in use is printed first (`Proxy: http://proxy:3128/ (fr
 environment)` or `Proxy: none`; credentials in the URL are hidden). An invalid URL is
 refused with status 2.
 
-The Debian builds run an installer (Debian 13 Legacy) or cloud-init (Debian 13 Cloud)
-in a VM, which cannot see your environment: the proxy is written into the installer
-preseed (`mirror/http/proxy`) and the cloud-init apt configuration, and removed from
-the finished image. A proxy on the machine's own loopback (`localhost`, `127.x`) is
+The builds run an installer or a script in a VM, which cannot see your environment, so the
+proxy is given to it: Debian 13 Legacy through the installer preseed (`mirror/http/proxy`),
+Debian 13 Cloud through the cloud-init apt configuration, Alpine through the `PROXYOPTS` answer
+of `setup-alpine` and the `http_proxy`, `https_proxy` and `ftp_proxy` variables of its build
+script (also used by its `apk add`), OpenWrt through the same variables before its `apk add`.
+It is removed from, or never written into, the finished image (the Alpine build checks that the
+installed `/etc` does not hold it). A proxy on the machine's own loopback (`localhost`, `127.x`) is
 given to the VM as `10.0.2.2`, the host as seen from QEMU's user-mode network; a proxy
 given by a name is resolved on this machine and the VM gets its address (a short name
 such as `proxy` works here through the search domains of the machine, not in the VM).
@@ -153,11 +156,25 @@ says so. Ask for the IPv4 address of the machine to be authorised, or give `-6` 
 proxy name is then resolved to its IPv6 address, which the VM receives in brackets
 (`http://[2001:db8::42]:3128/`; such an address can also be given to `--proxy` directly). Before
 starting the VM, the build fetches the `Release` files of `deb.debian.org` and
-`security.debian.org` through the same proxy and stops at once, naming the failing URL
-and the `curl` error, when they are not reachable. The ISO and the other systems are
-downloaded with `curl`; a failed download names its URL.
+`security.debian.org` (Alpine: `mirrors.alpinelinux.org/mirrors.txt` and the `main` and `community`
+package indexes of `dl-cdn.alpinelinux.org`; OpenWrt: the `base` and `packages` feeds of
+`downloads.openwrt.org`) through the same proxy and stops at once, naming the failing URL
+and the `curl` error (and, for a `403` of the proxy, the IPv4/IPv6 hint above), when they are not
+reachable. The ISO and the images are downloaded with `curl`; a failed download names its URL.
 
-### Progress and failures of a Debian build
+### Progress and failures of a build
+
+The Alpine and OpenWrt builds show the same status line, `--follow` and failure report as the
+Debian ones (their phases come from markers that the build script prints and from the Alpine
+installer's steps). The log shows for Alpine the failure of an unreachable mirror
+(`wget: can't connect to remote host`, `No mirror found`, `unable to select packages`) and for
+OpenWrt an `apk` network error or the failure marker of the build script; such a failure ends the
+build within seconds (the VM has no stall of more than 5 minutes, and `apk` is stopped after
+3 minutes in the OpenWrt VM) with the end of the log, the log directory and the hint
+`the build VM cannot reach <host>: check the proxy (--proxy URL, or -6 if the proxy only accepts IPv6)`.
+The strings are in `scripts/prepare/lib/common.sh` (`ALPINE_FAILURES`, `OPENWRT_FAILURES`);
+they come from the failing Alpine log recorded at the CREMI, the OpenWrt ones are not yet checked
+against a real failure.
 
 While the VM runs, one status line shows a gauge, an estimated percentage, the phase,
 the elapsed time and the size of the serial log, for example
@@ -178,7 +195,7 @@ of the log, the log directory and hints. The list of strings is in
 (the installer is stopped after 15), and any VM is stopped after 30 minutes
 (`PREPARE_VM_TIMEOUT` in the same file).
 
-When a Debian build fails:
+When a build fails:
 
 1. Read the end of the log shown, then the whole serial log,
    `runtime/.<system>-prepare.XXXXXX/serial.log` (the directory is kept on failure, with

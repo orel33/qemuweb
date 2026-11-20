@@ -54,8 +54,8 @@ of `scripts/prepare.sh`.
 
 - `/etc/apt/apt.conf.d/95proxy` and `/etc/profile.d/proxy.sh` carry it (`http_proxy`, `https_proxy`, and `no_proxy` for the
   CREMI names), see step 0 of the tutorial.
-- `prepare.sh` reads `https_proxy` and `http_proxy`, or `--proxy URL`, and gives it to the build VM (Debian installer or
-  cloud-init), which cannot see the environment. The short name `proxy` is resolved on the host and the VM receives the address.
+- `prepare.sh` reads `https_proxy` and `http_proxy`, or `--proxy URL`, and gives it to the build VM (Debian installer,
+  cloud-init, Alpine `setup-alpine`, OpenWrt `apk`), which cannot see the environment. The short name `proxy` is resolved on the host and the VM receives the address.
 - The build VM goes out over IPv4. The proxy first accepted only the IPv6 address of the machine (`403 ERR_ACCESS_DENIED`
   over IPv4): `prepare.sh -6` was the workaround. **The IPv4 of `v0-qemuweb` is authorised since 19 November 2026**, so
   it is no longer needed on this machine.
