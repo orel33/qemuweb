@@ -6,10 +6,15 @@ const assert = require('node:assert/strict');
 const EventEmitter = require('node:events');
 const test = require('node:test');
 const {attachCaptureLease, MAX_LEASES} = require('../../server/capture-lease');
+const {captureId, isCaptureId} = require('../../common/capture');
 
 const HOST = 'h-0123456789abcdef';
-const CAP = 'eth0-20260101-000000';
-const CAP2 = 'eth1-20260101-000001';
+// Capture IDs as the runner builds them (common/capture.js captureId), not typed by hand: the lease
+// checks the same format as the live view and the routes, and does not look a capture up (the dialog
+// leases right after Start, before any list could know the capture).
+const at = seconds => new Date(Date.UTC(2026, 10, 20, 10, 15, seconds));
+const CAP = captureId(0, at(30));
+const CAP2 = captureId(1, at(31));
 
 function tab({leases = new Map(), allowed = true, id = 's1'} = {}) {
   const socket = new EventEmitter();
@@ -20,6 +25,18 @@ function tab({leases = new Map(), allowed = true, id = 's1'} = {}) {
   const ask = (event, request) => new Promise(resolve => socket.emit(event, request, resolve));
   return {socket, runner, recorded, ask, leases};
 }
+
+test('the IDs the runner builds are accepted, right after Start, and the ones the real code would refuse are not', async () => {
+  const one = tab();
+  for (const id of [CAP, captureId(2, at(0)), captureId(3, at(59), 1), captureId(0, at(30), 12)]) {
+    assert.equal(isCaptureId(id), true, id);
+    assert.deepEqual(await one.ask('capture-lease', {nodeId: HOST, captureId: id}), {ok: true}, id);
+  }
+  // The format of the live view and the routes: anything else is unknown, whatever the node.
+  for (const id of ['eth0-20260101-000000', 'eth4-20261120T101530Z', 'eth0-20261120T101530Z-0', 'eth0-20261120T101530Z.pcap', 'ETH0-20261120T101530Z']) {
+    assert.match((await one.ask('capture-lease', {nodeId: HOST, captureId: id})).error, /Unknown capture/, id);
+  }
+});
 
 test('a lease is refused to an observer without control and for malformed requests', async () => {
   const observer = tab({allowed: false});
@@ -49,8 +66,10 @@ test('a lease belongs to one tab: another tab lists it but cannot take it', asyn
 
 test('the number of leases of one tab is limited', async () => {
   const one = tab();
-  for (let index = 0; index < MAX_LEASES; index++) assert.deepEqual(await one.ask('capture-lease', {nodeId: HOST, captureId: `eth0-20260101-${String(index).padStart(6, '0')}`}), {ok: true});
-  assert.match((await one.ask('capture-lease', {nodeId: HOST, captureId: CAP})).error, /Too many/);
+  const nth = index => captureId(0, new Date(Date.UTC(2026, 0, 1) + index * 1000));
+  for (let index = 0; index < MAX_LEASES; index++) assert.deepEqual(await one.ask('capture-lease', {nodeId: HOST, captureId: nth(index)}), {ok: true});
+  assert.match((await one.ask('capture-lease', {nodeId: HOST, captureId: nth(MAX_LEASES)})).error, /Too many/);
+  assert.deepEqual(await one.ask('capture-lease', {nodeId: HOST, captureId: nth(0)}), {ok: true}, 'a lease it already has is not a new one');
 });
 
 test('when the socket closes its captures are stopped then deleted, those of other tabs are not', async () => {

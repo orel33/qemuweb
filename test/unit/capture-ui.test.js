@@ -170,7 +170,7 @@ test('the Capture dialog and the pane button are wired in the page; the old plac
   assert.match(html, /Closing stops and discards the running capture\. Close anyway\?/);
   for (const gone of ['capture-controls', 'show-captures', 'captures-dialog', 'captures-list', 'close-captures', 'capture-tab-', 'capture-all-files', 'data-view="capture"', 'capture-toggle', 'capture-download-again']) assert.doesNotMatch(html, new RegExp(gone), `${gone} was removed`);
   const dialog = moduleSource('capture-dialog');
-  assert.match(dialog, /captureBlocker\(machine, current\.index\)/, 'the dialog reuses the CAP01 reasons');
+  assert.match(dialog, /captureControls\(machines\.get\(current\.nodeId\), capturesOf\(current\.nodeId\), current\.index, ownerOf\)/, 'the dialog takes the rules and the CAP01 reasons from captures.js');
   assert.match(dialog, /Closing the window stops and discards the capture\. Press Stop first to save it\./);
   assert.match(dialog, /dialog\.addEventListener\('cancel', event => \{ event\.preventDefault\(\); requestClose\(\); \}\)/, 'Esc asks first');
   assert.match(dialog, /emitOnSession\('capture-lease'/);
