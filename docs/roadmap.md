@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (0.9.4)
+## Where we are (0.9.5)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
