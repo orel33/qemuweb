@@ -114,7 +114,7 @@ test('the select is initialized at page start and updated by every change of the
   const nodes = moduleSource('nodes');
   assert.match(nodes, /store\.availableEngines = sessionSettings\.availableEngines \|\| \[\];/);
   assert.match(nodes, /showPage\(\);\s*updateEngineSelect\(\);/);
-  assert.match(nodes, /initEngineSelect\(\{/);
+  assert.match(nodes, /bindEngineSelect\(\{/);
   assert.match(nodes, /onError: message => showStatusError\(`Cannot change the session engine: \$\{message\}`\)/);
   // A host starting, stopping or loading changes busy/running, which refreshes the controls and the select.
   assert.match(moduleSource('workspace'), /export function updateControls\(\) \{\s*updateEngineSelect\(\);/);
@@ -124,7 +124,8 @@ test('the select is initialized at page start and updated by every change of the
   assert.match(moduleSource('socket'), /socket\.on\('general-settings-changed', event => \{[\s\S]{0,200}followEngineChange\(event\.engine\)/);
   const select = moduleSource('engine-select');
   assert.match(select, /select\.addEventListener\('change', async \(\) => \{[\s\S]{0,300}jsonRequest\('PUT', \{engine\}\)/);
-  assert.match(select, /finally \{ updateEngineSelect\(\); \}/, 'a refusal puts the select back on the real engine');
+  assert.match(select, /finally \{ shown = ''; updateEngineSelect\(\); \}/, 'a refusal puts the select back on the real engine');
+  assert.match(select, /if \(signature === shown\) return;/, 'an open list is not rebuilt by an update that changes nothing');
   assert.match(select, /hostsInUse\(machines\.values\(\)\)/);
   assert.match(select, /inUse: hostsInUse\(machines\.values\(\)\), observing/);
 });

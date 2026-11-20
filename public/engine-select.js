@@ -46,12 +46,17 @@ export function unavailableHostsWarning(unavailableHosts) {
 
 const picker = document.getElementById('engine-picker');
 const select = document.getElementById('session-engine');
+// What is shown now: the select is rebuilt only when it changes, so that an open list is not closed by an update.
+let shown = '';
 
 // Shows the state of the select from the engine, the runner's engines and the hosts of the page.
 export function updateEngineSelect() {
   if (!select) return;
   const state = engineSelectState({engine: generalSettings.engine, availableEngines: store.availableEngines,
     inUse: hostsInUse(machines.values()), observing});
+  const signature = JSON.stringify(state);
+  if (signature === shown) return;
+  shown = signature;
   select.replaceChildren(...state.options.map(item => {
     const option = new Option(item.text, item.value);
     option.disabled = item.disabled;
@@ -66,7 +71,7 @@ export function updateEngineSelect() {
 
 // Changes the session engine when the user picks another one. onChanged(body) refreshes the page
 // from the answer ({engine, unavailableHosts}); onError(message) reports a refusal.
-export function initEngineSelect({onChanged, onError}) {
+export function bindEngineSelect({onChanged, onError}) {
   select.addEventListener('change', async () => {
     const engine = select.value;
     select.disabled = true;
@@ -75,6 +80,6 @@ export function initEngineSelect({onChanged, onError}) {
       generalSettings.engine = body.engine;
       await onChanged(body);
     } catch (error) { onError(error.message); }
-    finally { updateEngineSelect(); }
+    finally { shown = ''; updateEngineSelect(); }
   });
 }

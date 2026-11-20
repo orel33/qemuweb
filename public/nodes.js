@@ -9,7 +9,7 @@ import {generalSettingsError, namingSchemeSelect, showGeneralSettings} from './g
 import {loadGraphicPositions, renderGraphic} from './graphic-view.js';
 import {refollow} from './observe.js';
 import {parseStartErrors, showStartFailure} from './start-failure.js';
-import {engineName, initEngineSelect, unavailableHostsWarning, updateEngineSelect} from './engine-select.js';
+import {engineName, bindEngineSelect, unavailableHostsWarning, updateEngineSelect} from './engine-select.js';
 import {refreshSystems} from './systems.js';
 
 const confirmDialog = document.getElementById('confirm-dialog');
@@ -294,7 +294,7 @@ export async function followEngineChange(engine = generalSettings.engine) {
 }
 
 export function initNodes() {
-  initEngineSelect({
+  bindEngineSelect({
     onChanged: async body => {
       const warning = await followEngineChange(body.engine);
       if (warning) showStatusError(warning);
