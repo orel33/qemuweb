@@ -21,25 +21,68 @@ export function contentProblem(kind, bytes) {
   return '';
 }
 
-// The existing flow that takes a kind: the session review dialog, or the topology load dialog.
-export function loadFlow(kind) {
-  return kind === 'session' ? 'archive' : kind === 'topology' ? 'topology' : null;
-}
-
-// Whether loading a file of this kind first needs the user's confirmation to remove what the session holds: a
-// session ZIP replaces the session, so it does when the session is not empty; a topology is added to it and never does.
-export function needsReplaceConfirmation(kind, nodeCount) {
-  return kind === 'session' && nodeCount > 0;
-}
-
 // "2 hosts", "1 host", "no host".
 export function countPhrase(count, singular, plural = `${singular}s`) {
   return count === 0 ? `no ${singular}` : `${count} ${count === 1 ? singular : plural}`;
 }
 
-// The text of the confirmation shown before a session replaces the current one.
-export function replaceMessage(hosts, switches) {
-  return `Your current session has ${countPhrase(hosts, 'host')} and ${countPhrase(switches, 'switch', 'switches')}. Loading a session replaces it: they will be stopped and removed (working disks included) before the new session is loaded. To keep a copy, cancel and use Save first.`;
+// The hosts and switches among nodes ({kind: 'host' | 'switch'}).
+export function nodeCounts(nodes) {
+  const counts = {hosts: 0, switches: 0};
+  for (const node of nodes) { if (node.kind === 'host') counts.hosts++; else if (node.kind === 'switch') counts.switches++; }
+  return counts;
+}
+
+const countsText = (hosts, switches) => `${countPhrase(hosts, 'host')} and ${countPhrase(switches, 'switch', 'switches')}`;
+
+// The one status line of the Save dialog, the same whether the topology checkbox is ticked or not.
+export function saveStatusLine(hosts, switches) {
+  return hosts + switches === 0 ? 'Your current session is empty.' : `Save your current session: ${countsText(hosts, switches)}.`;
+}
+
+// The orange warning of the Load Session and Load Topology dialogs: the previous session is always closed.
+// Empty for an empty session (its slot keeps its height).
+export function closeWarning(hosts, switches) {
+  return hosts + switches === 0 ? '' : `Your current session (${countsText(hosts, switches)}) will be closed and its working disks discarded.`;
+}
+
+// What the Close step of a load reports once the nodes are removed.
+export function closedText(hosts, switches) {
+  return `Closed ${countsText(hosts, switches)}`;
+}
+
+// When the previous session is removed: never when a dialog opens, and only once the file was read and checked
+// (`reviewed`) and the user pressed Load (`confirmed`); nothing to remove from an empty session, and nothing is
+// removed twice (a second try after a failed load finds the session empty).
+export function shouldCloseSession({reviewed, confirmed, nodeCount}) {
+  return reviewed === true && confirmed === true && nodeCount > 0;
+}
+
+// Where a chosen file goes: {kind, dialog: 'session' | 'topology'} (the Load Session or Load Topology dialog), or
+// {error} when the extension is not one of a topology or a session, or the content does not match it.
+// `bytes` is the start of the file for a session, the whole file for a topology.
+export function routeFile(name, bytes) {
+  const kind = kindOfFileName(name);
+  if (!kind) return {error: 'Choose a .topo (topology) or .zip (session) file.'};
+  const problem = contentProblem(kind, bytes);
+  if (problem) return {error: `${name}: ${problem}`};
+  return {kind, dialog: kind};
+}
+
+// The "From Server (Examples)" menu item: disabled, with its reason, when the server has no example.
+export function serverItemState(examples) {
+  return Array.isArray(examples) && examples.length > 0
+    ? {disabled: false, label: 'From Server (Examples)'}
+    : {disabled: true, label: 'No examples on the server'};
+}
+
+export const kindLabel = kind => (kind === 'session' ? 'Session' : 'Topology');
+
+export function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1048576).toFixed(1)} MB`;
+  return `${(bytes / 1073741824).toFixed(2)} GB`;
 }
 
 // The label of an example in the dropdown: "name · Topology|Session · size".
@@ -52,20 +95,11 @@ export function canLoadExample(value, examples) {
   return typeof value === 'string' && value !== '' && examples.some(example => example.name === value);
 }
 
-export const kindLabel = kind => (kind === 'session' ? 'Session' : 'Topology');
-
-export function formatSize(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-  if (bytes < 1024 * 1024 * 1024) return `${(bytes / 1048576).toFixed(1)} MB`;
-  return `${(bytes / 1073741824).toFixed(2)} GB`;
-}
-
-// What the Save dialog does for the checkbox "Save only the topology": the dialog keeps its size, so nothing
-// is hidden. With it, the working disk option is disabled (with its reason) and the estimate line says there is
-// no disk, and the .topo text is downloaded; otherwise the session ZIP.
+// What the Save dialog does for the checkbox "Save only the topology": the dialog keeps its size and its Download
+// button, nothing is hidden. With it, the working disk option is disabled (with its reason), the ZIP estimate line
+// is empty, and the .topo text is downloaded; otherwise the session ZIP.
 export function saveChoice(topologyOnly) {
   return topologyOnly
-    ? {sessionOptions: false, estimate: 'Topology file: no disks', optionNote: 'Not used for a topology file', confirmLabel: 'Download topology', fileName: 'network.topo'}
-    : {sessionOptions: true, estimate: null, optionNote: '', confirmLabel: 'Download ZIP', fileName: 'qemuweb-session.zip'};
+    ? {sessionOptions: false, optionNote: 'Not used for a topology file', fileName: 'network.topo'}
+    : {sessionOptions: true, optionNote: '', fileName: 'qemuweb-session.zip'};
 }

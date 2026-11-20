@@ -117,8 +117,10 @@ async function checkTopologies(client, systems) {
     const text = fs.readFileSync(example(name), 'utf8');
     const expected = parsedView(parseTopology(text, systems));
     const preview = await client.request('/api/topology/preview', {method: 'POST', body: {text, engine}});
-    assert.deepEqual(preview, {hosts: Object.keys(expected.hosts).length, switches: expected.switches.length}, `${name}: preview counts`);
-    const result = await client.request('/api/topology', {method: 'POST', body: {text, engine, autostart: false, closePrevious: !first}});
+    const links = Object.values(expected.hosts).reduce((count, host) => count + host.switches.length, 0);
+    assert.deepEqual(preview, {hosts: Object.keys(expected.hosts).length, switches: expected.switches.length, links}, `${name}: preview counts`);
+    if (!first) await client.request('/api/nodes', {method: 'DELETE'});
+    const result = await client.request('/api/topology', {method: 'POST', body: {text, engine, autostart: false}});
     assert.equal(result.created, Object.keys(expected.hosts).length + expected.switches.length, `${name}: created count`);
     assert.deepEqual(result.errors, []);
     const loaded = await nodeSet(client);
@@ -139,7 +141,7 @@ async function checkTopologies(client, systems) {
   };
   for (const [label, text] of Object.entries(invalid)) {
     await expectRefused(client, '/api/topology/preview', {method: 'POST', body: {text, engine}}, label);
-    const error = await expectRefused(client, '/api/topology', {method: 'POST', body: {text, engine, closePrevious: true}}, label);
+    const error = await expectRefused(client, '/api/topology', {method: 'POST', body: {text, engine}}, label);
     assert.deepEqual(sessionView(await nodeSet(client)), before, `${label}: the session changed`);
     console.log(`Load: invalid topology (${label}) refused without changes: ${error}`);
   }
