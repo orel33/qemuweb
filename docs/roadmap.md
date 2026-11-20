@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (0.9.0)
+## Where we are (0.9.1)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
@@ -23,6 +23,7 @@ monitor command on their own hosts, and there are no quotas and no jail.
 | Docs, graph | PDF documentation, Graphic view rebuilt (GRA01), README and documentation split into `docs/` | 0.9.0-beta.5.2, beta.5.3 |
 | CREMI | Apache and OpenID front end, `--auth proxy` (shared `X-Proxy-Key`), accounts without password, Connections panel and WebSocket test in `/admin` | 0.9.0-beta.5.4 |
 | Stabilisation | File formats back to `schemaVersion` 1, demo archives rewritten, session ZIP named `qemuweb-session.zip`; remote runner validated at the CREMI (registration, placement, network cut, revocation) | **0.9.0** |
+| Auth and capture | `--auth password|proxy` only (expired SSO session, two shared keys for a rotation); traffic capture: PCAP of a host interface through QEMU's `filter-dump`, a Capture button and dialog in the pane bar (Play, Stop, Download, live view inside, saved at once, discarded at close) | **0.9.1** |
 
 Formats: from 0.9.0, every change of a format increments its number and comes with an explicit decision on
 compatibility.
@@ -54,7 +55,7 @@ Sizes of tasks: S about an hour, M half a day, L a day or more.
 
 Two features for the labs, decided as the top of the list. They are independent of milestones 6 to 10 and can start at once.
 
-- [ ] **CAP01** (L) Traffic capture. Students analyse what their machines exchange: a button starts a capture on an
+- [x] **CAP01** (L) Traffic capture. Students analyse what their machines exchange: a button starts a capture on an
   interface of a host (`host/eth0`) or on a link (the "cable" between a host interface and its switch), and the result
   is a PCAP file to download and open in Wireshark. A live view runs in a terminal of the Terminals view.
   - **How to capture, per host interface.** QEMU can dump the frames of one NIC itself, with no help from the guest:
@@ -87,6 +88,22 @@ Two features for the labs, decided as the top of the list. They are independent 
   - Unit tests for the runner commands and the routes with a fake monitor; the real capture is checked by hand with a
     `ping` between two hosts and the file opened in Wireshark. Documents: user guide (a section "Capturing traffic"),
     `docs/json-files.md` if a capture is described in a file, runner prerequisites.
+- [x] **CAP01** delivered (merged 20 November 2026, validated by the user on the demo). The user wants the capture to be more
+  intuitive: see CAP02.
+- [ ] **CAP02** (M) A more intuitive capture interface, from the user's feedback after trying CAP01 (to be completed with what
+  was confusing). Ideas to weigh: one **Capture** control where the student already looks (the node card and the link in the
+  Graphic view, the toolbar of a console pane) instead of Host Settings > Network; start and stop as one toggle with the
+  recording state in place; pick the interface by what it is connected to ("eth0, to switch lan") rather than by number;
+  a default start that needs no choice (the only connected interface); the capture list and the live view next to each
+  other, with **Open live view** and **Download** one click away from a recording; clearer wording and one short hint on
+  first use ("Capture records what this interface sends and receives; open the file in Wireshark"); a sensible file name
+  with the host and interface. Keep the existing rights, limits and audit.
+- [x] **CAP02** delivered (merged 20 November 2026): Capture button in the pane bar, Capture dialog, the double scrollbar fixed (BUG09).
+- [x] **CAP03** (M) Delivered (0.9.1): simplify the capture dialog (user feedback after trying CAP02). A capture is saved at once or lost: no
+  "All captures" tab and no kept list. **Stop** downloads the PCAP through the browser (its download manager keeps it);
+  closing the dialog deletes the host's leftover capture files (stopping and downloading first if one is still recording, so
+  nothing is lost). The **live view moves into the dialog**, under the controls (a read-only text area with an optional
+  filter), and the fifth "Capture" view of the console panes is removed: it is no longer an extra console.
 - [ ] **HSV01** (L) Host services. A **Services** tab in Host Settings lists the services a host can run (DHCP, DNS,
   web server, FTP, telnet...) as checkboxes; the chosen ones start at the next boot (the interface offers **Apply and
   reboot**).
@@ -114,9 +131,9 @@ Two features for the labs, decided as the top of the list. They are independent 
     the boot with a service enabled is checked by hand (a DHCP server answering another host, a web server answering
     `curl`).
 - **Done when**
-  - [ ] A student starts a capture on a host interface, runs a `ping` and downloads a PCAP that Wireshark opens and that
+  - [x] A student starts a capture on a host interface, runs a `ping` and downloads a PCAP that Wireshark opens and that
     shows the ping.
-  - [ ] The Terminals view has a **Capture** view that shows the packets live.
+  - [x] The capture dialog shows the packets live.
   - [ ] A host started with the DHCP service checked answers a DHCP request from another host without the student
     installing or enabling anything.
 
@@ -562,6 +579,14 @@ commit message.
   the server refuses its options. Also check by hand that `./scripts/start.sh --session-hours 0` exits 2 at once and
   leaves nothing running.
 - [x] **BUG08** `docs/user-guide.md` still says the CREMI runs `--auth both`; it is `--auth proxy`. (Disappears with AUT01.)
+
+- [x] **BUG09** A console pane shows **two scrollbars**: the project's own slider (`input.terminal-scroll`, `public/css/app.css`
+  line ~370, driven by `public/terminal.js`) and the scrollbar that xterm.js 6.0.0 draws itself
+  (`.xterm-scrollable-element > .scrollbar`, a custom element of the library, which replaced the native viewport scrollbar of
+  xterm 5). The CSS only hides the old native one (`.terminal .xterm-viewport { scrollbar-width: none; ::-webkit-scrollbar }`).
+  Probable fix: hide the library's scrollbar too (`.terminal .xterm-scrollable-element > .scrollbar { display: none }`); the wheel
+  and the keyboard keep scrolling, and the slider stays the one control. Check the Log, Monitor and Capture views and the
+  floating console, and that the slider still follows the scroll position.
 
 ### TODO
 
