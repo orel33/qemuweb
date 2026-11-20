@@ -147,9 +147,9 @@ test('--list prints one ttyS1 line per Debian raw image, none for alpine, and ke
     fs.cpSync(path.join(repo, 'common'), path.join(root, 'common'), {recursive: true});
     fs.copyFileSync(path.join(repo, 'scripts', 'prepare.sh'), path.join(root, 'scripts', 'prepare.sh'));
     fs.copyFileSync(path.join(repo, 'scripts', 'prepare', 'lib', 'ttys1-login.js'), path.join(root, 'scripts', 'prepare', 'lib', 'ttys1-login.js'));
-    const {schemaVersion} = JSON.parse(fs.readFileSync(path.join(repo, 'config.json'), 'utf8'));
+    const {schemaVersion, systems: realSystems} = JSON.parse(fs.readFileSync(path.join(repo, 'config.json'), 'utf8'));
     const system = (name, extra) => ({basedOn: 'default', label: name, 'image:qemu': `images/${name}.raw`, 'image:vbox': `images/${name}.vdi`, ...extra});
-    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({schemaVersion, systems: {default: {memory: 512, image: null}, 'debian13-legacy': system('debian13-legacy'), alpine: system('alpine'), 'debian13-cloud': system('debian13-cloud')}}));
+    fs.writeFileSync(path.join(root, 'config.json'), JSON.stringify({schemaVersion, systems: {default: realSystems.default, 'debian13-legacy': system('debian13-legacy'), alpine: system('alpine'), 'debian13-cloud': system('debian13-cloud')}}));
     const {image, bin} = setup(dir, [[0x83, 2048]], 'disabled');
     for (const name of ['debian13-legacy', 'alpine']) fs.copyFileSync(image, path.join(root, 'images', `${name}.raw`));
     const run = () => spawnSync('bash', [path.join(root, 'scripts', 'prepare.sh'), '--list'], {encoding: 'utf8', env: {...process.env, PATH: `${bin}:${process.env.PATH}`}});
