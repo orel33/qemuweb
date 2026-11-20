@@ -359,7 +359,6 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .pane-session-list button:hover, .pane-session-list button[aria-current="true"] { background: #304256; color: #fff; }
 .pane-font-button { display: grid; place-items: center; flex: none; width: var(--control-small); height: var(--control-small); padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #b7d7f4; font: 700 12px system-ui, sans-serif; }
 .pane-font-button:not(:disabled):hover { border-color: #9fc5ef; background: #304256; }
-.pane-font-size { flex: none; box-sizing: border-box; width: 2ch; min-width: 2ch; color: #8aa0b8; font: 11px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; text-align: center; font-variant-numeric: tabular-nums; }
 .pane-font-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .pane-view-menu { position: relative; flex: none; margin-left: auto; }
 .pane-view-menu[open] { z-index: 5; }

@@ -56,7 +56,6 @@ function updatePaneStates() {
     pane.clearButton.hidden = !machine;
     pane.clearButton.disabled = !machine || !isConsoleView(pane.view);
     for (const button of pane.fontButtons) button.hidden = !machine;
-    pane.fontSizeLabel.hidden = !machine;
     const state = machine
       ? machine.error ? 'error' : machine.busy ? (machine.operation || 'starting') : machine.running ? 'running' : 'stopped'
       : workspaceError && pane.index === store.activePaneIndex ? 'error' : 'empty';

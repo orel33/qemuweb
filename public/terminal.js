@@ -73,8 +73,6 @@ function applyPaneFontSize(pane) {
     button.title = `${index === 0 ? 'Decrease' : 'Increase'} terminal font size (${size} px)`;
     button.setAttribute('aria-label', button.title);
   }
-  pane.fontSizeLabel.textContent = String(size);
-  pane.fontSizeLabel.title = `Terminal font size: ${size} px`;
 }
 function changePaneFontSize(pane, change) {
   const current = pane.fontSizeOverride ?? generalSettings.consoleFontSize;
@@ -484,10 +482,8 @@ export function initTerminals() {
       button.addEventListener('click', () => changePaneFontSize(pane, change));
       return button;
     });
-    pane.fontSizeLabel = document.createElement('span');
-    pane.fontSizeLabel.className = 'pane-font-size';
-    pane.fontSizeLabel.hidden = true;
-    pane.clearButton.after(pane.fontButtons[0], pane.fontSizeLabel, pane.fontButtons[1]);
+    // The size is not shown between the buttons: it is in their hint.
+    pane.clearButton.after(pane.fontButtons[0], pane.fontButtons[1]);
     terminal.onScroll(() => syncConsoleScroll(pane));
     terminal.onData(data => {
       if (pane.replaying || !pane.machineId) return;
