@@ -172,6 +172,7 @@ browser's cookie (and, behind OpenID, ends the OpenID session); see [docs/deploy
 | `--logout-url URL` | unset | Where **Log out** goes for an identity from the authenticating front end. |
 | `--no-auth` | authentication on | Disables authentication: one shared local session, for single-user local work only. |
 | `--logs DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions, and `users.log`, the user events (JSON lines, mode 0600). |
+| `--examples DIR` | `examples` | Directory of the example topologies (`.topo`) and sessions (`.zip`) listed by the **Load** dialog (read only; a missing directory means no example). |
 
 With `--no-auth`, the server prints a warning at startup and the
 interface shows **Authentication disabled**. It is never the default.
@@ -182,7 +183,8 @@ interface shows **Authentication disabled**. It is never the default.
 
 1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
 2. In the Web interface, choose an engine in **General Settings**, click
-   **Load session ZIP**, and select [`examples/lan.zip`](../examples/lan.zip).
+   **Load**, and under **Examples** click `lan.zip` (or choose
+   [`examples/lan.zip`](../examples/lan.zip) with the file picker).
 3. Start the hosts and the switch. Their startup scripts assign `192.168.0.x`
    addresses to the four hosts. Open their consoles and `ping` between them.
 
@@ -192,9 +194,26 @@ start from fresh images. [`examples/`](../examples/) also contains DMZ and gatew
 
 ### Sessions and topologies
 
-- **Save session** exports hosts, switches, settings, and startup scripts as a
-  ZIP archive; **Load session ZIP** restores it.
-- Choosing a ZIP opens a review dialog: it summarizes the archive (hosts,
+- One **Load** button and one **Save** button (bottom left, with the session
+  icons) handle both a topology and a session.
+- **Save** opens one dialog with the checkbox **Save only the topology (.topo)**,
+  unchecked by default. Unchecked, it exports hosts, switches, settings, and
+  startup scripts as the session ZIP `qemuweb-session.zip`, with the
+  **Include working disks** option and the size estimate. Checked, the working disk options and the estimate are hidden and
+  the topology text file `network.topo` is downloaded. The choice of the checkbox is
+  remembered in the browser.
+- **Load** opens one dialog with a file picker for a `.topo` or a `.zip` file, and
+  under it the **Examples** list when the server has some (each entry shows its
+  name, **Topology** or **Session**, its size and, for a topology, the first
+  comment line of the file). The kind is the extension, confirmed by the content
+  (a ZIP starts with `PK`, a topology is UTF-8 text): a `.zip` that is text or a
+  `.topo` that is binary is refused with a message. A session can only be loaded
+  into an empty session; a topology is added to the current one.
+- The **Examples** are the `.topo` and `.zip` files of the server's `examples/`
+  directory (the `--examples DIR` option of the server; a missing directory means
+  no example). They are read only, listed afresh at each opening of the dialog,
+  and loaded by the server from its own disk with the same checks as an upload.
+- Choosing a ZIP (a file or an example) opens a review dialog: it summarizes the archive (hosts,
   switches, hosts with a startup disk, working disks) and warns when a base image
   changed since the session was saved and the archive contains working disks
   (qcow2) for it: those disks cannot be reused, so **Discard working disks** is
@@ -205,8 +224,8 @@ start from fresh images. [`examples/`](../examples/) also contains DMZ and gatew
   and SHA-256). Hosts without a working disk simply start from the current image,
   without a warning (image builds are not reproducible, so the hash differs from one
   machine to another).
-- **Load topology** reads a `.topo` text file that describes only hosts,
-  switches, and their links, without disks or startup scripts. Examples:
+- A `.topo` text file describes only hosts, switches, and their links,
+  without disks or startup scripts. Examples:
   [`examples/lan.topo`](../examples/lan.topo), [`examples/dmz.topo`](../examples/dmz.topo),
   [`examples/gw.topo`](../examples/gw.topo).
 

@@ -45,7 +45,8 @@ bash scripts/prepare.sh --system debian13-legacy      # downloads and builds the
 
 Open <http://127.0.0.1:3003> and log in as `toto` (password `toto`; `tutu` and `admin` also exist, with the
 password equal to the login). The demo loads `examples/lan.zip` and starts it: a switch and four hosts on
-`192.168.0.x`. Open their consoles and `ping` between them. `Ctrl+C` stops everything.
+`192.168.0.x`. Open their consoles and `ping` between them. `Ctrl+C` stops everything. In the interface, the
+**Load** button also lists the files of `examples/` (LAN, DMZ and gateway topologies and sessions).
 
 If `qemu-system-x86_64 -netdev help` does not list `vde`, see
 [QEMU without VDE support](docs/install.md#qemu-without-vde-support). To install QemuWeb for your own use, see

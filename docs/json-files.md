@@ -404,7 +404,7 @@ date, `result` is `"ok"` or `"error: <message>"`.
 | `session-deleted` | `{sessionId, by?, reason?}` (`reason`: `runner lost`, `runner offline too long`, `creation failed`) | — |
 | `node-created` | `{nodeId, kind}` (`host` or `switch`; `nodeId` `null` if not a valid ID) | `ok` or `error: HTTP <status>` |
 | `node-started`, `node-stopped`, `node-deleted` | `{nodeId}` or `{all: true}` | same |
-| `archive-loaded`, `archive-saved` | `{kind}`: `session` or `topology` | same |
+| `archive-loaded`, `archive-saved` | `{kind}`: `session` or `topology`, and `example` (the file name) for a load from the server's examples | same |
 
 ## 3. Translation of `config.json` into commands
 

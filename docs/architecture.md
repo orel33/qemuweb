@@ -213,7 +213,7 @@ The server is split into layers with one-way dependencies:
 | --- | --- |
 | `server/main.js` | Entry point: command line (`common/cli.js`, table in `server/options.js`), banner, `Options`, `Checking dependencies…`, then `server/startup-checks.js` (`Checking configuration…`: `config.json`, users file, log and runtime directories); the web stack is loaded only after these pass, so `--help` and a refused option answer at once. |
 | `server/serve.js` | Wiring of the web stack: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
-| `server/options.js` | The server's command line table (`--listen`, `--runtime`, `--users`, `--runners`, `--logs`, `--session-hours`, `--runner-grace`, `--trust-proxy`, `--auth`, `--proxy-key-file`, `--logout-url`, `--no-auth`, `--ephemeral`), anything else refused with exit status 2. |
+| `server/options.js` | The server's command line table (`--listen`, `--runtime`, `--users`, `--runners`, `--logs`, `--examples`, `--session-hours`, `--runner-grace`, `--trust-proxy`, `--auth`, `--proxy-key-file`, `--logout-url`, `--no-auth`, `--ephemeral`), anything else refused with exit status 2. |
 | `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
 | `server/routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
@@ -222,7 +222,8 @@ The server is split into layers with one-way dependencies:
 | `server/routes/nodes.js` | Node listing, switches, start, stop, Resume all, Stop all, reboot, reset, monitor, rename and deletion. |
 | `server/routes/hosts.js` | Host creation, configuration and startup CD-ROM. |
 | `server/routes/topology.js` | Topology (`.topo`) preview, creation and export. |
-| `server/routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream. |
+| `server/routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream (`importArchive` sends any Readable, an upload or an example file). |
+| `server/examples.js`, `server/routes/examples.js` | The server's examples (`--examples`): `GET /api/examples` lists the regular `.topo` and `.zip` files (name, kind, size, description); `POST /api/examples/file` and `POST /api/examples/load` take a bare file name `{name}`, check it against a fresh listing (400 malformed, 404 unlisted), open it without following links, confirm the kind by content, then feed it to the same runner commands as an upload (`archive.import`, `topology.load`). Read only. |
 | `server/routes/metrics.js` | Per-host CPU and memory metrics. |
 | `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`, `runtime/users/<login>` links. |
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
@@ -286,12 +287,13 @@ order. State that several modules reassign lives on the `store` object of
 | `host-settings.js` | Host Settings dialog, also used to add a host. |
 | `startup-media.js` | Startup tab: `start.sh` template, startup disk and extra files. |
 | `general-settings.js` | General Settings dialog. |
-| `topology.js` | `.topo` load/save, and the start of the saved view. |
+| `topology.js` | The topology load review dialog and the `.topo` download, and the start of the saved view. |
+| `load-dialog.js`, `file-kinds.js` | The Load dialog (file picker, the Examples list, kind check by content) and its pure rules (kind of a file, flow of a kind, what the Save checkbox shows). |
 | `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
 | `captures.js`, `capture-dialog.js`, `capture-button.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the reasons, the interface labels, the preselection, the pane button state and the rules of ownership, saving and cleanup. `capture-dialog.js` is the Capture dialog (interface, live filter, Start/Stop, automatic save, live area), `capture-button.js` the pane bar button, and the link popover opens the dialog. `capture-live.js` is the live text area of the dialog (the last 2000 lines); there is no Capture view of a pane. |
 | `graphic-console.js` | Floating console of the Graphic view: the console workspace shown as a movable, resizable window over the graph, with the selected node's pane only. |
 | `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
-| `archive.js` | Session ZIP save and load dialogs. |
+| `archive.js` | The Save dialog (session ZIP, or only the topology with a checkbox) and the review and load of a session ZIP. |
 | `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
 | `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |
 
