@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (0.9.3)
+## Where we are (0.9.4)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
@@ -254,6 +254,41 @@ What separates a deployment that works from one you can operate calmly.
   - Test the re-selection of the console after a runner comes back (`runner-state`) in a real browser: today it is
     only tested through the socket events of `check-runner-remote`.
   - Restrict `/runner/connect` and `/api/runner/register` by address when the runners are known.
+- [ ] **RUN03** (L, design first) The **local runner becomes a runner like the others**: same relation to the server as a
+  remote runner, only the transport differs (a Unix socket instead of a WebSocket with a token). Today it differs in
+  one respect that matters: the server **shares files** with it (`docs/deployment.md`, "Files shared with the
+  runner"), and only with the local runner, only when its `hello` announces the server's own runtime directory:
+  `runtime/users/<login>` aliases created and removed by the server, the session directories removed by the server
+  when a runner is lost, the empty `sessions/<id>` directories pruned at start-up, and the **adoption** of its sessions
+  after a server restart (`entry.trusted`, in `server/session-manager.js` and `server/runner-gateway.js`). The default
+  runtime directory (TOD02) is therefore one directory per port, shared by the server and its local runner.
+  - **Goal.** The runner owns its directory (for example `/tmp/qw-<login>/runner-<id>`, or the one given with
+    `--runtime`), the server owns its own (`users.json`-side data, `runners.json`, logs), and **the server never writes
+    in the runner's files**: everything passes through runner commands. One code path for every runner, so what is
+    tested for a remote runner (RUN02, SEC03) is what runs at the CREMI. A server and a runner can then be on two
+    machines, or in two containers, with no shared disk.
+  - **Move to the runner** what the server does through files today: the `users/<login>` aliases (a runner command,
+    or dropped: they only help administrators; if kept, the runner creates them under its directory and `/admin` shows
+    the path), the removal of the sessions of a lost runner (a `session.delete` command when it returns, as for a remote
+    one), the pruning of empty session directories (the runner does it for its own directory), and the adoption of the
+    sessions after a restart of the server (the same persisted session-to-runner binding as RUN02: it must work for
+    any runner that proves its identity, the local one included, with the trust decided by the registration and no
+    longer by "the Unix socket").
+  - **Identity and trust.** The local runner is still the only one allowed on the Unix socket and still has the
+    admin-given `local` identifier, but "trusted" stops being a property of the transport: decide what the hello of a
+    runner may claim (its sessions, its owners) and how the server verifies it (a token or a socket credential,
+    `SO_PEERCRED`), so that a student's runner (PRN01, SEC03) is never trusted by accident and the local one needs no
+    special case in the placement.
+  - **Runner identifier in the directory name.** A remote runner has no port: its default directory must be unique per
+    runner (not the word `runner` alone, which two runners of the same account would share), for example derived from
+    its identifier, within the 107-byte budget of TOD02 (`common/runtime-dir.js` computes it from the real layout).
+  - **Scripts and tools.** `start.sh`, `stop.sh`, `status.sh`, `killall.sh` and `cleanall.sh` work per runtime
+    directory: they must handle the server's directory and the runner's directory as two things; the integration tests
+    `check-runner`, `check-runner-manual`, `check-load-start`, `admin` assume the shared directory and are rewritten.
+  - **Order.** Study together with RUN02 (binding persisted) and PST01 (what survives a reboot): the three describe the
+    same link between a session and its runner. Deliverable of the design step: a written decision in
+    `docs/architecture.md` validated by the user (what the server may still read, how the aliases are served, the
+    trust model, the migration of the tests), then implementation tasks. No code before the decision.
 - [ ] **PST01** (M, study first) Persistence of sessions: what survives a hard reboot, a power cut, a network cut, a
   crash of the server or of a runner. A **design study** whose deliverable is a written document (a new section of
   `docs/architecture.md`) with a recommendation and the options below, validated by the user **before any code**.

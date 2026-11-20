@@ -35,7 +35,8 @@ De la version 0.9.4 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | DOC01 | Un seul parcours d'installation documenté, guide utilisateur à jour | 1 |
 | PRP01 | **Fait (0.9.4)** : Construction des images derrière le proxy du CREMI sans option particulière | 1 |
 | RUN02 | Les sessions d'un runner distant survivent au redémarrage du serveur, perte forcée par l'administrateur | 4 |
-| TOD02 | **En cours** : dossier de travail par défaut dans `/tmp`, court et privé, pour qu'aucun chemin de socket ne dépasse la limite ; fin de l'erreur « Runtime socket path is too long » | 2 |
+| TOD02 | **Fait (fusionnée, à valider).** Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>`, court et privé : fin de l'erreur « Runtime socket path is too long » | 2 |
+| RUN03 | **Conception** : le runner local devient un runner comme les autres, avec son propre dossier et sans fichier partagé avec le serveur ; à étudier avec RUN02 et PST01 | 4 |
 | PST01 | **Étude** : persistance des sessions après coupure brutale, redémarrage du serveur ou d'un runner, panne réseau ; options de politique pour le serveur et pour le runner (rien, session conservée arrêtée, reprise automatique) | 3 |
 | SEC01 | Mot de passe minimal, ralentissement des échecs de connexion, contrôle de l'origine, déconnexion révocable | 3 |
 | SEC02 | Liste blanche des commandes de l'hyperviseur et quotas (machine, session, serveur) | 3 |
