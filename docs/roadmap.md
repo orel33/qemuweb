@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (0.9.2)
+## Where we are (0.9.3)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
@@ -25,6 +25,7 @@ monitor command on their own hosts, and there are no quotas and no jail.
 | Stabilisation | File formats back to `schemaVersion` 1, demo archives rewritten, session ZIP named `qemuweb-session.zip`; remote runner validated at the CREMI (registration, placement, network cut, revocation) | **0.9.0** |
 | Auth and capture | `--auth password|proxy` only (expired SSO session, two shared keys for a rotation); traffic capture: PCAP of a host interface through QEMU's `filter-dump`, a Capture button and dialog in the pane bar (Play, Stop, Download, live view inside, saved at once, discarded at close) | **0.9.1** |
 | Files and dependencies | One **Load** menu (From User Files, From Server examples) and one **Save**; Load Session and Load Topology share one dialog style and always close the previous session; `examples/` (renamed from `demo/`) with `--examples`; `tcpdump` a declared dependency of the runner (`TCPDUMP` in `.env`) | **0.9.2** |
+| Admin tabs, VirtualBox, engine per session | The Admin page in tabs (Sessions, Accounts, Runners, WebSocket, Logs; the tab in the URL; only the visible tab refreshes; badges); the VirtualBox engine repaired (clear start errors, a runner-wide KVM/VirtualBox exclusion that names no other session, a dialog for start failures, cleanup without `--delete`, `status.sh` showing `vbox` hosts); **Engine:** selector in the header, changeable while the session is idle; `host.json` format 2 with settings per engine (`keyword:qemu`, `keyword:vbox`); working disks per engine (`disk.qcow2`, `disk.vdi`) in the session ZIP | **0.9.3** |
 
 Formats: from 0.9.0, every change of a format increments its number and comes with an explicit decision on
 compatibility.
@@ -56,6 +57,64 @@ Sizes of tasks: S about an hour, M half a day, L a day or more.
 
 Two features for the labs, decided as the top of the list. They are independent of milestones 6 to 10 and can start at once.
 
+- [ ] **PRN01** (L, **priority**) **A student registers their own runner.** A user with the role `student` can create a registration
+  token and enroll a machine of theirs as a runner that **belongs to them**, without an administrator (today only an administrator
+  creates tokens, in `/admin -> Runners`). Design: "Personal runners (design)" in milestone 7. What already exists helps: a
+  registration token already records who created it (`by`, returned by `redeem`), and the runner registry already has an
+  `ownerLogin` field (`server/runner-registry.js`, "reserved, unused"); `pickRunner(login, ...)` already receives the login and ignores it.
+  - **Server**: routes open to any signed-in account (`/api/my-runner` or similar: create a token, list my runner and my pending
+    tokens, revoke), the token and the runner record in `runners.json` get the owner's login, the registration route copies the creator's
+    login to the new runner, the registry sets `ownerLogin`; a student sees and revokes only their own, an administrator sees
+    every runner with its owner in `/admin -> Runners`.
+  - **Limits**: one personal runner per user to start with, a registration token valid 15 minutes and single use, a small number of
+    creations per day and per user (stored, so a restart does not reset it), at most the existing cap of pending tokens.
+  - **Placement** (`pickRunner`): a **new or loaded** session of a user goes to that user's own runner when it is online, otherwise to the
+    shared pool as today; an existing session stays where it is (Save then Load moves one); a personal runner accepts **only its owner's
+    sessions**, never another user's (the one isolation rule, kept before any quota); a shared runner never receives a runner token
+    of a student. A session whose runner is offline shows "runner offline" and comes back when it reconnects.
+  - **Trust, said plainly**: in this first slice the server does not yet validate everything a student's runner sends (that is SEC03, in
+    milestone 8): until then personal runners are for **trusted students** (beta), the runner only ever receives commands for its owner's
+    session, and the token, the owner and every action are audited (`users.log`, `admin.log`). No quotas yet.
+  - **Tests**: the routes and rights (a student can create, list and revoke only their own; an administrator sees all; a third party
+    cannot use someone's token), the registration with an owner, the placement rules (own runner first, never another user's, fallback to
+    the pool, existing session stays), the limits and the daily counter; the full path by hand with a second machine.
+- [ ] **PRN02** (M, **priority**, after PRN01) **The "My runner" page and the offline message.** In the account menu of every signed-in user:
+  create the token (shown once, with its expiry), the command to paste (`./scripts/runner.sh register --url URL --token TOKEN`, then
+  `run`), the state of my runner (online, offline since, engines, memory), revoke it, and a short help text of what a personal runner is
+  and what the student's machine needs (QEMU, VDE, Node, the images: until PRN03, the local `images/` built by `prepare.sh`). The session
+  bar shows "Running on: my runner / the server" and "runner offline" when the runner of the session is away. Disabled with a reason when
+  the server has no public URL for runners configured. English UI text, phone width, unit tests for the pure parts, the user guide and
+  the install documents (a short "Run your own runner" section), a manual check with a second machine.
+- [x] **VBX01** (M, **PRIORITY: repair**) The **VirtualBox engine no longer starts a host** (reported by the user on 20 November 2026). Nothing in the engine
+  code changed since 0.9.0 (`runner/engines/vbox.js` is untouched; the runner changes since then are the capture hooks and the
+  TCPDUMP check, which do not run for a VirtualBox host), and the runner's start-up check still finds `VBoxManage`, so the
+  interface still offers the engine: the failure is when a host starts, or in the system around it. Facts read on the user's
+  machine (read-only, nothing started): `VBoxManage` 7.1.14 from Oracle's `virtualbox-7.1` package; the Ubuntu 6.1.50 package
+  `virtualbox` is removed (state `rc`: configuration left behind), so VirtualBox was moved from 6.1 to 7.1 at some point; the
+  `vboxdrv` module loaded is 7.1.14 and matches `VBoxManage`; `Extension Packs: 0`; the user is **not** in `vboxusers`;
+  `/dev/vboxdrv` is `root:root 0600` because of `/etc/udev/rules.d/60-vboxdrv.rules` (`vboxdrvu` is 0666), so an unprivileged
+  user cannot open the full driver; the KVM modules are loaded (QEMU hosts use KVM at the same time); the VDE driver of VirtualBox
+  (`DrvVDE`, which loads `libvdeplug.so`) is present and `libvdeplug.so` exists. The engine's commands were written against 6.1 and
+  have never been checked against 7.1. Candidate causes, to settle with the real error (the `VBoxManage` line that fails is in the
+  Log view of the host): (1) the device access (group `vboxusers`, the udev rule) or VirtualBox and KVM both wanting VT-x/AMD-V,
+  which is a message of `startvm`; (2) an option or a value of `modifyvm`, `storagectl`, `createmedium` or `--nicgenericdrv VDE`
+  that 7.1 renamed or refuses (the NIC types, `--ostype`, the controller names, `--diffparent`, `--boot1`...); (3) the VDE driver
+  failing to connect (`Failed to connect to the VDE SWITCH`, the socket path or the `[port]` syntax); (4) leftover VMs or
+  media of an earlier failed run in the VirtualBox registry (`unregistervm`, `closemedium`).
+  - **Step 0, diagnose**: get the exact failing command and message (the Log view, or run the sequence of
+    `virtualBoxCommands` by hand for a throwaway VM in a temporary directory, with the user's authorisation to start a VirtualBox VM);
+    say which candidate it is, with the evidence.
+  - **Step 1, repair** the engine for VirtualBox 7.1 (and keep 6.1/7.0 working only if it costs nothing; the supported version is
+    the one installed here), clean up on failure (the existing `catch` already unregisters and deletes: check it works), and fail
+    with a **clear message in the host's Log and in the UI** that names the cause (for example "VirtualBox cannot open
+    /dev/vboxdrv: add yourself to the group vboxusers"), not a raw `VBoxManage` error.
+  - **Step 2, prevent a repeat**: a start-up check of the runner that goes further than `--version` (the user's group and
+    the device access, the loaded module version against `VBoxManage`) and prints a warning line in the same table; a unit
+    test with a fake `VBoxManage` for each command of the sequence and each failure message; `docs/install.md` (VirtualBox
+    section: supported version, the group, the udev rule, KVM and VirtualBox together) and `docs/reference.md`; and a manual
+    check sheet for a VirtualBox host (start, console, network on a switch, stop, remove) in `test/tests.md`.
+  - **Done when**: a VirtualBox host (Alpine and Debian 13 Legacy) starts from the interface, its serial console works, two hosts
+    ping each other through a VDE switch, stop and remove leave nothing in the VirtualBox registry, and a failure shows its cause.
 - [x] **CAP01** (L) Traffic capture. Students analyse what their machines exchange: a button starts a capture on an
   interface of a host (`host/eth0`) or on a link (the "cable" between a host interface and its switch), and the result
   is a PCAP file to download and open in Wireshark. A live view runs in a terminal of the Terminals view.
@@ -195,8 +254,7 @@ What separates a deployment that works from one you can operate calmly.
   - Test the re-selection of the console after a runner comes back (`runner-state`) in a real browser: today it is
     only tested through the socket events of `check-runner-remote`.
   - Restrict `/runner/connect` and `/api/runner/register` by address when the runners are known.
-- [ ] **PRN01** (L) Personal runners, server side (design below).
-- [ ] **PRN02** (M) The "My runner" page and the "runner offline" message.
+- **PRN01** and **PRN02** (personal runners: server side, and the "My runner" page) are **priority features**: see the top of the roadmap. The design below applies to them.
 - [ ] **PRN03** (M) Base images for a runner: shared directory or HTTP download, workstation sheet.
 
 ### Personal runners (design)
@@ -384,7 +442,7 @@ personal runner and any guest access exist only for trusted users.
     Connect, GRA04) follow the mode.
   Checked by hand on desktop and at phone width; unit tests for the pure rule "which controls are enabled in which
   mode". Update `docs/user-guide.md` (and note that it still says the CREMI runs `--auth both`: it is now `--auth proxy`).
-- [ ] **ADM01** (M) Tabs in the Admin (Supervision) page. `/admin` (`public/admin.html`, `admin.js`,
+- [x] **ADM01** (M) Tabs in the Admin (Supervision) page. `/admin` (`public/admin.html`, `admin.js`,
   `admin-connections.js`) stacks five sections on one long page: Sessions, Runners, Connections (WebSocket), Accounts and
   Logs. Wanted: a tab bar, one section visible at a time (**Sessions**, **Accounts**, **Runners**, **WebSocket**,
   **Logs**, and room for later ones, for example **Quotas** or **Audit**), each with its own refresh.
@@ -416,6 +474,39 @@ personal runner and any guest access exist only for trusted users.
   **Verified in the CAP01 spike**: `netdev_add` works at runtime, but `device_add` fails with "Bus 'pcie.0' does not support hotplugging"
   and a `pcie-root-port` cannot be added at runtime either, so free `pcie-root-port` devices must be declared at boot (a few per host).
   Host Settings > Network then applies live when the host runs; the guest kernel must handle the hot-plug (Debian does).
+- [ ] **GAG01** (M, **study**) **Feasibility of showing the IP addresses of running hosts (and more) with the QEMU guest agent.** Today QemuWeb knows
+  nothing of what runs inside a guest (the cards of the Graphic view show no address, see GRA03). The QEMU guest agent
+  (`qemu-ga`, Debian/Ubuntu package `qemu-guest-agent`) answers the host over a **virtio-serial channel** named
+  `org.qemu.guest_agent.0`, which QEMU exposes as a Unix socket (`-chardev socket,id=qga,path=<node dir>/qga.sock,server=on,wait=off`,
+  `-device virtio-serial`, `-device virtserialport,chardev=qga,name=org.qemu.guest_agent.0`); no network traffic is involved, so it fits
+  IMG01 (a silent network) and the shared-folder style of channels (SHR01). Read-only commands that matter: `guest-network-get-interfaces`
+  (names, MACs, IPv4/IPv6 addresses, statistics: the IP of each interface), `guest-get-host-name`, `guest-get-osinfo`, `guest-get-time`,
+  `guest-get-fsinfo`, `guest-get-vcpus`, `guest-get-memory-blocks`, `guest-info` (the supported commands), `guest-ping`; commands to
+  **never** expose: `guest-exec`, `guest-file-*`, `guest-set-user-password`, anything that writes (a student has root in the guest and
+  the host must not become a way into it, or the reverse).
+  - **Questions the study answers, with evidence from a throwaway prototype** (a QEMU machine in a temporary directory, an overlay of
+    a COPY of an image, never a file of `images/` as a parent):
+    1. What must be added to the QEMU command line, at launch (the channel cannot be hot-added on q35 without a free hotplug port,
+       see NET03) and what does it cost (memory, boot time, one more socket per host)?
+    2. Which images can carry the agent: `debian13-legacy` and `debian13-cloud` (package and systemd unit; `debian13-cloud` may already
+       have it), Alpine (`qemu-guest-agent` and the OpenRC service), OpenWrt (`qemu-ga`); the size, the boot-time effect, how `prepare.sh` installs
+       and enables it, and what happens on a guest that has no agent (the call times out: how fast do we know, and how do we show "unknown").
+    3. Which replies are reliable at which moment (the agent starts late in the boot; an address appears after DHCP or a manual
+       `ip addr`): the polling rate, the timeouts, the state "agent not ready".
+    4. **Trust and safety**: the guest is untrusted. An allowlist of commands in the runner (only the read-only ones above), the
+       agent's own blocklist in the image (`BLACKLIST_RPC`) as a second wall, reply size caps, validation of every address and name before
+       it goes to a browser (text only, no markup), a per-host rate limit, and the agent socket never reachable by the user.
+    5. **Alternatives without any software in the guest**, to compare honestly: learning addresses passively from the traffic on a host's
+       interface (ARP and DHCP seen by the same `filter-dump` of CAP01; works for every guest, Alpine and OpenWrt included, but shows only
+       what has been said on the wire); a command typed on the serial console (rejected: fragile and invasive); the startup script reporting
+       (needs the lab to do it). Where does each win, and could the two be combined (agent first, wire as a fallback)?
+    6. **What to show**: IPv4 and IPv6 per interface on the node card and its hover (the Graphic view), in Host Settings, the host name,
+       the OS, uptime; later in Admin (an administrator observing a student). Which of these are worth the cost.
+    7. VirtualBox hosts: the equivalent is the Guest Additions property store (`VBoxManage guestproperty`), out of scope here, say so.
+  - **Deliverable**: a written feasibility note in `docs/` (or a section of `docs/architecture.md`) with the measurements, a go or no-go
+    and a proposed design with its tasks (a follow-up `GAG02`: the QEMU arguments, the runner module, the server route and event, the image
+    changes in `prepare.sh`, the UI), and the throwaway spike script kept out of the repository. No product code in this task, except
+    what the spike strictly needs outside the repository.
 - [ ] **GRA02** (L) Several floating consoles: up to 4 overlapping windows, cascaded, a click brings one to the front,
   each movable, resizable and closable, built on the 4 existing panes (today only one floating window exists: the
   selected node's pane, `public/graphic-console.js`; a double click on another node reuses it). To decide: the maximum
@@ -439,8 +530,7 @@ personal runner and any guest access exist only for trusted users.
   Unit tests for the pure part (which interface, which pairs); the pointer interaction is checked by hand on desktop
   and at phone width.
 - [ ] **GRA03** (M) Remaining points.
-  - No IP address on the cards: QemuWeb does not know a guest's address without a guest agent (or a startup-script
-    convention that reports it).
+  - No IP address on the cards: see the feasibility study GAG01 (QEMU guest agent, or addresses learned from the traffic).
   - Touch: the view pans with one finger and zooms with the buttons only; no pinch zoom.
   - The position and size of the floating console are kept only until the page is reloaded.
   - A link is removed by disconnecting the interface, which stays; removing the interface itself is only in Host
@@ -597,6 +687,30 @@ commit message.
   silently, so the command can succeed having recorded nothing. Print `ID.raw: no image` (and `ID.vdi`) and exit non-zero
   when a targeted system has no image at all (only one of the two formats is a warning); with no `--system`, list the
   systems not built as skipped, and exit non-zero only if no image was found anywhere. A test of the status and messages.
+- [ ] **BUG10** (**priority**, reported by the user on 20 November 2026) **The second serial console (ttyS1) no longer works.** Debian hosts have two
+  serial ports (`serialPorts:qemu: ["ttyS0", "ttyS1"]` in `config.json` for `debian13-legacy` and `debian13-cloud`); the pane view
+  "Console (ttyS1)" (`data-view="console2"`, console id by `public/console-id.js`) and the socket `serial1.sock` come from the second
+  `-serial unix:<node dir>/serial1.sock` that `runner/engines/qemu.js` adds only when `node.launchSettings.serialPorts.length >= 2`.
+  Facts checked by reading, before any analysis of the symptom: the four pane view buttons are all still in `public/index.html`
+  (`console`, `console2`, `monitor`, `log`, four times each); since 0.9.2 the code that can matter was touched by VBX01 (the engine
+  exclusion and start path in `runner/node-lifecycle.js`) and by VBX02 (the engine selector, `host.json` format 2 with
+  `serialPorts`, `serialPorts:qemu`, `serialPorts:vbox` resolved per engine by `resolveHostConfig` in `common/system-config.js`, the
+  engine switch in `runner/engine-switch.js`, `launchSettingsFor`), and earlier by CAP01/CAP03/CAP02 (the pane views and their
+  buttons, `public/terminal.js`, `workspace.js`, `view-state.js`). Hypotheses to settle with evidence: (1) the resolution of
+  `serialPorts` for the QEMU engine now returns only ttyS0 (an unsuffixed `serialPorts` in a loaded or rewritten host.json, the
+  `examples/*.zip` rewrite, a host created while the session engine was VirtualBox and then switched, the engine switch not
+  re-resolving `launchSettings`), so QEMU is started with one `-serial` only; (2) the runner starts both serial ports but the
+  console for ttyS1 is not attached (the second socket, the rooms/events `serial1`, `public/console-id.js`, the pane `serial-reset`);
+  (3) the UI view for ttyS1 is hidden or falls back to the console (`usablePaneView` in `public/terminal.js`: "a ttyS1 console its node
+  lacks") because the node data no longer says the host has two ports (the node's `serialPorts`/`consoles` field in the state events
+  or `/api/nodes`); (4) the guest side: the image has no login on ttyS1 (the project says images prepared before that feature need
+  `prepare.sh` again). Task: reproduce by reading (the full path from `config.json` through host.json, launch settings, the QEMU
+  arguments, the console sockets, the Socket.IO rooms, to the pane), find the commit that broke it (`git log -S` / `git bisect` by
+  reading), fix the cause, and add a test that would have caught it (the launch settings of every Debian system under QEMU give two
+  ports; a host loaded from each example and switched between engines and back still gives two; the QEMU arguments contain two
+  `-serial`; the console id of ttyS1 resolves). Ask the user for: which system and engine, what he sees (empty pane, no prompt, an error,
+  the view missing), whether it also fails on a freshly added host and on an example loaded from the menu, and the "Console" tab of
+  Host Settings (it lists `serial0.sock`, `serial1.sock` and the monitor socket).
 - [ ] **BUG02** The "switch consoles" button is not greyed out when the view is driven (Follow checked, or owner under
   admin control) although it carries the `view-control` class. Not reproduced by reading the code: find the exact case.
 - [ ] **BUG03** A `monitor` view received before the node data says Monitor is supported falls back to the console and is

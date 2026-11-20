@@ -1,6 +1,6 @@
 # Remote runner test sheet
 
-QemuWeb 0.9.2 · one server, one remote runner machine · every command spells out its
+QemuWeb 0.9.3 · one server, one remote runner machine · every command spells out its
 options (no default relied upon)
 
 ## What is tested

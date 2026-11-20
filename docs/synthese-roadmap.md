@@ -27,6 +27,9 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 
 | Code | Tâche | Difficulté |
 | --- | --- | --- |
+| PRN01 | **Priorité** : un étudiant crée un jeton et enregistre son propre runner (côté serveur : propriétaire, limites, placement sur son runner) | 4 |
+| PRN02 | **Priorité** : page « My runner » pour créer son jeton, copier la commande, voir l'état et révoquer ; message « runner offline » | 2 |
+| VBX01 | **Réparation prioritaire** : le moteur VirtualBox ne démarre pas à côté de QEMU/KVM (VT-x occupé) ; message clair et garde par runner | 3 |
 | AUT01 | Retirer le mode d'authentification mixte `both`, gérer l'expiration de la session OpenID en cours d'usage | 2 |
 | SVC01 | Services systemd, rotation des journaux, renouvellement du certificat, contrôles au démarrage | 2 |
 | DOC01 | Un seul parcours d'installation documenté, guide utilisateur à jour | 1 |
@@ -71,9 +74,7 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 
 | Code | Tâche | Difficulté |
 | --- | --- | --- |
-| PRN01 | Côté serveur : un runner et un jeton appartiennent à un utilisateur, la session nouvelle va sur son runner s'il est en ligne | 4 |
 | SEC03 | Un runner d'étudiant n'est pas de confiance : tout ce qu'il envoie est validé et borné | 4 |
-| PRN02 | Page « My runner » : créer son jeton, copier la commande, voir l'état, révoquer | 2 |
 | PRN03 | Images de base : dossier partagé NFS ou téléchargement vérifié, fiche d'installation d'un poste | 3 |
 
 *Critère de sortie* : un étudiant enregistre son poste de TP et sa session s'y place ; un autre étudiant ne peut pas y placer la sienne. Prérequis : décision 3.
