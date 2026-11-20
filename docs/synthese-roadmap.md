@@ -1,10 +1,10 @@
 # QemuWeb : feuille de route pour décideurs
 
-De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [roadmap.md](roadmap.md), en français à la demande du responsable du projet ; le détail technique de chaque tâche est dans ce fichier.
+De la version 0.9.4 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [roadmap.md](roadmap.md), en français à la demande du responsable du projet ; le détail technique de chaque tâche est dans ce fichier.
 
 ## En bref
 
-- **Aujourd'hui (0.9.0)** : le serveur tourne au CREMI derrière Apache et OpenID, avec un runner local, un runner distant validé et les consoles par WebSocket à travers le relais. Il est réservé à des utilisateurs de confiance : pas de quotas, de limitation des commandes ni d'isolation des machines.
+- **Aujourd'hui (0.9.4)** : le serveur tourne au CREMI derrière Apache et OpenID, avec un runner local, un runner distant validé et les consoles par WebSocket à travers le relais. Livré depuis la 0.9.0 : la capture de trafic (fichier PCAP et vue `tcpdump`), un seul menu Load et un seul Save avec des exemples du serveur, la page d'administration en onglets, le moteur VirtualBox réparé avec un sélecteur de moteur, et la construction des quatre images derrière le proxy du CREMI. Il reste réservé à des utilisateurs de confiance : pas de quotas, de limitation des commandes ni d'isolation des machines.
 - **1.0 : ouvrir à une promo entière** (environ 30 sessions simultanées) sans faire confiance aux utilisateurs : sécurité, exploitation sans surprise, test de charge, et la capture de trafic, fonction phare pour les TP de réseau.
 - **1.1 à 1.3 : confort et portée** : services d'un hôte, interface retravaillée, runners sur les postes de TP, davantage de systèmes invités.
 - **2.0 : au-delà des consoles série** : affichage graphique (Windows, bureaux Linux), conteneurs Docker, macOS.
@@ -27,20 +27,21 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 
 | Code | Tâche | Difficulté |
 | --- | --- | --- |
-| PRN01 | **Priorité** : un étudiant crée un jeton et enregistre son propre runner (côté serveur : propriétaire, limites, placement sur son runner) | 4 |
+| PRN01 | **Priorité, code écrit, à tester** : un étudiant crée un jeton et enregistre son propre runner (côté serveur : propriétaire, limites, placement sur son runner) | 4 |
 | PRN02 | **Priorité** : page « My runner » pour créer son jeton, copier la commande, voir l'état et révoquer ; message « runner offline » | 2 |
-| VBX01 | **Réparation prioritaire** : le moteur VirtualBox ne démarre pas à côté de QEMU/KVM (VT-x occupé) ; message clair et garde par runner | 3 |
-| AUT01 | Retirer le mode d'authentification mixte `both`, gérer l'expiration de la session OpenID en cours d'usage | 2 |
+| VBX01 | **Fait (0.9.3).** Réparation prioritaire : le moteur VirtualBox ne démarre pas à côté de QEMU/KVM (VT-x occupé) ; message clair et garde par runner | 3 |
+| AUT01 | **Fait.** Retirer le mode d'authentification mixte `both`, gérer l'expiration de la session OpenID en cours d'usage | 2 |
 | SVC01 | Services systemd, rotation des journaux, renouvellement du certificat, contrôles au démarrage | 2 |
 | DOC01 | Un seul parcours d'installation documenté, guide utilisateur à jour | 1 |
-| PRP01 | Construction des images derrière le proxy du CREMI sans option particulière | 1 |
+| PRP01 | **Fait (0.9.4)** : Construction des images derrière le proxy du CREMI sans option particulière | 1 |
 | RUN02 | Les sessions d'un runner distant survivent au redémarrage du serveur, perte forcée par l'administrateur | 4 |
+| TOD02 | **En cours** : dossier de travail par défaut dans `/tmp`, court et privé, pour qu'aucun chemin de socket ne dépasse la limite ; fin de l'erreur « Runtime socket path is too long » | 2 |
 | PST01 | **Étude** : persistance des sessions après coupure brutale, redémarrage du serveur ou d'un runner, panne réseau ; options de politique pour le serveur et pour le runner (rien, session conservée arrêtée, reprise automatique) | 3 |
 | SEC01 | Mot de passe minimal, ralentissement des échecs de connexion, contrôle de l'origine, déconnexion révocable | 3 |
 | SEC02 | Liste blanche des commandes de l'hyperviseur et quotas (machine, session, serveur) | 3 |
 | SEC04 | Runner sous un compte dédié, un cgroup par session limitant mémoire et processeur | 4 |
 | IMG01 | Image Debian plus légère, démarrage le plus rapide, aucun trafic réseau spontané | 3 |
-| CAP01 | **Capture de trafic** : fichier PCAP à télécharger pour Wireshark et vue `tcpdump` en direct | 4 |
+| CAP01 | **Fait (0.9.1).** Capture de trafic : fichier PCAP à télécharger pour Wireshark et vue `tcpdump` en direct | 4 |
 | LOD01 | Test de charge de 30 sessions simultanées, équilibrage selon la mémoire libre | 3 |
 | QUA01 | Défauts ouverts corrigés, fiche de test manuelle déroulée en production, PDF à jour | 2 |
 
@@ -53,7 +54,7 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | Code | Tâche | Difficulté |
 | --- | --- | --- |
 | HSV01 | Onglet « Services » d'un hôte : DHCP, DNS, web, FTP, telnet… à cocher, appliqués au redémarrage | 4 |
-| FIL01 | Un seul bouton Load et un seul Save (topologie `.topo` ou session `.zip`), avec les fichiers d'exemple du serveur | 3 |
+| FIL01 | **Fait (0.9.2).** Un seul bouton Load et un seul Save (topologie `.topo` ou session `.zip`), avec les fichiers d'exemple du serveur | 3 |
 | UXS01 | Conception écrite de l'interface autour de la session, validée par l'utilisateur | 2 |
 | UXS02 | Session créée à la connexion, une seule action « Reset » à la place de deux boutons confus | 2 |
 | UXS03 | Actions regroupées en catégories claires : Session, Nœuds, Affichage | 2 |
@@ -61,11 +62,11 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | NET01 | Couper et rebrancher un câble d'un hôte en marche (panne de lien pour les TP de routage) | 2 |
 | NET02 | Points de sauvegarde d'un hôte ou d'une session : revenir à l'état d'avant une erreur | 4 |
 | NET03 | Ajouter ou retirer une interface d'un hôte sans le redémarrer | 4 |
-| ADM01 | Page d'administration en onglets (sessions, comptes, runners, WebSocket, journaux) | 2 |
+| ADM01 | **Fait (0.9.3).** Page d'administration en onglets (sessions, comptes, runners, WebSocket, journaux) | 2 |
 | GRA02 | Plusieurs consoles flottantes dans la vue graphique | 3 |
 | GRA03 | Points restants de la vue graphique : zoom au pincement, invite du shell, tooltips | 2 |
 | GRA04 | Relier deux nœuds en glissant d'une prise à l'autre dans la vue graphique | 3 |
-| BUG01 à BUG08, TOD01 à TOD07 | Petites tâches indépendantes de l'annexe, à prendre au fil des creux | 1 |
+| BUG02 à BUG07, TOD01, TOD03 à TOD07 | Petites tâches indépendantes de l'annexe, à prendre au fil des creux | 1 |
 
 *Critère de sortie* : un étudiant sans aide sait créer, lancer, arrêter et remettre à zéro sa session, et reconnaît les actions de session de celles d'un nœud.
 
