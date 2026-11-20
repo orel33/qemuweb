@@ -51,6 +51,7 @@ De la version 0.9.5 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | PRP01 | **Fait (0.9.4)** : Construction des images derrière le proxy du CREMI sans option particulière | 1 |
 | TOD02 | **Fait (fusionnée, à valider).** Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>`, court et privé : fin de l'erreur « Runtime socket path is too long » | 2 |
 | RUN03 | **Prochaine étape d'architecture, à préparer maintenant** : le runner local devient un runner comme les autres (dossier propre, aucun fichier partagé avec le serveur) ; conception d'abord | 4 |
+| GAG02 | Adresse IP en direct des machines VirtualBox (Guest Additions), symétrique de GAG01 qui le fait pour QEMU | 3 |
 | PST01 | **Étude, fusionnée avec l'ancienne RUN02** : persistance des sessions du serveur et des runners (coupure brutale, redémarrage, panne réseau, perte forcée par l'administrateur) ; plusieurs politiques à comparer, **rien n'est décidé** | 4 |
 | SEC01 | Mot de passe minimal, ralentissement des échecs de connexion, contrôle de l'origine, déconnexion révocable | 3 |
 | SEC02 | Liste blanche des commandes de l'hyperviseur et quotas (machine, session, serveur) | 3 |
