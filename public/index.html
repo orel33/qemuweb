@@ -173,25 +173,32 @@
     <h2 id="session-archive-title">Save</h2>
     <p id="session-archive-intro">Save your current session.</p>
     <label class="save-choice"><input id="save-topology-only" type="checkbox"> Save only the topology (.topo)</label>
-    <div id="save-session-options">
     <label><input id="include-working-disks" type="checkbox"> Include working disks</label>
     <div id="archive-working-disk-warning" class="archive-warning" role="note" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span>All hosts and switches will be stopped before saving.</span></div>
-    </div>
     <p id="session-archive-estimate" role="status"></p>
     <div id="session-archive-progress" role="status" aria-live="polite" hidden><div class="archive-progress"><span class="archive-progress-spinner" aria-hidden="true"></span><span id="session-archive-progress-text">Creating archive…</span></div><div class="archive-progress-track" aria-hidden="true"></div></div>
     <p id="session-archive-error" role="alert" hidden></p>
     <div class="confirm-actions"><button id="cancel-session-archive" type="button">Cancel</button><button id="confirm-session-archive" type="button">Download ZIP</button></div>
   </dialog>
-  <dialog class="confirm-dialog" id="load-dialog" aria-labelledby="load-dialog-title" aria-describedby="load-dialog-note">
+  <dialog class="confirm-dialog" id="load-dialog" aria-labelledby="load-dialog-title">
     <h2 id="load-dialog-title">Load</h2>
-    <p id="load-dialog-note">Choose a topology (.topo) or a session (.zip). A session can only be loaded into an empty session: first remove all hosts and switches from the current one.</p>
-    <label class="load-file-label">File (.topo or .zip)<input id="load-file" type="file" accept=".topo,.zip"></label>
-    <section id="load-examples" aria-labelledby="load-examples-title" hidden>
-      <h3 id="load-examples-title">Examples</h3>
-      <ul id="load-example-list" class="example-list"></ul>
-    </section>
+    <div id="load-body">
+    <div id="load-picker">
+      <label class="load-file-label">File (.topo or .zip)<input id="load-file" type="file" accept=".topo,.zip"></label>
+      <section id="load-examples" hidden>
+        <label class="load-file-label">Examples<select id="load-example-select"><option value="" disabled selected>Choose an example...</option></select></label>
+        <p id="load-example-description" class="example-description"></p>
+        <button id="load-example-button" type="button" disabled>Load example</button>
+      </section>
+    </div>
+    <div id="load-replace" hidden>
+      <p id="load-replace-text" role="alert"></p>
+      <p id="load-replace-status" role="status" hidden></p>
+      <div class="confirm-actions"><button id="load-replace-cancel" type="button">Cancel</button><button id="load-replace-continue" type="button">Continue</button></div>
+    </div>
+    </div>
     <p id="load-error" role="alert" hidden></p>
-    <div class="confirm-actions"><button id="close-load-dialog" type="button">Cancel</button></div>
+    <div class="confirm-actions" id="load-actions"><button id="close-load-dialog" type="button">Cancel</button></div>
   </dialog>
   <dialog class="confirm-dialog" id="session-archive-load-dialog" aria-labelledby="session-archive-load-title">
     <h2 id="session-archive-load-title">Load session</h2>
@@ -208,11 +215,6 @@
       <p id="load-discard-note" class="archive-option-note" hidden></p>
     </div>
     <div class="confirm-actions"><button id="cancel-session-archive-load" type="button">Cancel</button><button id="confirm-session-archive-load" type="button" hidden>OK</button></div>
-  </dialog>
-  <dialog class="confirm-dialog" id="session-archive-load-blocked-dialog" aria-labelledby="session-archive-load-blocked-title" aria-describedby="session-archive-load-blocked-message">
-    <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><h2 id="session-archive-load-blocked-title">Warning</h2></div>
-    <p id="session-archive-load-blocked-message">To load a session ZIP, first remove all hosts and switches from the current session.</p>
-    <form method="dialog" class="confirm-actions"><button autofocus>Close</button></form>
   </dialog>
   <dialog class="confirm-dialog" id="confirm-dialog" aria-labelledby="confirm-title" aria-describedby="confirm-message">
     <div class="confirm-heading"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4"/><path d="M12 17h.01"/></svg><h2 id="confirm-title">Warning</h2></div>
