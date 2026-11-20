@@ -30,7 +30,7 @@ const commands = {
       return {id, label: p.label,
         images: {raw: config.systems[id].qemu.image, vdi: config.systems[id].vbox.image},
         memory: p.memory, cpus: p.cpus, clock: p.clock,
-        startupDiskEnabled: p.startupDiskEnabled, serialPorts: profileSerialPorts(p),
+        startupDiskEnabled: p.startupDiskEnabled, serialPorts: profileSerialPorts(p), guestAgent: p.guestAgent,
         vboxNetworkModel: p.networkModel === 'virtio' ? 'virtio' : '82540EM',
         hasDifferentialDisk: true};
     });

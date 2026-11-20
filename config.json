@@ -20,6 +20,8 @@
       "diskInterface:qemu": "virtio",
       "diskInterface:vbox": "sata",
       "networkModel": "virtio",
+      "guestAgent:qemu": false,
+      "guestAgent:vbox": false,
       "image": null
     },
     "debian13-legacy": {
@@ -30,7 +32,8 @@
       "image:vbox": "images/debian13-legacy.vdi",
       "diskInterface:qemu": "ide",
       "networkModel": "e1000",
-      "serialPorts:qemu": ["ttyS0", "ttyS1"]
+      "serialPorts:qemu": ["ttyS0", "ttyS1"],
+      "guestAgent:qemu": true
     },
     "alpine": {
       "basedOn": "default",

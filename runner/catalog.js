@@ -19,7 +19,7 @@ function createCatalog(ctx) {
     const qemu = selectedProfile(catalog, id, 'qemu');
     const vbox = selectedProfile(catalog, id, 'vbox');
     const active = selectedProfile(catalog, id, ctx.session.engine);
-    return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled, serialPorts: profileSerialPorts(active),
+    return {id, label: active.label, startupDiskEnabled: active.startupDiskEnabled, serialPorts: profileSerialPorts(active), guestAgent: active.guestAgent,
       images: {raw: qemu.image, vdi: vbox.image},
       virtualbox: {osType: 'Linux_64', networkModel: vbox.networkModel === 'virtio' ? 'virtio' : '82540EM',
         firmware: vbox.firmware, diskBus: vbox.diskInterface,

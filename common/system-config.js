@@ -7,7 +7,7 @@ const {CONFIG_SCHEMA_VERSION} = require('./schema-versions');
 const engines = ['qemu', 'vbox'];
 const editableKeys = ['memory', 'cpus', 'clock', 'startupDiskEnabled', 'serialPorts'];
 const keywords = new Set(['type', 'arch', 'mode', 'label', ...editableKeys, 'firmware',
-  'acceleration', 'boot', 'extraOptions', 'cdromInterface', 'diskInterface', 'networkModel', 'image']);
+  'acceleration', 'boot', 'extraOptions', 'cdromInterface', 'diskInterface', 'networkModel', 'image', 'guestAgent']);
 
 function isObject(value) { return value !== null && typeof value === 'object' && !Array.isArray(value); }
 
@@ -99,6 +99,9 @@ function validateProfile(profile, id, engine) {
   } else if (profile.extraOptions !== undefined) {
     throw new Error(`extraOptions:vbox is not defined for the current runner: ${id}.`);
   }
+  // A capability of the image, not a host setting (not in editableKeys): whether the guest agent of
+  // this engine is installed in the image (QEMU: qemu-guest-agent; VirtualBox: Guest Additions).
+  if (typeof profile.guestAgent !== 'boolean') throw new Error(`guestAgent:${engine} must be true or false: ${id}.`);
   if (id === 'default' && profile.image === null) return;
   if (typeof profile.image !== 'string' || !profile.image || /[\x00-\x1f\x7f]/.test(profile.image)) {
     throw new Error(`Missing image for ${id}/${engine}.`);

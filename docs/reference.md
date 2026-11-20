@@ -7,7 +7,7 @@ web interface is described in the [user guide](user-guide.md).
 
 | File | Purpose |
 | --- | --- |
-| [`config.json`](../config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. `serialPorts` lists the serial ports of a system (`ttyS0`, `ttyS1`): QemuWeb turns each into a QEMU `-serial` option, in order. |
+| [`config.json`](../config.json) | System catalog, base images, memory, and QEMU or VirtualBox options. `serialPorts` lists the serial ports of a system (`ttyS0`, `ttyS1`): QemuWeb turns each into a QEMU `-serial` option, in order. `guestAgent:qemu` and `guestAgent:vbox` (true/false) say whether the image carries the guest agent (`qemu-guest-agent`, Guest Additions); see [json-files](json-files.md). |
 | [`.env`](../.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
 | `users.json` | User accounts (see [Users and sessions](user-guide.md#users-and-sessions)); ignored by Git. |
