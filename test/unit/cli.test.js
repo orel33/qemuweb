@@ -7,7 +7,7 @@ const packageInfo = require('../../package.json');
 
 const spec = {
   program: 'demo',
-  node: 'node demo/main.js',
+  node: 'node examples/main.js',
   script: './scripts/demo.sh',
   summary: 'The demo program.',
   environment: null,
@@ -57,7 +57,7 @@ test('--help or -h anywhere on the line wins over every other check', () => {
 
 test('the help text: usage forms, options with their default on their own line, environment section', () => {
   const lines = cli.formatHelp(spec).split('\n');
-  assert.equal(lines[0], 'Usage: node demo/main.js [options]');
+  assert.equal(lines[0], 'Usage: node examples/main.js [options]');
   assert.equal(lines[1], '       ./scripts/demo.sh [options]');
   assert.ok(lines.includes('Options (default in brackets):'));
   const at = lines.findIndex(line => /^ {2}--port PORT +\[3002\]$/.test(line));

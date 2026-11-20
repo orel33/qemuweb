@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Demo of the Web interface on port 3003 or --listen PORT: a separate, temporary users file (never the
 # repository's users.json) with admin/admin (admin), toto/toto and tutu/tutu (students), and
-# demo/lan.zip loaded and started in the sessions of toto and tutu. Passwords equal to logins
+# examples/lan.zip loaded and started in the sessions of toto and tutu. Passwords equal to logins
 # exist only in this mode. Its sessions live in a temporary directory, so `scripts/status.sh` needs --all to see it.
 #   ./scripts/demo.sh [--listen PORT]
 # Stop with Ctrl+C; scripts/stop.sh and scripts/status.sh also find the server.
@@ -50,8 +50,8 @@ cat <<EOT
 
 QemuWeb demo: http://127.0.0.1:$port
   admin / admin   (admin)
-  toto  / toto    (student, demo/lan.zip loaded and started)
-  tutu  / tutu    (student, demo/lan.zip loaded and started)
+  toto  / toto    (student, examples/lan.zip loaded and started)
+  tutu  / tutu    (student, examples/lan.zip loaded and started)
 Passwords equal to logins exist only in this demo mode's temporary users file.
 Stop with Ctrl+C.
 EOT

@@ -1,6 +1,6 @@
 'use strict';
 
-// Loads demo/lan.zip the way the Web interface's Load session button does (public/archive.js:
+// Loads examples/lan.zip the way the Web interface's Load session button does (public/archive.js:
 // archive summary, base image check only when the archive has working disks, then
 // POST /api/session-archive/import?autoStart=true&discardDisks=false) and checks that the
 // server's own start path brings up the switch and the four hosts. No ping, no guest login.
@@ -14,7 +14,7 @@ const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client'
 const {readArchive} = require('../../runner/archive-zip');
 
 const root = path.resolve(__dirname, '../..');
-const archiveFile = path.join(root, 'demo', 'lan.zip');
+const archiveFile = path.join(root, 'examples', 'lan.zip');
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-check-load-start-'));
 let child;
 let client;
@@ -113,7 +113,7 @@ function watchNode(id) {
 }
 
 async function run() {
-  assert.ok(fs.existsSync(archiveFile), 'Missing demo/lan.zip.');
+  assert.ok(fs.existsSync(archiveFile), 'Missing examples/lan.zip.');
   fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
   const expected = await archiveView(archiveFile);
   const systems = [...new Set(Object.values(expected.nodes).filter(node => node.kind === 'host').map(node => node.system))];
@@ -136,8 +136,8 @@ async function run() {
 
   // (1) Like the button: summary of the archive; the base image check runs only for working disks.
   const counts = kind => Object.values(expected.nodes).filter(node => node.kind === kind).length;
-  assert.deepEqual(expected.diskHosts, [], 'demo/lan.zip unexpectedly contains working disks.');
-  console.log(`Load start: demo/lan.zip summary: ${counts('host')} hosts and ${counts('switch')} switches, no working disk, so no base image check (as in the Web interface)`);
+  assert.deepEqual(expected.diskHosts, [], 'examples/lan.zip unexpectedly contains working disks.');
+  console.log(`Load start: examples/lan.zip summary: ${counts('host')} hosts and ${counts('switch')} switches, no working disk, so no base image check (as in the Web interface)`);
 
   // (2) The import request of the button.
   const result = await client.request('/api/session-archive/import?autoStart=true&discardDisks=false', {

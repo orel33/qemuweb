@@ -44,7 +44,7 @@ bash scripts/prepare.sh --system debian13-legacy      # downloads and builds the
 ```
 
 Open <http://127.0.0.1:3003> and log in as `toto` (password `toto`; `tutu` and `admin` also exist, with the
-password equal to the login). The demo loads `demo/lan.zip` and starts it: a switch and four hosts on
+password equal to the login). The demo loads `examples/lan.zip` and starts it: a switch and four hosts on
 `192.168.0.x`. Open their consoles and `ping` between them. `Ctrl+C` stops everything.
 
 If `qemu-system-x86_64 -netdev help` does not list `vde`, see

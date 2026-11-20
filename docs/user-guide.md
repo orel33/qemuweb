@@ -182,12 +182,12 @@ interface shows **Authentication disabled**. It is never the default.
 
 1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
 2. In the Web interface, choose an engine in **General Settings**, click
-   **Load session ZIP**, and select [`demo/lan.zip`](../demo/lan.zip).
+   **Load session ZIP**, and select [`examples/lan.zip`](../examples/lan.zip).
 3. Start the hosts and the switch. Their startup scripts assign `192.168.0.x`
    addresses to the four hosts. Open their consoles and `ping` between them.
 
 The archive contains settings and startup scripts but no working disks, so hosts
-start from fresh images. [`demo/`](../demo/) also contains DMZ and gateway sessions
+start from fresh images. [`examples/`](../examples/) also contains DMZ and gateway sessions
 (`dmz0.zip`, `dmz1.zip`, `gw0.zip`, `gw1.zip`).
 
 ### Sessions and topologies
@@ -207,8 +207,8 @@ start from fresh images. [`demo/`](../demo/) also contains DMZ and gateway sessi
   machine to another).
 - **Load topology** reads a `.topo` text file that describes only hosts,
   switches, and their links, without disks or startup scripts. Examples:
-  [`demo/lan.topo`](../demo/lan.topo), [`demo/dmz.topo`](../demo/dmz.topo),
-  [`demo/gw.topo`](../demo/gw.topo).
+  [`examples/lan.topo`](../examples/lan.topo), [`examples/dmz.topo`](../examples/dmz.topo),
+  [`examples/gw.topo`](../examples/gw.topo).
 
 ### Graphic view
 

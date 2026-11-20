@@ -2,10 +2,10 @@
 
 // Node part of scripts/demo.sh, in two steps:
 //   node scripts/demo.js prepare <users-file>
-//     checks demo/lan.zip and the base images it needs, then writes a separate users file
+//     checks examples/lan.zip and the base images it needs, then writes a separate users file
 //     with admin/admin (admin), toto/toto and tutu/tutu (students).
 //   node scripts/demo.js load <base-url>
-//     waits for the server, logs in as toto and tutu and loads demo/lan.zip into their
+//     waits for the server, logs in as toto and tutu and loads examples/lan.zip into their
 //     sessions with automatic start, exactly like the Load session button
 //     (POST /api/session-archive/import?autoStart=true; no backdoor).
 //     Start errors are reported but do not fail the setup.
@@ -19,7 +19,7 @@ const {readArchive} = require('../runner/archive-zip');
 const {QemuWebClient} = require('../test/integration/qemuweb-client');
 
 const root = path.resolve(__dirname, '..');
-const archive = path.join(root, 'demo', 'lan.zip');
+const archive = path.join(root, 'examples', 'lan.zip');
 const ACCOUNTS = [
   {login: 'admin', password: 'admin', role: 'admin'},
   {login: 'toto', password: 'toto', role: 'student'},

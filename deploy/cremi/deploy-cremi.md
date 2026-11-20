@@ -352,7 +352,7 @@ do not restart it). Always run `configtest` before `reload`, and do not restart 
 ## Runner A: local, on this machine (`ssh qemuweb-app`)
 
 Runs the machines on this machine, under `qemuweb`, and dials the server on the Unix socket
-`/var/lib/qemuweb/runner-3002.sock` (same `--runtime` for both, at most 49 characters). Each host of `demo/lan.zip`
+`/var/lib/qemuweb/runner-3002.sock` (same `--runtime` for both, at most 49 characters). Each host of `examples/lan.zip`
 takes 1 GiB (`free -g`, `nproc`).
 
 ```sh
@@ -388,7 +388,7 @@ sudo systemctl enable --now qemuweb-runner
 sudo journalctl -u qemuweb-runner -n 30 --no-pager -o cat   # "Connected to the server."
 sudo journalctl -u qemuweb-server -n 10 --no-pager -o cat          # the server sees its runner
 
-# 19. in a private window: https://qemuweb.emi.u-bordeaux.fr/ (CREMI login), "Load session ZIP" demo/lan.zip, start, open a console
+# 19. in a private window: https://qemuweb.emi.u-bordeaux.fr/ (CREMI login), "Load session ZIP" examples/lan.zip, start, open a console
 #     (without Apache: "Emergency: password mode" above, with the SSH tunnel)
 
 # 20. on the server: the machines run here, under the runner's account

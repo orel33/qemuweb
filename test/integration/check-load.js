@@ -1,7 +1,7 @@
 'use strict';
 
-// Loads the real demo files without starting any VM: demo/*.topo through the topology routes,
-// demo/lan.zip through the session-archive routes, its export re-imported into another session,
+// Loads the real example files without starting any VM: examples/*.topo through the topology routes,
+// examples/lan.zip through the session-archive routes, its export re-imported into another session,
 // and corrupted copies of lan.zip refused. Nodes are only created, never started: no system
 // image, KVM or VDE process is needed. Expectations come from the project's own topology
 // parser and ZIP reader.
@@ -16,7 +16,7 @@ const {parseTopology} = require('../../common/topology');
 const {readArchive} = require('../../runner/archive-zip');
 
 const root = path.resolve(__dirname, '../..');
-const demo = name => path.join(root, 'demo', name);
+const example = name => path.join(root, 'examples', name);
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-check-load-'));
 let child;
 let testUsers;
@@ -114,7 +114,7 @@ async function checkTopologies(client, systems) {
   const engine = (await client.request('/api/general-settings')).engine;
   let first = true;
   for (const name of ['lan.topo', 'gw.topo', 'dmz.topo']) {
-    const text = fs.readFileSync(demo(name), 'utf8');
+    const text = fs.readFileSync(example(name), 'utf8');
     const expected = parsedView(parseTopology(text, systems));
     const preview = await client.request('/api/topology/preview', {method: 'POST', body: {text, engine}});
     assert.deepEqual(preview, {hosts: Object.keys(expected.hosts).length, switches: expected.switches.length}, `${name}: preview counts`);
@@ -123,12 +123,12 @@ async function checkTopologies(client, systems) {
     assert.deepEqual(result.errors, []);
     const loaded = await nodeSet(client);
     assert.deepEqual(topologyView(loaded), expected, `${name}: nodes and links differ from the file`);
-    console.log(`Load: demo/${name}: ${expected.switches.length} switches and ${Object.keys(expected.hosts).length} hosts created, links match, none running`);
+    console.log(`Load: examples/${name}: ${expected.switches.length} switches and ${Object.keys(expected.hosts).length} hosts created, links match, none running`);
 
     const exportResponse = await client.fetch('/api/topology');
     assert.equal(exportResponse.status, 200, `${name}: topology export returned ${exportResponse.status}`);
     assert.deepEqual(parsedView(parseTopology(await exportResponse.text(), systems)), expected, `${name}: exported topology differs`);
-    console.log(`Load: demo/${name}: exported topology parses back to the same hosts and switches`);
+    console.log(`Load: examples/${name}: exported topology parses back to the same hosts and switches`);
     first = false;
   }
 
@@ -146,17 +146,17 @@ async function checkTopologies(client, systems) {
 }
 
 async function checkArchives(importer, reimporter, systems) {
-  const archiveFile = demo('lan.zip');
+  const archiveFile = example('lan.zip');
   const data = fs.readFileSync(archiveFile);
   const expected = await archiveView(archiveFile);
-  assert.equal(expected.disks, 0, 'demo/lan.zip unexpectedly contains working disks.');
+  assert.equal(expected.disks, 0, 'examples/lan.zip unexpectedly contains working disks.');
   for (const node of Object.values(expected.nodes)) if (node.kind === 'host') assert.ok(systems.includes(node.system), `Unknown system ${node.system}`);
 
   // Only hosts with a working disk record a base image identity: lan.zip has none, so
   // neither the check nor the import reads images/<system>.raw.
   const check = await importer.request('/api/session-archive/check', {method: 'POST', body: {engine: expected.engine, baseImages: {}}});
   assert.deepEqual(check, {changed: []});
-  console.log('Load: demo/lan.zip base image check: nothing to compare (no working disk)');
+  console.log('Load: examples/lan.zip base image check: nothing to compare (no working disk)');
 
   const imported = await importArchive(importer, data);
   const counts = kind => Object.values(expected.nodes).filter(node => node.kind === kind).length;
@@ -164,7 +164,7 @@ async function checkArchives(importer, reimporter, systems) {
   assert.equal(imported.switches, counts('switch'));
   assert.deepEqual(imported.startErrors, []);
   assert.deepEqual(sessionView(await nodeSet(importer)), expected.nodes, 'lan.zip: imported nodes differ from the archive');
-  console.log(`Load: demo/lan.zip imported (${imported.hosts} hosts, ${imported.switches} switches): IDs, names, systems and links match, none running`);
+  console.log(`Load: examples/lan.zip imported (${imported.hosts} hosts, ${imported.switches} switches): IDs, names, systems and links match, none running`);
 
   await expectRefused(importer, '/api/session-archive/import?autoStart=false', {
     method: 'POST', body: data, headers: {'content-type': 'application/zip'}
@@ -177,7 +177,7 @@ async function checkArchives(importer, reimporter, systems) {
   const exportFile = path.join(workDir, 'export.zip');
   fs.writeFileSync(exportFile, exported);
   assert.deepEqual((await archiveView(exportFile)).nodes, expected.nodes, 'The exported archive differs from lan.zip');
-  console.log(`Load: session exported (${exported.length} bytes), readable and identical in content to demo/lan.zip`);
+  console.log(`Load: session exported (${exported.length} bytes), readable and identical in content to examples/lan.zip`);
 
   // Corrupted copies are refused and create nothing.
   const corrupted = {
@@ -188,7 +188,7 @@ async function checkArchives(importer, reimporter, systems) {
       for (let at = copy.indexOf(name); at >= 0; at = copy.indexOf(name, at + 1)) {
         if (at >= 30 && copy.readUInt32LE(at - 30) === 0x04034b50) { offset = at + name.length + copy.readUInt16LE(at - 2); break; }
       }
-      assert.ok(offset > 0, 'No session.json local entry in demo/lan.zip.');
+      assert.ok(offset > 0, 'No session.json local entry in examples/lan.zip.');
       copy[offset] ^= 0xff;
       return copy;
     })(),
@@ -210,7 +210,7 @@ async function checkArchives(importer, reimporter, systems) {
 }
 
 async function run() {
-  for (const name of ['lan.topo', 'gw.topo', 'dmz.topo', 'lan.zip']) assert.ok(fs.existsSync(demo(name)), `Missing demo/${name}.`);
+  for (const name of ['lan.topo', 'gw.topo', 'dmz.topo', 'lan.zip']) assert.ok(fs.existsSync(example(name)), `Missing examples/${name}.`);
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'topo'}, {login: 'importer'}, {login: 'reimporter'}]);
