@@ -221,7 +221,11 @@ module is still the old one).
   runner dedicated to VirtualBox. **Switching the engine** of a session is done in the
   header (**Engine**), only while no host of the session is up or busy; the hosts,
   their settings for both engines and the working disk of each engine (`disk.qcow2`,
-  `disk.vdi`) are kept, so a session can alternate between QEMU and VirtualBox. A host
+  `disk.vdi`) are kept, so a session can alternate between QEMU and VirtualBox. A saved
+  VirtualBox disk (`disk.vdi` in a session ZIP) loads again only when the base `.vdi` of its system is
+  byte-identical to the one it was made on (the ZIP records its size and SHA-256); the runner then
+  registers that base with VirtualBox again before attaching the disk, and a message names the cause if it
+  cannot. A host
   whose system has no `.vdi` image (`scripts/prepare.sh`) stays in the session and cannot
   start under VirtualBox. Placing a VirtualBox session on a runner free
   of KVM hosts is not automatic yet.
