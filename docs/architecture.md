@@ -270,12 +270,12 @@ order. State that several modules reassign lives on the `store` object of
 `state.js`. `monitor-terminal.js`, `session-log.js`, `network-node-icons.js`, `view-state.js` and
 `topology-graphic.js` (layout, link routing and SVG drawing of the Graphic view) remain classic scripts, also loaded by unit tests.
 `login.html` and its module `login.js` form the separate login page;
-`admin.html` and `admin.js` the supervision page `/admin`, served to admins only.
+`admin.html` and `admin.js` the Admin page `/admin`, served to admins only, one tab at a time (`admin-tabs.js` for the tab bar, the refresh rules and the badges; `admin-tabs-rules.js` for the pure rules). Only the visible tab polls, none while the browser tab is hidden.
 
 | Module | Role |
 | --- | --- |
 | `app.js` | Entry point: initializes the other modules. |
-| `account.js` | User name (and display name from the front end), Supervision link (admins), Delete session and Log out in the header; authentication-disabled warning. |
+| `account.js` | User name (and display name from the front end), Admin link (admins), Delete session and Log out in the header; authentication-disabled warning. |
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
 | `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, session-expiry handling on 401 (`session-expiry.js`: login page, or one reload for an identity from the front end), `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |

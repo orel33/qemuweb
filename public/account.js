@@ -1,4 +1,4 @@
-// Account controls in the header: user name, Supervision link (admins), Delete session, Log out, and the warning
+// Account controls in the header: user name, Admin link (admins), Delete session, Log out, and the warning
 // shown when authentication is disabled (--no-auth). The session survives Log out. An identity given by the authenticating front end
 // shows its display name, and Log out goes to --logout-url (no button without it).
 import {installAuthRedirect, requestJson, accountLabel, canLogOut, logOut} from './api.js';
@@ -12,7 +12,7 @@ const accountName = document.getElementById('account-name');
 const authOffWarning = document.getElementById('auth-off-warning');
 const logoutButton = document.getElementById('logout');
 const deleteSessionButton = document.getElementById('delete-session');
-const navSupervision = document.getElementById('nav-supervision');
+const navAdmin = document.getElementById('nav-admin');
 
 let currentUser = null;
 
@@ -24,8 +24,8 @@ export function initAccount() {
     setIdentityVia(me.via);
     // Observing yourself is just your own session.
     if (observedLogin === me.login) { location.replace('/'); return; }
-    // Admins go to Supervision from their session or an observed one; students never see it.
-    navSupervision.hidden = me.role !== 'admin';
+    // Admins go to Admin from their session or an observed one; students never see it.
+    navAdmin.hidden = me.role !== 'admin';
     accountName.textContent = accountLabel(me);
     accountName.title = `Logged in as ${me.login} (${me.role})${me.mail ? `, ${me.mail}` : ''}`;
     authOffWarning.hidden = me.authMode !== 'off';

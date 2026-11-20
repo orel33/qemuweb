@@ -31,7 +31,7 @@ button { cursor: pointer; }
 #toggle-console-columns { color: #9fc5ef; }
 #exit-all { color: #ff777d; }
 #toggle-switch-consoles { color: #9fc5ef; }
-/* Navigation buttons at the top right, before the account: the destination (Supervision, or
+/* Navigation buttons at the top right, before the account: the destination (Admin, or
    My session on /admin) and the view toggle (the view it switches to). Same look as the icon
    buttons, with a bold label. */
 .header-nav { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
@@ -40,15 +40,15 @@ button { cursor: pointer; }
 .nav-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
 .nav-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 /* Fixed widths, so that a button does not change size when its label alternates: the longer
-   label (bold 14px system-ui: "Supervision" ~82px, "Terminals" ~70px) + 20px icon + 7px gap +
+   label (bold 14px system-ui: "Admin" ~45px, "Terminals" ~70px) + 20px icon + 7px gap +
    2 x 12px padding + 2px border, rounded up. */
-#nav-supervision, #nav-session { width: 140px; justify-content: center; }
+#nav-admin, #nav-session { width: 140px; justify-content: center; }
 #toggle-graphic-view { width: 130px; justify-content: center; }
 /* The view toggle closes the bottom toolbar, at its far right (after the page controls,
    which are hidden in the Graphic view). */
 .machines #toggle-graphic-view { margin-left: auto; }
 body:not([data-view="graphic"]) .machines #toggle-graphic-view { margin-left: 12px; }
-@media (max-width: 700px) { .nav-button span { display: none; } #nav-supervision, #nav-session, #toggle-graphic-view { width: var(--control); padding: 0; } }
+@media (max-width: 700px) { .nav-button span { display: none; } #nav-admin, #nav-session, #toggle-graphic-view { width: var(--control); padding: 0; } }
 body[data-view="graphic"] .page-controls, body[data-view="graphic"] #toggle-console-columns, body[data-view="graphic"] #toggle-switch-consoles { display: none; }
 button:disabled { opacity: .45; cursor: default; }
 .machines { display: flex; flex: none; align-items: center; gap: 6px; min-height: 48px; padding: 6px 16px; overflow-x: auto; border-top: 1px solid #35404c; }
@@ -418,7 +418,7 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .account { display: inline-flex; flex: none; align-items: center; gap: 8px; }
 .account-name { max-width: 180px; overflow: hidden; color: #b8c7d8; text-overflow: ellipsis; white-space: nowrap; }
 .auth-off-warning { flex: none; padding: 4px 8px; border: 1px solid #b1452f; border-radius: 6px; color: #ffd2c8; background: #4a1f17; font-size: 12px; font-weight: 700; }
-/* Administration: Supervision link, observation banner and console control banner. */
+/* Administration: Admin link, observation banner and console control banner. */
 .admin-link { color: #f2c46d; text-decoration: none; padding: 6px 9px; border: 1px solid #6a5730; border-radius: 6px; white-space: nowrap; }
 .admin-link:hover, .admin-link:focus-visible { background: #3a3220; }
 .admin-link[hidden] { display: none; }
@@ -443,8 +443,16 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
    and is shown disabled in an observation tab (same layout as the user's page; observe.js
    also blocks the keyboard and sets aria-disabled). */
 body.observing .write-action { pointer-events: none; opacity: .45; }
-/* Supervision page (/admin). */
+/* Admin page (/admin). */
 .admin-page header { gap: 12px; }
+.admin-tabs { display: flex; flex: none; gap: 2px; padding: 0 16px; overflow-x: auto; scrollbar-width: thin; border-bottom: 1px solid #35404c; }
+.admin-tab { display: inline-flex; flex: none; align-items: center; gap: 7px; height: var(--control); padding: 0 14px; color: #b8c7d8; white-space: nowrap; background: transparent; border: 0; border-bottom: 3px solid transparent; border-radius: 0; font: inherit; font-weight: 600; }
+.admin-tab:hover { color: #e7edf5; background: #202c3a; }
+.admin-tab:focus-visible { outline: 2px solid #9cc8ff; outline-offset: -2px; }
+.admin-tab[aria-selected="true"] { color: #f2c46d; border-bottom-color: #f2c46d; }
+.admin-tab-badge { min-width: 20px; padding: 1px 6px; font-size: 12px; line-height: 1.4; text-align: center; color: #e7edf5; background: #35506f; border-radius: 10px; }
+.admin-tab-badge[data-level="warning"] { color: #1d1405; background: #f2c46d; }
+.admin-main section:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 4px; }
 .admin-heading { margin-left: 14px; color: #f2c46d; font-weight: 600; }
 .admin-main { display: block; flex: 1; overflow: auto; padding: 16px; } /* One column: Sessions above Accounts. */
 .admin-main section { margin-bottom: 28px; }
