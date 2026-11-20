@@ -4,6 +4,7 @@ import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderCons
 import {captureView, renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
 import {scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
 import {defaultEngineSelect} from './general-settings.js';
+import {refreshSystems} from './systems.js';
 import {sessionLost} from './api.js';
 import {liveConnectionLost, receiveLiveData, receiveLiveEnd} from './capture-live.js';
 import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
@@ -162,6 +163,7 @@ export function initSockets() {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
       generalSettings.engine = event.engine;
       defaultEngineSelect.value = event.engine;
+      refreshSystems().catch(error => showStatusError(`System list unavailable: ${error.message}`));
     }
   });
   socket.on('node-renamed', event => { const machine = machines.get(event.nodeId); if (machine) { machine.hostname = event.name; renderTabs(); if (machine.id === store.activeId) updateControls(); } });
