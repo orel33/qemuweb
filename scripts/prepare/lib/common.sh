@@ -508,7 +508,7 @@ vm_failed() {
     if [[ -s "$dir/qemu.stderr" ]]; then echo 'QEMU error output:'; sed 's/^/  | /' "$dir/qemu.stderr"; fi
     echo 'What to check first:'
     if [[ -n "$PREPARE_NETWORK_HOST" ]]; then
-      echo "  - the build VM cannot reach $PREPARE_NETWORK_HOST: check the proxy (--proxy URL, or -6 if the proxy only accepts IPv6)."
+      echo "  - if the log shows a network error, the build VM cannot reach $PREPARE_NETWORK_HOST: check the proxy (--proxy URL, or -6 if the proxy only accepts IPv6)."
       echo "    Proxy in use: $(proxy_describe)."
     else
       echo "  - The build VM needs the Debian mirror. Proxy in use: $(proxy_describe)."

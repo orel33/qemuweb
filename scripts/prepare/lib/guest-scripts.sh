@@ -74,7 +74,7 @@ chroot "$target" /bin/sh -c '
 # it, then check that the proxy is nowhere in the installed /etc (the guest script stops here if it is).
 rm -f "$target/etc/profile.d/proxy.sh"
 for f in "$target/etc/profile" "$target/etc/environment"; do
-  if [ -f "$f" ]; then sed -i -E '/(http|https|ftp|no|all)_proxy=/Id' "$f"; fi
+  if [ -f "$f" ]; then sed -i '/_[Pp][Rr][Oo][Xx][Yy]=/d' "$f"   # BusyBox sed has no I flag; fi
 done
 if [ -n "${QEMUNET_PROXY:-}" ] && grep -rIqF -- "$QEMUNET_PROXY" "$target/etc"; then
   echo 'Alpine: the build proxy is still recorded in the installed system' >&2; exit 1
