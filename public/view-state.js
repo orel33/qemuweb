@@ -5,7 +5,7 @@
 //   {mode: 'terminals' | 'graphic',
 //    layout: 'single' | 'columns-2' | 'rows-2' | 'grid-4',
 //    panes: (nodeId | null)[],   exactly paneCount(layout) entries, in pane order; null = empty
-//    views: ('console' | 'console2' | 'monitor' | 'log' | 'capture')[],   parallel to panes: the view of each
+//    views: ('console' | 'console2' | 'monitor' | 'log')[],   parallel to panes: the view of each
 //                                pane ('console' for an empty one)
 //    switches: boolean,          switch consoles shown
 //    active: nodeId | null}      the selected node
@@ -18,7 +18,7 @@
 })(typeof globalThis === 'object' ? globalThis : this, function () {
   const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
   const MODES = ['terminals', 'graphic'];
-  const PANE_VIEWS = ['console', 'console2', 'monitor', 'log', 'capture'];
+  const PANE_VIEWS = ['console', 'console2', 'monitor', 'log'];
   const KEYS = ['mode', 'layout', 'panes', 'views', 'switches', 'active'];
 
   // Number of panes of a layout, 0 for an unknown one.

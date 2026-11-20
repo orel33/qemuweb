@@ -155,9 +155,9 @@ classic script shared by the server and the browser: `paneCount`,
   layout:   'single' | 'columns-2' | 'rows-2' | 'grid-4',
   panes:    (nodeId | null)[],   exactly paneCount(layout) entries: the node shown in each
                                  pane, in pane order; null = empty pane
-  views:    ('console' | 'console2' | 'monitor' | 'log' | 'capture')[],
+  views:    ('console' | 'console2' | 'monitor' | 'log')[],
                                  parallel to panes: the view of each pane
-                                 (Console ttyS0, Console ttyS1, Monitor, Log, Capture)
+                                 (Console ttyS0, Console ttyS1, Monitor, Log)
   switches: boolean,             switch consoles shown
   active:   nodeId | null }      the selected node (tab or graphic selection)
 ```
@@ -174,7 +174,7 @@ In the browser, `captureView()` reads the view and `applyView(view)` shows one
 (layout, switch consoles, the panes' nodes through the same
 assignment as the pane node menu, active node, mode), without saving it and
 attaching only the consoles of panes whose node changes; then each pane's view
-(`setPaneView`), only if its node allows it (Monitor and Capture need a QEMU host, Capture also the right to capture, ttyS1 a
+(`setPaneView`), only if its node allows it (Monitor needs a QEMU host, ttyS1 a
 second console, else `console`; an observer is never shown the Monitor, a
 followed `monitor` shows the console). `viewChanged()`, at
 the end of `setPaneSessions` (so `showPage`), `focusPane` and
@@ -248,7 +248,7 @@ The server is split into layers with one-way dependencies:
 | `runner/archive-snapshot.js`, `runner/archive-zip.js` | What a session ZIP contains, and the ZIP format itself. |
 | `runner/session-runtime.js` | Node records, runtime directories, hostname aliases, state and log publishing. |
 | `runner/capture.js`, `runner/capture-live.js`, `runner/pcap.js` | Traffic capture (see [Traffic capture](#traffic-capture)): `filter-dump` through the monitor, the size watcher and the capture records; the live view (`tcpdump`); whole packets of a growing PCAP. `common/capture.js` holds the limits, the capture ID rules and the filter validation. |
-| `server/routes/captures.js`, `server/capture-live.js` | Capture routes (owner or control-lock admin), the download stream, and the relay of the live view to a pane socket. |
+| `server/routes/captures.js`, `server/capture-live.js`, `server/capture-lease.js` | Capture routes (owner or control-lock admin), the download stream, the relay of the live view to the page's socket, and the capture leases (a capture lives only as long as the dialog of the tab that started it). |
 | `runner/node-lifecycle.js` | Host start, stop, reboot, reset and deletion. |
 | `runner/catalog.js`, `runner/host-config.js` | System catalog and `host.json`. |
 | `runner/launch-preview.js` | Settings, storage paths and commands a host would use, without starting it. |
@@ -288,7 +288,7 @@ order. State that several modules reassign lives on the `store` object of
 | `general-settings.js` | General Settings dialog. |
 | `topology.js` | `.topo` load/save, and the start of the saved view. |
 | `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
-| `captures.js`, `capture-dialog.js`, `capture-button.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the interface labels, the preselection and the pane button state. `capture-dialog.js` is the Capture dialog (interface, Start/Stop, files, all captures of the session), `capture-button.js` the pane bar button, and the link popover opens the dialog. The Capture view of a pane (capture choice, filter, start and stop) is `capture-live.js`. |
+| `captures.js`, `capture-dialog.js`, `capture-button.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the reasons, the interface labels, the preselection, the pane button state and the rules of ownership, saving and cleanup. `capture-dialog.js` is the Capture dialog (interface, live filter, Start/Stop, automatic save, live area), `capture-button.js` the pane bar button, and the link popover opens the dialog. `capture-live.js` is the live text area of the dialog (the last 2000 lines); there is no Capture view of a pane. |
 | `graphic-console.js` | Floating console of the Graphic view: the console workspace shown as a movable, resizable window over the graph, with the selected node's pane only. |
 | `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
 | `archive.js` | Session ZIP save and load dialogs. |
@@ -327,6 +327,15 @@ is also the file name, built by the runner, never taken from a user: `eth<N>-<UT
   or the session. A capture is not part of the session ZIP. The `captures` event
   (`{nodeId, captures}`) goes to the session's room on each change; the size of a recording capture
   is not pushed (the browser asks again every 2 s while it displays one).
+- **Lease.** A capture lasts only while the Capture dialog of the tab that started it is open. The tab
+  *leases* the capture on its session socket (`capture-lease`, `server/capture-lease.js`; the leases of
+  a session are shared by its sockets); when that socket closes (tab closed, reload, crash, lost
+  network) the server tells the runner to stop the capture and delete its file, like the live view
+  that dies with its socket. Other tabs read the leases (`capture-leased`) to show such a capture
+  read-only and to leave it alone; they never take or release a lease. The dialog saves the PCAP
+  through the browser's download when a capture ends while it is open, and deletes the captures it
+  started when it closes; opening it deletes the finished files nobody leases. An administrator's
+  discard at disconnect is audited as `capture-discarded` (`admin.log`).
 - **Limits** (`common/capture.js`, one place; placeholders for the quotas of milestone 8): 100 MB
   per capture file and 4 capture files per node. A 500 ms watcher polls the size of the recording
   files and removes the filter at the limit (state "stopped: size limit reached"); a burst can
@@ -355,11 +364,11 @@ The only place where an external program runs. `capture.live.start` spawns `tcpd
 [-- <filter>]` on the runner's machine **with an argument array, never a shell**, and
 `runner/capture-live.js` feeds its standard input with the capture file from the first byte, then
 as the file grows while the capture records. Its output goes to the browser as `capture-live`
-events ({liveId, data}, 32 KB at most each, 50 ms coalescing), which the server relays to the pane
-socket that asked (`capture-live` → `capture-live-data` / `capture-live-end`, `server/capture-live.js`).
+events ({liveId, data}, 32 KB at most each, 50 ms coalescing), which the server relays to the socket that asked: the page's session socket, the Capture dialog having no pane
+(`capture-live` → `capture-live-data` / `capture-live-end`, `server/capture-live.js`).
 The view ends by itself when the capture is stopped and read to its end (`End of the capture.`),
-when tcpdump fails or is missing (an immediate error for a missing one), when the pane leaves the
-Capture view or changes node (`capture-live-stop`), when its socket closes, when the node is
+when tcpdump fails or is missing (an immediate error for a missing one), when the dialog stops it or closes
+(`capture-live-stop`), when its socket closes, when the node is
 removed, and when the control connection closes; every case kills the tcpdump process (SIGTERM,
 then SIGKILL after 2 s). At most 4 views per session; output waits while the connection is
 congested (`ctx.flow`, as for consoles). `tcpdump` is found in the runner's `PATH` and the `sbin`

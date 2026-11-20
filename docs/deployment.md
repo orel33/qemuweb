@@ -86,7 +86,7 @@ server, connected, refused, lost). A refused option ends either program with sta
   runners that do not all have both. A new session uses the first engine the
   runner has. QEMU also needs `/dev/kvm`: when it is not accessible the runner
   warns at startup and QEMU hosts cannot start. `tcpdump` is an optional tool of
-  the runner's machine (it is not checked at startup): the live Capture view
+  the runner's machine (it is not checked at startup): the live view of the Capture dialog
   runs it there, and says so when it is missing. The PCAP files of a capture
   are written by QEMU itself and need nothing else.
 - **Startup failure:** a missing common tool or no engine at all stops the

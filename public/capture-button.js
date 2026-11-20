@@ -15,7 +15,7 @@ export function createCaptureButton(pane) {
   button.className = 'pane-capture-button';
   button.hidden = true;
   button.innerHTML = ICON;
-  button.addEventListener('click', () => { if (pane.machineId) openCaptureDialog(pane.machineId, {pane}); });
+  button.addEventListener('click', () => { if (pane.machineId) openCaptureDialog(pane.machineId); });
   return button;
 }
 

@@ -17,7 +17,6 @@ const changeListeners = new Set();
 export const capturesOf = nodeId => byNode.get(nodeId) || [];
 export const isRecording = capture => capture.state !== 'stopped';
 export const recordingOf = nodeId => capturesOf(nodeId).filter(isRecording);
-export const allCaptures = () => [...byNode.values()].flat();
 export const onCapturesChanged = listener => changeListeners.add(listener);
 
 // An observer may look but not capture; an administrator holding the control lock may.
@@ -81,6 +80,65 @@ export function captureButtonState(machine, captures) {
   return {hidden: false, disabled: false, recording, title};
 }
 
+// The three buttons of the Capture dialog for interface `index` of a host: Play (start), Stop and
+// Download. Each blocker is null when the button is enabled, else the reason it is disabled (also its
+// tooltip). `captures` are the host's captures; `owner(capture)` says 'mine', 'other' or 'free'
+// (captureOwnership). `file` is the capture Download gives: the latest of this interface that this
+// dialog or another tab holds (nothing from a leftover), also while it records: the runner cuts the
+// download after its last whole packet.
+export function captureControls(machine, captures, index, owner) {
+  const here = captures.filter(item => item.index === index);
+  const recording = here.find(item => item.state !== 'stopped') || null;
+  const elsewhere = !!recording && owner(recording) === 'other';
+  const files = here.filter(item => owner(item) !== 'free').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
+  const file = files.at(-1) || null;
+  const rights = canCapture() ? null : 'Read-only observation: take control of the session to capture.';
+  let play = null;
+  if (recording) play = elsewhere ? 'This capture belongs to another window.' : 'This interface is already being captured.';
+  else play = captureBlocker(machine, index);
+  let stop = null;
+  if (!recording) stop = 'Nothing is recording on this interface.';
+  else if (rights) stop = rights;
+  else if (elsewhere) stop = 'This capture belongs to another window: only that window can stop it.';
+  let download = null;
+  if (rights) download = rights;
+  else if (!file) download = 'No capture file yet: start a capture.';
+  else if (file.bytes <= 24) download = 'Nothing was captured yet.';
+  return {recording, elsewhere, file, play, stop, download};
+}
+
+// A capture that ended is saved through the browser's download once, when it holds a packet (a
+// PCAP header alone is 24 bytes). `saved` is the set of the capture IDs already saved.
+export function shouldAutoDownload(capture, saved) {
+  return capture.state === 'stopped' && capture.bytes > 24 && !saved.has(capture.id);
+}
+
+// Whose a capture is, for the Capture dialog: 'mine' (this dialog started it), 'other' (another
+// tab holds its lease, or it started a few seconds ago and its tab has not leased it yet) or 'free'
+// (nobody: a leftover of a crashed tab). `mine` and `leased` are sets of capture IDs; `leased`
+// holds the leases of the other tabs (server/capture-lease.js).
+export function captureOwnership(capture, mine, leased, now) {
+  if (mine.has(capture.id)) return 'mine';
+  if (leased.has(capture.id)) return 'other';
+  return capture.state !== 'stopped' && now - Date.parse(capture.startedAt) < 10000 ? 'other' : 'free';
+}
+
+// Finished captures nobody leases: the leftovers deleted when the Capture dialog opens. A recording
+// capture, and the file another tab has not yet saved, are never touched.
+export function staleCaptures(captures, leased) {
+  return captures.filter(item => item.state === 'stopped' && !leased.has(item.id));
+}
+
+// What closing the Capture dialog does to a host's captures: the recording ones started by this
+// dialog (`mine`, a set of IDs) are stopped; they, and the finished files nobody else leases, are
+// deleted. A capture of another tab is left alone. Nothing is saved at close: Stop saves.
+export function closePlan(captures, mine, leased) {
+  return {
+    stop: captures.filter(item => item.state !== 'stopped' && mine.has(item.id)),
+    remove: captures.filter(item => mine.has(item.id) || (item.state === 'stopped' && !leased.has(item.id)))
+  };
+}
+
 // The host's state changed (started, stopped, switches connected): the reasons change with it.
 export const refreshCaptureRules = () => publishChange(null);
 
@@ -121,7 +179,7 @@ export async function loadCaptures(nodeId) {
   } catch (_) { /* The list stays as it was. */ }
 }
 
-export const captureAction = async (nodeId, captureId, verb, options) => requestJson(nodeUrl(nodeId, `captures${captureId ? `/${captureId}` : ''}${verb ? `/${verb}` : ''}`), options, 'Capture request failed.');
+const captureAction = async (nodeId, captureId, verb, options) => requestJson(nodeUrl(nodeId, `captures${captureId ? `/${captureId}` : ''}${verb ? `/${verb}` : ''}`), options, 'Capture request failed.');
 
 export const startCapture = (nodeId, index) => captureAction(nodeId, '', '', jsonRequest('POST', {interface: `eth${index}`}));
 export const stopCapture = (nodeId, captureId) => captureAction(nodeId, captureId, 'stop', {method: 'POST'});

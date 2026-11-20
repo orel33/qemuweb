@@ -1,8 +1,8 @@
 'use strict';
 
-// The live Capture view of one browser socket (a console pane): the socket asks for the text of a
+// The live view of the Capture dialog, on one browser socket (the page's session socket): the socket asks for the text of a
 // capture and receives it as it arrives. The server only relays: the runner reads the PCAP and runs
-// tcpdump (runner/capture-live.js). A socket has at most one view; it ends when the pane asks, when
+// tcpdump (runner/capture-live.js). A socket has at most one view; it ends when the dialog asks, when
 // the socket closes, or by itself (the runner says why). The owner, and an administrator holding
 // the session's control lock, may use it; any other observer is refused.
 //   socket -> server  'capture-live' {nodeId, captureId, filter?}, ack {ok}|{error}

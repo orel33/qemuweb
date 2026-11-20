@@ -25,6 +25,7 @@
 // relayed to the session room and shown by the owner's pages.
 const {ConsoleControl} = require('./console-control');
 const {attachCaptureLive} = require('./capture-live');
+const {attachCaptureLease} = require('./capture-lease');
 const {normalizeView} = require('../public/view-state');
 const {baseNodeId} = require('../common/console-id');
 const {createTransportRegistry} = require('./ws-transports');
@@ -88,6 +89,9 @@ function bindWorkspace(io, {session, runner}) {
 function attachSockets(io, manager, {audit, currentUser, control: options = {}, transports = createTransportRegistry()}) {
   // The controlling admin's last view, per session ID, kept only while a lock exists there.
   const controllerViews = new Map();
+  // The capture leases of each session, shared by its sockets (server/capture-lease.js).
+  const leaseRegistry = new Map();
+  const leasesOf = sessionId => { if (!leaseRegistry.has(sessionId)) leaseRegistry.set(sessionId, new Map()); return leaseRegistry.get(sessionId); };
   const control = new ConsoleControl({...options, onRelease: (lock, reason) => {
     controllerViews.delete(lock.sessionId);
     io.to(`session:${lock.sessionId}`).emit('console-control', {admin: lock.admin, active: false});
@@ -254,9 +258,12 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
       if (!Number.isInteger(cols) || !Number.isInteger(rows) || cols < 20 || cols > 400 || rows < 5 || rows > 200) return;
       runner.request('console.resize', {nodeId: request.id, cols, rows}).catch(() => {});
     }));
-    // The live Capture view of this pane (server/capture-live.js): the owner, or the admin holding the control lock.
+    // The live view of the Capture dialog (server/capture-live.js): the owner, or the admin holding the control lock.
     attachCaptureLive(socket, {runner, guard, allowed: () => !observer || control.heldBy(session.id, user.login),
       record: ({nodeId, captureId}) => { if (observer) audit.record(user.login, 'capture-viewed', {login: workspace.owner, nodeId, captureId}); }});
+    // A capture lasts as long as the dialog of the tab that started it (server/capture-lease.js).
+    attachCaptureLease(socket, {runner, guard, leases: leasesOf(session.id), allowed: () => !observer || control.heldBy(session.id, user.login),
+      record: ({nodeId, captureId}) => { if (observer) audit.record(user.login, 'capture-discarded', {login: workspace.owner, nodeId, captureId}); }});
     socket.on('clear-console', guard(request => {
       if (observer) return refuse('Read-only observation: the console cannot be cleared.');
       if (!request || !request.id || request.id !== socket.data.nodeId) return;
