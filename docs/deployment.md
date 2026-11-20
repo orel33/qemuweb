@@ -85,10 +85,11 @@ server, connected, refused, lost). A refused option ends either program with sta
   marked `-` in "Checking dependencies…"), because `config.json` is shared by
   runners that do not all have both. A new session uses the first engine the
   runner has. QEMU also needs `/dev/kvm`: when it is not accessible the runner
-  warns at startup and QEMU hosts cannot start. `tcpdump` is an optional tool of
-  the runner's machine (it is not checked at startup): the live view of the Capture dialog
-  runs it there, and says so when it is missing. The PCAP files of a capture
-  are written by QEMU itself and need nothing else.
+  warns at startup and QEMU hosts cannot start. `tcpdump` is a dependency of the
+  runner's machine like the other tools (`TCPDUMP` in `.env`, checked at startup, also searched in
+  `/usr/sbin` and `/sbin`): the live view of the Capture dialog runs it there. A missing one is
+  only a warning line ("the live view of captures is unavailable") and the dialog says so. The PCAP
+  files of a capture are written by QEMU itself and need nothing else.
 - **Startup failure:** a missing common tool or no engine at all stops the
   runner with its message (`scripts/start.sh` then ends). Another server already using the socket of
   the same port is refused.

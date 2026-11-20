@@ -15,9 +15,12 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    sudo apt install bash build-essential coreutils findutils grep gzip curl git python3 qemu-system-x86 qemu-utils genisoimage vde2 tcpdump
    ```
 
-   `tcpdump` is only needed for the live **Capture** view of the Terminals
-   (see [Capturing traffic](user-guide.md#capturing-traffic)); the PCAP files
-   do not need it. Without it that view says so and everything else works.
+   `tcpdump` prints the packets of a capture as text for the live **Capture**
+   view of the Terminals (see [Capturing traffic](user-guide.md#capturing-traffic)).
+   The runner checks it at startup like the other tools (`TCPDUMP` in `.env`,
+   also searched in `/usr/sbin` and `/sbin`) but does not need it to run: without
+   it the startup check warns, the live view says so, and everything else works,
+   PCAP files included.
 
 2. Install **Node.js 24 LTS** with npm. Ubuntu's `nodejs` package is too old,
    and `npm ci` fails with `EBADENGINE` on other Node versions. Use one of:

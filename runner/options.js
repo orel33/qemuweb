@@ -23,7 +23,7 @@ function defaultRunnerConfig() {
 }
 
 const ENVIRONMENT = [{
-  names: 'QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE',
+  names: 'QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE, TCPDUMP',
   description: 'names or paths of the external programs: .env.local, then the environment, then the default of .env'
 }];
 

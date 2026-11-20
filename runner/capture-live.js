@@ -8,7 +8,6 @@
 // asked to stop sends nothing more. Nothing is left behind: the tcpdump process is killed when
 // the view stops, the node is removed or the session shuts down.
 const fs = require('fs');
-const path = require('path');
 const {spawn} = require('child_process');
 const {StringDecoder} = require('string_decoder');
 const {validateFilter, LIVE_ID, MAX_LIVE} = require('../common/capture');
@@ -22,20 +21,10 @@ const FLUSH_BYTES = 32 * 1024;
 // while the control connection is congested (ctx.flow.paused, runner/endpoint.js).
 const HIGH_MARK = 256 * 1024;
 const KILL_AFTER_MS = 2000;
-const SBIN = ['/usr/sbin', '/sbin', '/usr/local/sbin'];
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
-// The absolute path of tcpdump: the PATH of the runner, then the sbin directories a user PATH often lacks.
-function findTcpdump(env = process.env) {
-  for (const directory of [...(env.PATH || '').split(path.delimiter), ...SBIN]) {
-    if (!directory) continue;
-    const candidate = path.join(directory, 'tcpdump');
-    try { fs.accessSync(candidate, fs.constants.X_OK); if (fs.statSync(candidate).isFile()) return candidate; } catch (_) { /* Not here. */ }
-  }
-  return null;
-}
-
-function createCaptureLive(ctx, {locate = findTcpdump, spawnProcess = spawn} = {}) {
+// tcpdump is the command the start-up check resolved (ctx.commands.TCPDUMP, runner/preflight.js; null when missing).
+function createCaptureLive(ctx, {locate = () => ctx.commands.TCPDUMP, spawnProcess = spawn} = {}) {
   const lives = new Map(); // liveId -> {nodeId, stop()}
 
   const emit = payload => ctx.events.emit('capture-live', payload);
@@ -156,4 +145,4 @@ function createCaptureLive(ctx, {locate = findTcpdump, spawnProcess = spawn} = {
   return {start, stop, stopNode, count: () => lives.size};
 }
 
-module.exports = {createCaptureLive, findTcpdump};
+module.exports = {createCaptureLive};

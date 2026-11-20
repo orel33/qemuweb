@@ -120,7 +120,7 @@ test('both programs share the help layout, usage forms and errors', () => {
   }
   assert.match(helps[0].text, /none: this program reads no environment variable/);
   assert.doesNotMatch(helps[0].text, /QEMUWEB_|PORT=/);
-  assert.match(helps[1].text, /QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE/);
+  assert.match(helps[1].text, /QEMU_SYSTEM_X86_64, QEMU_IMG, VDE_SWITCH, VDETERM, GENISOIMAGE, NODE, PYTHON3, VBOXMANAGE, TCPDUMP/);
   // The same closing text and the same refusal sentence.
   const closing = text => text.slice(text.indexOf('At startup it prints'));
   assert.equal(closing(helps[0].text), closing(helps[1].text));

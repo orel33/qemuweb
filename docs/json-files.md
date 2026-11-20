@@ -500,6 +500,7 @@ never archived.
 | `NODE`, `PYTHON3` | dependency checks | yes |
 | `QEMU_SYSTEM_X86_64`, `QEMU_IMG` | QEMU engine, overlay | yes |
 | `VBOXMANAGE` | VirtualBox engine | optional: without it the engine is unavailable |
+| `TCPDUMP` | live view of the Capture dialog | optional: without it the live view is unavailable (searched in `PATH`, then `/usr/sbin` and `/sbin`) |
 
 ### 3.4 Startup script variables
 
