@@ -1,6 +1,6 @@
 'use strict';
 
-// The Session Engine select of the header (public/engine-select.js): the pure rules (value, disabled,
+// The Engine select of the header (public/engine-select.js): the pure rules (value, disabled,
 // reason from the runner's engines and the state of the session), the markup (same line as QemuWeb and
 // the beta badge, a real label), its removal from General Settings, and every update point of the page.
 const test = require('node:test');
@@ -87,14 +87,19 @@ test('Host Settings says which engine its values are for, and that the other eng
 });
 
 test('the header has the labelled select after the beta badge, in the h1 line; /admin has none', () => {
-  assert.match(html, /aria-label="Beta version">BETA<\/span><span class="engine-picker" id="engine-picker" hidden><label for="session-engine">Session Engine:<\/label><select id="session-engine" disabled><option value="qemu">QEMU - KVM<\/option><option value="vbox">VirtualBox<\/option><\/select><\/span><\/h1>/);
+  assert.match(html, /aria-label="Beta version">BETA<\/span><span class="engine-picker" id="engine-picker" hidden><label for="session-engine">Engine:<\/label><select id="session-engine" disabled aria-label="Session engine"><option value="qemu">QEMU - KVM<\/option><option value="vbox">VirtualBox<\/option><\/select><\/span><\/h1>/);
   assert.ok(!html.includes('engine-badge'), 'the badge is replaced');
   for (const file of fs.readdirSync(publicDir).filter(name => name.endsWith('.html') && name !== 'index.html')) {
     assert.ok(!fs.readFileSync(path.join(publicDir, file), 'utf8').includes('session-engine'), file);
   }
   assert.ok(!fs.existsSync(path.join(publicDir, 'engine-badge.js')));
-  assert.match(css, /\.engine-picker \{[^}]*font-size: 12px/);
-  assert.match(css, /\.engine-picker select \{[^}]*height: 22px/);
+  // Same font and colour as the user name of the header (shared custom properties), same height as the header buttons.
+  assert.match(css, /--header-font: [^;]+; --header-text: #b8c7d8;/);
+  assert.match(css, /\.account-name \{[^}]*color: var\(--header-text\); font: var\(--header-font\);/);
+  assert.match(css, /\.engine-picker \{[^}]*color: var\(--header-text\); font: var\(--header-font\);/);
+  assert.match(css, /\.engine-picker select \{[^}]*font: var\(--header-font\); color: var\(--header-text\);/);
+  assert.doesNotMatch(css, /\.engine-picker[^{]*\{[^}]*(?:top: 2px|position: relative)/, 'no positioning hack; the height is the --control one of the select rule');
+  assert.match(css, /button, select \{ height: var\(--control\);/);
   assert.doesNotMatch(css, /\.engine-badge/);
   // Narrow widths: the label is kept for screen readers but not shown; the select stays reachable.
   assert.match(css, /@media \(max-width: 640px\) \{ \.engine-picker label \{ position: absolute;/);

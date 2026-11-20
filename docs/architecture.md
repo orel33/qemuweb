@@ -289,7 +289,7 @@ order. State that several modules reassign lives on the `store` object of
 | `host-settings.js` | Host Settings dialog, also used to add a host. |
 | `startup-media.js` | Startup tab: `start.sh` template, startup disk and extra files. |
 | `general-settings.js` | General Settings dialog (naming scheme, console font). |
-| `engine-select.js` | The **Session Engine** select of the header: the pure rules (value, disabled, reason), live freeze while a host is up or busy, change request, notes of Host Settings. |
+| `engine-select.js` | The **Engine** select of the header: the pure rules (value, disabled, reason), live freeze while a host is up or busy, change request, notes of Host Settings. |
 | `topology.js` | The Load Topology dialog (same structure as Load Session) and the `.topo` download, and the start of the saved view. |
 | `load-menu.js`, `load-steps.js`, `file-kinds.js` | The Load button's upward menu (From User Files, From Server (Examples) with its small dialog) and the check of a chosen file by extension and content; the steps list and the Close step (which removes the previous session with `removeAllNodes` of `nodes.js`, once, when Load is pressed after the file was read and checked) shared by the Load Session and Load Topology dialogs; and the pure rules (kind and routing of a file, the Save status line, the warning, the timing of the closing, menu item states). |
 | `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |

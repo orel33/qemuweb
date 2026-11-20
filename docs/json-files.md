@@ -519,10 +519,17 @@ The VM name is `qemuweb-<pid>-<session>-<node>`; `controlvm`, `showvminfo`,
 keywords. The differencing disk `disk.vdi` is created at the first start under VirtualBox,
 kept (the machine stays registered) until Reset or the removal of the host, and goes in a
 ZIP with the other engine's disk. A `disk.vdi` loaded from a ZIP has no registered machine: the
-next start creates the machine around it (`internalcommands sethduuid` on that file inside
-the node directory, `openmedium` of the base image, `createvm`/`modifyvm`/`storagectl`/
-`storageattach` as above, without `createmedium`), and on a failure leaves the file
-untouched (Reset starts over). No QEMU monitor exists (`mon.sock`).
+next start creates the machine around it. VirtualBox resolves the parent of a differencing disk in its
+global media registry, and that registry forgets a base image nothing uses (found on a real machine:
+"Parent medium with UUID {...} ... is not found in the media registry" after a ZIP load; an
+`openmedium` of the base left the registry empty), so the runner first checks the VDI headers (the
+parent UUID of the saved disk must be the UUID of the base `.vdi`, else "the saved disk belongs to
+another build of the base image"), runs `internalcommands sethduuid` on the saved file inside the node
+directory, registers the base the way the first start does (a differencing probe `parent-probe.vdi`
+in the node directory, `createmedium --diffparent`), CHECKS with `list hdds` that the base UUID is
+registered, then `createvm`/`modifyvm`/`storagectl`/`storageattach` as above (no `createmedium` of the
+disk), and closes and removes the probe. On a failure the probe and the machine go and the saved file
+stays untouched (Reset starts over). No QEMU monitor exists (`mon.sock`).
 
 ### 3.3 `.env` and `.env.local`
 

@@ -189,7 +189,7 @@ interface shows **Authentication disabled**. It is never the default.
 ### Included LAN demo
 
 1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
-2. In the Web interface, choose the engine in the **Session Engine** select of the header (see
+2. In the Web interface, choose the engine in the **Engine** select of the header (see
    [The session engine](#the-session-engine)), click
    **Load**, and under **Examples** click `lan.zip` (or choose
    [`examples/lan.zip`](../examples/lan.zip) with the file picker).
@@ -203,7 +203,7 @@ start from fresh images. Its settings apply to either engine.
 
 ### The session engine
 
-The header shows **Session Engine:** followed by a select (**QEMU - KVM** or
+The header shows **Engine:** followed by a select (**QEMU - KVM** or
 **VirtualBox**) on the line of the title. It is the engine of the whole session; the
 engine select that was in General Settings is gone (General Settings keeps the
 naming scheme and the console font).

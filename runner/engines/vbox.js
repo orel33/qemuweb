@@ -5,6 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
 const {explainVirtualBoxFailure, failureText, firstErrorLine} = require('./vbox-errors');
+const {readVdiHeader} = require('../media/vdi');
 
 function createVirtualBox(ctx) {
   const {tempFile, execLogged, appendLog} = ctx.runtime;
@@ -88,24 +89,50 @@ function createVirtualBox(ctx) {
     catch (_) { return false; }
   }
 
+  // The UUIDs of the media in the output of `VBoxManage list hdds`.
+  function registeredMediaUuids(output) {
+    return [...String(output).matchAll(/^UUID:\s*([0-9a-f-]{36})\s*$/gim)].map(match => match[1].toLowerCase());
+  }
+
   // A disk.vdi loaded from an archive has no VirtualBox machine around it: creates the machine and
-  // attaches that disk. The disk file stays untouched on failure (Reset discards it). Only files of
-  // the node's own directory are given to VirtualBox, and nothing is ever deleted here.
+  // attaches that disk. VirtualBox resolves the parent of a differencing disk in its global media
+  // registry, which forgets a base image once nothing uses it (after Remove all, or in another
+  // session), so the base is registered again first: the way that surely works is the one of the
+  // first start, a differencing medium of the base (a probe file in the node directory, closed
+  // after the attach); the registry is then CHECKED for the parent UUID of the saved disk.
+  // The disk file stays untouched on failure (Reset discards it). Only files of the node's own
+  // directory are written, no medium is deleted by VirtualBox and the base image is never modified.
   function ensureVirtualBoxMachine(node, image) {
     if (virtualBoxMachineExists(node)) return;
     const disk = tempFile(node, 'disk.vdi');
+    const base = imagePath(image.images.vdi);
+    const probe = tempFile(node, 'parent-probe.vdi');
     if (!fs.existsSync(disk)) throw new Error('The current host disk was not found.');
+    const advice = 'Use Reset to start from the base image.';
+    let child, parent;
+    try { child = readVdiHeader(disk); parent = readVdiHeader(base); }
+    catch (error) { throw new Error(`Cannot read the saved VirtualBox disk or its base image: ${error.message} ${advice}`, {cause: error}); }
+    if (child.parentUuid !== parent.uuid) {
+      throw new Error(`The saved VirtualBox disk belongs to another build of the base image (its parent is ${child.parentUuid}, the base image is ${parent.uuid}). ${advice}`);
+    }
+    const dropProbe = () => { vboxIgnoringFailure(node, ['closemedium', 'disk', probe]); fs.rmSync(probe, {force: true}); };
     appendLog(node, '# Creating the VirtualBox machine around the saved disk');
     fs.mkdirSync(tempFile(node, 'vbox-vm'), {recursive: true});
     try {
       // A new identity for the loaded disk: another copy of it may be registered already.
       vbox(node, ['internalcommands', 'sethduuid', disk]);
-      vboxIgnoringFailure(node, ['openmedium', 'disk', imagePath(image.images.vdi)]);
+      fs.rmSync(probe, {force: true});
+      vbox(node, ['createmedium', 'disk', '--filename', probe, '--diffparent', base, '--format', 'VDI']);
+      if (!registeredMediaUuids(vbox(node, ['list', 'hdds'])).includes(parent.uuid)) {
+        throw new Error(`VirtualBox did not register the base image ${path.basename(base)} (UUID ${parent.uuid}).`);
+      }
       for (const args of virtualBoxCommands(node, image, {existingDisk: true})) vbox(node, args);
+      dropProbe();
     } catch (error) {
+      dropProbe();
       vboxIgnoringFailure(node, ['unregistervm', node.vmName]);
       fs.rmSync(tempFile(node, 'vbox-vm'), {recursive: true, force: true});
-      throw new Error(`Cannot attach the saved VirtualBox disk: ${error.message} Use Reset to start from the base image.`, {cause: error});
+      throw new Error(`Cannot attach the saved VirtualBox disk: ${error.message} ${advice}`, {cause: error});
     }
   }
 
