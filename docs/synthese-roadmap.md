@@ -35,6 +35,7 @@ De la version 0.9.0 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | DOC01 | Un seul parcours d'installation documenté, guide utilisateur à jour | 1 |
 | PRP01 | Construction des images derrière le proxy du CREMI sans option particulière | 1 |
 | RUN02 | Les sessions d'un runner distant survivent au redémarrage du serveur, perte forcée par l'administrateur | 4 |
+| PST01 | **Étude** : persistance des sessions après coupure brutale, redémarrage du serveur ou d'un runner, panne réseau ; options de politique pour le serveur et pour le runner (rien, session conservée arrêtée, reprise automatique) | 3 |
 | SEC01 | Mot de passe minimal, ralentissement des échecs de connexion, contrôle de l'origine, déconnexion révocable | 3 |
 | SEC02 | Liste blanche des commandes de l'hyperviseur et quotas (machine, session, serveur) | 3 |
 | SEC04 | Runner sous un compte dédié, un cgroup par session limitant mémoire et processeur | 4 |

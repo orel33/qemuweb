@@ -254,6 +254,42 @@ What separates a deployment that works from one you can operate calmly.
   - Test the re-selection of the console after a runner comes back (`runner-state`) in a real browser: today it is
     only tested through the socket events of `check-runner-remote`.
   - Restrict `/runner/connect` and `/api/runner/register` by address when the runners are known.
+- [ ] **PST01** (M, study first) Persistence of sessions: what survives a hard reboot, a power cut, a network cut, a
+  crash of the server or of a runner. A **design study** whose deliverable is a written document (a new section of
+  `docs/architecture.md`) with a recommendation and the options below, validated by the user **before any code**.
+  - **Inventory today.** For each event, what is kept and what is lost: server restart (local runner adopted again,
+    remote runner dropped), runner crash or restart (machines gone, session deleted as `runner lost`), reboot of the
+    whole machine (QEMU and VDE dead; disks, `session.json` and `meta.json` stay under `runtime/`, nothing reads them
+    back), network cut between a remote runner and the server (`--runner-grace`), loss of the browser (the session
+    survives). Check by reading and by a measured, authorised test on a throwaway runtime directory: what is left on
+    disk after a SIGKILL of the runner and after a machine reboot, and whether a session can be rebuilt from it.
+  - **What can be persisted**, from cheap to costly: the session description only (nodes, links, settings: it is
+    already a ZIP-like state in `session.json` and `host.json`); plus the working disks as they are (a hard stop of a
+    guest is a power cut for its filesystem: ext4 journal replay, possible data loss); plus the **memory and device
+    state** of a running guest (QEMU `savevm` / `migrate` to a file: a true resume, large and slow, only on request).
+  - **Policies for the runner** at start-up, to compare: *discard* (today: the sessions on disk are cleaned);
+    *keep, restart nothing* (the session reappears stopped, with its disks, and the user presses Resume all);
+    *auto-resume* (the hosts that were running start again, in the order of their switches, with a cap on the number
+    and the memory to avoid a boot storm); *per-session choice* (a setting "restore on restart" kept in the session).
+    Include the **periodic autosave** of the session description (and optionally of the disks' state) so that a
+    hard cut loses little, the disk cost per session and a quota for it, and the interaction with the observation
+    rules and with the paused state of the runner.
+  - **Policies for the server**: where the session-to-runner binding is kept (`runners.json` or a new file, shared
+    with RUN02), what happens to a session whose runner does not come back (grace period, then *keep as stopped data*
+    or *delete*), the order of the events when both restart together (a reboot), `--runner-grace` per kind of runner
+    (a lab workstation that sleeps is not a crashed server), what the user sees (a banner "session restored, machines
+    stopped", an explicit Resume) and what the administrator sees in `/admin` (restorable sessions, a Discard button).
+  - **Remote and personal runners** (PRN01): a student's workstation that reboots or sleeps must not cost the
+    session; decide whether the data is kept on the workstation, uploaded to the server (a periodic ZIP, size and
+    privacy limits) or lost, and what happens when the user opens the session elsewhere.
+  - **Consistency and cleanup**: stale sockets and VDE directories after a hard cut (see TOD02: sockets in a short
+    private directory are recreated), PID and lock files, the VirtualBox machines left registered (remove by exact
+    name only), disk space reclaimed from abandoned sessions, a retention time.
+  - **Output**: a table "event x policy" with the user-visible result of each, the recommended default policy for the
+    CREMI server (a trusted local runner) and for a student's runner, the data format changes it implies (schema
+    versions, with the explicit compatibility decision), and the split into implementation tasks (for example the
+    autosave, the restore at start, the binding, the `/admin` controls, `SVC01`'s boot recovery). Related: RUN02,
+    SVC01, PRN01, NET02 (checkpoints), HSV01.
 - **PRN01** and **PRN02** (personal runners: server side, and the "My runner" page) are **priority features**: see the top of the roadmap. The design below applies to them.
 - [ ] **PRN03** (M) Base images for a runner: shared directory or HTTP download, workstation sheet.
 
