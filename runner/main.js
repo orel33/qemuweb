@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const cli = require('../common/cli');
 const {runnerSpec, runSpec, serverSocket, RECONNECT_MS} = require('./options');
+const {defaultRuntime, prepareRuntime, removeEmptyDefaultRuntime} = require('../common/runtime-dir');
 
 const root = path.join(__dirname, '..');
 // A connection the server closes within this delay was refused (a runner is already connected).
@@ -32,6 +33,7 @@ function main(remote) {
   const options = cli.commandLine(spec, process.argv.slice(remote ? 3 : 2));
   // A remote runner takes its server, runtime and certificate authority from the runner file unless an option says otherwise.
   const identity = remote ? require('./remote-identity').load(options) : null;
+  if (!options.runtime) options.runtime = defaultRuntime('runner');
   options.socket = remote ? null : serverSocket(options);
   cli.printBanner('runner');
   const derived = remote ? identity.derivedRows() : [['Server socket', options.socket]];
@@ -41,9 +43,11 @@ function main(remote) {
   const {Connection} = require('../common/runner-protocol');
 
   let commands;
+  let runtimeWarning = null;
   try {
     commands = resolveCommands(root);
-    fs.mkdirSync(path.join(options.runtime, 'sessions'), {recursive: true});
+    // Before any session exists: the private default directory is created or refused, a --runtime too long for the sockets is refused.
+    runtimeWarning = prepareRuntime(options.runtime).warning;
   } catch (error) {
     cli.abort('runner', error.message);
   }
@@ -57,6 +61,8 @@ function main(remote) {
     const {warnings, images} = service.capabilities();
     cli.heading('Checking configuration…');
     const ok = remote ? identity.printChecks() : true;
+    cli.pass(`runtime directory  ${options.runtime}  (writable)`);
+    if (runtimeWarning) cli.warning(runtimeWarning);
     if (!warnings.length) cli.pass(`${path.basename(options.config)}  ${Object.keys(images).length} systems`);
     for (const warning of warnings) cli.warning(warning);
     cli.end();
@@ -72,6 +78,7 @@ function main(remote) {
     await service.shutdown();
     // Empty once this runner's sessions are gone (a server that ended earlier left it to us).
     try { fs.rmdirSync(path.join(options.runtime, 'sessions')); } catch (_) {}
+    removeEmptyDefaultRuntime(options.runtime);
     process.exit(code);
   }
 

@@ -246,6 +246,7 @@ naming scheme and the console font).
 
 ### Sessions and topologies
 
+- **Sessions are disposable.** With the default setup the session lives in `/tmp` on the server machine and does not survive a reboot of that machine (or an administrator wiping it): the next login finds an empty session. Use **Save** (ZIP, with the working disks if needed) to keep work. A server started with `--runtime` on a persistent disk (the CREMI deployment) keeps sessions across reboots.
 - One **Load** button and one **Save** button (bottom left, with the session
   icons) handle both a topology and a session.
 - **Save** opens one dialog. One status line gives the size of the session

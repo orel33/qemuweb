@@ -53,6 +53,10 @@ If `qemu-system-x86_64 -netdev help` does not list `vde`, see
 [QEMU without VDE support](docs/install.md#qemu-without-vde-support). To install QemuWeb for your own use, see
 [docs/install.md](docs/install.md).
 
+## Where the sessions live
+
+By default the sessions of a server live in a short private directory of `/tmp` (`/tmp/qw-<login>/<port>`), so that Unix socket paths always fit. They do not survive a reboot of the machine: sessions are disposable, **Save session** (ZIP) keeps work, and `--runtime DIR` on a persistent disk changes that (see [docs/reference.md](docs/reference.md#runtime-directory)).
+
 ## Documentation
 
 | Document | Content |

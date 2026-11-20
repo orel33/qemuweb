@@ -7,6 +7,7 @@
 // test/unit/server-startup-report.test.js checks that each option is documented in docs/reference.md.
 const path = require('path');
 const {parseArguments, defaultSettings: cliDefaults, UsageError, invalid} = require('../common/cli');
+const {defaultRuntime} = require('../common/runtime-dir');
 
 const DEFAULT_PORT = 3002;
 const DEFAULT_SESSION_HOURS = 12;
@@ -30,8 +31,8 @@ function serverSpec(root) {
     options: [
       {flag: '--listen', metavar: 'PORT', kind: 'port', key: 'port', default: DEFAULT_PORT, fallback: String(DEFAULT_PORT),
         description: 'TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-PORT.sock, the socket its runner dials'},
-      {flag: '--runtime', metavar: 'DIR', kind: 'path', key: 'runtime', default: path.join(root, 'runtime'), fallback: 'runtime/ of the repository',
-        description: 'runtime directory: sessions of a local runner, users/ aliases, server-PORT.pid and .session, and the socket DIR/runner-PORT.sock'},
+      {flag: '--runtime', metavar: 'DIR', kind: 'path', key: 'runtime', default: null, fallback: '/tmp/qw-<login>/<port>',
+        description: 'runtime directory: sessions of a local runner, users/ aliases, server-PORT.pid and .session, and the socket DIR/runner-PORT.sock; the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets)'},
       {flag: '--users', metavar: 'FILE', kind: 'path', key: 'usersFile', default: path.join(root, 'users.json'), fallback: 'users.json of the repository',
         description: 'users file (mode 0600)'},
       {flag: '--runners', metavar: 'FILE', kind: 'path', key: 'runnersFile', default: path.join(root, 'runners.json'), fallback: 'runners.json of the repository',
@@ -65,6 +66,7 @@ function serverSpec(root) {
         description: 'marks an ephemeral server of the test scenarios (tests only)'}
     ],
     validate(settings) {
+      if (!settings.given.has('--runtime')) settings.runtime = defaultRuntime(settings.port);
       if (settings.authMode === 'proxy' && !settings.proxyKeyFile) {
         throw new UsageError('--auth proxy requires --proxy-key-file FILE');
       }

@@ -8,7 +8,7 @@ usage() {
 }
 parse_options() {
   port=3002
-  runtime="$root/runtime"
+  runtime=''
   while (( $# )); do
     case "$1" in
       -h|--help) usage; exit 0 ;;
@@ -23,6 +23,10 @@ parse_options() {
   fi
 }
 parse_options "$@"
+if [[ -z "$runtime" ]]; then
+  source "$root/scripts/lib/runtime.sh"
+  runtime="$(default_runtime "$port")"
+fi
 pid_file="$runtime/server-$port.pid"
 session_file="$runtime/server-$port.session"
 

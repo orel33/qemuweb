@@ -70,7 +70,7 @@ title, offers it only when the server has `VBoxManage`).
 ## Starting the server and the runner by hand
 
 `./start.sh` is the same as these two commands, run in two terminals from the
-repository root (port 3002 and `runtime/` of the repository by default, for both):
+repository root (port 3002 and the runtime directory `/tmp/qw-<login>/3002` by default, for both):
 
 ```sh
 ./scripts/server.sh                          # terminal 1: the server (web interface, accounts, sessions)
@@ -198,7 +198,7 @@ of the log, the log directory and hints. The list of strings is in
 When a build fails:
 
 1. Read the end of the log shown, then the whole serial log,
-   `runtime/.<system>-prepare.XXXXXX/serial.log` (the directory is kept on failure, with
+   `sources/.prepare/.<system>-prepare.XXXXXX/serial.log` (the directory is kept on failure, with
    `qemu.stderr` and the preseed or cloud-init files; delete it when done).
 2. Check the proxy first (`Proxy:` line); an unreachable mirror is the usual cause.
 3. Without Internet access at all, build the image on another machine and copy
@@ -288,11 +288,18 @@ lists `vde`, then run `./start.sh` again.
 Another QemuWeb server is probably running. Stop it with `scripts/stop.sh`, or
 start on another port with `./start.sh --listen 3003`.
 
-### Runtime socket path is too long
+### The runtime directory is refused or too long
 
-`Runtime socket path is too long; move the project to a shorter directory.` The sockets of a node live in
-`<runtime>/sessions/<session id>/<node id>/` and a Unix socket path is limited to 107 bytes, which leaves 49
-characters for the runtime directory itself. A project kept in a deep directory (for example
-`/home/me/Documents/projects/qemuweb/runtime`, 51 characters) fails when a session is loaded. Start with a short
-runtime directory, for the server and the runner alike: `./scripts/start.sh --runtime /tmp/qemuweb-rt`
-(`scripts/demo.sh` already does).
+The runtime directory defaults to `/tmp/qw-<login>/<port>` (see [the reference](reference.md#runtime-directory)), so
+the location of the project no longer matters. Two messages can still appear at startup:
+
+- `… is too long (N bytes) … Use a shorter --runtime.` Only with an explicit `--runtime`: a Unix socket path is limited
+  to 107 bytes, which leaves 49 bytes for the runtime directory (the message gives the exact numbers). Choose a shorter one.
+- `/tmp/qw-<login> … refusing to use it`: the directory exists but is a symbolic link, belongs to someone else, or is open to group or
+  others. Someone else created it, or it was changed: look at it, delete it if it is yours, or use `--runtime DIR`.
+
+Warning `runtime directory … is on a tmpfs` or `has only N GB free`: the working disks of the sessions are written there;
+give a larger disk with `--runtime DIR` if sessions are big.
+
+With the default directory, **sessions do not survive a reboot of the machine** (`/tmp` is emptied): the next start
+begins with an empty session. Use **Save session** (ZIP) to keep work, or `--runtime DIR` on a persistent disk.

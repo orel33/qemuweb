@@ -12,6 +12,7 @@
 const os = require('os');
 const path = require('path');
 const {parseArguments} = require('../common/cli');
+const {defaultRuntime} = require('../common/runtime-dir');
 
 const DEFAULT_PORT = 3002;
 const RECONNECT_MS = 2000;
@@ -29,8 +30,9 @@ const ENVIRONMENT = [{
 
 const REFUSED = 'Any unknown option, or a value that is missing or invalid, is refused (exit status 2).';
 
-function runtimeOption(root, description) {
-  return {flag: '--runtime', metavar: 'DIR', kind: 'path', key: 'runtime', default: path.join(root, 'runtime'), fallback: 'runtime/ of the repository', description};
+// --runtime: the default is computed by the spec's validate (a local runner) or by main.js (a remote one), common/runtime-dir.js.
+function runtimeOption(description, fallback = '/tmp/qw-<login>/<port>') {
+  return {flag: '--runtime', metavar: 'DIR', kind: 'path', key: 'runtime', default: null, fallback, description};
 }
 
 const catalogOption = root => ({flag: '--config', metavar: 'FILE', kind: 'path', key: 'config', default: path.join(root, 'config.json'), fallback: 'config.json of the repository',
@@ -59,11 +61,17 @@ function runnerSpec(root) {
         description: 'port of the server to reach: the runner dials DIR/runner-PORT.sock, DIR being its --runtime'},
       {flag: '--connect', metavar: 'SOCKET', kind: 'path', key: 'connect', default: null, fallback: 'none', showWhenGiven: true,
         description: 'Unix socket of the server, instead of --port (the two exclude each other)'},
-      runtimeOption(root, 'where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; the server cleans the empty sessions it leaves there only with the same --runtime'),
+      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; the server cleans the empty sessions it leaves there only with the same --runtime; default: the private directory of that port in /tmp, lost at a reboot'),
       catalogOption(root),
       {flag: '--exit-on-disconnect', metavar: null, key: 'exitOnDisconnect', default: false, value: true, fallback: 'off',
         description: `stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect every ${RECONNECT_MS / 1000} seconds)`}
-    ]
+    ],
+    // The default runtime directory is the one of the server this runner serves (its port, or the port named by --connect).
+    validate(settings) {
+      if (settings.given.has('--runtime')) return;
+      const dialled = settings.connect ? /runner-(\d+)\.sock$/.exec(settings.connect)?.[1] : settings.port;
+      settings.runtime = defaultRuntime(dialled || 'runner');
+    }
   };
 }
 
@@ -81,7 +89,7 @@ function runSpec(root) {
     ].join('\n'),
     environment: ENVIRONMENT,
     options: [
-      runtimeOption(root, 'where the runner keeps its sessions (DIR/sessions/<id>/); default: the "runtime" of the runner file, else this'),
+      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/); default: the "runtime" of the runner file, else a private directory in /tmp (lost at a reboot)', '/tmp/qw-<login>/runner'),
       catalogOption(root),
       {flag: '--url', metavar: 'URL', kind: 'text', key: 'url', default: null, fallback: 'the runner file',
         description: 'server URL (https://host); default: the one that register wrote in the runner file'},
@@ -112,7 +120,7 @@ function registerSpec(root) {
         description: 'name shown in /admin/runners (up to 64 characters)'},
       caOption('PEM file of the certificate authority that signed the server certificate (self-signed); kept in the runner file'),
       insecureOption,
-      runtimeOption(root, 'sessions directory the runner will use, kept in the runner file; default: runtime/ of the repository where it runs'),
+      runtimeOption('sessions directory the runner will use, kept in the runner file; default: not kept, the runner then uses a private directory in /tmp', '/tmp/qw-<login>/runner'),
       runnerConfigOption('where to write the runner file (directory 0700, file 0600)')
     ]
   };

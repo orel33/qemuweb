@@ -36,7 +36,7 @@ do the same in their own writer.
 | `logs/admin.log` (or `--logs DIR`) | server | 0600 | no | `server/audit.js` (tail for `/admin`) |
 | `logs/users.log` | server | 0600 | no | `server/audit.js` |
 
-`<session>` stands for `runtime/sessions/<id>`, `<host>` and `<switch>` for `<session>/<node ID>`. The runner
+`<session>` stands for `<runtime>/sessions/<id>` (`<runtime>` is `/tmp/qw-<login>/<port>` by default), `<host>` and `<switch>` for `<session>/<node ID>`. The runner
 never reads `session.json`, `host.json`, `switch.json` or `meta.json` back to
 rebuild a live session: it keeps the state in memory and writes these files so
 that they can be archived and inspected. They are read only when a ZIP is loaded
@@ -193,7 +193,7 @@ errors. Path: `~/.config/qemuweb-runner/runner.json`, or `--runner-config FILE`.
 | `runnerId` | `^r-[0-9a-f]{8}$` | — | G |
 | `authToken` | non-empty text, at most 256 characters | — | G |
 | `name` | text (may be empty) | — | G |
-| `runtime` | optional absolute path of the runtime directory | `--runtime`, else `runtime/` | E |
+| `runtime` | optional absolute path of the runtime directory | `--runtime`, else `/tmp/qw-<login>/runner` | E |
 | `ca` | optional absolute path of a CA certificate (PEM) | none | E |
 | `limits` | optional object, edited by hand | none | E |
 | `limits.maxSessions` | positive integer: the server places at most this many sessions | none | E |
@@ -566,7 +566,7 @@ when the startup disk is on.
 
 | Event | Files written or removed |
 |:--|:--|
-| Session created (first login) | `runtime/sessions/<id>/`, `session.json` (empty), `meta.json` |
+| Session created (first login) | `<runtime>/sessions/<id>/`, `session.json` (empty), `meta.json` |
 | Add a host (or topology load) | `<host>/`, `host.json`, `startup/start.sh`; `session.json` |
 | Add a switch | `<switch>/`, `switch.json`; `session.json` |
 | Edit host settings, cabling, rename | `host.json` (rewritten, atomic); `startup/*` for scripts |
@@ -577,7 +577,7 @@ when the startup disk is on.
 | Save session (ZIP) | `session.json` rewritten; the ZIP is built in the session directory and streamed, then removed; with working disks, running nodes are stopped first |
 | Load session (ZIP) | staging directory, then `<node>/` directories moved in, `session.json` and node JSON rewritten by the runner |
 | Delete a node | its directory, then `session.json` |
-| Delete the session | the whole `runtime/sessions/<id>/` including `meta.json` |
+| Delete the session | the whole `<runtime>/sessions/<id>/` including `meta.json` |
 | Edit `config.json` | nothing is rewritten (see below) |
 
 **What a change of `config.json` does to existing hosts.** The file is re-read at

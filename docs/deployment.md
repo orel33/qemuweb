@@ -40,7 +40,7 @@ The server reads no environment variable: its options are on the command line of
 | `--session-hours` | `12` (default) | Login lifetime, renewed while the user is active. |
 | `--users` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
 | `--logs` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
-| `--runtime` | optional | State directory outside the repository, e.g. `/var/lib/qemuweb` (give the runner the same one). |
+| `--runtime` | recommended | State directory on a persistent disk, e.g. `/var/lib/qemuweb` (give the runner the same one). Without it the default is the private `/tmp/qw-<login>/<port>`, emptied by a reboot: the sessions are lost (see [the reference](reference.md#runtime-directory)). At most 49 bytes. |
 
 ## The runner process
 
@@ -112,7 +112,7 @@ server, connected, refused, lost). A refused option ends either program with sta
 - **Files shared with the runner:** the server touches the runner's files only
   for the **local runner** (the one on the Unix socket, never a remote one), and only when it shares its runtime directory
   with the server, that is when the runner's `runtimeRoot`
-  (announced in `hello`) is the server's own `--runtime` (`runtime/` of the project by
+  (announced in `hello`) is the server's own `--runtime` (`/tmp/qw-<login>/<port>` by
   default, for both; there is no environment variable for it). Then, when a runner connects, the
   server prunes the empty `sessions/<id>` directories left by earlier servers (sparing the
   sessions that `hello` reports and those of other live servers), creates the
@@ -172,7 +172,7 @@ Restart=on-failure
 ```
 
 Both are given the same `--runtime` (here `/var/lib/qemuweb`, state kept apart from the code;
-the default is `/srv/qemuweb/runtime`): the runner socket `runner-<port>.sock` is in it, and it
+the default is `/tmp/qw-<login>/3002`, lost at a reboot): the runner socket `runner-<port>.sock` is in it, and it
 is what lets the server manage the runner's sessions. The directory must exist and belong to the
 `qemuweb` account. Restarts
 are systemd's job (`Restart=`): QemuWeb never restarts a process itself.
@@ -251,7 +251,7 @@ the `kvm` group for `/dev/kvm`):
 directory 0700, file 0600): the server URL, the runner ID, the runner's own token, its name, and optionally
 the `runtime` and `ca` given to `register` and hand-written `limits` (`maxSessions`, `memoryBytes`, `cpus`). A
 registration token is single use and expires (15 minutes, 1 hour or 24 hours, chosen in `/admin`). Sessions live in
-`<runtime>/sessions/` of the machine (`--runtime`, default `runtime/` of the repository).
+`<runtime>/sessions/` of the machine (`--runtime`, default `/tmp/qw-<login>/runner`, lost at a reboot of the machine).
 
 - **TLS:** use an `https://` URL. A server certificate signed by a private authority needs
   `--ca FILE` (the PEM file; `register` keeps it in `runner.json`), or `NODE_EXTRA_CA_CERTS=file` in the environment.

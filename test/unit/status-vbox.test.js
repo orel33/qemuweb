@@ -7,6 +7,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
+const {defaultRuntime} = require('../../common/runtime-dir');
 const {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('../../scripts/status-vbox');
 
 const HEADLESS_1 = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-1478098-7535bdff74b4f486-h-d1cacd841664407c --startvm a34c81c3-5414-4b9f-810d-6d999d37b156 --vrde config';
@@ -36,10 +37,11 @@ test('the VMs of a runner are those whose name carries its pid; the others are l
   assert.deepEqual(vboxProcessesOf(entries, 5), []);
 });
 
-test('the sessions directory of a runner: --runtime, the socket it dials, else runtime/ of its project', () => {
-  assert.equal(runnerSessionsDir('node /p/runner/main.js --runtime /data/rt --port 3002', '/p'), '/data/rt/sessions');
-  assert.equal(runnerSessionsDir('node runner/main.js --connect /srv/rt/runner-3002.sock', '/p'), '/srv/rt/sessions');
-  assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3002', '/p'), '/p/runtime/sessions');
+test('the sessions directory of a runner: --runtime, the socket it dials, else the default directory of its port', () => {
+  assert.equal(runnerSessionsDir('node /p/runner/main.js --runtime /data/rt --port 3002'), '/data/rt/sessions');
+  assert.equal(runnerSessionsDir('node runner/main.js --connect /srv/rt/runner-3002.sock'), '/srv/rt/sessions');
+  assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3002'), path.join(defaultRuntime(3002), 'sessions'));
+  assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3010'), path.join(defaultRuntime(3010), 'sessions'));
 });
 
 test('the host line of a VirtualBox VM mirrors QEMU: the same tag position, the memory in MB', () => {

@@ -5,8 +5,8 @@
 # [runner].
 #   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --users FILE, --runners FILE, --logs DIR, --examples DIR, --session-hours N, --runner-grace SECONDS,
 #                                          --trust-proxy VALUE, --auth MODE, --proxy-key-file FILE, --logout-url URL, --no-auth, --ephemeral: see node server/main.js --help)
-# The server gets all of them; the runner gets --port PORT (the server's --listen), --runtime DIR and
-# --exit-on-disconnect. A refused option is reported by the server (exit status 2, nothing started).
+# The server gets all of them; the runner gets --port PORT (the server's --listen), --runtime DIR (when
+# given; the default is /tmp/qw-<login>/<port> for both, common/runtime-dir.js) and --exit-on-disconnect. A refused option is reported by the server (exit status 2, nothing started).
 # Each process leads its own process group (setsid): a terminal Ctrl+C reaches this script only.
 # Ctrl+C or SIGTERM stops the runner first (it stops every machine, within a bounded delay), kills
 # what is left of its group (QEMU, vde_switch), then stops the server, and exits 0. When the
@@ -27,7 +27,7 @@ usage() {
 # The options are the server's: it validates them and refuses what it does not know (this script
 # then ends with its status). Only --listen and --runtime are read here, for the runner and its socket.
 port=3002
-runtime="$root/runtime"
+runtime=''
 server_args=()
 while (( $# )); do
   case "$1" in
@@ -45,6 +45,15 @@ while (( $# )); do
     *) server_args+=("$1"); shift ;;
   esac
 done
+
+# The default runtime directory, from the same rule as the server's (an invalid port is refused by the server).
+if [[ -z "$runtime" && "$port" =~ ^[0-9]+$ ]]; then
+  source "$root/scripts/lib/runtime.sh"
+  runtime="$(default_runtime "$port")"
+  runtime_args=()
+else
+  runtime_args=(--runtime "$runtime")
+fi
 
 server_pid=''
 runner_pid=''
@@ -91,12 +100,12 @@ trap stop_all EXIT
 setsid ./scripts/server.sh "${server_args[@]}" > >(sed -u 's/^/[server] /') 2>&1 &
 server_pid=$!
 for _ in {1..150}; do
-  [[ -S "$runtime/runner-$port.sock" ]] && break
+  [[ -n "$runtime" && -S "$runtime/runner-$port.sock" ]] && break
   kill -0 "$server_pid" 2>/dev/null || break
   sleep 0.2
 done
 if kill -0 "$server_pid" 2>/dev/null; then
-  setsid ./scripts/runner.sh --port "$port" --runtime "$runtime" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
+  setsid ./scripts/runner.sh --port "$port" "${runtime_args[@]}" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
   runner_pid=$!
 fi
 

@@ -15,6 +15,7 @@ const {createRunnerStore} = require('./runner-store');
 const {createRegistrationTokens} = require('./runner-registration');
 const {createRegisterRouter} = require('./routes/runner-register');
 const {ServerInstance} = require('./server-instance');
+const {removeEmptyDefaultRuntime} = require('../common/runtime-dir');
 const {SessionManager} = require('./session-manager');
 const {attachSockets} = require('./sockets');
 const {attachWsTest} = require('./ws-test');
@@ -51,8 +52,8 @@ function serve({root, settings}) {
   registry.on('online', (entry, hello) => {
     const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
     console.log(`${runnerLabel(entry)} connected${entry.address ? ` from ${entry.address}` : ''} (engines: ${engines || 'none'}).`);
-    // The server cleans the empty sessions that earlier servers left in the runtime/ it shares with
-    // the local runner when it shares this runtime/ (the only runner whose files it touches); the sessions the runner reports stay.
+    // The server cleans the empty sessions that earlier servers left in the runtime directory it shares with
+    // the local runner when it shares this directory (the only runner whose files it touches); the sessions the runner reports stay.
     if (manager.sharesRuntime(entry)) instance.pruneEmptyRuntimeSessions({keep: (hello.sessions || []).map(item => item?.sessionId)});
   });
   registry.on('lost', entry => {
@@ -158,6 +159,7 @@ function serve({root, settings}) {
     manager.removeUserAliases();
     // Empty only when the runner has removed its sessions (whichever of the two ends last tidies up).
     try { fs.rmdirSync(path.join(runtime, 'sessions')); } catch (_) {}
+    removeEmptyDefaultRuntime(runtime);
   });
 
   let shuttingDown = false;

@@ -7,6 +7,7 @@
 // That name ties a process to its runner, its session and its node; a VM with another name
 // (one of the user's own) is never shown. Pure functions, no I/O except readVirtualBoxMemory.
 const path = require('path');
+const {defaultRuntime} = require('../common/runtime-dir');
 
 const VM_NAME = /^qemuweb-(\d+)-([0-9a-f]{16})-(h-[0-9a-f]{16})$/;
 
@@ -26,14 +27,24 @@ function vboxProcessesOf(entries, runnerPid) {
   return [...entries].filter(entry => entry.vbox && entry.vbox.runnerPid === runnerPid);
 }
 
-// The sessions directory of a runner: its --runtime, else the folder of the socket it dials
-// (--connect), else runtime/ of its project.
-function runnerSessionsDir(args, projectRoot) {
+// The runtime directory a server or a runner works in, from its command line: --runtime, else the folder
+// of the socket it dials (--connect), else the default directory of its port (--listen of a server,
+// --port of a runner, 3002), see common/runtime-dir.js.
+function runtimeOfProcess(args) {
   const runtime = / --runtime (\S+)/.exec(args)?.[1];
-  if (runtime) return path.join(runtime, 'sessions');
+  if (runtime) return runtime;
   const socket = /(\S*runner-\d+\.sock)/.exec(args)?.[1];
-  return path.join(socket ? path.dirname(socket) : path.join(projectRoot, 'runtime'), 'sessions');
+  if (socket) return path.dirname(socket);
+  return defaultRuntime(/ --(?:listen|port) (\d+)( |$)/.exec(args)?.[1] || '3002');
 }
+
+// The directory a runner dials the server in: the folder of its --connect socket, else the default of its port.
+function dialledRuntime(args) {
+  const socket = /(\S*runner-\d+\.sock)/.exec(args)?.[1];
+  return socket ? path.dirname(socket) : defaultRuntime(/ --port (\d+)( |$)/.exec(args)?.[1] || '3002');
+}
+
+const runnerSessionsDir = args => path.join(runtimeOfProcess(args), 'sessions');
 
 // "memory=512" of `VBoxManage showvminfo --machinereadable`, in MB, or null.
 function memoryFromShowVmInfo(text) {
@@ -63,4 +74,4 @@ function readVirtualBoxMemory(uuid, run) {
   return memoryCache.get(uuid);
 }
 
-module.exports = {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory};
+module.exports = {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, dialledRuntime, runnerSessionsDir, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory};

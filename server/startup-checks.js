@@ -8,6 +8,7 @@ const fs = require('fs');
 const path = require('path');
 const cli = require('../common/cli');
 const {readCatalog} = require('../common/system-config');
+const {prepareRuntime} = require('../common/runtime-dir');
 const {createLogDir} = require('./audit');
 const {createUsersStore} = require('./auth/users-store');
 const {readProxyKeys} = require('./auth/proxy');
@@ -73,10 +74,11 @@ function checkLogDir(settings) {
   cli.pass(`logs directory  ${settings.logDir}  (${existed ? '' : 'created, '}mode ${octal(fs.statSync(settings.logDir).mode)})`);
 }
 
+// The private default directory is created or refused, a --runtime too long for the sockets is refused (common/runtime-dir.js).
 function checkRuntime(settings) {
-  fs.mkdirSync(path.join(settings.runtime, 'sessions'), {recursive: true});
-  fs.accessSync(settings.runtime, fs.constants.W_OK);
+  const {warning} = prepareRuntime(settings.runtime);
   cli.pass(`runtime directory  ${settings.runtime}  (writable)`);
+  if (warning) cli.warning(warning);
 }
 
 function checkStartup({root, settings}) {
@@ -94,4 +96,4 @@ function checkStartup({root, settings}) {
   return ok;
 }
 
-module.exports = {checkStartup, checkDependencies, satisfiesCaret};
+module.exports = {checkStartup, checkDependencies, checkRuntime, satisfiesCaret};
