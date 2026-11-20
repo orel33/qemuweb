@@ -59,6 +59,7 @@ The server is configured by options only: it reads **no environment variable**.
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
 | `--runners FILE` | `runners.json of the repository` | registered remote runners (mode 0600): a hash of the token of each |
 | `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
+| `--examples DIR` | `examples/ of the repository` | directory of the example topologies (.topo) and sessions (.zip) offered by the Load dialog (read only; a missing directory means no example) |
 | `--session-hours N` | `12` | login lifetime in hours (more than 0, at most 2160), renewed while the user is active |
 | `--runner-grace SECONDS` | `300` | how long the sessions of a remote runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once) |
 | `--trust-proxy VALUE` | `unset` | Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS |
@@ -83,6 +84,7 @@ Options
   --users           /home/me/qemuweb/users.json                (default)
   --runners         /home/me/qemuweb/runners.json              (default)
   --logs            /home/me/qemuweb/logs                      (default)
+  --examples        /home/me/qemuweb/examples                  (default)
   --session-hours   12                                         (default)
   --runner-grace    300                                        (default)
   --trust-proxy     unset                                      (default)

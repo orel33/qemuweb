@@ -3,7 +3,7 @@
 # runner (the process that runs the machines), each as its own command. This is the only way to
 # start QemuWeb here, in development and in the tests. Output lines are prefixed [server] and
 # [runner].
-#   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --users FILE, --runners FILE, --logs DIR, --session-hours N, --runner-grace SECONDS,
+#   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --users FILE, --runners FILE, --logs DIR, --examples DIR, --session-hours N, --runner-grace SECONDS,
 #                                          --trust-proxy VALUE, --auth MODE, --proxy-key-file FILE, --logout-url URL, --no-auth, --ephemeral: see node server/main.js --help)
 # The server gets all of them; the runner gets --port PORT (the server's --listen), --runtime DIR and
 # --exit-on-disconnect. A refused option is reported by the server (exit status 2, nothing started).
@@ -32,7 +32,7 @@ server_args=()
 while (( $# )); do
   case "$1" in
     -h|--help) usage; exit 0 ;;
-    --listen|--runtime|--users|--runners|--logs|--session-hours|--runner-grace|--trust-proxy)
+    --listen|--runtime|--users|--runners|--logs|--examples|--session-hours|--runner-grace|--trust-proxy)
       server_args+=("$1")
       shift
       (( $# )) || break

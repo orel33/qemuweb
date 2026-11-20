@@ -30,26 +30,34 @@ function register({app, session, runner, handle}) {
   });
 
   app.post('/api/session-archive/import', async (req, res) => {
-    session.archiveBusy = true;
-    const {id, stream} = runner.outgoing();
-    // The upload goes to the runner as it arrives. When the runner refuses it (its stream is
-    // cancelled), the rest of the request body is read and discarded so that the HTTP
-    // connection stays usable for the error response.
-    const discard = () => { req.unpipe(stream); req.resume(); };
-    stream.on('error', discard);
-    req.on('error', error => stream.destroy(error));
-    req.pipe(stream);
     try {
-      res.json(await runner.request('archive.import', {stream: id, query: req.query,
+      res.json(await importArchive({session, runner, source: req, query: req.query,
         contentType: req.headers['content-type'], declaredBytes: req.headers['content-length']}));
-    } catch (error) {
-      res.status(error.status || 400).json({error: error.message});
-      discard();
-      if (!stream.destroyed) stream.destroy();
-    } finally {
-      session.archiveBusy = false;
-    }
+    } catch (error) { res.status(error.status || 400).json({error: error.message}); }
   });
 }
 
-module.exports = {register};
+// Sends a ZIP to the runner's archive.import and answers its result. `source` is a Readable: the
+// HTTP upload, or a file of the server's examples (server/routes/examples.js); both go through
+// the same runner command and its checks. The upload goes to the runner as it arrives. When the
+// runner refuses it (its stream is cancelled), the rest of the source is read and discarded so
+// that an HTTP connection stays usable for the error response.
+async function importArchive({session, runner, source, query, contentType, declaredBytes}) {
+  session.archiveBusy = true;
+  const {id, stream} = runner.outgoing();
+  const discard = () => { source.unpipe(stream); source.resume(); };
+  stream.on('error', discard);
+  source.on('error', error => stream.destroy(error));
+  source.pipe(stream);
+  try {
+    return await runner.request('archive.import', {stream: id, query, contentType, declaredBytes});
+  } catch (error) {
+    discard();
+    if (!stream.destroyed) stream.destroy();
+    throw error;
+  } finally {
+    session.archiveBusy = false;
+  }
+}
+
+module.exports = {register, importArchive};

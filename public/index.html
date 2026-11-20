@@ -170,14 +170,28 @@
     <div class="confirm-actions"><button id="close-capture-dialog" type="button">Close</button></div>
   </dialog>
   <dialog class="confirm-dialog" id="session-archive-dialog" aria-labelledby="session-archive-title">
-    <h2 id="session-archive-title">Save session</h2>
+    <h2 id="session-archive-title">Save</h2>
     <p id="session-archive-intro">Save your current session.</p>
+    <label class="save-choice"><input id="save-topology-only" type="checkbox"> Save only the topology (.topo)</label>
+    <div id="save-session-options">
     <label><input id="include-working-disks" type="checkbox"> Include working disks</label>
     <div id="archive-working-disk-warning" class="archive-warning" role="note" hidden><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.29 3.86-8.48 14.14a2 2 0 0 0 1.71 3h16.96a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0Z"/><path d="M12 9v4M12 17h.01"/></svg><span>All hosts and switches will be stopped before saving.</span></div>
+    </div>
     <p id="session-archive-estimate" role="status"></p>
     <div id="session-archive-progress" role="status" aria-live="polite" hidden><div class="archive-progress"><span class="archive-progress-spinner" aria-hidden="true"></span><span id="session-archive-progress-text">Creating archive…</span></div><div class="archive-progress-track" aria-hidden="true"></div></div>
     <p id="session-archive-error" role="alert" hidden></p>
     <div class="confirm-actions"><button id="cancel-session-archive" type="button">Cancel</button><button id="confirm-session-archive" type="button">Download ZIP</button></div>
+  </dialog>
+  <dialog class="confirm-dialog" id="load-dialog" aria-labelledby="load-dialog-title" aria-describedby="load-dialog-note">
+    <h2 id="load-dialog-title">Load</h2>
+    <p id="load-dialog-note">Choose a topology (.topo) or a session (.zip). A session can only be loaded into an empty session: first remove all hosts and switches from the current one.</p>
+    <label class="load-file-label">File (.topo or .zip)<input id="load-file" type="file" accept=".topo,.zip"></label>
+    <section id="load-examples" aria-labelledby="load-examples-title" hidden>
+      <h3 id="load-examples-title">Examples</h3>
+      <ul id="load-example-list" class="example-list"></ul>
+    </section>
+    <p id="load-error" role="alert" hidden></p>
+    <div class="confirm-actions"><button id="close-load-dialog" type="button">Cancel</button></div>
   </dialog>
   <dialog class="confirm-dialog" id="session-archive-load-dialog" aria-labelledby="session-archive-load-title">
     <h2 id="session-archive-load-title">Load session</h2>
@@ -253,12 +267,8 @@
   </section>
   <nav class="machines" id="machine-tabs" aria-label="Hosts and switches">
     <button id="show-general-settings" class="icon-button write-action" type="button" disabled title="General Settings" aria-label="General Settings"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h9M17 7h3M4 17h3M11 17h9"/><circle cx="15" cy="7" r="2"/><circle cx="9" cy="17" r="2"/></svg></button>
-    <input id="topology-file" type="file" accept=".topo" hidden>
-    <button id="load-topology" class="icon-button write-action" type="button" title="Load topology" aria-label="Load topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4m-4 4 4-4 4 4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
-    <button id="save-topology" class="icon-button write-action" type="button" title="Save topology" aria-label="Save topology"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m-4-4 4 4 4-4"/><path d="M4 16v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3"/></svg></button>
-    <input id="session-archive-file" type="file" accept=".zip,application/zip" hidden>
-    <button id="load-session-archive" class="icon-button write-action" type="button" title="Load session ZIP" aria-label="Load session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2M20 8v11a2 2 0 0 1-2 2h-2m-7-6 3-3 3 3m-3-3v9"/></svg></button>
-    <button id="save-session-archive" class="icon-button write-action" type="button" title="Save session ZIP" aria-label="Save session ZIP"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h.343M20 8v11a2 2 0 0 1-2 2h-.343M9 18l3 3 3-3m-3-6v9"/></svg></button>
+    <button id="load-session-archive" class="icon-button write-action" type="button" title="Load a topology or a session" aria-label="Load a topology or a session"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h2M20 8v11a2 2 0 0 1-2 2h-2m-7-6 3-3 3 3m-3-3v9"/></svg></button>
+    <button id="save-session-archive" class="icon-button write-action" type="button" title="Save the topology or the session" aria-label="Save the topology or the session"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="20" height="5" x="2" y="3" rx="1"/><path d="M4 8v11a2 2 0 0 0 2 2h.343M20 8v11a2 2 0 0 1-2 2h-.343M9 18l3 3 3-3m-3-6v9"/></svg></button>
     <button id="new-host" class="icon-button write-action" type="button" disabled title="Add a new host" aria-label="Add a new host"><svg viewBox="0 0 24 24" aria-hidden="true"></svg></button>
     <button id="new-switch" class="icon-button write-action" type="button" disabled title="Add a new switch" aria-label="Add a new switch"><svg viewBox="0 0 24 24" aria-hidden="true"></svg></button>
     <button id="clone-machine" class="icon-button write-action" type="button" disabled title="Clone selected host or switch" aria-label="Clone selected host or switch"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3M14.5 14.5v5M12 17h5"/></svg></button>

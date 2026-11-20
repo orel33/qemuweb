@@ -64,7 +64,7 @@ function serve({root, settings}) {
   });
   manager.on('created', (workspace, {adopted}) => {
     const {session, runner} = workspace;
-    workspace.router = createSessionRouter({session, runner, userLog, audit});
+    workspace.router = createSessionRouter({session, runner, userLog, audit, examplesDir: settings.examplesDir});
     userLog.record(workspace.owner, adopted ? 'session-adopted' : 'session-created', {sessionId: session.id});
     console.log(`Session ${session.id} ${adopted ? 'adopted from the runner' : 'opened'} for ${workspace.owner}.`);
   });
