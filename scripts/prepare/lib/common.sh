@@ -45,13 +45,15 @@ fetch_file() {
     # Download to a side file so that an interrupted run never leaves a truncated
     # file that the check above would reuse. curl reads the proxy from http_proxy
     # and https_proxy, which proxy_init sets (or clears) for every build.
-    if ! curl -fL --retry 3 --connect-timeout 30 "$url" -o "$target.part"; then
+    # %{http_connect} is the status the proxy answered to the CONNECT request (000 without one).
+    local codes=''
+    if ! codes=$(curl -fL --retry 3 --connect-timeout 30 -w '%{http_connect} %{http_code}' "$url" -o "$target.part"); then
       rm -f "$target.part"
       {
         echo "prepare.sh: download failed: $url"
         echo "  Proxy in use: $(proxy_describe)."
-        if [[ "$err" == *403* ]]; then
-          echo "  The proxy answered 403 (access denied) over IPv$family. The build VM goes out in IPv4 unless -6/--ipv6 is given:"
+        if [[ "$codes" == *403* ]]; then
+          echo '  The proxy answered 403 (access denied). The build VM goes out in IPv4 unless -6/--ipv6 is given:'
           echo '  ask for the IPv4 address of this machine to be authorised on the proxy, or retry with -6 if it accepts IPv6.'
         fi
         echo '  Without direct Internet access, set the proxy with --proxy URL or the https_proxy variable.'
@@ -203,19 +205,27 @@ DEBIAN_SUITE=trixie
 DEBIAN_MIRROR_URL=http://deb.debian.org/debian
 DEBIAN_SECURITY_URL=http://security.debian.org/debian-security
 
+# The curl options of an early check: the same proxy, and the same address family
+# towards it, as the build VM will use. Sets CHECK_ARGS and CHECK_FAMILY (empty
+# without a proxy).
+check_curl_setup() {
+  CHECK_ARGS=(-fsSL --connect-timeout 10 --max-time 30 -o /dev/null); CHECK_FAMILY=''
+  if [[ -n "$PROXY_URL" ]]; then
+    # The build VM reaches the proxy over IPv4, unless -6/--ipv6 (or an IPv6 proxy address) is given: check the same way.
+    # A proxy that accepts this machine over IPv6 only passes a check without this flag, and refuses the VM.
+    if (( PREPARE_IPV6 )) || [[ "$PROXY_URL" == *'://['* || "$PROXY_URL" == *'@['* ]]; then CHECK_FAMILY=6; else CHECK_FAMILY=4; fi
+    CHECK_ARGS+=(--proxy "$PROXY_URL" "-$CHECK_FAMILY")
+  else
+    CHECK_ARGS+=(--noproxy '*')
+  fi
+}
+
 # Fetch the Release files of the mirrors from this machine, with the same proxy
 # as the VM will use. Stop at once with a clear message when one is unreachable.
 check_debian_mirrors() {
   local id="$1" url err
-  local args=(-fsSL --connect-timeout 10 --max-time 30 -o /dev/null) family=''
-  if [[ -n "$PROXY_URL" ]]; then
-    # The build VM reaches the proxy over IPv4, unless -6/--ipv6 (or an IPv6 proxy address) is given: check the same way.
-    # A proxy that accepts this machine over IPv6 only passes a check without this flag, and refuses the VM.
-    if (( PREPARE_IPV6 )) || [[ "$PROXY_URL" == *'://['* || "$PROXY_URL" == *'@['* ]]; then family=6; else family=4; fi
-    args+=(--proxy "$PROXY_URL" "-$family")
-  else
-    args+=(--noproxy '*')
-  fi
+  check_curl_setup
+  local args=("${CHECK_ARGS[@]}") family="$CHECK_FAMILY"
   echo "  Checking the Debian mirrors (proxy: $(proxy_describe)${family:+, over IPv$family})"
   for url in "$DEBIAN_MIRROR_URL/dists/$DEBIAN_SUITE/Release" "$DEBIAN_SECURITY_URL/dists/$DEBIAN_SUITE-security/Release"; do
     if ! err=$(curl "${args[@]}" "$url" 2>&1); then
@@ -232,6 +242,51 @@ check_debian_mirrors() {
       exit 1
     fi
   done
+}
+
+# check_build_urls ID WHAT URL...: the same check for the other systems (Alpine,
+# OpenWrt), whose build VM downloads packages. Only the first bytes of each URL
+# are requested (the package indexes are large). On failure: the URL, the curl
+# error and what to do, then exit 1.
+check_build_urls() {
+  local id="$1" what="$2" url err
+  shift 2
+  check_curl_setup
+  echo "  Checking $what (proxy: $(proxy_describe)${CHECK_FAMILY:+, over IPv$CHECK_FAMILY})"
+  for url in "$@"; do
+    if ! err=$(curl "${CHECK_ARGS[@]}" --range 0-1023 "$url" 2>&1); then
+      {
+        echo "prepare.sh: $what is not reachable from this machine, so $id cannot be built:"
+        echo "  $url"
+        echo "  ${err:-curl failed}"
+        echo "  Proxy in use: $(proxy_describe)."
+        if [[ -n "$CHECK_FAMILY" && "$err" == *403* ]]; then
+          echo "  The proxy answered 403 (access denied) over IPv$CHECK_FAMILY, the family the build VM uses (IPv4 unless -6/--ipv6 is given):"
+          echo '  ask for the IPv4 address of this machine to be authorised on the proxy, or retry with -6 if it accepts IPv6.'
+        fi
+        echo '  The build VM downloads packages through the same network. Set the proxy with'
+        echo '  --proxy URL (for example --proxy http://proxy:3128/) or the https_proxy variable, or build'
+        echo "  the image on a machine with Internet access and copy images/$id.raw and images/$id.vdi"
+        echo '  here (then run: bash scripts/prepare.sh --hash).'
+      } >&2
+      exit 1
+    fi
+  done
+}
+
+# The proxy as a guest shell script sets it: the three variables that wget, apk
+# and uclient-fetch read, and no_proxy for the VM itself. Nothing when there is
+# no proxy. The URL is single-quoted (a password may hold any character).
+shell_quote() {
+  local sq="'"
+  printf "'%s'" "${1//$sq/$sq\\$sq$sq}"
+}
+guest_proxy_exports() {
+  [[ -n "$PROXY_URL" ]] || return 0
+  local quoted
+  quoted="$(shell_quote "$(guest_proxy_url)")"
+  printf 'export http_proxy=%s https_proxy=%s ftp_proxy=%s\n' "$quoted" "$quoted" "$quoted"
+  printf 'export no_proxy=localhost,127.0.0.1\n'
 }
 
 # ---------------------------------------------------------------------------
@@ -319,6 +374,53 @@ CLOUD_INIT_PHASES=(
 DEBIAN_INSTALLER_DONE='QEMUNET_IMAGE_PREPARED'
 CLOUD_INIT_DONE='QEMUNET_IMAGE_PREPARED.*Cloud-initv.*finishedat|Cloud-initv.*finishedat.*QEMUNET_IMAGE_PREPARED'
 
+# Alpine and OpenWrt run a python driver that types a script into the console of the VM and reads the
+# serial socket itself: it writes the serial log, which watch_vm reads like the Debian ones (same rules:
+# bounded patterns, no open `.*`, the end marker first). What the driver types is echoed by the console,
+# so a marker the guest PRINTS must not appear literally in the typed text: the OpenWrt script is typed
+# in clear and writes its markers as QEMUWEB_OPENWRT_PHASE_"NAME" (the quotes break the typed text, not
+# the output); the Alpine script is sent as base64.
+# The Alpine strings come from setup-alpine (the "APK Mirror" step: busybox wget and "No mirror found"),
+# apk and the guest script itself; the OpenWrt ones from apk and uclient-fetch. They are checked against
+# the failing Alpine log of the CREMI (no proxy), not against a real OpenWrt failure.
+ALPINE_FAILURES=(
+  "wget: can.t connect to remote host" # no route or refused (the Alpine CDN without the proxy)
+  'wget: download timed out'
+  'wget: bad address'                  # the name does not resolve
+  'wget: server returned error'        # for example the 403 of a proxy
+  'Warning! No mirror found'           # setup-alpine could not read the mirror list
+  'unable to select packages'          # apk found no repository
+  'QEMUNET_ALPINE_STATUS_[1-9]'        # the build script failed, for any other reason
+)
+ALPINE_DONE='QEMUNET_ALPINE_PREPARED'
+ALPINE_PHASES=(
+  '5@Booting the installer@Linuxversion|OpenRC|Welcometo'
+  '15@Console ready, sending the build script@login:'
+  '25@Starting setup-alpine@QEMUNET_ALPINE_PHASE_SETUP'
+  '32@Setting up the APK mirror@APKMirror-'
+  '45@Partitioning and installing the system@Disk&Install'
+  '75@Installing the lab tools (apk add)@QEMUNET_ALPINE_PHASE_TOOLS'
+  '90@Finishing the image@QEMUNET_ALPINE_PHASE_FINISH'
+  '98@Image prepared, waiting for the VM to stop@QEMUNET_ALPINE_PREPARED'
+)
+OPENWRT_FAILURES=(
+  'QEMUWEB_OPENWRT_STATUS_[1-9]'       # the build script failed (the failed apk step included)
+  'unable to select packages'
+  'ERROR: .{0,160}(network error|temporary error|Connection refused|Could not resolve|bad address|timed out)'
+  'Connection error'                   # uclient-fetch
+  'Download failed'
+)
+OPENWRT_DONE='QEMUWEB_OPENWRT_STATUS_0'
+OPENWRT_PHASES=(
+  '5@Booting OpenWrt@Linuxversion'
+  '15@Waiting for the console@Pleasepressenter'
+  '25@Sending the build script@rm-f/tmp/qemuweb-prepare.sh'
+  '45@Customizing the system@QEMUWEB_OPENWRT_PHASE_SYSTEM'
+  '60@Installing the lab tools (apk add)@QEMUWEB_OPENWRT_PHASE_APK'
+  '85@Configuring the network@QEMUWEB_OPENWRT_PHASE_CONFIG'
+  '98@Image prepared, waiting for the VM to stop@QEMUWEB_OPENWRT_STATUS_0'
+)
+
 # Serial output without terminal escape sequences and control characters.
 serial_strip() {
   local esc=$'\033'
@@ -340,6 +442,7 @@ vm_stop() {
   wait "$pid" 2>/dev/null || true
 }
 
+PREPARE_NETWORK_HOST=''   # set by the Alpine and OpenWrt builds: the host(s) their VM needs, for the hint of a failure
 PREPARE_LINE_OPEN=0   # 1 while a progress line, not yet ended by a newline, is on the terminal
 PREPARE_FOLLOW_LINES="${QEMUWEB_PREPARE_FOLLOW:-0}"   # --follow: lines of the serial log shown under the progress line (0: none)
 PREPARE_FRAME_ROWS=0  # rows of the frame drawn in place (progress line and log lines), 0 when none
@@ -404,8 +507,13 @@ vm_failed() {
     echo "Log directory: $dir (full serial log: $log)"
     if [[ -s "$dir/qemu.stderr" ]]; then echo 'QEMU error output:'; sed 's/^/  | /' "$dir/qemu.stderr"; fi
     echo 'What to check first:'
-    echo "  - The build VM needs the Debian mirror. Proxy in use: $(proxy_describe)."
-    echo '    Set it with --proxy URL or the https_proxy variable (the VM cannot see this shell).'
+    if [[ -n "$PREPARE_NETWORK_HOST" ]]; then
+      echo "  - the build VM cannot reach $PREPARE_NETWORK_HOST: check the proxy (--proxy URL, or -6 if the proxy only accepts IPv6)."
+      echo "    Proxy in use: $(proxy_describe)."
+    else
+      echo "  - The build VM needs the Debian mirror. Proxy in use: $(proxy_describe)."
+      echo '    Set it with --proxy URL or the https_proxy variable (the VM cannot see this shell).'
+    fi
     if LC_ALL=C grep -aqi 'Could not resolve' "$log" 2>/dev/null; then
       echo "  - 'Could not resolve': the VM cannot resolve a host name. A proxy given by a short name needs its domain:"
       echo '    use the full name or the address with --proxy (the name is resolved on this machine, see "Proxy for the build VM").'

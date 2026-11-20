@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 source "$(dirname "$0")/lib/common.sh"
+source "$(dirname "$0")/lib/guest-scripts.sh"
 parse_prepare_mode "$@"
 
 # Keep the downloaded release archive and checksum file under the OpenWrt ID;
@@ -9,7 +10,8 @@ source_dir="$SOURCES/openwrt"
 raw="$IMAGES/openwrt.raw"
 vdi="$IMAGES/openwrt.vdi"
 archive=openwrt-25.12.6-x86-64-generic-ext4-combined.img.gz
-url=https://downloads.openwrt.org/releases/25.12.6/targets/x86/64
+release_url=https://downloads.openwrt.org/releases/25.12.6
+url=$release_url/targets/x86/64
 mkdir -p "$source_dir"
 if prepare_sources; then
   move_if_present "$SOURCES/$archive" "$source_dir/$archive"
@@ -26,113 +28,19 @@ fi
 if [[ ! -s "$raw" ]]; then
   [[ -s "$source_dir/$archive" ]] || { echo "Missing source archive: $source_dir/$archive (run --sources first)." >&2; exit 1; }
   require_commands qemu-system-x86_64 qemu-img python3 base64
+  # Fail in seconds, before any VM starts, when the package feeds that the VM's apk reads (the distfeeds
+  # of the image: this release, x86_64, base and packages) are not reachable through the proxy.
+  check_build_urls openwrt 'the OpenWrt package feeds' \
+    "$release_url/packages/x86_64/base/packages.adb" "$release_url/packages/x86_64/packages/packages.adb"
+  guest_proxy_note
+  PREPARE_NETWORK_HOST='downloads.openwrt.org'
   temp_dir="$(mktemp -d "$RUNTIME/.openwrt-prepare.XXXXXX")"
   disk="$temp_dir/openwrt.raw"
   serial_socket="$temp_dir/openwrt-serial.sock"
   serial_log="$temp_dir/openwrt-serial.log"
   guest_script="$temp_dir/openwrt-prepare.sh"
-  # OpenWrt has no adduser applet in this image. Create the regular lab account
-  # explicitly, keep root passwordless, and persist the common hostname in UCI.
-  cat > "$guest_script" <<'OPENWRT_PREPARE'
-#!/bin/sh
-set -eu
-sed -i 's#^root:[^:]*:#root::#' /etc/shadow
-sed -i '/^toto:/d' /etc/passwd
-sed -i '/^toto:/d' /etc/group
-sed -i '/^toto:/d' /etc/shadow
-printf '%s\n' 'toto:x:1000:1000:toto:/home/toto:/bin/ash' >> /etc/passwd
-printf '%s\n' 'toto:x:1000:' >> /etc/group
-printf '%s\n' 'toto:$6$qemuweb$0QuT0CJj087ILV95eOwdT3u2MSv50m/qOO1ZcldVMPUpYOZwd0af9jbRPllLcoY5e1LrOK0EvYTVno41TJNIb1:0:0:99999:7:::' >> /etc/shadow
-mkdir -p /home/toto
-chown 1000:1000 /home/toto
-if uci -q get 'system.@system[0]' >/dev/null; then
-  uci set 'system.@system[0].hostname=qemuweb'
-else
-  uci set 'system.qemuweb=system'
-  uci set 'system.qemuweb.hostname=qemuweb'
-fi
-uci commit system
-printf 'qemuweb\n' > /proc/sys/kernel/hostname
-# eth0 is OpenWrt's LAN port; the second temporary NIC supplies DHCP on the
-# default eth1 WAN during image preparation. Neither NIC is part of the base.
-attempt=0
-until ip -4 route show default | grep -q 'dev eth1'; do
-  attempt=$((attempt + 1))
-  [ "$attempt" -lt 60 ] || { echo 'OpenWrt preparation WAN did not get a route' >&2; exit 1; }
-  sleep 1
-done
-apk -U add tcpdump nano
-# The stock image has no hostname command, while the default start.sh uses it.
-# Provide the get/set form needed by the guest startup script and lab console.
-if ! command -v hostname >/dev/null 2>&1; then
-  cat > /usr/bin/hostname <<'HOSTNAME_TOOL'
-#!/bin/sh
-case "$#" in
-  0) cat /proc/sys/kernel/hostname ;;
-  1) printf '%s\n' "$1" > /proc/sys/kernel/hostname ;;
-  *) echo 'Usage: hostname [name]' >&2; exit 2 ;;
-esac
-HOSTNAME_TOOL
-  chmod 755 /usr/bin/hostname
-fi
-for tool in ifconfig ping ip route traceroute nslookup nc tcpdump nano hostname; do
-  command -v "$tool" >/dev/null || { echo "Missing OpenWrt tool: $tool" >&2; exit 1; }
-done
-# This lab image has one guest NIC at runtime. Keep its LAN address directly
-# on eth0 instead of OpenWrt's stock br-lan bridge.
-[ "$(uci -q get 'network.@device[0].name')" = br-lan ] || { echo 'Unexpected OpenWrt LAN device layout' >&2; exit 1; }
-uci delete 'network.@device[0]'
-uci set 'network.lan.device=eth0'
-# The stock config gives lan 192.168.1.1/24 (static ipaddr/netmask, plus
-# ip6assign). Every host would then share that address until start.sh runs, and
-# two hosts on one switch would conflict. Remove the stock address so the lab
-# LAN stays unconfigured until the startup script assigns one. proto becomes
-# "none" so netifd brings the device up without any address.
-# "uci delete" exits with 1 when the option does not exist (recent releases write
-# a CIDR "list ipaddr" and no separate netmask), which set -e would turn into a
-# failed build: tolerate it here and verify the result below.
-for option in ipaddr netmask ip6assign; do uci -q delete "network.lan.$option" || true; done
-uci set network.lan.proto=none
-uci commit network
-[ "$(uci -q get network.lan.proto)" = none ] || { echo 'OpenWrt LAN proto not none' >&2; exit 1; }
-if uci -q get network.lan.ipaddr >/dev/null; then echo 'OpenWrt LAN still has a static address' >&2; exit 1; fi
-# A plain lab image must not hand out addresses on a static-IP-only LAN.
-# Disable DHCPv4, DHCPv6 and RA for the lan section (uci set creates it when it is
-# missing) and dnsmasq's DNS/DHCP service when its section exists, then verify.
-uci set 'dhcp.lan=dhcp'
-uci set 'dhcp.lan.interface=lan'
-uci set 'dhcp.lan.ignore=1'
-uci set 'dhcp.lan.dhcpv6=disabled'
-uci set 'dhcp.lan.ra=disabled'
-if uci -q get 'dhcp.@dnsmasq[0]' >/dev/null; then uci set 'dhcp.@dnsmasq[0].port=0'; fi
-uci commit dhcp
-[ "$(uci -q get dhcp.lan.ignore)" = 1 ] || { echo 'OpenWrt LAN DHCP was not disabled' >&2; exit 1; }
-if uci -q get 'dhcp.@dnsmasq[0]' >/dev/null && [ "$(uci -q get 'dhcp.@dnsmasq[0].port')" != 0 ]; then
-  echo 'OpenWrt dnsmasq was not disabled' >&2; exit 1
-fi
-/etc/init.d/odhcpd disable
-OPENWRT_PREPARE
-  cat >> "$guest_script" <<'OPENWRT_HOOK'
-mkdir -p /usr/local/sbin
-cat > /usr/local/sbin/qemuweb-guest-start <<'GUEST_HOOK'
-OPENWRT_HOOK
-  cat "$ROOT/scripts/prepare/resources/guest-start.sh" >> "$guest_script"
-  cat >> "$guest_script" <<'OPENWRT_HOOK'
-GUEST_HOOK
-cat > /etc/init.d/qemuweb-guest-start <<'INIT_HOOK'
-#!/bin/sh /etc/rc.common
-START=99
-start() { /usr/local/sbin/qemuweb-guest-start >/dev/ttyS0 2>&1; }
-INIT_HOOK
-chmod 755 /usr/local/sbin/qemuweb-guest-start /etc/init.d/qemuweb-guest-start
-/etc/init.d/qemuweb-guest-start enable
-# OpenWrt has no systemd machine-id generator; the guest hook creates a
-# per-host value on the first boot from this generic image.
-: > /etc/machine-id
-test ! -s /etc/machine-id
-sync
-echo QEMUWEB_OPENWRT_PREPARED
-OPENWRT_HOOK
+  # The script that runs inside the temporary OpenWrt VM (see lib/guest-scripts.sh), with the proxy if any.
+  openwrt_guest_script "$guest_script"
   payload="$(base64 -w 0 "$guest_script")"
   gzip -dc "$source_dir/$archive" > "$disk"
   qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 256 -smp 1 \
@@ -147,6 +55,7 @@ OPENWRT_HOOK
   # preparation stopped, and print their location.
   cleanup_openwrt_prepare() {
     local status=$?
+    if [[ -n "${driver_pid:-}" ]]; then kill -TERM "$driver_pid" 2>/dev/null || true; fi
     kill -TERM "$qemu_pid" 2>/dev/null || true
     wait "$qemu_pid" 2>/dev/null || true
     rm -f "$disk"
@@ -154,7 +63,9 @@ OPENWRT_HOOK
     else rm -rf "$temp_dir"; fi
   }
   trap cleanup_openwrt_prepare EXIT
-  python3 - "$serial_socket" "$serial_log" "$payload" <<'PY'
+  # The driver runs in the background: it writes the serial log, which watch_vm (lib/common.sh) reads to
+  # draw the progress line and to stop the build at once on a failure that will not recover.
+  python3 - "$serial_socket" "$serial_log" "$payload" <<'PY' &
 import base64, os, re, shlex, socket, sys, time
 socket_path, log_path, payload = sys.argv[1:]
 deadline = time.monotonic() + 900
@@ -205,6 +116,14 @@ if wait_for([rb'QEMUWEB_OPENWRT_STATUS_0', rb'QEMUWEB_OPENWRT_STATUS_[1-9][0-9]*
 sock.sendall(b'poweroff\r')
 sock.close()
 PY
+  driver_pid=$!
+  echo "  Customizing OpenWrt in a VM (serial log: $serial_log)"
+  if ! watch_vm 'OpenWrt build' "$driver_pid" "$serial_log" "$OPENWRT_DONE" 1 300 OPENWRT_FAILURES OPENWRT_PHASES; then
+    driver_pid=''
+    exit 1   # the VM is stopped and the log directory kept by cleanup_openwrt_prepare
+  fi
+  wait "$driver_pid"   # the driver exited 0 once the build script reported success
+  driver_pid=''
   for _ in $(seq 1 60); do
     if ! kill -0 "$qemu_pid" 2>/dev/null; then break; fi
     sleep 1
