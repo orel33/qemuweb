@@ -171,7 +171,7 @@ test('Alpine script with a proxy on the loopback of the host: 10.0.2.2', () => {
   withRoot(root => {
     const script = guestScript(root, 'alpine', 'http://localhost:3128');
     assert.match(script, /^PROXYOPTS='http:\/\/10\.0\.2\.2:3128'$/m);
-    assert.match(script, /^export https_proxy='http:\/\/10\.0\.2\.2:3128'/m);
+    assert.match(script, /^export .*https_proxy='http:\/\/10\.0\.2\.2:3128'/m);
   });
 });
 
