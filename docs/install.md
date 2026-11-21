@@ -221,7 +221,10 @@ first byte arrives, the **Console (ttyS1)** pane shows a hint saying so
 reads each Debian raw image offline and read-only (with `debugfs`, no root) and
 prints a line such as `debian13-legacy  ttyS1 login: yes`, `... no (rebuild: ...)`
 or `... unknown` (`debugfs` missing, unreadable image or unexpected partition
-table).
+table). Every raw image also gets a line such as
+`debian13-legacy  guest agent: yes (restricted)`, `... yes (NOT restricted)`
+(the agent is there without its QemuWeb allowlist) or `... no (rebuild: ...)`,
+read the same way: see [guest-agent](guest-agent.md).
 
 **Addresses on the Graphic view (guest agent).** The addresses a running host reports are read from the QEMU
 guest agent (`qemu-guest-agent`, `qemu-ga` on OpenWrt) through a virtio-serial channel QemuWeb adds to

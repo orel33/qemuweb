@@ -12,44 +12,7 @@ const {EventEmitter} = require('node:events');
 const {queryAgent, createGuestAgent, ALLOWED_COMMANDS} = require('../../runner/guest-agent');
 const {NODE_FILES, socketPathsBelowRuntime, SOCKET_LIMIT} = require('../../common/runtime-dir');
 const fixtures = require('../fixtures/guest-agent-replies');
-
-// A fake qemu-ga. mode: ok | silent | no-command | huge | malformed | error | wrong-sync
-async function startFakeAgent(t, mode, value = fixtures.debianLegacy) {
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-qga-'));
-  const file = path.join(directory, 'qga.sock');
-  const seen = [];
-  const server = net.createServer(connection => {
-    let pending = '';
-    let open = true;
-    connection.on('close', () => { open = false; });
-    connection.on('error', () => {});
-    connection.on('data', chunk => {
-      if (mode === 'silent') return;
-      pending += chunk.toString('latin1');
-      let end;
-      while ((end = pending.indexOf('\n')) >= 0) {
-        const line = pending.slice(0, end).replace(/^\xff+/, '');
-        pending = pending.slice(end + 1);
-        const request = JSON.parse(line);
-        seen.push(request.execute);
-        if (request.execute === 'guest-sync-delimited') {
-          connection.write(Buffer.from(`\xff${JSON.stringify({return: mode === 'wrong-sync' ? request.arguments.id + 1 : request.arguments.id})}\n`, 'latin1'));
-        } else if (mode === 'no-command') {
-          // answers the handshake, never the command
-        } else if (mode === 'huge') {
-          const block = Buffer.alloc(16384, 0x41);
-          const flood = () => { while (open && connection.write(block)); if (open) connection.once('drain', flood); };
-          flood();
-        } else if (mode === 'malformed') connection.write('this is not json\n');
-        else if (mode === 'error') connection.write(`${JSON.stringify({error: {class: 'CommandNotFound', desc: 'Command has been disabled'}})}\n`);
-        else connection.write(`${JSON.stringify({return: value})}\n`);
-      }
-    });
-  });
-  await new Promise(resolve => server.listen(file, resolve));
-  t.after(() => { server.close(); fs.rmSync(directory, {recursive: true, force: true}); });
-  return {file, seen};
-}
+const {startFakeAgent} = require('../fixtures/fake-guest-agent');
 
 test('a normal agent: handshake, then the one command, and the reply value comes back', async t => {
   const agent = await startFakeAgent(t, 'ok');

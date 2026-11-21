@@ -71,20 +71,26 @@ function nicIndexOf(face, nics, claimed) {
   return -1;
 }
 
-// {"<nic index>": ["192.168.0.1/24", ...]} for the NICs that have an address: IPv4 first, then IPv6, at most
-// LIMITS.perNic each. Interfaces that match no NIC (lo, a bridge with another MAC, a tunnel) are ignored.
-function matchAddresses(interfaces, nics) {
+// The NIC index of each interface (-1 when it matches no NIC), in the order of the list.
+function nicIndexes(interfaces, nics) {
   const claimed = new Set();
   for (const face of interfaces) {
     const index = face.mac ? nics.findIndex(nic => String(nic.mac).toLowerCase() === face.mac) : -1;
     if (index >= 0) claimed.add(index);
   }
+  return interfaces.map(face => nicIndexOf(face, nics, claimed));
+}
+
+// {"<nic index>": ["192.168.0.1/24", ...]} for the NICs that have an address: IPv4 first, then IPv6, at most
+// LIMITS.perNic each. Interfaces that match no NIC (lo, a bridge with another MAC, a tunnel) are ignored.
+function matchAddresses(interfaces, nics) {
+  const indexes = nicIndexes(interfaces, nics);
   const result = {};
-  for (const face of interfaces) {
-    const index = nicIndexOf(face, nics, claimed);
-    if (index < 0) continue;
+  interfaces.forEach((face, position) => {
+    const index = indexes[position];
+    if (index < 0) return;
     result[index] = [...(result[index] || []), ...face.addresses];
-  }
+  });
   for (const [index, list] of Object.entries(result)) {
     const unique = [...new Set(list)].sort((a, b) => Number(a.includes(':')) - Number(b.includes(':')));
     if (unique.length) result[index] = unique.slice(0, LIMITS.perNic);
@@ -95,4 +101,4 @@ function matchAddresses(interfaces, nics) {
 
 const sameAddresses = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 
-module.exports = {LIMITS, cleanAddress, parseGuestInterfaces, matchAddresses, sameAddresses};
+module.exports = {LIMITS, cleanAddress, parseGuestInterfaces, nicIndexes, matchAddresses, sameAddresses};

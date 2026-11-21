@@ -261,7 +261,46 @@ of version 1 is refused at start (beta: no migration; a custom file is edited by
 | Tests: fake channel with the recorded replies, hostile cases, parser, matching, budget | M |
 | Later: wire fallback (`filter-dump` parse), Host Settings and Admin fields, VirtualBox measurement | L |
 
-## 12. Open risks
+## 12. From the shell
+
+`scripts/guest-agent.sh [--runtime DIR] [--port PORT] [--json] [HOST] ping|info|interfaces` asks the agent of a
+running host without talking to the socket by hand. It is a thin wrapper around `scripts/guest-agent.js`, which reuses
+`queryAgent` (runner/guest-agent.js: handshake, 2 s deadline, 64 KB cap) and the validation of
+`common/guest-addresses.js`, so `interfaces` shows what the browser shows. Only the three commands exist
+(`guest-ping`, `guest-info`, `guest-network-get-interfaces`): any other word, raw JSON or extra argument is a usage
+error (status 2) and nothing is sent.
+
+| Command | Output |
+|:--|:--|
+| `ping` | `ok` |
+| `info` | `guest agent version: 10.0.13` and `enabled commands (N): ...`, the commands the agent reports as enabled; a `WARNING` line when one of them is `guest-exec`, `guest-file-*`, `guest-shutdown`... (the image is not restricted, section 6) |
+| `interfaces` | the table `NIC  NAME  MAC  ADDRESS/PREFIX` (`-` for an interface with no NIC or no address), then `The Graphic view shows:` and one `NIC n: address, ...` line per NIC; `--json` prints `{interfaces, shown}` |
+
+`HOST` is a node ID (`h-...`), a host name or a unique prefix of either (names come from `host.json`); with no
+`HOST`, the only host that has a `qga.sock` is used. Several matches are listed and the command stops (status 2): it
+never guesses. The runtime directory is the default one of the port (`/tmp/qw-<login>/<port>`, port 3002) or
+`--runtime`. The runner polls the same socket every 5 s and the channel serves one client at a time: a refused or
+closed connection is retried 3 times, 1 s apart, and the command says so. Replies are never printed as received
+(validated strings only, control characters removed). Status: 0 ok, 1 error or no answer, 2 usage or ambiguity.
+
+```
+$ scripts/guest-agent.sh alice interfaces
+NIC  NAME  MAC                ADDRESS/PREFIX
+-    lo    00:00:00:00:00:00  -
+0    eth0  52:54:00:aa:bb:01  10.1.2.3/24
+
+The Graphic view shows:
+  NIC 0: 10.1.2.3/24
+```
+
+`bash scripts/prepare.sh --list` also tells, offline, whether each raw image carries the agent: `guest agent: yes
+(restricted)` (the binary and `/etc/qemu/qemu-ga.conf` with its `allow-rpcs` line), `yes (NOT restricted)` (the binary
+without that configuration: rebuild), `no (rebuild: bash scripts/prepare.sh --system ID --force)` or `unknown`
+(`debugfs` missing, unreadable image or partition table, 10 s limit). The binary is looked for in `/usr/sbin/qemu-ga`
+(Debian) and `/usr/bin/qemu-ga` (the Alpine and OpenWrt packages; not verified on those two images: a `no` there
+means neither place has it).
+
+## 13. Open risks
 
 - The images shipped with this version do not carry the allowlist file until they are rebuilt (`prepare.sh`).
   Until then the Debian legacy agent runs with all its commands enabled (the runner still sends only the four).
