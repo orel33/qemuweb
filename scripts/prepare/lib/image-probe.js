@@ -96,17 +96,17 @@ function guestAgent(image, {timeoutMs = TIME_LIMIT_MS} = {}) {
 }
 
 // The text of the extra line of `prepare.sh --list`.
-function describe(result, id) {
+function describe(result) {
   if (result === 'yes') return 'ttyS1 login: yes';
-  if (result === 'no') return `ttyS1 login: no (rebuild: bash scripts/prepare.sh --system ${id} --force)`;
+  if (result === 'no') return 'ttyS1 login: no';
   return 'ttyS1 login: unknown';
 }
 
 // The text of the guest agent line of `prepare.sh --list`.
-function describeGuestAgent(result, id) {
+function describeGuestAgent(result) {
   if (result === 'restricted') return 'guest agent: yes (restricted)';
   if (result === 'open') return 'guest agent: yes (NOT restricted)';
-  if (result === 'none') return `guest agent: no (rebuild: bash scripts/prepare.sh --system ${id} --force)`;
+  if (result === 'none') return 'guest agent: no';
   return 'guest agent: unknown';
 }
 

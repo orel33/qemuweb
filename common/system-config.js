@@ -121,6 +121,7 @@ function readCatalog(file) {
     if (cache.has(id)) return cache.get(id);
     if (visiting.has(id)) throw new Error(`System inheritance cycle at ${id}.`);
     const source = catalog.systems[id];
+    if (id === 'all') throw new Error('Invalid system all: "all" is reserved (scripts/prepare.sh --system all).');
     if (!isObject(source) || !/^[A-Za-z0-9_-]{1,32}$/.test(id)) throw new Error(`Invalid system ${id}.`);
     for (const key of Object.keys(source)) {
       if (key === 'basedOn') continue;

@@ -5,23 +5,24 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 usage() {
   cat <<'HELP'
-Usage: bash scripts/prepare.sh [--all | --system <sysname>] [--force] [--proxy <url>]
-       bash scripts/prepare.sh --hash [--system <sysname>]
+Usage: bash scripts/prepare.sh                      (same as --list: nothing is built)
        bash scripts/prepare.sh --list
+       bash scripts/prepare.sh --system <id|all> [--force] [--proxy <url>] [-6] [--follow[=N]]
+       bash scripts/prepare.sh --hash [--system <id|all>]
        bash scripts/prepare.sh --help
 
-Prepare every system by default. For each system:
+Without argument, only list the systems. To build, name them with --system. For each system:
   1. Fetch and verify sources in sources/<sysname>/.
   2. Build images/<sysname>.raw and images/<sysname>.vdi.
 The elapsed time of each step and the system total are displayed.
 
 --list             List systems, allocated image disk usage (GB), date, and the state of the
                    SHA-256 files of the images (ok, old: older than its image, missing).
-                   Debian raw images get one more line: "ttyS1 login: yes", "no (rebuild: ...)"
+                   Debian raw images get one more line: "ttyS1 login: yes", "no"
                    or "unknown"; every raw image gets "guest agent: yes (restricted)", "yes (NOT
-                   restricted)", "no (rebuild: ...)" or "unknown" (best effort, read-only, needs debugfs).
---all              Prepare every configured system (the default).
---system <sysname> Prepare one configured system.
+                   restricted)", "no" or "unknown" (best effort, read-only, needs debugfs).
+--system <id|all>  Prepare one configured system, or every one with "all" ("all" is reserved:
+                   no system can have this ID). Required by --force, --proxy, -6 and --follow.
 --force            Rebuild and replace existing images. Save the old pair in
                    images/backups/ for recovery. Running VMs and old working
                    disks may become incompatible with the new base.
@@ -43,7 +44,8 @@ The elapsed time of each step and the system total are displayed.
                    and .vdi.sha256 (sha256sum format), without building anything. Every build
                    records them itself; the server uses a hash file that is not older than its
                    image to compare the image with a session archive without reading it.
-                   A missing image is reported ("<sysname>.<format>: no image"). Exit status 2 when
+                   A missing image is reported ("<sysname>.<format>: no image"). Without --system
+                   (or with --system all), every system with an image is hashed. Exit status 2 when
                    --system names a system without any image, when no system has an image, or when
                    a hash could not be recorded; a single missing format is only a warning.
 HELP
@@ -56,8 +58,9 @@ format_duration() {
   printf '%02d:%02d:%02d' "$((seconds / 3600))" "$(((seconds / 60) % 60))" "$((seconds % 60))"
 }
 
+argument_count=$#
 selected_system=''
-explicit_all=false
+system_given=false
 list_only=false
 force=false
 hash_only=false
@@ -69,13 +72,11 @@ while (( $# )); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --list) list_only=true; shift ;;
-    --all)
-      [[ -z "$selected_system" && "$explicit_all" == false ]] || fail 'Choose --all or one --system.'
-      explicit_all=true; shift ;;
+    --all) fail '--all no longer exists: use --system all.' ;;
     --system)
-      [[ "$explicit_all" == false && -z "$selected_system" && $# -ge 2 ]] || fail 'Expected one system ID after --system.'
-      [[ -n "$2" && "$2" != --* ]] || fail 'Expected one system ID after --system.'
-      selected_system="$2"; shift 2 ;;
+      [[ "$system_given" == false ]] || fail 'Choose only one --system <id|all>.'
+      [[ $# -ge 2 && -n "$2" && "$2" != -* ]] || fail 'Expected a system ID, or all, after --system.'
+      system_given=true; selected_system="$2"; shift 2 ;;
     --force) force=true; shift ;;
     -6|--ipv6) ipv6=1; shift ;;
     --follow) follow_lines=20; shift ;;
@@ -91,12 +92,25 @@ while (( $# )); do
   esac
 done
 
-if [[ "$hash_only" == true && ( "$explicit_all" == true || "$force" == true || "$list_only" == true || "$proxy_set" == true || $follow_lines -gt 0 || $ipv6 -eq 1 ) ]]; then
-  fail '--hash cannot be combined with --all, --force, --proxy, --ipv6, --follow or --list.'
+# No argument: list, never build.
+if (( argument_count == 0 )) && [[ "$system_given" == false ]]; then list_only=true; fi
+# The options that only make sense for a build.
+build_options=()
+[[ "$force" == true ]] && build_options+=(--force)
+[[ "$proxy_set" == true ]] && build_options+=(--proxy)
+(( ipv6 == 1 )) && build_options+=(--ipv6)
+(( follow_lines > 0 )) && build_options+=(--follow)
+if [[ "$hash_only" == true && ( "$list_only" == true || ${#build_options[@]} -gt 0 ) ]]; then
+  fail '--hash cannot be combined with --list, --force, --proxy, --ipv6 or --follow.'
 fi
-if [[ "$list_only" == true && ( "$explicit_all" == true || -n "$selected_system" || "$force" == true || "$proxy_set" == true || $follow_lines -gt 0 || $ipv6 -eq 1 ) ]]; then
+if [[ "$list_only" == true && ( "$system_given" == true || ${#build_options[@]} -gt 0 ) ]]; then
   fail '--list cannot be combined with preparation options.'
 fi
+if [[ "$hash_only" == false && "$list_only" == false && "$system_given" == false ]]; then
+  fail "${build_options[*]} needs a system: choose --system <id|all>."
+fi
+# "all" is every system (reserved word); an empty selection below means the same for --hash.
+if [[ "$selected_system" == all ]]; then selected_system=''; fi
 
 config_ids=$(node - "$ROOT/config.json" <<'NODE'
 const fs = require('fs');
@@ -104,6 +118,7 @@ const config = JSON.parse(fs.readFileSync(process.argv[2], 'utf8'));
 const ids = Object.keys(config.systems || {}).filter(id => id !== 'default');
 if (!ids.length) throw new Error('No systems declared in config.json.');
 for (const id of ids) {
+  if (id === 'all') throw new Error('"all" is reserved (--system all): no system can have this ID.');
   if (!/^[a-zA-Z0-9_-]+$/.test(id)) throw new Error(`Unsafe system ID in config.json: ${id}`);
   console.log(id);
 }
@@ -146,10 +161,11 @@ try {
     if (id === 'default' || !system.qemu?.image) continue;
     const image = path.resolve(root, system.qemu.image);
     if (!fs.existsSync(image)) continue;
-    if (id.startsWith('debian')) console.log(`${id.padEnd(widths[0])}  ${describe(ttys1Login(image), id)}`);
-    console.log(`${id.padEnd(widths[0])}  ${describeGuestAgent(guestAgent(image), id)}`);
+    if (id.startsWith('debian')) console.log(`${id.padEnd(widths[0])}  ${describe(ttys1Login(image))}`);
+    console.log(`${id.padEnd(widths[0])}  ${describeGuestAgent(guestAgent(image))}`);
   }
 } catch { /* the note is optional */ }
+console.log('To build: bash scripts/prepare.sh --system <id|all> [--force]');
 NODE
   exit 0
 fi
@@ -208,7 +224,7 @@ if [[ "$hash_only" == true ]]; then
     if [[ -n "$selected_system" ]]; then
       fail "Nothing to hash for $selected_system: no image built (run: bash scripts/prepare.sh --system $selected_system)."
     fi
-    fail 'Nothing to hash: no image built (run: bash scripts/prepare.sh).'
+    fail 'Nothing to hash: no image built (run: bash scripts/prepare.sh --system <id|all>).'
   fi
   if (( hash_failed > 0 )); then exit 2; fi
   exit 0

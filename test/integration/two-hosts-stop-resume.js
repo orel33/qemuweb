@@ -259,7 +259,7 @@ async function startHost(id) {
 
 async function run() {
   fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK);
-  assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh first.`);
+  assert.ok(fs.existsSync(imagePath), `Missing ${imagePath}; run bash scripts/prepare.sh --system <id> first.`);
   const port = await freePort();
   baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'integration'}]);

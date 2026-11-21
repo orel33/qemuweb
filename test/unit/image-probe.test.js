@@ -83,7 +83,7 @@ test('a missing link on a root filesystem is "no", with the rebuild command', ()
     const {image, bin} = setup(dir, [[0x83, 2048]], 'disabled');
     const result = withPath(bin, () => ttys1Login(image));
     assert.equal(result, 'no');
-    assert.equal(describe(result, 'debian13-cloud'), 'ttyS1 login: no (rebuild: bash scripts/prepare.sh --system debian13-cloud --force)');
+    assert.equal(describe(result, 'debian13-cloud'), 'ttyS1 login: no');
   });
 });
 
@@ -166,16 +166,17 @@ test('--list prints one ttyS1 line per Debian raw image and one guest agent line
     assert.match(lines[0], /^System +RAW GB +VDI GB +Total GB +Built \(local time\) +SHA-256 raw\/vdi$/);
     assert.equal(lines.filter(line => /ttyS1 login/.test(line)).length, 1); // debian13-cloud has no image
     const legacy = lines.filter(line => /^debian13-legacy +(ttyS1|guest)/.test(line));
-    assert.match(legacy[0], /^debian13-legacy +ttyS1 login: no \(rebuild: bash scripts\/prepare\.sh --system debian13-legacy --force\)$/);
+    assert.match(legacy[0], /^debian13-legacy +ttyS1 login: no$/);
     assert.match(legacy[1], /^debian13-legacy +guest agent: yes \(restricted\)$/);
-    assert.match(lines.at(-1), /^alpine +guest agent: yes \(restricted\)$/);
+    assert.equal(lines.at(-1), 'To build: bash scripts/prepare.sh --system <id|all> [--force]');
+    assert.match(lines.at(-2), /^alpine +guest agent: yes \(restricted\)$/);
     assert.ok(!lines.some(line => /^alpine +ttyS1/.test(line)));
     assert.equal(lines.filter(line => /guest agent/.test(line)).length, 2); // debian13-cloud has no image
     // Without debugfs the listing still succeeds with "unknown".
     fs.rmSync(path.join(bin, 'debugfs'));
     const withoutDebugfs = spawnSync('bash', [path.join(root, 'scripts', 'prepare.sh'), '--list'], {encoding: 'utf8', env: {...process.env, PATH: `${bin}:/usr/bin:/bin`}});
     assert.equal(withoutDebugfs.status, 0);
-    assert.match(withoutDebugfs.stdout, /debian13-legacy +ttyS1 login: unknown\ndebian13-legacy +guest agent: unknown\nalpine +guest agent: unknown\n$/);
+    assert.match(withoutDebugfs.stdout, /debian13-legacy +ttyS1 login: unknown\ndebian13-legacy +guest agent: unknown\nalpine +guest agent: unknown\nTo build: bash scripts\/prepare\.sh --system <id\|all> \[--force\]\n$/);
   });
 });
 
@@ -191,7 +192,7 @@ test('the guest agent: restricted, open (no configuration), none, and the Alpine
     assert.equal(probe('none'), 'none');
     assert.equal(describeGuestAgent('restricted', 'x'), 'guest agent: yes (restricted)');
     assert.equal(describeGuestAgent('open', 'x'), 'guest agent: yes (NOT restricted)');
-    assert.equal(describeGuestAgent('none', 'alpine'), 'guest agent: no (rebuild: bash scripts/prepare.sh --system alpine --force)');
+    assert.equal(describeGuestAgent('none', 'alpine'), 'guest agent: no');
     assert.equal(describeGuestAgent('unknown', 'x'), 'guest agent: unknown');
   });
 });
