@@ -222,4 +222,102 @@ shown "offline", as a remote one, with its last seen date); `connectHint` stays 
 - Two machines with no shared disk work for the *remote* path today; for the Unix path, the server and the runner must see the socket
   (same host, or a bind-mounted socket).
 
-[Parts 3 and 4: written next.]
+## 3. Migration, tests and tasks
+
+### 3.1 Migration (beta rules)
+
+No legacy reader, no compatibility path. After the change an old runtime directory (`/tmp/qw-<login>/<port>` with `sessions/`, `users/`
+of a former run; `/var/lib/qemuweb` of the CREMI) is simply not used as a runner directory: the user deletes it by hand
+(`./scripts/cleanall.sh`, or `rm -rf /var/lib/qemuweb/*` at the CREMI after `qwctl.sh stop`). An old `runners.json` (schema 1) is refused
+with the existing message ("must contain schemaVersion 2"): the user deletes or rewrites it (it holds only tokens of test runners). Both
+processes must be restarted together once (no protocol version bump is needed: the hello fields that are removed are only ignored).
+
+### 3.2 Implementation tasks, in order
+
+Each task is small, merges on its own, and the application stays usable after each one. The user approves before RUN03a starts.
+
+| Task | Size | What | Acceptance criteria | Files |
+|---|---|---|---|---|
+| **RUN03a** The runner owns its files | M | Move to the runner what the server does with files: aliases `users/<login>` (create at `session.create`, remove at `session.delete`, prune dangling at start); start-up pruning of empty session directories (code of `pruneEmptyRuntimeSessions`); `runner.pid` lock. Remove from the server `linkUserAlias`, `unlinkUserAlias`, `removeUserAliases`, `pruneUserAliases`, `sharesRuntime`, the `rmSync` of `dropRunnerSessions`, `ServerInstance.pruneEmptyRuntimeSessions`/`liveServerSessions`, `server-<port>.session`, `Session.runtimeDir`, the `fs` import of `session-manager.js`. | `grep -n "fs\." server/session-manager.js` finds nothing; the server opens no path outside its own directory, the logs and `runners.json`; a session shows `<runner dir>/users/<login>`; two runners on one directory: the second refuses with a clear message; the empty directories are pruned by the runner at start. | `runner/service.js`, `runner/session.js`, new `runner/runtime-tidy.js`, `runner/main.js`, `server/session-manager.js`, `server/session.js`, `server/server-instance.js`, `server/serve.js`, `scripts/stop.sh` (`.session`) |
+| **RUN03b** One directory per runner | M | Own default directories (R2), `--connect`/`--port` resolve the **server's** directory, `status.js` pairs a runner and a server by the dialled socket and reads aliases and `meta.json` in the runner's directory, `start.sh`/`demo.sh` give the runner its own directory, CREMI units and doc. | `start.sh` runs with `/tmp/qw-<login>/<port>` (server) and `/tmp/qw-<login>/l-<port>` (runner); `runner.sh` with no `--runtime` works for a server of the default port; a remote runner of id `r-1a2b3c4d` uses `/tmp/qw-<login>/r-1a2b3c`; every default is within the 49-byte budget for a 32-character login; `status.sh` shows the same tree as today. | `common/runtime-dir.js`, `scripts/lib/runtime.sh`, `runner/options.js`, `runner/main.js`, `runner/remote-identity.js`, `scripts/start.sh`, `stop.sh`, `demo.sh`, `status.js`, `status-vbox.js`, `deploy/cremi/*.service`, `qwctl.sh`, docs |
+| **RUN03c** One identity, no trust flag | M | `runners.json` v2 with `transport`; the record `local` auto-created at the first socket connection; `trusted` and `local` removed from the registry; paused/revoked/forget for `local`; `runtimeRoot` display-only; `transport` in the admin summary; log lines of the same form; tie-break without `local`. | Registry has no `local`/`trusted`; pause of `local` survives a server restart; revoking `local` refuses its next connection; a second connection with another id on the socket is refused; the hello's `owner` is ignored. | `server/runner-gateway.js`, `runner-registry.js`, `runner-store.js`, `remote-gateway.js`, `routes/admin-runners.js`, `serve.js`, `public/admin*.js` (the runners panel), `server/startup-checks.js` (v2 message) |
+| **RUN03d** Binding and uniform adoption | L | `bindings.json` (R6), offline restore at start with a placeholder client, `resync` by the binding for every runner, grace for every runner (`start.sh` passes `--runner-grace 0` unless given), `session.delete` for unknown or dropped sessions, forced-loss route. | Server restart with a local **and** a remote runner: both keep their machines and consoles; hello with an unknown session deletes it; a lost `bindings.json` deletes sessions on return; no new session can be opened for a user whose bound runner is only offline; the `users.log` events are unchanged (`session-adopted`, `session-deleted`). | `server/session-manager.js`, new `server/session-bindings.js`, `server/runner-client.js` (offline placeholder), `server/serve.js`, `server/routes/admin-runners.js`, `scripts/start.sh` |
+| **RUN03e** Documentation and cleanup | S | `architecture.md` (replace the "5c" paragraphs on `local`/`trusted`/shared files), `deployment.md` ("Files shared with the runner" removed; adoption, runner crash, forced loss), `deploy-cremi.md`, `reference.md` options, `test/tests.md`, the roadmap entry (by the orchestrator). | No mention of "shared with the runner" or "trusted runner" remains (grep). | `docs/*`, `deploy/cremi/*.md`, `test/tests.md` |
+
+A and B can be done in either order; C needs neither; D needs A and C. Tests are rewritten **with** the task that breaks them (3.3).
+
+### 3.3 Tests
+
+| Test | Why it changes | Task |
+|---|---|---|
+| `test/unit/session-manager.test.js` | aliases, `sharesRuntime`, rmSync, pruning disappear; adoption by owner of a hello disappears | a, d |
+| `test/unit/runtime-restart.test.js` | `ServerInstance` live sessions and pruning move to the runner (its tests move to a runner unit test) | a |
+| `test/unit/runner-gateway.test.js` | registers `local` as `trusted`/`local`; new: record, one connection, other id refused | c |
+| `test/unit/session-adoption.test.js`, `remote-sessions.test.js` | adoption is by binding for every runner; grace for the local runner | d |
+| `test/unit/admin-runners.test.js` | summaries without `local`, pause/revoke/forget for `local`, `transport` | c |
+| `test/unit/server-startup-report.test.js` | start-up lines (no `users/` link line, directory per runner) | a, b |
+| `test/unit/runtime-dir.test.js` | new default names (`l-<port>`, `r-<id6>`), budget for a 32-character login | b |
+| `test/unit/status-vbox.test.js`, status tests | pairing by the dialled socket | b |
+| `test/integration/check-runner.js` | asserts server-port session directory and aliases; now the runner directory | a, b |
+| `test/integration/check-runner-manual.js` | becomes the standard case: runner directory separate, aliases created **by the runner**, binding adoption | a, d |
+| `test/integration/check-load-start.js`, `admin.js` | process lookup by `<default runtime>/sessions/<id>` | b |
+| `test/integration/check-runner-remote.js` | extend: server restart, the remote session is adopted | d |
+
+New tests: runner pruning and aliases (a); `runner.pid` lock (a); runner defaults within the budget (b); `local` record and refused second id (c);
+`bindings.json` read/write/lost/stale (d); offline restore blocks `open()` (d); forced loss route (d); a real-browser check of console
+re-selection after a runner returns (PST01 item, can use `check-runner-remote`). Per `AGENTS.md`, **none of them is run without the user's approval.**
+
+### 3.4 Scripts and CREMI
+
+| Script / unit | Effect |
+|---|---|
+| `start.sh` | two directories; the runner dials `--connect <server dir>/runner-<port>.sock`; `--runner-grace 0` unless given |
+| `stop.sh` | removes `server-<port>.pid` and the socket (own directory); no `.session` |
+| `status.sh` | pairs by socket; login from the runner directory |
+| `killall.sh`, `cleanall.sh` | unchanged: they work on `/tmp/qw-<login>/`, which holds both directories; the dry run lists both |
+| `demo.sh` | `$demo_dir/server` and `$demo_dir/runner` (deleted at exit) |
+| `qemuweb-server.service` | `--runtime /var/lib/qemuweb/server` |
+| `qemuweb-runner.service` | `--runtime /var/lib/qemuweb/runner --connect /var/lib/qemuweb/server/runner-3002.sock`; one `install -d` more in `deploy-cremi.md`; start order unchanged (`After=`); restarting the server alone keeps the machines (as today, now also with the binding) |
+| `qwctl.sh` | text only |
+
+### 3.5 Documentation
+
+`architecture.md` (ownership table, "Runners in the control plane", "Connection lifecycle" items 3 and 6, "Runner loss", "User-land runners",
+"Remote runners"), `deployment.md` (adoption, "Files shared with the runner", runner crash, remote runners, directory layout),
+`deploy-cremi.md` and `cremi-architecture.md` (directories, units), `reference.md` and the `--help` of `runner/main.js` and `server/main.js`
+(`--runtime` text), `test/tests.md`.
+
+### 3.6 Event x outcome (the bridge to PST01)
+
+"Today" is read from the code (grace 300 s as at the CREMI; the local runner has no grace). "Design" is the recommended design with PST01 policies **not** yet chosen (machines are never restored after a runner process dies).
+
+| Event | Local runner today | Remote runner today | Both, with the design |
+|---|---|---|---|
+| **Server restart** (runner alive) | Sessions adopted by the `owner` in the hello; users log in again and keep machines. Under `start.sh` the runner exits with the server | Sessions of the hello are **deleted** on the runner when it reconnects: the VMs die | Binding loaded as offline workspaces, then bound to the runner at its hello (2 s to 30 s later): the same for both. Under `start.sh` the runner still exits with the server |
+| **Runner process restart** (crash, `systemctl restart`) | Sessions dropped at once, dirs removed by the server; new empty session at the next request | Sessions offline for the grace; at return the hello lacks them: dropped; directories left | Sessions offline until the runner returns (hello without them: dropped at once) or until the grace ends; runner prunes its empty directories at start; non-empty ones stay (PST01) |
+| **Machine reboot** (`/tmp` default) | All lost (RAM, `/tmp`); nothing reads files back | Same on the runner side; the server forgot everything | Server and runner directories lost together: a clean start. With `--runtime` on disk (CREMI): the binding is loaded, the runner's hello lacks the sessions, they are dropped and logged `session-deleted: runner lost`; disks stay on disk until PST01 decides restore or discard |
+| **Network cut** | Not applicable (Unix socket) | Offline for the grace (503), VMs keep running, resync at return | Same, for every runner whose transport can be cut |
+| **Runner revoked** | Refused (403) | Token invalid, connection closed, sessions kept for the grace then dropped, the runner stops itself | Same for both; forced loss and drop-at-once for a revoked runner are the PST01 controls (R7) |
+| **Runner removed from `runners.json` by hand** | n/a | Next `verify` fails (401) | Same for both |
+
+## 4. Open questions for the user
+
+| # | Question | Recommendation and why |
+|---|---|---|
+| Q1 | Design B (own directories, registered identity, binding), or A as a cheaper first step? | **B**: A keeps the server writing in runner files, which is what you want gone, and PST01 and PRN01 would have to special-case the local runner. |
+| Q2 | Identity of the local runner: record `local` auto-created on first socket connection, proof = the 0600 socket (no `SO_PEERCRED` in Node), or a token also for the local runner (C)? | **Socket proof.** Same guarantee as today (only the server's user can connect), no bootstrap of a token for `start.sh`, `demo.sh`, tests, systemd units. |
+| Q3 | The owner of an adopted session comes from the server's `bindings.json`, never from the hello. A lost file means the sessions are deleted at the next hello. Accept? | **Yes**: the trust then does not depend on who sent the hello (SEC03), and the file lives next to `runners.json`. |
+| Q4 | `users/<login>` aliases: kept by the runner (recommended), or dropped (owner only in `meta.json`, shown by `status.sh`)? | **Kept by the runner**: no habit changes for you on a machine, no server involvement, a few lines in the runner. Drop only if you never use them. |
+| Q5 | A runner killed hard leaves non-empty session directories: kept until PST01 (recommended), or deleted at the runner's next start after checking that no process uses them? | **Kept until PST01** (restore or discard is exactly its question); `cleanall.sh` removes them. |
+| Q6 | Grace for the local runner: the same 300 s (a stopped local runner shows "offline" instead of a new empty session at once), `start.sh` with `--runner-grace 0` (recommended for development)? | **Uniform grace, `--runner-grace 0` in `start.sh`.** One rule; in the CREMI, systemd restarts the runner in seconds and the hello drops what was lost. |
+| Q7 | Revoking a runner: drop its sessions at once (recommended) or keep them for the grace? Forced-loss route in RUN03d or left to PST01? | **Drop at once** (nothing returns) and **the route in RUN03d** (it is the same drop function). |
+| Q8 | Directory names: `l-<port>` for the local runner, `r-<6 hex of the id>` for a remote one, server `<port>` (all at most 8 characters, within the 49-byte budget). OK? | **Yes.** Longer names break the budget for a 32-character login. |
+| Q9 | Is a **one-time breaking change** acceptable at the CREMI (new directories, runner unit edited, old `/var/lib/qemuweb` content deleted, `runners.json` rewritten)? | **Yes** (beta rules). Do it with the roadmap's next release and say so in the release notes. |
+| Q10 | Order: RUN03 (a, b, c, d, e) before PST01, as the roadmap says? | **Yes.** PST01's persistence is RUN03d's `bindings.json`; deciding restore policies first would be built twice. |
+
+### What could not be verified
+
+- Nothing was run (no tests, no application, no `prepare.sh`), per `AGENTS.md`.
+- `SO_PEERCRED` is not available in Node.js without a native addon: this is from knowledge of the platform, not checked on this machine.
+- The behaviour of the real CREMI systemd units after the change (directory permissions between the two `qemuweb` directories, the order of start) is by reading the unit files only.
+- The exact test counts of `session-adoption.test.js`, `remote-sessions.test.js`, `admin-runners.test.js` were taken from their names and the test index; the precise assertions to rewrite are known only when the tasks start.
