@@ -1,10 +1,10 @@
 # QemuWeb : feuille de route pour décideurs
 
-De la version 0.9.5 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [roadmap.md](roadmap.md), en français à la demande du responsable du projet ; le détail technique de chaque tâche est dans ce fichier.
+De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [roadmap.md](roadmap.md), en français à la demande du responsable du projet ; le détail technique de chaque tâche est dans ce fichier.
 
 ## En bref
 
-- **Aujourd'hui (0.9.5)** : le serveur tourne au CREMI derrière Apache et OpenID, avec un runner local, un runner distant validé et les consoles par WebSocket à travers le relais. Livré depuis la 0.9.0 : la capture de trafic (fichier PCAP et vue `tcpdump`), un seul menu Load et un seul Save avec des exemples du serveur, la page d'administration en onglets, le moteur VirtualBox réparé avec un sélecteur de moteur, et la construction des quatre images derrière le proxy du CREMI. Il reste réservé à des utilisateurs de confiance : pas de quotas, de limitation des commandes ni d'isolation des machines.
+- **Aujourd'hui (0.9.6)** : le serveur tourne au CREMI derrière Apache et OpenID, avec un runner local, un runner distant validé et les consoles par WebSocket à travers le relais. Livré depuis la 0.9.0 : la capture de trafic (fichier PCAP et vue `tcpdump`), un seul menu Load et un seul Save avec des exemples du serveur, la page d'administration en onglets, le moteur VirtualBox réparé avec un sélecteur de moteur, et la construction des quatre images derrière le proxy du CREMI. Il reste réservé à des utilisateurs de confiance : pas de quotas, de limitation des commandes ni d'isolation des machines.
 - **1.0 : ouvrir à une promo entière** (environ 30 sessions simultanées) sans faire confiance aux utilisateurs : sécurité, exploitation sans surprise, test de charge, et la capture de trafic, fonction phare pour les TP de réseau.
 - **1.1 à 1.3 : confort et portée** : services d'un hôte, interface retravaillée, runners sur les postes de TP, davantage de systèmes invités.
 - **2.0 : au-delà des consoles série** : affichage graphique (Windows, bureaux Linux), conteneurs Docker, macOS.
@@ -25,6 +25,7 @@ De la version 0.9.5 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | **0.9.3** | Page d'administration en onglets ; **moteur VirtualBox réparé** (messages clairs, exclusion de KVM par runner) ; sélecteur **Engine** dans l'en-tête, réglages et disques de travail par moteur (`host.json` format 2) |
 | **0.9.4** | Console ttyS1 : indice quand elle est vide et vérification dans `prepare.sh --list` ; images Alpine et OpenWrt construites **derrière le proxy du CREMI** ; `prepare.sh --hash` signale les images manquantes |
 | **0.9.5** | Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>` : fin de l'erreur « Runtime socket path is too long » (TOD02, validée) ; la taille de la police n'est plus affichée entre A− et A+ (elle reste dans l'infobulle) |
+| **0.9.6** | **Adresse IP en direct** de chaque interface (avec son préfixe) dans la vue graphique, lue par l'agent invité de QEMU (`GAG01`) ; commande `scripts/guest-agent.sh` ; `prepare.sh` sans argument liste les images (et indique l'agent et ttyS1), `--system <id\|all>` et `--all` pour construire (`PRP02`) |
 
 ## Décisions attendues
 
