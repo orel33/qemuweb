@@ -789,6 +789,12 @@ the trust model of the local runner: the control plane must not trust it.
   plane as well as by the runner, and archive streams size-limited on both
   sides.
 
+### Runner model (RUN03, design study)
+
+Proposed, not implemented: the local runner becomes a runner like the others (own directory, registered identity, no file shared with
+the server, one adoption rule from a persisted binding). The study, the options and the decision list are in
+[runner-model.md](runner-model.md). Until the user validates it, the sections above describe the code as it is.
+
 ### Testing
 
 - Unit: the frame codec (split and merged chunks, size limits, binary
