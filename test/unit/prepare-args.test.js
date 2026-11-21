@@ -1,6 +1,6 @@
 'use strict';
 
-// Command line of scripts/prepare.sh: no argument lists, --system <id|all> builds, --all is gone, the build
+// Command line of scripts/prepare.sh: no argument lists, --system <id|all> builds, --all is the same as --system all, the build
 // options need --system. The real script runs in a temporary project root whose per-system scripts are
 // STUBS: they only log their calls (and create fake images), so nothing is downloaded or built. The reserved
 // system name "all" is checked in the config validation (common/system-config.js).
@@ -80,14 +80,24 @@ test('--system <id> prepares that system only', () => {
   });
 });
 
-test('--all is rejected with the hint, nothing is built', () => {
+test('--all is the same as --system all, and cannot be combined with --system', () => {
   withRoot(({run, calls}) => {
-    for (const args of [['--all'], ['--all', '--force'], ['--system', 'x', '--all']]) {
+    const result = run('--all');
+    assert.equal(result.status, 0, result.err);
+    assert.deepEqual(calls(), ['x --sources', 'x --images', 'y --sources', 'y --images']);
+    assert.match(result.out, /Prepared 2 system\(s\)\./);
+  });
+  withRoot(({run, calls}) => {
+    for (const args of [['--all', '--system', 'x'], ['--system', 'x', '--all'], ['--all', '--all']]) {
       const result = run(...args);
       assert.equal(result.status, 2, args.join(' '));
-      assert.match(result.err, /prepare\.sh: --all no longer exists: use --system all\./);
+      assert.match(result.err, /Choose only one of --system <id\|all> and --all\./);
     }
     assert.deepEqual(calls(), []);
+  });
+  withRoot(({run}) => {
+    assert.equal(run('--all', '--list').status, 2);
+    assert.equal(run('--hash', '--all').status, run('--hash', '--system', 'all').status);
   });
 });
 
@@ -159,13 +169,13 @@ test('an unknown system, a repeated --system and a missing id are errors, nothin
   });
 });
 
-test('--help describes the new rules and the usage has no --all', () => {
+test('--help describes the new rules, with --all as the same as --system all', () => {
   withRoot(({run}) => {
     const result = run('--help');
     assert.equal(result.status, 0);
     assert.match(result.out, /--system <id\|all>/);
     assert.match(result.out, /same as --list/);
-    assert.doesNotMatch(result.out, /--all/);
+    assert.match(result.out, /--all +Same as --system all\./);
   });
 });
 

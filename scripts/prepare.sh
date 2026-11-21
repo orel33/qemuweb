@@ -8,6 +8,7 @@ usage() {
 Usage: bash scripts/prepare.sh                      (same as --list: nothing is built)
        bash scripts/prepare.sh --list
        bash scripts/prepare.sh --system <id|all> [--force] [--proxy <url>] [-6] [--follow[=N]]
+       bash scripts/prepare.sh --all [--force] [--proxy <url>] [-6] [--follow[=N]]   (same as --system all)
        bash scripts/prepare.sh --hash [--system <id|all>]
        bash scripts/prepare.sh --help
 
@@ -23,6 +24,7 @@ The elapsed time of each step and the system total are displayed.
                    restricted)", "no" or "unknown" (best effort, read-only, needs debugfs).
 --system <id|all>  Prepare one configured system, or every one with "all" ("all" is reserved:
                    no system can have this ID). Required by --force, --proxy, -6 and --follow.
+--all              Same as --system all.
 --force            Rebuild and replace existing images. Save the old pair in
                    images/backups/ for recovery. Running VMs and old working
                    disks may become incompatible with the new base.
@@ -72,9 +74,11 @@ while (( $# )); do
   case "$1" in
     --help|-h) usage; exit 0 ;;
     --list) list_only=true; shift ;;
-    --all) fail '--all no longer exists: use --system all.' ;;
+    --all)
+      [[ "$system_given" == false ]] || fail 'Choose only one of --system <id|all> and --all.'
+      system_given=true; selected_system=all; shift ;;
     --system)
-      [[ "$system_given" == false ]] || fail 'Choose only one --system <id|all>.'
+      [[ "$system_given" == false ]] || fail 'Choose only one of --system <id|all> and --all.'
       [[ $# -ge 2 && -n "$2" && "$2" != -* ]] || fail 'Expected a system ID, or all, after --system.'
       system_given=true; selected_system="$2"; shift 2 ;;
     --force) force=true; shift ;;

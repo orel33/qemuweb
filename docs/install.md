@@ -104,6 +104,7 @@ Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, and OpenWrt 25.12.
 ```sh
 bash scripts/prepare.sh                      # same as --list: nothing is built
 bash scripts/prepare.sh --system all         # all systems
+bash scripts/prepare.sh --all                  # same as --system all
 bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt
 bash scripts/prepare.sh --list               # show prepared images and the state of their SHA-256 files (ok, old, missing)
 bash scripts/prepare.sh --hash               # (all systems) record image hashes without building (reports missing images)
