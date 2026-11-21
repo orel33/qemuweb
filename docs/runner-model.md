@@ -100,4 +100,126 @@ Observation: `check-runner-manual.js` already tests the case "runner has its own
 **silently loses** the `users/` aliases, the empty-session pruning and the server-side directory removal, but still adopts: it is the
 design of this study, minus the identity and the binding.
 
-[Parts 2 to 4: written next.]
+## 2. Options and recommendation
+
+### 2.1 The options
+
+| | A: formalise the shared directory | B: Unix socket, own directory, registered identity (**recommended**) | C: the local runner uses the WebSocket path |
+|---|---|---|---|
+| Idea | Keep one directory per port for both; write the contract (what the server may touch) as a protocol-less file convention | Same Unix socket, but the runner has its own directory; it is a registered runner (record in `runners.json`, persisted state); sessions are bound to runners in a server-side file; the server writes nothing in the runner's directory | The local runner dials `ws://127.0.0.1:<port>/runner/connect` with a token, exactly like a remote one; the Unix socket and its gateway are deleted |
+| What changes | Little: document `trusted`/`local`; add a lock file | Gateway (identity), registry (drop `local`/`trusted`), session manager (binding, adoption, no `fs`), `ServerInstance` (no pruning), runner (alias, pruning, own directory), `runner/options.js`, scripts, units, tests | All of B's server work, plus: a token must exist before the first start (`register` for `start.sh`, `demo.sh`, the tests), a loopback TCP listener reachable by every local account, the runner needs the server URL, not a socket path |
+| Still "two ways" for the server | Yes: shared files stay a second channel | No: one registry, one adoption rule, one loss rule; only the accept step differs (socket vs upgrade) | No: one accept step |
+| Risks | The server keeps writing in a runner's files; a runner on another machine or container is impossible; two runners of one account collide in one directory; SEC03 stays a special case | Migration of tests and units (large but mechanical); the Unix-socket identity relies on file permissions (no `SO_PEERCRED` in Node); a lost binding file deletes sessions on the runner at the next hello | Token bootstrap for dev flows (`start.sh` would have to create `runners.json` entries itself: the server must be running to mint a token, so a script would call an admin route or write the server's store: a second writer); any local user can try the loopback port; `trust-proxy`/nginx path sees local runner traffic |
+| Effort | **S** | **L** (about 5 tasks, section 3.1) | **XL** (B + token bootstrap + a loopback route to secure) |
+| PST01 persistence | The binding would still be needed for remote runners; the local one keeps a different path | The binding and the uniform grace are the PST01 link: remote and local use the same code; PST01 only chooses policies | Same as B |
+| PRN01 / SEC03 trust | `trusted` stays an exception; a student's runner on the lab machine must be told apart from the local one by an extra rule | Nothing is trusted by transport; a personal runner and the local runner differ only by `ownerLogin` and `transport` | Same as B, and the local runner is also token-authenticated |
+| CREMI (two systemd units, one machine) | Unchanged | Two directories (`/var/lib/qemuweb/server`, `/var/lib/qemuweb/runner`); the runner unit gets `--connect`; no other change; the units still need no secret | Runner unit needs a token file and the server URL; one more secret to deploy and rotate |
+| `start.sh` / `demo.sh` | Unchanged | Two subdirectories, runner dials `--connect`; no token | Needs the bootstrap described above |
+| `/admin`, observability | Unchanged (local special-cased) | One panel row type: transport, address, directory as announced (text), sessions bound, pause/revoke/forget for all | Same as B |
+| Separate machines / containers with no shared disk (the user's goal) | No | Remote: already; local socket stays on one host, but the runner may live in another container that mounts only the socket | Yes (TCP) but then it **is** a remote runner |
+
+### 2.2 Honest comparison
+
+- **A** is cheap and solves nothing the user asked for: the server still writes in runner files, and a student's runner sitting next to the
+  local one (lab machine) cannot share one `/tmp/qw-<login>/<port>` safely. It is the fallback if RUN03 is judged too costly now.
+- **C** is the purest, but it moves the cost to *deployment* (a token for the local runner, a loopback listener) to gain nothing the Unix socket
+  does not already give: only the server's user can open the socket. It also makes `start.sh`/`demo.sh`/tests depend on `runners.json`
+  bootstrapping. Rejected for the local case; the same code accepts it later (the accept step is the only difference).
+- **B** makes the Unix socket a *transport detail*. The only place where the two paths differ is the accept step in the gateways.
+  Every rule after the accept (identity record, pause, grace, binding, adoption, loss, deletion) is written once.
+
+### 2.3 Recommended design (B), with its rules
+
+**R1. Ownership.** Two directories, two owners, no overlap; a process never writes in the other's.
+
+| Directory | Owner | Holds |
+|---|---|---|
+| server directory `<server runtime>` | server | `server-<port>.pid`, `runner-<port>.sock`, `bindings.json` (R6); `server-<port>.session` is **dropped** (R9); nothing of a runner |
+| runner directory `<runner runtime>` | runner | `sessions/<id>/` (`session.json`, `meta.json`, nodes, disks, sockets), `users/<login>` aliases (R8), `runner.pid` (lock, R9) |
+| `runners.json`, `users.json`, logs | server | as today (outside both) |
+
+The server never opens a path under a runner's directory. Anything it needs travels as a command or an event.
+
+**R2. Default directories (budget of TOD02: 49 bytes for a runner directory, 107 for the socket, measured by `common/runtime-dir.js`).**
+`/tmp/qw-<login>` is at most 8 + 32 = 40 bytes, leaving 8 bytes for the last component: it must be at most 8 characters.
+
+| Process | Default | Length of last component |
+|---|---|---|
+| Server | `/tmp/qw-<login>/<port>` (as today; it only holds `runner-<port>.sock` (17), a short file) | 5 |
+| Local runner | `/tmp/qw-<login>/l-<port>` | 7 |
+| Remote runner | `/tmp/qw-<login>/r-<6 hex of its id>` | 8 |
+
+The id of a remote runner is `r-xxxxxxxx`: its first six hex digits make the name unique per runner of an account (two runners of the same
+account never share a directory; a collision is refused by the lock `runner.pid`, R9). `--runtime DIR` replaces any default (the CREMI
+units pass absolute paths). The server's socket path is `<server runtime>/runner-<port>.sock`; the runner finds it with `--connect SOCKET`,
+or with `--port PORT` which resolves the **server's** default directory (a convention, no shared access). `register --runtime` keeps the
+chosen runner directory in the runner file as today.
+
+**R3. Identity.** Every runner has a record in `runners.json` (schema version 2: adds `transport: "unix" | "ws"`; `tokenHash` only for `ws`).
+- `ws`: as today (registration token, Bearer, constant-time compare, 401/409).
+- `unix`: one record, id `local`, **auto-created the first time something connects to the socket** (audited in `admin.log` as
+  `register-local-runner`). The proof is the socket: mode 0600 in a directory owned by the server's user (kept as today). Node.js exposes no
+  `SO_PEERCRED`; the file mode is the credential (same user, or root). Any other runner id on the socket is refused: the socket serves
+  exactly the record `local` (still one live connection).
+- A revoked record (either transport) is refused at its accept step. `DELETE` forgets the record (the next connection of `local` creates it again).
+
+**R4. No trust by transport.** `trusted` and `local` disappear from the registry. What a runner may do is decided by its **record**
+(owner, paused, revoked, later limits), never by how it connected. A personal runner (PRN01) and the local runner are the same kind of
+entry; they differ by `ownerLogin` and by the record fields.
+
+**R5. What a hello may claim.** The hello is untrusted input for every runner. The server uses only: `protocol`, bounded capabilities
+(engines, kvm, cpus, memoryBytes, images, warnings, `limits.maxSessions`), `pid` (display), `runtimeRoot` (display text only, bounded, never
+opened) and the **session IDs** it reports. It ignores `owner` and `createdAt` of a reported session (an **owner is never taken from a
+hello**, today only trusted by the transport). A reported session no one asked for is `session.delete`d.
+
+**R6. Binding: the PST01 link.** The server persists the link session -> runner in `<server runtime>/bindings.json` (mode 0600, atomic
+write-through, schema version 1): `{"sessions": [{"id", "owner", "runnerId", "createdAt"}]}`. It is written **before** `session.create` is
+sent and removed when the session is deleted or dropped.
+- At server start the bindings are loaded as workspaces in the **offline** state (the handle is bound to a placeholder client that answers 503,
+  `manager.available` is false): there is no window in which a user can open a new session while the runner of the old one is still
+  connecting (this race exists today with several runners).
+- On a hello of runner X (**any** transport): each binding of X that the hello reports is bound to the new connection (`RunnerClient.adopt`,
+  `runner-state online`), each binding of X that is not reported is dropped (`runner lost`), each reported session with no binding of X is
+  `session.delete`d. A session is thus adopted only if the **server** already knew its owner: the trust is in the server's file, not in the hello.
+- A restart of a remote runner's server no longer kills its VMs, as for the local one: the same code.
+- If `bindings.json` is lost, the runners' sessions are deleted at their next hello (the user starts again). If it is stale (a server crash
+  after `session.create`, before the runner created it), the binding is dropped at the hello.
+
+**R7. Loss and removal.** One rule for all runners: when the connection drops, the sessions of the runner are kept offline for `--runner-grace`
+seconds (503 "offline", `runner-state`), then dropped (`runner offline too long`, bindings removed). When the runner returns, sessions it
+holds that the server dropped are deleted by `session.delete`, sessions it lost are dropped at once. The server **never removes a
+directory**; the runner prunes its own at start (R9). `scripts/start.sh` passes `--runner-grace 0` unless the user gave one (the script
+ends when the runner ends anyway). **Forced loss** (PST01): `POST /api/admin/runners/:id/drop-sessions` drops the bindings and, if the
+runner is connected, sends `session.delete` for each: the one place to extend. A revoked runner: PST01 decides (recommendation: drop at once, nothing will return).
+
+**R8. `users/<login>` aliases.** **Recommendation: the runner keeps them in its own directory.** `session.create` already carries
+the owner; the runner creates `<runner runtime>/users/<login>` -> `../sessions/<id>`, removes it at `session.delete`, prunes the dangling ones at
+start. The server never reads or writes them. For the administrator who looks at the files: **no change** on the machine of the runner
+(`ls <runner dir>/users/`); `scripts/status.js` reads `users/` (or `meta.json`, which holds the owner) from the **runner** directory
+it finds through the runner's command line (`--runtime` or the default). `/admin -> Runners` shows the directory the runner announced
+(text, display only) so the administrator knows where to look. Alternative (dropped aliases, `meta.json` only) is possible: see Q4.
+
+**R9. Start-up pruning, by the runner, in its own directory.** A runner takes `runner.pid` (the lock of the directory: a live process
+refuses a second runner on the same directory); at start it removes the session directories that hold no node (the existing rule of
+`ServerInstance.pruneEmptyRuntimeSessions`, moved to `runner/`) and the dangling aliases. A non-empty directory left by a crash
+is kept and reported in the runner's log until PST01 chooses a restore or discard policy; `cleanall.sh` removes it. Because each runner
+has its own directory, the "do not prune a session of another live server" test (`server-<port>.session`) is gone, and so is that file.
+Behaviour change to know: a SIGKILLed local runner's session directories are no longer removed by the server (they stay until the runner's next start or `cleanall.sh`).
+
+**R10. Observation and control rules unchanged.** Administrator observation, the control lock, the audit log, browser rooms, the 503 for
+an offline runner, `pickRunner` (one place) are not touched. `pickRunner` loses only the `local` tie-break; PRN01 will add the owner rule
+there.
+
+**R11. Administration (`/admin -> Runners`).** The summary gets `transport` (`unix`/`ws`), `directory` (as announced), `pid` (for unix);
+pause, resume, revoke, forget are the same for all rows; the local row exists as soon as its record exists (so a stopped local runner is
+shown "offline", as a remote one, with its last seen date); `connectHint` stays for the case "no runner at all".
+
+### 2.4 What the design does not do
+
+- It does not choose a restore policy (PST01), does not add address restrictions (`/runner/connect`, `/api/runner/register`: PST01 item, an allow
+  list in the record fits the model), and does not validate a runner's events (SEC03: the single rule "an event for a session bound to
+  this runner", already in `RunnerClient.receive`, now stands for all).
+- Two machines with no shared disk work for the *remote* path today; for the Unix path, the server and the runner must see the socket
+  (same host, or a bind-mounted socket).
+
+[Parts 3 and 4: written next.]
