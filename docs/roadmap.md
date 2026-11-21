@@ -548,7 +548,7 @@ personal runner and any guest access exist only for trusted users.
   **Verified in the CAP01 spike**: `netdev_add` works at runtime, but `device_add` fails with "Bus 'pcie.0' does not support hotplugging"
   and a `pcie-root-port` cannot be added at runtime either, so free `pcie-root-port` devices must be declared at boot (a few per host).
   Host Settings > Network then applies live when the host runs; the guest kernel must handle the hot-plug (Debian does).
-- [ ] **GAG01** (M, **study**) **Feasibility of showing the IP addresses of running hosts (and more) with the QEMU guest agent.** Today QemuWeb knows
+- [ ] **GAG01** (L, **study then feature, extended 21 November 2026**: live address with prefix on the Graphic view, QEMU) **Feasibility of showing the IP addresses of running hosts (and more) with the QEMU guest agent.** Today QemuWeb knows
   nothing of what runs inside a guest (the cards of the Graphic view show no address, see GRA03). The QEMU guest agent
   (`qemu-ga`, Debian/Ubuntu package `qemu-guest-agent`) answers the host over a **virtio-serial channel** named
   `org.qemu.guest_agent.0`, which QEMU exposes as a Unix socket (`-chardev socket,id=qga,path=<node dir>/qga.sock,server=on,wait=off`,
@@ -581,6 +581,15 @@ personal runner and any guest access exist only for trusted users.
     and a proposed design with its tasks (a follow-up `GAG02`: the QEMU arguments, the runner module, the server route and event, the image
     changes in `prepare.sh`, the UI), and the throwaway spike script kept out of the repository. No product code in this task, except
     what the spike strictly needs outside the repository.
+- [ ] **GAG02** (M) **VirtualBox symmetric of GAG01: the Guest Additions.** GAG01 (extended on 21 November 2026 from a study to the whole
+  feature for QEMU) shows the live address with its prefix on the Graphic view through the qemu-guest-agent, and carries the
+  `guestAgent:qemu|vbox` profile keyword and an **inert** VirtualBox reader. GAG02 makes the VirtualBox side real: read
+  `VBoxManage guestproperty enumerate <vm> --patterns '/VirtualBox/GuestInfo/Net/*'` (V4/IP, V4/Netmask converted to a prefix length,
+  MAC, Name, Status, Net/Count) with `guestproperty wait` or a slow poll, publish the same `addresses` field as the QEMU engine, so the
+  browser code is unchanged. Needs the **Guest Additions in the images** (`virtualbox-guest-utils` for Debian; Alpine and OpenWrt
+  probably not: measure and say), set `guestAgent:vbox` true only where the VDI really has them, and a **measurement under VirtualBox**
+  on a machine free of KVM guests (user authorisation, throwaway copy of the VDI, exact-path cleanup, never `--delete`
+  outside the node's own directory). Same trust rules as GAG01 (guest data untrusted, strict validation, caps, informative only).
 - [ ] **GRA02** (L) Several floating consoles: up to 4 overlapping windows, cascaded, a click brings one to the front,
   each movable, resizable and closable, built on the 4 existing panes (today only one floating window exists: the
   selected node's pane, `public/graphic-console.js`; a double click on another node reuses it). To decide: the maximum
