@@ -1,12 +1,11 @@
 # Runner model: the local runner becomes a runner like the others (RUN03, design study)
 
-Status: **DRAFT, revision 2** (the user chose **option C** for Q1/Q2: the local runner connects by the same WebSocket path as a remote runner and registers
-with a token; no Unix socket for the runner link). No code changes with this document. Roadmap: RUN03 (milestone 7), then PST01.
+Status: **DECIDED** (22 November 2026, validated by the user: option C and every decision of section 4). The local runner connects by the same WebSocket path as a remote runner and registers
+with a token; no Unix socket for the runner link. This document is the specification of the implementation tasks RUN03a to RUN03f (3.2). It changes no code itself. Roadmap: RUN03 (milestone 7), then PST01.
 Beta rules (`AGENTS.md`): no legacy reader, no compatibility path; an old runtime directory is not used, the user deletes it by hand.
 Linked from [architecture.md](architecture.md#runner-model-run03-design-study).
 
-Terms: **server** = control plane (`server/`), **runner** = `runner/`. "Local runner" = the one on the Unix socket today
-(id `local`). "Remote runner" = registered with a token (`r-xxxxxxxx`, `runners.json`), over WebSocket.
+Terms: **server** = control plane (`server/`), **runner** = `runner/`. "Local runner" = the runner of the server's machine (id `local`; it dials the Unix socket today, the WebSocket after RUN03c). "Remote runner" = registered with a token (`r-xxxxxxxx`, `runners.json`), over WebSocket.
 
 ## 1. Inventory: local runner vs remote runner today
 
@@ -101,9 +100,9 @@ Observation: `check-runner-manual.js` already runs the case "runner has its own 
 **silently loses** the `users/` aliases, the empty-session pruning and the server-side directory removal, but still adopts: it is the
 design of this study, minus the WebSocket identity and the binding.
 
-## 2. Options and recommendation
+## 2. Options and design
 
-### 2.1 The options (first round)
+### 2.1 The options compared (record of the decision)
 
 | | A: formalise the shared directory | B: Unix socket, own directory, registered identity | **C: the local runner uses the WebSocket path (decided)** |
 |---|---|---|---|
@@ -113,17 +112,17 @@ design of this study, minus the WebSocket identity and the binding.
 | Main risk | The server keeps writing in runner files; no separate machines | Identity rests on file permissions (no `SO_PEERCRED` in Node) | The token must reach the local runner without a manual step (answered in 2.4) |
 | PST01 / PRN01 / SEC03 | Special case for the local runner stays | Uniform | Uniform, and the local runner is authenticated like every other |
 
-**Decision of the user: C.** A and B are kept here only as the record of the comparison. Everything that existed for the Unix socket (gateway,
+**Decision: C.** A and B are kept here only as the record of the comparison; the rules below are those of C. Everything that existed for the Unix socket (gateway,
 `--connect`, `runner-<port>.sock`, the 0600 socket as a proof of identity, the `SO_PEERCRED` discussion, a `transport` field) is removed from the design, not kept as an option.
 
 ### 2.2 Why C is acceptable
 
-The cost feared in the first round was deployment: a token for a runner that never leaves the machine. Section 2.4 removes it: the server mints the token of
+The cost feared when comparing the options was deployment: a token for a runner that never leaves the machine. Section 2.4 removes it: the server mints the token of
 the local runner itself, in a file only the same account can read, and the runner reads it at each connection attempt. A user types no token
 (`./scripts/start.sh`, `demo.sh`, the tests and the CREMI units all work without one). The Unix socket's only advantage over a
 loopback WebSocket was that nobody else could connect; the token gives the same guarantee and is checked by the code path the remote runners already exercise.
 
-### 2.3 The recommended design (C), with its rules
+### 2.3 The design (C), with its rules
 
 **R1. Ownership.** Two directories, two owners, no overlap; a process never writes in the other's.
 
@@ -158,7 +157,7 @@ The record `local` exists only when the server runs with `--local-runner`. No `t
 **R4. Nothing is trusted by transport.** `trusted` and `local` disappear from the registry. What a runner may do is decided by its record (owner, paused, revoked,
 later limits). The id `local` is a name: pickRunner's tie-break uses `registeredAt` (0 for `local`, so it is still preferred on ties without a special case).
 
-**R5. What a hello may claim.** Unchanged from the first round: the server uses only `protocol`, bounded capabilities, `pid` and `runtimeRoot` (both display only, never
+**R5. What a hello may claim.** The server uses only `protocol`, bounded capabilities, `pid` and `runtimeRoot` (both display only, never
 opened) and the session IDs. It **ignores the `owner` and `createdAt` of a reported session**; a reported session with no binding is `session.delete`d.
 
 **R6. Binding: the PST01 link.** `<server runtime>/bindings.json` (0600, atomic write-through, schema 1): `{"sessions": [{"id", "owner", "runnerId", "createdAt"}]}`,
@@ -206,7 +205,7 @@ let **any visitor of the site** register as `local` through the proxy unless the
 on the machine could do the same. It would put "trust by transport" back, which is the rule this design removes. The assumption "the server machine has no student shell" is not guaranteed
 (the lab machines of PRN01 are exactly such machines).
 
-**Recommendation: (a).** One mechanism for development, tests and the CREMI; no manual step; the secret never leaves the server's account. (b) is only a more manual way to reach the same state
+**Decision: (a).** One mechanism for development, tests and the CREMI; no manual step; the secret never leaves the server's account. (b) is only a more manual way to reach the same state
 and needs two code paths. For a local runner under **another** account or in a container, use the existing remote registration (`/admin` token, `runner.sh register`, `runner.sh run`): nothing new.
 
 **Command line.**
@@ -225,10 +224,10 @@ node server/main.js --local-runner [--runtime DIR ...]      # server: creates/re
 
 1. A long-lived token is **never on a command line** (`ps` shows arguments to every account): a file (0600, directory 0700; the runner warns, as for `runner.json`, when the file is group or world readable) or a
    child's environment. Never printed, never logged, never shown by `status.sh`. Known exception today: the **one-time** registration token of `runner.sh register --token TOKEN` is on `argv` for its
-   15 minutes; a `--token-file` or stdin form is proposed (Q12).
+   15 minutes; a `--token-file` or stdin form is added by a small task after RUN03c (Q12).
 2. The server writes the file atomically (temporary file, mode 0600, rename) and only when it is missing or unreadable; it never rewrites a file it can read.
 3. The runner reads the file **at every attempt**, so a rotation needs no runner restart. File missing or unreadable: a clear, **non-fatal** message and retry (2 s doubling to 30 s), distinct from 401.
-4. 401 (unknown or revoked) is **fatal** as for a remote runner; the runner exits with a dedicated status (proposed **78**) so that systemd can say `RestartPreventExitStatus=78` (otherwise `Restart=on-failure` would loop on a revoked runner).
+4. 401 (unknown or revoked) is **fatal** as for a remote runner; the runner exits with a dedicated status (**78**, Q13) so that systemd can say `RestartPreventExitStatus=78` (otherwise `Restart=on-failure` would loop on a revoked runner).
 
 **Lost file.** The server recreates it at its next start (`qwctl.sh restart server`; under `start.sh` simply start again). The runner, which retries, picks the new token up and reconnects; its sessions are
 adopted by the binding (R6). That is the one-command recovery.
@@ -275,7 +274,7 @@ and `RestartPreventExitStatus=78`; `install -d` for the two directories; the tok
 
 ### 3.2 Implementation tasks, in order
 
-Each task is small and leaves the application usable. The user approves before RUN03a starts.
+Each task is small and leaves the application usable. Each task is delegated separately, and its tests run only with the user's approval.
 
 | Task | Size | What | Acceptance criteria | Files |
 |---|---|---|---|---|
@@ -328,24 +327,24 @@ token absent from `ps` (c); defaults within the budget (d); `bindings.json` read
 | **Runner revoked** | Refused (403) | Token invalid, connection closed, sessions kept for the grace, the runner stops itself | Same for both (the local runner exits 78, systemd does not restart it); forced loss and drop-at-once are PST01 controls (R7) |
 | **Token file lost** | n/a | n/a (the runner file holds the token) | The runner waits ("token file missing"); a server restart recreates it; the runner reconnects and its sessions are adopted |
 
-## 4. Open questions for the user
+## 4. Decisions (validated by the user, 22 November 2026)
 
-**Decided:** Q1 (option C) and Q2 (the local runner registers with a token and uses the WebSocket path, no Unix socket for the runner link).
-
-| # | Question | Recommendation and why |
+| # | Question | Decision and why |
 |---|---|---|
-| Q3 | The owner of an adopted session comes from the server's `bindings.json`, never from the hello. A lost file means the sessions are deleted at the next hello. Accept? | **Yes**: the trust then does not depend on who sent the hello (SEC03). |
-| Q4 | `users/<login>` aliases: kept by the runner (recommended), or dropped (owner only in `meta.json`, shown by `status.sh`)? | **Kept by the runner**: no change of habit, no server involvement. |
-| Q5 | A runner killed hard leaves non-empty session directories: kept until PST01, or deleted at the runner's next start after checking no process uses them? | **Kept until PST01**; `cleanall.sh` removes them. |
-| Q6 | Grace for the local runner: the same 300 s (a stopped local runner shows "offline" instead of a new empty session at once), `start.sh` with `--runner-grace 0`? | **Uniform grace, `--runner-grace 0` in `start.sh`.** |
-| Q7 | Revoking a runner: drop its sessions at once or keep them for the grace? Forced-loss route in RUN03e or left to PST01? | **Drop at once**, **route in RUN03e** (same function). |
-| Q8 | Directory names: server `<port>`, local runner `l-<port>`, remote `r-<6 hex>` (runner names at most 8 characters, within 49 bytes). OK? | **Yes.** |
-| Q9 | A **one-time breaking change** at the CREMI (two directories, new runner unit, old `/var/lib/qemuweb` content deleted, `runners.json` v2)? | **Yes** (beta rules), with the next release notes. |
-| Q10 | Order: RUN03 (a to f) before PST01? | **Yes**: PST01's persistence is RUN03e's `bindings.json`. |
-| Q11 | Option name and default: `--local-runner` on the server, **off** by default (a server with only remote runners then has no `local` record)? And is the token file name `local-runner.token` in the server directory fine? | **Yes to both**; `start.sh`, `demo.sh` and the CREMI unit pass it. |
-| Q12 | The one-time registration token of `runner.sh register --token TOKEN` is visible in `ps` for 15 minutes: add `--token-file` / stdin (small, outside RUN03)? | **Yes, as a small task** after RUN03c, for the same rule "no secret on a command line". |
-| Q13 | A dedicated exit status (78) when a runner is refused (revoked), with `RestartPreventExitStatus=78` in the unit, so systemd does not loop? | **Yes**: otherwise a revoked runner restarts every few seconds. |
-| Q14 | The credential file `local-runner.token` is written by the server in **its** directory and read by the runner: accepted as the one file that crosses (a credential hand-off, not a runner file)? | **Yes**: the alternative (an administrator copying a secret by hand, (b)) adds a manual step and a second code path. |
+| Q1 | Design | **Option C**: the local runner uses the same WebSocket path as a remote one; one transport, one code path. |
+| Q2 | Identity of the local runner | **A token like any runner** (server-minted token file, 2.4); no Unix socket for the runner link. |
+| Q3 | Owner of an adopted session | **From the server's `bindings.json`, never from the hello**; a lost file means the runners' sessions are deleted at their next hello. The trust then does not depend on who sent the hello (SEC03). |
+| Q4 | `users/<login>` aliases | **Kept, by the runner, in its own directory**: no change of habit for the administrator, no server involvement. |
+| Q5 | Non-empty session directories left by a hard-killed runner | **Kept until PST01** decides restore or discard; `cleanall.sh` removes them. |
+| Q6 | Grace for the local runner | **Uniform grace for every runner; `start.sh` passes `--runner-grace 0` unless given.** One rule; systemd restarts the runner in seconds and its hello drops what was lost. |
+| Q7 | Revoking a runner, forced loss | **A revoked runner's sessions are dropped at once** (nothing will return); **the forced-loss route is in RUN03e** (same drop function). |
+| Q8 | Directory names | **Server `<port>`, local runner `l-<port>`, remote runner `r-<6 hex of its id>`**: runner names stay within 8 characters, so within the 49-byte budget for any login. |
+| Q9 | One-time breaking change at the CREMI | **Accepted** (beta rules): two directories, new runner unit, old `/var/lib/qemuweb` content deleted, `runners.json` v2; stated in the release notes. |
+| Q10 | Order | **RUN03 (a to f) before PST01**: PST01's persistence is RUN03e's `bindings.json`. |
+| Q11 | Option and file names | **`--local-runner` on the server, off by default; `local-runner.token` in the server directory**; `start.sh`, `demo.sh` and the CREMI unit pass it. |
+| Q12 | One-time registration token on `argv` | **`runner.sh register` gets `--token-file` / stdin** (small task after RUN03c), for the rule "no secret on a command line". |
+| Q13 | Exit status of a refused runner | **Status 78** when the server refuses the token (revoked), with `RestartPreventExitStatus=78` in the unit, so systemd does not loop. |
+| Q14 | Credential file crossing from server to runner | **Accepted** as the one file that crosses (a credential hand-off, not a runner file); the alternative, copying a secret by hand, adds a manual step and a second code path. |
 
 ### What could not be verified
 
