@@ -158,7 +158,7 @@ test('an unknown system, a repeated --system and a missing id are errors, nothin
     for (const args of [['--system', 'all', '--system', 'x'], ['--system', 'x', '--system', 'all'], ['--system', 'x', '--system', 'y']]) {
       result = run(...args);
       assert.equal(result.status, 2, args.join(' '));
-      assert.match(result.err, /Choose only one --system <id\|all>\./);
+      assert.match(result.err, /Choose only one of --system <id\|all> and --all\./);
     }
     for (const args of [['--system'], ['--system', '--force'], ['--system', '']]) {
       result = run(...args);
