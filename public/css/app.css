@@ -261,6 +261,7 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .capture-confirm span { flex: 1 1 100%; }
 .topology-link:hover .link-line, .topology-link.is-selected .link-line { stroke: #ffe96a; stroke-width: 4.5; }
 .topology-link text { fill: #e0df9c; font: 700 12px system-ui, sans-serif; paint-order: stroke; stroke: #111a24; stroke-width: 4px; stroke-linejoin: round; }
+.topology-link text.link-address { fill: #9fe3c0; font: 600 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; }
 .topology-svg[data-zoom="far"] .topology-link text, .topology-svg[data-zoom="far"] .node-detail, .topology-svg[data-zoom="far"] .node-status, .topology-svg[data-zoom="far"] .node-dot { display: none; }
 .topology-node { cursor: grab; touch-action: none; }
 #graphic-canvas[data-dragging="node"] .topology-node { cursor: grabbing; }

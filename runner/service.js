@@ -26,7 +26,7 @@ const {availableEngines} = require('./preflight');
 const {statusError} = require('./commands/errors');
 
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
-const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures', 'capture-live'];
+const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures', 'capture-live', 'guest-info'];
 const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology', 'archives', 'consoles', 'captures']
   .map(name => require(`./commands/${name}`).commands));
 // Commands that answer for an unknown node themselves: the launch preview describes host

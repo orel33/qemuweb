@@ -18,7 +18,8 @@ The elapsed time of each step and the system total are displayed.
 --list             List systems, allocated image disk usage (GB), date, and the state of the
                    SHA-256 files of the images (ok, old: older than its image, missing).
                    Debian raw images get one more line: "ttyS1 login: yes", "no (rebuild: ...)"
-                   or "unknown" (best effort, read-only, needs debugfs).
+                   or "unknown"; every raw image gets "guest agent: yes (restricted)", "yes (NOT
+                   restricted)", "no (rebuild: ...)" or "unknown" (best effort, read-only, needs debugfs).
 --all              Prepare every configured system (the default).
 --system <sysname> Prepare one configured system.
 --force            Rebuild and replace existing images. Save the old pair in
@@ -138,12 +139,15 @@ for (const [id, system] of Object.entries(systems)) {
 }
 const widths = heading.map((_, index) => Math.max(...rows.map(row => row[index].length)));
 for (const row of rows) console.log(row.map((value, index) => value.padEnd(widths[index])).join('  ').trimEnd());
-// Best-effort note per Debian raw image (read-only, never fails the listing): see scripts/prepare/lib/ttys1-login.js.
+// Best-effort notes per raw image (read-only, never fail the listing): see scripts/prepare/lib/image-probe.js.
 try {
-  const {ttys1Login, describe} = require(path.join(root, 'scripts', 'prepare', 'lib', 'ttys1-login'));
+  const {ttys1Login, guestAgent, describe, describeGuestAgent} = require(path.join(root, 'scripts', 'prepare', 'lib', 'image-probe'));
   for (const [id, system] of Object.entries(systems)) {
-    if (!id.startsWith('debian') || !fs.existsSync(path.resolve(root, system.qemu.image))) continue;
-    console.log(`${id.padEnd(widths[0])}  ${describe(ttys1Login(path.resolve(root, system.qemu.image)), id)}`);
+    if (id === 'default' || !system.qemu?.image) continue;
+    const image = path.resolve(root, system.qemu.image);
+    if (!fs.existsSync(image)) continue;
+    if (id.startsWith('debian')) console.log(`${id.padEnd(widths[0])}  ${describe(ttys1Login(image), id)}`);
+    console.log(`${id.padEnd(widths[0])}  ${describeGuestAgent(guestAgent(image), id)}`);
   }
 } catch { /* the note is optional */ }
 NODE

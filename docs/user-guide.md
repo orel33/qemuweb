@@ -308,9 +308,21 @@ naming scheme and the console font).
 
 The **Graphic** button (bottom right) shows the network as a diagram; **Terminals** goes
 back. Each card shows the node name, its system, its state, and for a host its memory,
-vCPUs and how many interfaces are linked (for a switch, how many ports are in use). No IP
-address is shown: QemuWeb does not know the guests' addresses. Hovering a card lists
-everything, including each interface's switch and port.
+vCPUs and how many interfaces are linked (for a switch, how many ports are in use). Hovering a
+card lists everything, including each interface's switch and port.
+
+**Addresses.** For a running host, the address the guest reports with its prefix (for example
+`192.168.0.1/24`) is drawn under the interface label (`eth0`, `eth1`, ...) at the host end of the link of
+that interface, and listed in the hover of the card and of the link (with the MAC address). It follows the
+guest: a DHCP lease, a static address at boot or `ip addr add` show up within a few seconds, and the label
+disappears when the address is removed or the host stops. If an interface has several addresses, the
+first is drawn followed by `+N`, all are in the hover; link-local and loopback addresses are not shown.
+The address is what the guest says about itself (a student is root in it and can make it say anything): it
+is informational, QemuWeb never uses it for anything. QemuWeb asks the QEMU guest agent of the guest
+through a private channel, with no network traffic, so nothing shows when the system has no agent: the
+four systems of QemuWeb have it in images prepared with this version, an image prepared before needs
+`bash scripts/prepare.sh --system <id> --force`, and a VirtualBox host never shows addresses. Nothing is
+drawn for a host without an address or whose agent has not started yet (the first seconds of a boot).
 
 - **Move the view**: drag the background to pan, use the mouse wheel to zoom around the
   pointer, or the zoom buttons (`+`, `-` and `0` on the keyboard). **Fit to view** shows the

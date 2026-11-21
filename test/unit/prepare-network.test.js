@@ -73,7 +73,7 @@ const OPENWRT_APK_FAILURE = [
   'QEMUWEB_OPENWRT_PHASE_APK',
   'fetch https://downloads.openwrt.org/releases/25.12.6/packages/x86_64/base/packages.adb',
   'ERROR: https://downloads.openwrt.org/releases/25.12.6/packages/x86_64/base/packages.adb: Network error (check Internet connection and firewall)',
-  'OpenWrt preparation: apk could not install tcpdump and nano from the package feeds (check the proxy)',
+  'OpenWrt preparation: apk could not install tcpdump, nano and qemu-ga from the package feeds (check the proxy)',
   'QEMUWEB_OPENWRT_STATUS_1',
   ''
 ].join('\r\n');
@@ -82,7 +82,7 @@ function makeRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-prepare-network-'));
   fs.mkdirSync(path.join(root, 'scripts', 'prepare', 'resources'), {recursive: true});
   fs.cpSync(path.join(PREPARE, 'lib'), path.join(root, 'scripts', 'prepare', 'lib'), {recursive: true});
-  fs.copyFileSync(path.join(PREPARE, 'resources', 'guest-start.sh'), path.join(root, 'scripts', 'prepare', 'resources', 'guest-start.sh'));
+  for (const file of ['guest-start.sh', 'qemu-ga.conf']) fs.copyFileSync(path.join(PREPARE, 'resources', file), path.join(root, 'scripts', 'prepare', 'resources', file));
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   // curl: records its arguments in curl.args; CURL_STUB_FAIL makes it print that text on stderr and fail.
@@ -221,7 +221,7 @@ test('OpenWrt script with a proxy: exports before apk, bounded apk and a clear f
     assert.match(script, new RegExp(`^export http_proxy='${url}' https_proxy='${url}' ftp_proxy='${url}'$`, 'm'));
     assert.ok(indexOfLine(script, 'export http_proxy=') < indexOfLine(script, '-U add tcpdump nano'));
     assert.match(script, /timeout 180 apk/);
-    assert.match(script, /apk could not install tcpdump and nano from the package feeds \(check the proxy\)/);
+    assert.match(script, /apk could not install tcpdump, nano and qemu-ga from the package feeds \(check the proxy\)/);
     syntaxOk(root, script);
   });
 });

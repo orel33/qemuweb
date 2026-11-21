@@ -63,9 +63,9 @@ if ! grep -Eq '^[^#].*/community/?$' "$target/etc/apk/repositories"; then
 fi
 echo QEMUNET_ALPINE_PHASE_TOOLS
 apk --root "$target" --no-cache add \
-  net-tools iputils-ping iproute2 tcpdump traceroute bind-tools netcat-openbsd nano
+  net-tools iputils-ping iproute2 tcpdump traceroute bind-tools netcat-openbsd nano qemu-guest-agent
 chroot "$target" /bin/sh -c '
-  for tool in ifconfig ping ip tcpdump traceroute dig nc nano; do
+  for tool in ifconfig ping ip tcpdump traceroute dig nc nano qemu-ga; do
     command -v "$tool" >/dev/null || { echo "Missing Alpine tool: $tool" >&2; exit 1; }
   done
 '
@@ -81,7 +81,17 @@ if [ -n "${QEMUNET_PROXY:-}" ] && grep -rIqF -- "$QEMUNET_PROXY" "$target/etc"; 
   echo 'Alpine: the build proxy is still recorded in the installed system' >&2; exit 1
 fi
 echo QEMUNET_ALPINE_PHASE_FINISH
-mkdir -p "$target/usr/local/sbin" "$target/etc/init.d" "$target/etc/runlevels/default"
+mkdir -p "$target/usr/local/sbin" "$target/etc/init.d" "$target/etc/runlevels/default" "$target/etc/qemu"
+# The QEMU guest agent (QemuWeb reads the addresses of a running host from it, docs/guest-agent.md) answers
+# read-only network queries only, and starts with the default runlevel.
+cat > "$target/etc/qemu/qemu-ga.conf" <<'QGA_CONF'
+ALPINE_HOOK
+    cat "$ROOT/scripts/prepare/resources/qemu-ga.conf"
+    cat <<'ALPINE_HOOK'
+QGA_CONF
+test -s "$target/etc/qemu/qemu-ga.conf"
+test -x "$target/etc/init.d/qemu-guest-agent"
+ln -sf /etc/init.d/qemu-guest-agent "$target/etc/runlevels/default/qemu-guest-agent"
 cat > "$target/usr/local/sbin/qemuweb-guest-start" <<'GUEST_HOOK'
 ALPINE_HOOK
     cat "$ROOT/scripts/prepare/resources/guest-start.sh"
@@ -169,7 +179,7 @@ restore_feeds() {
     if [ -f "$saved" ]; then cp "$saved" "$f"; fi
   done
 }
-$apk_run -U add tcpdump nano || { echo 'OpenWrt preparation: apk could not install tcpdump and nano from the package feeds (check the proxy)' >&2; restore_feeds; exit 1; }
+$apk_run -U add tcpdump nano qemu-ga || { echo 'OpenWrt preparation: apk could not install tcpdump, nano and qemu-ga from the package feeds (check the proxy)' >&2; restore_feeds; exit 1; }
 restore_feeds
 echo QEMUWEB_OPENWRT_PHASE_"CONFIG"
 # The stock image has no hostname command, while the default start.sh uses it.
@@ -185,7 +195,7 @@ esac
 HOSTNAME_TOOL
   chmod 755 /usr/bin/hostname
 fi
-for tool in ifconfig ping ip route traceroute nslookup nc tcpdump nano hostname; do
+for tool in ifconfig ping ip route traceroute nslookup nc tcpdump nano hostname qemu-ga; do
   command -v "$tool" >/dev/null || { echo "Missing OpenWrt tool: $tool" >&2; exit 1; }
 done
 # This lab image has one guest NIC at runtime. Keep its LAN address directly
@@ -223,7 +233,17 @@ fi
 /etc/init.d/odhcpd disable
 OPENWRT_PREPARE
     cat <<'OPENWRT_HOOK'
-mkdir -p /usr/local/sbin
+mkdir -p /usr/local/sbin /etc/qemu
+# The QEMU guest agent (QemuWeb reads the addresses of a running host from it, docs/guest-agent.md) answers
+# read-only network queries only. It is installed BEFORE the first boot with the channel: its helper creates
+# /dev/virtio-ports/org.qemu.guest_agent.0 when the port appears.
+cat > /etc/qemu/qemu-ga.conf <<'QGA_CONF'
+OPENWRT_HOOK
+    cat "$ROOT/scripts/prepare/resources/qemu-ga.conf"
+    cat <<'OPENWRT_HOOK'
+QGA_CONF
+test -s /etc/qemu/qemu-ga.conf
+/etc/init.d/qemu-ga enable
 cat > /usr/local/sbin/qemuweb-guest-start <<'GUEST_HOOK'
 OPENWRT_HOOK
     cat "$ROOT/scripts/prepare/resources/guest-start.sh"

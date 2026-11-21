@@ -68,6 +68,7 @@ By default the sessions of a server live in a short private directory of `/tmp` 
 | [docs/architecture.md](docs/architecture.md) | Data paths between the browser, the server, QEMU and VDE |
 | [docs/json-files.md](docs/json-files.md) | Specification of the JSON files |
 | [docs/development.md](docs/development.md) | Code layout, tests, building the documentation |
+| [docs/guest-agent.md](docs/guest-agent.md) | Live addresses with the QEMU guest agent: measurements, safety, design |
 | [docs/roadmap.md](docs/roadmap.md) | Roadmap to 1.0.0: milestones, tasks and open points |
 
 PDF versions are in [docs/pdf/](docs/pdf/).

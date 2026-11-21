@@ -58,7 +58,11 @@ Companions needed to understand the JSON files:
 
 ### 2.1 `config.json` — system catalog
 
-Top level: `{"schemaVersion": 1, "systems": {...}}` and nothing else.
+Top level: `{"schemaVersion": 2, "systems": {...}}` and nothing else.
+
+**Format decision (GAG01): `schemaVersion` 2, no migration.** Every profile now ends with a boolean `guestAgent` for each
+engine and `systems.default` must give them, so a `config.json` of version 1 (or without those keys) is refused at start;
+edit a custom file by hand (set `"schemaVersion": 2`, add `"guestAgent:qemu": false, "guestAgent:vbox": false` to `default`).
 `systems.default` is mandatory and abstract (never offered). Every other system
 has `"basedOn": "default"` (or another system) and must resolve a non-empty
 `image` for both engines. A system ID matches `^[A-Za-z0-9_-]{1,32}$`.
@@ -92,16 +96,20 @@ checks below is an error (the server and the runner refuse to start).
 | `diskInterface` | qemu: `{ide, virtio}`; vbox: `{sata}` | `virtio:qemu`, `sata:vbox` | F |
 | `networkModel` | `{virtio, e1000}` | `virtio` | F |
 | `image` | non-empty path, no control character; relative to the project root or absolute; `null` only in `default` | `null` | F |
+| `guestAgent` | boolean; says whether the IMAGE of the system contains the guest agent of the engine: `guestAgent:qemu` = `qemu-guest-agent` (channel `org.qemu.guest_agent.0`), `guestAgent:vbox` = VirtualBox Guest Additions. A capability of the image, not a host setting: it is not in Host Settings and never written to `host.json` | `false:qemu`, `false:vbox` | F |
 
 The values of the E keywords are the defaults of a new host; a host stores only
 what differs (section 2.5). `serialPorts` only counts for QEMU: the runner
-declares `ttyS0` alone for VirtualBox (one `--uart1`).
+declares `ttyS0` alone for VirtualBox (one `--uart1`). `guestAgent` is
+resolved like the others (`guestAgent:<engine>`, then `guestAgent`, then the parent) and every profile
+must end with a boolean for each engine; the runner gives it, for the session's engine, as
+`guestAgent` in the system list (`GET /api/systems`). Nothing uses it yet (study GAG01, `docs/guest-agent.md`).
 
 Minimal real example (the shipped file has five systems; two shown):
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "systems": {
     "default": {
       "type": "linux", "arch": "x86_64", "mode": "text", "label": "Default Linux",
@@ -110,14 +118,16 @@ Minimal real example (the shipped file has five systems; two shown):
       "acceleration:qemu": "kvm", "acceleration:vbox": "default", "boot": "disk",
       "extraOptions:qemu": ["-machine", "q35", "-cpu", "host", "-nic", "none"],
       "cdromInterface": "ide", "diskInterface:qemu": "virtio",
-      "diskInterface:vbox": "sata", "networkModel": "virtio", "image": null
+      "diskInterface:vbox": "sata", "networkModel": "virtio", "image": null,
+      "guestAgent:qemu": false, "guestAgent:vbox": false
     },
     "debian13-legacy": {
       "label": "Debian 13 Legacy", "basedOn": "default", "memory": 1024,
       "image:qemu": "images/debian13-legacy.raw",
       "image:vbox": "images/debian13-legacy.vdi",
       "diskInterface:qemu": "ide", "networkModel": "e1000",
-      "serialPorts:qemu": ["ttyS0", "ttyS1"]
+      "serialPorts:qemu": ["ttyS0", "ttyS1"],
+      "guestAgent:qemu": true
     }
   }
 }

@@ -35,9 +35,10 @@ prepare_debian_image() {
     local user_data="$temp_dir/user-data" meta_data="$temp_dir/meta-data" network_config="$temp_dir/network-config"
     # Cloud-init creates the lab account, enables both consoles, and configures
     # the guest NIC for DHCP. The VDE switch itself does not provide DHCP.
-    local hook_b64 unit_b64
+    local hook_b64 unit_b64 qga_conf_b64
     hook_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/guest-start.sh")"
     unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/qemuweb-start.service")"
+    qga_conf_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/qemu-ga.conf")"
     # The VM cannot see this shell's environment: give cloud-init the proxy for apt
     # (empty: none). The file it writes is removed again by the last runcmd.
     local apt_proxy_yaml='' guest_proxy
@@ -95,6 +96,8 @@ packages:
   - inetutils-telnetd
   - tnftp
   - inetutils-ftpd
+  # QemuWeb reads the addresses of a running host from the guest agent (docs/guest-agent.md).
+  - qemu-guest-agent
 users:
   - name: toto
     groups: [sudo]
@@ -117,6 +120,10 @@ write_files:
     permissions: '0755'
     encoding: b64
     content: $hook_b64
+  - path: /etc/qemu/qemu-ga.conf
+    permissions: '0644'
+    encoding: b64
+    content: $qga_conf_b64
   - path: /etc/systemd/system/qemuweb-start.service
     permissions: '0644'
     encoding: b64
@@ -145,7 +152,7 @@ runcmd:
   - [rm, -f, /usr/sbin/policy-rc.d]
   # Finish the template with no fixed machine ID. This is the last guest-side
   # change before the temporary preparation VM is shut down.
-  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
+  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null && dpkg -s qemu-guest-agent >/dev/null && test -s /etc/qemu/qemu-ga.conf; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
 CLOUD_CONFIG
     cat > "$meta_data" <<EOF_META
 instance-id: qemuweb-$id-$(date +%s)

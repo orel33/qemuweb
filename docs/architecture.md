@@ -405,6 +405,40 @@ Checked on the QEMU of `.env.local` before writing the code:
   `device_add` fails with `Bus 'pcie.0' does not support hotplugging`, and a `pcie-root-port` cannot
   be added at runtime either: hot-adding NICs needs free root ports declared at boot.
 
+## Guest agent (live addresses)
+
+A running host shows the addresses it reports in the Graphic view. Nothing is installed by hand and nothing
+goes through the guest's network: QEMU exposes a **virtio-serial channel** to the guest agent as a Unix socket
+of the node directory. Measurements, safety analysis and the alternatives: [guest-agent.md](guest-agent.md).
+
+- **Channel.** For a system whose profile has `guestAgent:qemu` true, `runner/engines/qemu.js` adds
+  `-chardev socket,id=qga,path=<node dir>/qga.sock,server=on,wait=off -device virtio-serial-pci -device
+  virtserialport,chardev=qga,name=org.qemu.guest_agent.0` (the channel must exist at boot on q35) and makes
+  the node directory 0700. `qga.sock` is a `NODE_FILES` entry of `common/runtime-dir.js`, so the 107-byte
+  budget covers it; QEMU removes it when it exits and the runner removes a leftover.
+- **Poller** (`runner/guest-agent.js`). Started when a host starts (`watch`), stopped when it stops, is reset
+  or removed (`unwatch`). One call at a time per host: connect, `guest-sync-delimited` with a fresh id, then the
+  single command `guest-network-get-interfaces`; 2 s deadline, 64 KB cap on what is read (a hostile guest can
+  write about 900 MB/s), the connection is dropped on any violation. Every 5 s after an answer; without an
+  answer 2 s, then x1.5 up to 10 s, so a guest without an agent costs one failed call per 10 s. After two failed
+  polls in a row, and when the host stops, the addresses are cleared.
+- **Allowlist.** The runner can send only `guest-ping`, `guest-info` and `guest-network-get-interfaces`: no
+  route, event or setting takes a command name. The images add a second wall, `/etc/qemu/qemu-ga.conf` with
+  `allow-rpcs=` the same commands (`scripts/prepare/resources/qemu-ga.conf`); the host cannot enforce it
+  (root in the guest owns the agent), so the runner never trusts a reply.
+- **Validation** (`common/guest-addresses.js`). Strict patterns for addresses (IPv4 dotted quad, IPv6, prefix
+  range), interface names and MACs; at most 16 interfaces, 8 addresses each, 4 kept per NIC; loopback and
+  link-local dropped. An interface is matched to the NIC of the node by MAC (the runner chose it), else by the
+  name `ethN`. The result, `node.guestAddresses = {"<nic index>": ["192.168.0.1/24"]}`, is informational
+  only, never used for routing or any decision.
+- **Data path.** Runner event `guest-info` `{nodeId, addresses}` (only when the value changes; `{}` when the
+  host stops), forwarded by `server/sockets.js` to the session room (observers too); `GET /api/nodes` carries
+  the same `addresses` for a page that loads late. The browser keeps `machine.addresses` and
+  `public/topology-graphic.js` draws the text at the host end of the link (`addressesOf`, `addressText`).
+- **VirtualBox.** `runner/engines/vbox-guest.js` reads the Guest Additions properties
+  (`/VirtualBox/GuestInfo/Net/*`) into the same shape; it is inert (`guestAgent:vbox` is false everywhere)
+  and was never run against VirtualBox.
+
 ## Images and the session
 
 [`config.json`](../config.json) defines system profiles and base image paths.
@@ -551,7 +585,7 @@ line, column}`, and `input` messages.
 ### Events
 
 `state`, `log`, `logs-reset`, `serial`, `serial-reset`, `nodes-removed`,
-`nodes-changed`, `node-renamed`, `general-settings-changed`, `captures` `{nodeId, captures}` and `capture-live` `{liveId, data}` or `{liveId, end}`, with today's
+`nodes-changed`, `node-renamed`, `general-settings-changed`, `guest-info` `{nodeId, addresses}`, `captures` `{nodeId, captures}` and `capture-live` `{liveId, data}` or `{liveId, end}`, with today's
 Socket.IO payloads; `server/sockets.js` forwards them to the rooms of `sessionId`
 (the last three were emitted by routes, they now come from the runner like the
 others).

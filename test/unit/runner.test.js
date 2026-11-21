@@ -118,7 +118,7 @@ test('listNodes describes nodes for the web layer', t => {
   assert.deepEqual(runner.listNodes(), [{
     id: SWITCH_1, kind: 'switch', running: false, hasLaunched: false, engine: null, imageId: null,
     settings: null, hostname: 's1', networkInterfaces: [], pendingRestart: false, serialPorts: ['ttyS0'], hasDifferentialDisk: false,
-    message: 'Stopped'
+    addresses: {}, message: 'Stopped'
   }]);
 });
 
