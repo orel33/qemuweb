@@ -143,6 +143,7 @@ for (const row of rows) console.log(row.map((value, index) => value.padEnd(width
 try {
   const {ttys1Login, guestAgent, describe, describeGuestAgent} = require(path.join(root, 'scripts', 'prepare', 'lib', 'image-probe'));
   for (const [id, system] of Object.entries(systems)) {
+    if (id === 'default' || !system.qemu?.image) continue;
     const image = path.resolve(root, system.qemu.image);
     if (!fs.existsSync(image)) continue;
     if (id.startsWith('debian')) console.log(`${id.padEnd(widths[0])}  ${describe(ttys1Login(image), id)}`);

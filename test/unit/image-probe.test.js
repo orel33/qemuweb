@@ -53,6 +53,7 @@ function setup(dir, partitions, mode, {stub = true, rootOffset = ''} = {}) {
   const image = path.join(dir, 'debian.raw');
   fs.writeFileSync(image, mbr(partitions));
   const bin = path.join(dir, 'bin');
+  fs.rmSync(bin, {recursive: true, force: true});
   fs.mkdirSync(bin);
   if (stub) fs.writeFileSync(path.join(bin, 'debugfs'), STUB, {mode: 0o755});
   const log = path.join(dir, 'debugfs.log');

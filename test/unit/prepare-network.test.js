@@ -82,7 +82,7 @@ function makeRoot() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-prepare-network-'));
   fs.mkdirSync(path.join(root, 'scripts', 'prepare', 'resources'), {recursive: true});
   fs.cpSync(path.join(PREPARE, 'lib'), path.join(root, 'scripts', 'prepare', 'lib'), {recursive: true});
-  fs.copyFileSync(path.join(PREPARE, 'resources', 'guest-start.sh'), path.join(root, 'scripts', 'prepare', 'resources', 'guest-start.sh'));
+  for (const file of ['guest-start.sh', 'qemu-ga.conf']) fs.copyFileSync(path.join(PREPARE, 'resources', file), path.join(root, 'scripts', 'prepare', 'resources', file));
   const bin = path.join(root, 'bin');
   fs.mkdirSync(bin);
   // curl: records its arguments in curl.args; CURL_STUB_FAIL makes it print that text on stderr and fail.
