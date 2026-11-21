@@ -102,10 +102,11 @@ their machines still running.
 Alpine Linux 3.24, Debian 13 Cloud, Debian 13 Legacy, and OpenWrt 25.12.
 
 ```sh
-bash scripts/prepare.sh                      # all systems
+bash scripts/prepare.sh                      # same as --list: nothing is built
+bash scripts/prepare.sh --system all         # all systems
 bash scripts/prepare.sh --system <id>        # alpine, debian13-cloud, debian13-legacy, openwrt
 bash scripts/prepare.sh --list               # show prepared images and the state of their SHA-256 files (ok, old, missing)
-bash scripts/prepare.sh --hash               # record image hashes without building (reports missing images)
+bash scripts/prepare.sh --hash               # (all systems) record image hashes without building (reports missing images)
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/  # behind an HTTP proxy
 bash scripts/prepare.sh --system <id> --follow  # also show the last 20 lines of the build log
@@ -219,11 +220,11 @@ first byte arrives, the **Console (ttyS1)** pane shows a hint saying so
 ("Nothing received yet. Press Enter. ..."): if it stays, rebuild the image with
 `bash scripts/prepare.sh --system <id> --force`. `bash scripts/prepare.sh --list`
 reads each Debian raw image offline and read-only (with `debugfs`, no root) and
-prints a line such as `debian13-legacy  ttyS1 login: yes`, `... no (rebuild: ...)`
+prints a line such as `debian13-legacy  ttyS1 login: yes`, `... no`
 or `... unknown` (`debugfs` missing, unreadable image or unexpected partition
 table). Every raw image also gets a line such as
 `debian13-legacy  guest agent: yes (restricted)`, `... yes (NOT restricted)`
-(the agent is there without its QemuWeb allowlist) or `... no (rebuild: ...)`,
+(the agent is there without its QemuWeb allowlist) or `... no`,
 read the same way: see [guest-agent](guest-agent.md).
 
 **Addresses on the Graphic view (guest agent).** The addresses a running host reports are read from the QEMU

@@ -37,7 +37,7 @@ function createCatalog(ctx) {
   // offers it only the systems of the runner that holds the session (catalog.systems).
   function requireInstalledImage(image) {
     if (ctx.requireImages && !imageInstalled(image.id)) {
-      throw new Error(`System ${image.label || image.id} is not installed on this runner (its image is missing): run scripts/prepare.sh there.`);
+      throw new Error(`System ${image.label || image.id} is not installed on this runner (its image is missing): run bash scripts/prepare.sh --system ${image.id} there.`);
     }
   }
 

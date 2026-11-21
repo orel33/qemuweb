@@ -295,14 +295,14 @@ The Graphic view shows:
 
 `bash scripts/prepare.sh --list` also tells, offline, whether each raw image carries the agent: `guest agent: yes
 (restricted)` (the binary and `/etc/qemu/qemu-ga.conf` with its `allow-rpcs` line), `yes (NOT restricted)` (the binary
-without that configuration: rebuild), `no (rebuild: bash scripts/prepare.sh --system ID --force)` or `unknown`
+without that configuration: rebuild), `no` or `unknown`
 (`debugfs` missing, unreadable image or partition table, 10 s limit). The binary is looked for in `/usr/sbin/qemu-ga`
 (Debian) and `/usr/bin/qemu-ga` (the Alpine and OpenWrt packages; not verified on those two images: a `no` there
 means neither place has it).
 
 ## 13. Open risks
 
-- The images shipped with this version do not carry the allowlist file until they are rebuilt (`prepare.sh`).
+- The images shipped with this version do not carry the allowlist file until they are rebuilt (`prepare.sh --system <id> --force`).
   Until then the Debian legacy agent runs with all its commands enabled (the runner still sends only the four).
 - `allow-rpcs` was not exercised on OpenWrt; the agent versions differ per system (10.0 to 11.0).
 - Polling cost under 30 busy sessions is an estimate.

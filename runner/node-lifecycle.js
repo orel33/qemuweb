@@ -47,8 +47,8 @@ function createLifecycle(ctx) {
     refuseKvmConflict(node, selectedEngine, acceleration);
     const image = resume ? node.selectedImage : imageById(imageId);
     if (!image) throw new Error('Unknown system in config.json.');
-    if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
-    if (selectedEngine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+    if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh --system ${image.id}.`);
+    if (selectedEngine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh --system ${image.id}.`);
     node.guestMedia = readStartupFiles(startupDirectory(node));
     if (options.startupDiskEnabled !== undefined) {
       if (typeof options.startupDiskEnabled !== 'boolean') throw new Error('Invalid startup CD-ROM option.');
@@ -122,8 +122,8 @@ function createLifecycle(ctx) {
     if (node.engine.startsWith('qemu')) qemuAcceleration(node.engine);
     refuseKvmConflict(node, node.engine, node.engine.startsWith('qemu') ? 'kvm' : null);
     const image = node.selectedImage;
-    if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh.`);
-    if (node.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh.`);
+    if (!fs.existsSync(imagePath(image.images.raw))) throw new Error(`RAW image for ${image.label} is missing; run bash scripts/prepare.sh --system ${image.id}.`);
+    if (node.engine === 'vbox' && !fs.existsSync(imagePath(image.images.vdi))) throw new Error(`VirtualBox base for ${image.label} is missing; run bash scripts/prepare.sh --system ${image.id}.`);
     for (const nic of node.networkInterfaces) validateNetworkInterfaces([nic.switchId], node.engine);
   }
 
