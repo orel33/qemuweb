@@ -13,7 +13,7 @@ web interface is described in the [user guide](user-guide.md).
 | `users.json` | User accounts (see [Users and sessions](user-guide.md#users-and-sessions)); ignored by Git. |
 | `<runtime>/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks (`<host>/disk.qcow2` for QEMU and `<host>/disk.vdi` for VirtualBox, up to one per engine), and sockets. The ID is random. |
 | `<runtime>/users/<login>` | Link to the user's session directory, for administrators; made and removed by the runner in its own directory. |
-| `<runtime>/runner-<port>.sock` | Socket (mode 0600) that the runner, which runs the machines, dials to reach the server. |
+| `<runtime>/local-runner.token` | Token (mode 0600) of the local runner, created by the server started with `--local-runner`; the runner reads it to connect over the WebSocket. Never printed or logged. |
 
 `<runtime>` is the runtime directory (below): a node's files are removed with the node or when
 the server stops. `./scripts/start.sh` (`npm start`) runs the server and a runner (`runner/main.js`)
@@ -41,21 +41,24 @@ with their arguments, so the process is the Node.js one (`./scripts/status.sh`, 
   `Checking dependencies…` and `Checking configuration…`, with `✓` (ok), `⚠` (warning), `✗`
   (failure, the program then stops with `Startup aborted`) and `-` (not applicable).
 
-The port and the runtime directory are options (there is no environment variable for them). The server and the runner started
-with the same `--runtime` (by default the same private directory of the port, see below) share that directory: the server creates
-`runner-<port>.sock` in it and the runner looks for it there. Nothing else crosses: the server touches no file of a runner;
-the runner creates the `users/<login>` aliases, removes the empty sessions and dangling aliases it finds at its own
+The port and the runtime directory are options (there is no environment variable for them). The runner link is a WebSocket
+(`ws://127.0.0.1:<port>/runner/connect`), like that of a remote runner, with a token. With `--local-runner` the server creates
+`<runtime>/local-runner.token` (mode 0600, only when missing or unusable; a readable file is never rewritten) and keeps only its hash in
+memory; the runner of this machine (`runner.sh --port PORT [--token-file FILE]`, by default the file of the default directory of the port) reads it
+at every connection attempt, so nobody types a token and none is on a command line. The one file that crosses is that credential: the server touches
+no file of a runner. A lost file is recreated at the next server start (the runner waits and reconnects); to rotate it, remove it and restart the server;
+a revoked `local` runner is refused (401) and exits with status 78 (`RestartPreventExitStatus=78` in a unit), and a restart never un-revokes it. The runner creates the `users/<login>` aliases, removes the empty sessions and dangling aliases it finds at its own
 start, and locks the directory with `runner.pid` (a second runner on it refuses to start).
 
 ### Runtime directory
 
-Every Unix socket of QemuWeb lives under the runtime directory, and a socket path is limited to 107 bytes. The
-default is therefore a short private directory in `/tmp`, one per account and per server port
+The Unix sockets of the nodes (consoles, monitor, VDE) live under the runner's runtime directory, and a socket path is limited to
+107 bytes. The default is therefore a short private directory in `/tmp`, one per account and per server port
 (`common/runtime-dir.js` is the only place of the rule; the scripts ask it):
 
 | Process | Default |
 |---|---|
-| Server and local runner | `/tmp/qw-<login>/<port>`, the port being the server's `--listen` (the runner's `--port`, or the port in the name of the `--connect` socket); `/tmp/qw-<login>/3002` by default |
+| Server and local runner | `/tmp/qw-<login>/<port>`, the port being the server's `--listen` (the runner's `--port`); `/tmp/qw-<login>/3002` by default |
 | Remote runner (`runner.sh run`) without `--runtime` or a `runtime` in its runner file | `/tmp/qw-<login>/runner` |
 
 `<login>` is the operating system account that runs the process (`id -un`), each character outside `A-Za-z0-9._-`
@@ -86,10 +89,11 @@ The server is configured by options only: it reads **no environment variable**.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--listen PORT` | `3002` | TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-PORT.sock, the socket its runner dials |
-| `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory of the server: server-PORT.pid and the socket DIR/runner-PORT.sock (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets) |
+| `--listen PORT` | `3002` | TCP port of the web interface on 127.0.0.1, and of /runner/connect, where the runners connect |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory of the server: server-PORT.pid, bindings.json and the token file local-runner.token (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot |
+| `--local-runner` | `off` | accepts the runner of this machine (id local): creates DIR/local-runner.token when missing (mode 0600) and accepts the runner that presents it; ./scripts/runner.sh --port PORT reads it, start.sh and demo.sh pass this option |
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
-| `--runners FILE` | `runners.json of the repository` | registered remote runners (mode 0600): a hash of the token of each |
+| `--runners FILE` | `runners.json of the repository` | registered runners (mode 0600): a hash of the token of each remote one |
 | `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
 | `--examples DIR` | `examples/ of the repository` | directory of the example topologies (.topo) and sessions (.zip) offered by the Load dialog (read only; a missing directory means no example) |
 | `--session-hours N` | `12` | login lifetime in hours (more than 0, at most 2160), renewed while the user is active |
@@ -125,7 +129,8 @@ Options
   --logout-url      unset                                      (default)
   --no-auth         off                                        (default)
   --ephemeral       off                                        (default)
-  Runner socket     /tmp/qw-me/3002/runner-3002.sock  (derived)
+  --local-runner    on                                         (option)
+  Local runner token  /tmp/qw-me/3002/local-runner.token  (derived)
 
 Checking dependencies…
   ✓ Node.js  /usr/bin/node  (v24.22.0, requires ^24.0.0)
@@ -148,11 +153,11 @@ The runner is an ordinary unprivileged process; every path is a parameter.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--port PORT` | `3002` | port of the server to reach: the runner dials `DIR/runner-PORT.sock`, DIR being its `--runtime` |
-| `--connect SOCKET` | `none` | Unix socket of the server, instead of `--port` (the two exclude each other) |
-| `--runtime DIR` | `/tmp/qw-<login>/<port>` | where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot |
+| `--port PORT` | `3002` | port of the server to reach: the runner dials ws://127.0.0.1:PORT/runner/connect |
+| `--token-file FILE` | `<default server directory of the port>/local-runner.token` | token file the server created (--local-runner), read again at every connection attempt; a missing file is waited for, never a token on the command line |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | where the runner keeps its sessions (DIR/sessions/<id>/); DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot |
 | `--config FILE` | `config.json of the repository` | system catalog (images, memory, QEMU options) |
-| `--exit-on-disconnect` | `off` | stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect every 2 seconds) |
+| `--exit-on-disconnect` | `off` | stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect, after 2 seconds, then 4, up to 30) |
 | `-h`, `--help` | | this text |
 
 | Variable | Default | Effect |
@@ -163,17 +168,19 @@ The `Checking dependencies…` block shows, for each external program, the path 
 named it with its source (for example `QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env`). The server runs no
 external program, but it runs on Node.js: its block shows the Node.js in use and checks its version
 against the range of `package.json`. After the checks the runner prints the state of its
-connection (`Waiting for the server…`, `Connected to the server.`, `Connection to the server lost, reconnecting…`).
+connection (`Cannot reach the server…` or `…token file … does not exist…` (retried), `Connected to the server.`, `Connection to the server lost, reconnecting…`).
 
 ```text
 QemuWeb 0.9.6 runner
 
 Options
   --port                3002                                       (default)
+  --token-file          /tmp/qw-me/3002/local-runner.token         (default)
   --runtime             /tmp/qw-me/3002                   (default)
   --config              /home/me/qemuweb/config.json               (default)
   --exit-on-disconnect  off                                        (default)
-  Server socket         /tmp/qw-me/3002/runner-3002.sock  (derived)
+  Runner                local                                      (derived)
+  Server WebSocket      ws://127.0.0.1:3002/runner/connect         (derived)
 
 Checking dependencies…
   ✓ QEMU           /usr/bin/qemu-system-x86_64  (QEMU_SYSTEM_X86_64=qemu-system-x86_64, .env)
@@ -182,9 +189,9 @@ Checking dependencies…
   ✓ tcpdump        /usr/bin/tcpdump  (TCPDUMP=tcpdump, .env)
 
 Checking configuration…
+  ✓ /tmp/qw-me/3002/local-runner.token  (mode 0600)
   ✓ config.json  9 systems
 
-Waiting for the server at /tmp/qw-me/3002/runner-3002.sock…
 Connected to the server.
 ```
 
@@ -192,7 +199,7 @@ Connected to the server.
 ### Remote runner: `./scripts/runner.sh register` and `run`
 
 A runner on **another machine or account** connects to the server over the network, with its own
-token, instead of the local Unix socket. It is for **trusted machines** until milestone 8 (jail and
+token, like the local runner (which dials `ws://127.0.0.1:<port>` with the token file of the server). It is for **trusted machines** until milestone 8 (jail and
 quotas): it runs the machines of the sessions the server places on it under the account that starts
 it, never root. The machine needs this repository (or a copy of `runner/`, `common/`, `scripts/` and
 `config.json`), Node.js, QEMU, VDE and the images prepared there by `scripts/prepare.sh`; it needs no
