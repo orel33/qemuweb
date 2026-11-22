@@ -8,9 +8,9 @@ const path = require('path');
 const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
 const {RunnerRegistry} = require('./runner-registry');
-const {createRunnerGateway} = require('./runner-gateway');
+const {ensureLocalRunnerToken} = require('./local-runner-token');
 const {createRemoteGateway} = require('./remote-gateway');
-const {createRunnerStore} = require('./runner-store');
+const {createRunnerStore, LOCAL_ID} = require('./runner-store');
 const {createRegistrationTokens} = require('./runner-registration');
 const {createRegisterRouter} = require('./routes/runner-register');
 const {ServerInstance} = require('./server-instance');
@@ -23,8 +23,19 @@ const {createSessionRouter} = require('./routes');
 const {createAuth} = require('./auth');
 const {ADMIN_LOG, USERS_LOG, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
+const {connectHint} = require('./routes/admin-runners');
 
-const RUNNER_HINT = './scripts/runner.sh';
+// The token file and the record of the local runner (--local-runner). Throws when the token file can neither be read nor created.
+function startLocalRunner({runtime, store, audit}) {
+  const token = ensureLocalRunnerToken(runtime);
+  if (token.created) console.log(`Local runner token file ${token.file} created${token.reason ? ` (${token.reason})` : ''}.`);
+  else if (token.mode & 0o077) console.warn(`Local runner token file ${token.file} can be read by other users: chmod 600 it, or remove it and restart the server.`);
+  const known = store.get(LOCAL_ID);
+  const record = store.ensureLocal();
+  if (!known) audit.record('server', 'register-local-runner', {runnerId: record.id}, 'ok');
+  if (record.revoked) console.log('The local runner is revoked: it stays refused (forget it in /admin, then restart the server, to allow it again).');
+  return token;
+}
 
 function serve({root, settings}) {
   const {runtime, port} = settings;
@@ -39,26 +50,33 @@ function serve({root, settings}) {
   const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
   const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
 
-  // One session per user, each with its own HTTP router, executed by a runner that dials
-  // <runtime>/runner-<port>.sock (server/runner-gateway.js), started by ./scripts/runner.sh.
+  // One session per user, each with its own HTTP router, executed by a runner that dials /runner/connect
+  // (server/remote-gateway.js): a registered remote runner, or the local one (--local-runner), started by ./scripts/runner.sh.
   const registry = new RunnerRegistry();
   // The server's own record of which session belongs to whom and to which runner (bindings.json):
   // the only source of the owner of a session adopted after a restart.
   const bindings = createSessionBindings(path.join(runtime, 'bindings.json'));
   const manager = new SessionManager({registry, graceSeconds: settings.runnerGrace, bindings});
-  // Every runner has a record in runners.json; the one of the local runner is created at its first connection.
+  // Every runner has a record in runners.json; the one of the local runner (--local-runner) is created here, with its token file.
   const runnerStore = createRunnerStore(settings.runnersFile);
-  const gateway = createRunnerGateway({root, runtimeRoot: runtime, port, registry, store: runnerStore});
-  // Remote runners (registered with a token) dial /runner/connect on this HTTP server.
+  let localRunner = null;
+  try { if (settings.localRunner) localRunner = startLocalRunner({runtime, store: runnerStore, audit}); }
+  catch (error) {
+    console.error(`server: Cannot read or create the local runner token file: ${error.message}`);
+    process.exit(1);
+  }
+  // Every runner, the local one included, dials /runner/connect on this HTTP server, with a token.
   const runnerTokens = createRegistrationTokens();
-  const remoteGateway = createRemoteGateway({server, registry, store: runnerStore, trustProxy: settings.trustProxy !== null});
+  const remoteGateway = createRemoteGateway({server, registry, store: runnerStore, trustProxy: settings.trustProxy !== null, localRunner});
+  // The command that starts the local runner (null without --local-runner), shown while no runner is online.
+  const startHint = localRunner ? connectHint({runners: [], port, runtime: settings.given.has('--runtime') ? runtime : null, localRunner: true}) : null;
   const runnerLabel = entry => `Runner ${entry.name} (${entry.id})`;
   registry.on('online', (entry, hello) => {
     const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
     console.log(`${runnerLabel(entry)} connected${entry.address ? ` from ${entry.address}` : ''} (engines: ${engines || 'none'}).`);
   });
   registry.on('lost', entry => {
-    console.log(`${runnerLabel(entry)} disconnected.${registry.list().some(other => other.state === 'online') ? '' : ` Start one with ${RUNNER_HINT}.`}`);
+    console.log(`${runnerLabel(entry)} disconnected.${registry.list().some(other => other.state === 'online') || !startHint ? '' : ` Start one with ${startHint}.`}`);
     try { runnerStore.change(entry.id, {lastSeenAt: new Date().toISOString()}); } catch (_) { /* Removed meanwhile. */ }
   });
   manager.on('created', (workspace, {adopted}) => {
@@ -97,7 +115,7 @@ function serve({root, settings}) {
   // X-Observe (admins, read-only) and the admin API come before anything that could open or
   // change the caller's own session.
   app.use('/api', observationGate(manager, {controlHeld: sockets.controlHeld}));
-  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null,
+  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null, localRunner: localRunner !== null,
     runnerStore, runnerTokens, runnerGrace: settings.runnerGrace, trustProxy: settings.trustProxy !== null}));
   // Self-service deletion: stops and removes every node, then the session; the next request
   // opens a new, empty session.
@@ -123,7 +141,6 @@ function serve({root, settings}) {
   server.on('error', error => {
     if (error.code === 'EADDRINUSE') {
       console.error(`server: Port ${port} is already in use. Stop the existing server or choose another port with --listen.`);
-      gateway.close();
       process.exit(1);
       return;
     }
@@ -131,22 +148,15 @@ function serve({root, settings}) {
     process.exitCode = 1;
   });
   // HTTP opens at once; a runner may connect at any time (session routes answer 503 until then).
-  async function startup() {
-    try { await gateway.start(); }
-    catch (error) {
-      console.error(`server: ${error.message}`);
-      process.exit(1);
-    }
-    server.listen(port, '127.0.0.1', onListening);
-  }
-  startup();
+  server.listen(port, '127.0.0.1', onListening);
 
   function onListening() {
     instance.writeRecords();
     console.log('QemuWeb is ready.');
     console.log(`  Web interface      http://127.0.0.1:${port}`);
     console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
-    console.log(`No runner connected. Start one with ${RUNNER_HINT}, or run ./scripts/start.sh for the server and a runner.\n`);
+    console.log(startHint ? `No runner connected. Start one with ${startHint}, or run ./scripts/start.sh for the server and a runner.\n`
+      : 'No runner connected. This server has no local runner (--local-runner): register a remote runner in /admin, Runners.\n');
   }
 
   process.on('exit', () => {
@@ -159,7 +169,6 @@ function serve({root, settings}) {
     if (shuttingDown) return;
     shuttingDown = true;
     const forceExit = setTimeout(() => process.exit(1), 10000);
-    gateway.close();
     remoteGateway.close();
     io.close(() => {
       clearTimeout(forceExit);

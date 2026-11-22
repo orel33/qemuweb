@@ -3,25 +3,24 @@
 // Runner process entry point. A runner is an ordinary unprivileged process: every path is a
 // parameter, nothing is written outside them. Three forms (runner/options.js, node runner/main.js
 // --help, docs/reference.md "Server and runner command line"), started by scripts/runner.sh:
-//   runner.sh [options]            local runner on the server's Unix socket (also through
-//                                  scripts/start.sh, with a [runner] prefix)
+//   runner.sh [options]            local runner (id local): WebSocket to ws://127.0.0.1:PORT with the token of a file
+//                                  (also through scripts/start.sh, with a [runner] prefix)
 //   runner.sh run [options]        remote runner: outbound WebSocket to the server of the runner file
 //   runner.sh register [options]   one-time registration (runner/register-command.js)
 // It prints a banner, its options, its own checks (dependencies, configuration warnings) and the
-// state of the connection. Without --exit-on-disconnect (and a remote runner never has it) it keeps
+// state of the connection. A server that refuses its token ends it with status 78. Without --exit-on-disconnect (and a remote runner never has it) it keeps
 // its sessions when the server goes away and reconnects; with it (scripts/start.sh) the loss of the
 // connection destroys every node and ends the process.
-const net = require('net');
 const path = require('path');
 const fs = require('fs');
 const cli = require('../common/cli');
-const {runnerSpec, runSpec, serverSocket, RECONNECT_MS} = require('./options');
+const {runnerSpec, runSpec} = require('./options');
 const {takeRunnerLock, pruneRuntime} = require('./runtime-tidy');
 const {defaultRuntime, prepareRuntime, removeEmptyDefaultRuntime} = require('../common/runtime-dir');
 
 const root = path.join(__dirname, '..');
-// A connection the server closes within this delay was refused (a runner is already connected).
-const REFUSED_MS = 500;
+// Exit status of a runner whose token the server refuses (EX_CONFIG): systemd can leave it stopped (RestartPreventExitStatus=78).
+const REFUSED_STATUS = 78;
 
 const subcommand = ['register', 'run'].includes(process.argv[2]) ? process.argv[2] : null;
 if (subcommand === 'register') require('./register-command').run({root, argv: process.argv.slice(3)});
@@ -35,10 +34,10 @@ function main(remote) {
   // A remote runner takes its server, runtime and certificate authority from the runner file unless an option says otherwise.
   const identity = remote ? require('./remote-identity').load(options) : null;
   if (!options.runtime) options.runtime = defaultRuntime('runner');
-  options.socket = remote ? null : serverSocket(options);
+  // The local runner: the server of this machine and the token file (runner/local-identity.js).
+  const local = remote ? null : require('./local-identity').load(options);
   cli.printBanner('runner');
-  const derived = remote ? identity.derivedRows() : [['Server socket', options.socket]];
-  cli.printOptions(cli.startupRows(spec, options, derived).filter(([name]) => !(name === '--port' && options.given.has('--connect'))));
+  cli.printOptions(cli.startupRows(spec, options, (remote ? identity : local).derivedRows()));
 
   const {createRunnerService, serveConnection, resolveCommands} = require('./index');
   const {Connection} = require('../common/runner-protocol');
@@ -65,7 +64,7 @@ function main(remote) {
   function printConfigurationChecks() {
     const {warnings, images} = service.capabilities();
     cli.heading('Checking configuration…');
-    const ok = remote ? identity.printChecks() : true;
+    const ok = (remote ? identity : local).printChecks();
     cli.pass(`runtime directory  ${options.runtime}  (writable)`);
     if (runtimeWarning) cli.warning(runtimeWarning);
     if (!warnings.length) cli.pass(`${path.basename(options.config)}  ${Object.keys(images).length} systems`);
@@ -88,7 +87,7 @@ function main(remote) {
     process.exit(code);
   }
 
-  // Connection lines, each printed once per change of state: waiting, connected, refused, lost.
+  // Connection lines, each printed once per change of state: waiting, token, connected, refused, lost.
   let reported = null;
   function report(state, message) {
     if (reported === state) return;
@@ -96,50 +95,22 @@ function main(remote) {
     console.log(message);
   }
 
-  function connect() {
-    const socket = net.createConnection(options.socket);
-    let connected = false;
-    socket.once('connect', () => {
-      connected = true;
-      const connectedAt = Date.now();
-      const announce = setTimeout(() => report('connected', 'Connected to the server.'), REFUSED_MS);
-      const connection = new Connection(socket);
-      connection.on('close', error => {
-        clearTimeout(announce);
-        if (stopping) return;
-        if (error) console.error(`runner: Control connection failed: ${error.message}`);
-        if (options.exitOnDisconnect) stop(0);
-        else {
-          if (Date.now() - connectedAt < REFUSED_MS) report('refused', 'The server refused the connection (another runner is probably connected). Retrying…');
-          else report('lost', 'Connection to the server lost, reconnecting…');
-          setTimeout(connect, RECONNECT_MS);
-        }
-      });
-      serveConnection(connection, service);
-    });
-    socket.once('error', error => {
-      if (connected) return;
-      if (options.exitOnDisconnect) {
-        console.error(`runner: Cannot reach ${options.socket}: ${error.message}`);
-        stop(1);
-      } else {
-        report('waiting', `Waiting for the server at ${options.socket}…`);
-        setTimeout(connect, RECONNECT_MS);
-      }
-    });
-  }
-
-  // The remote runner dials the server of its runner file over a WebSocket and keeps the link.
-  function connectRemote() {
+  // Both forms dial the server over a WebSocket (runner/remote.js): the remote runner with the token of its runner file, the
+  // local one with the token read again from its file at every attempt. A server that refuses the token ends the runner with status 78
+  // (systemd: RestartPreventExitStatus=78); a server that is not there yet, a missing token file, a network error are retried.
+  function connectServer() {
     const {startRemote} = require('./remote');
-    const {config} = identity;
-    remoteLink = startRemote({url: identity.urls.connectUrl, runnerId: config.runnerId, authToken: config.authToken, ca: options.ca, report,
+    const link = remote ? identity : local;
+    remoteLink = startRemote({url: link.urls.connectUrl, runnerId: remote ? identity.config.runnerId : local.runnerId,
+      authToken: remote ? identity.config.authToken : local.readToken, ca: remote ? options.ca : null, report,
       onConnection: connection => serveConnection(connection, service),
-      fatal: message => { console.error(`runner: ${message}`); stop(1); }});
+      onLost: () => { if (options.exitOnDisconnect) stop(0); },
+      ...(remote ? {} : {refusal: 'The server refused the local runner: its token is wrong, or the record "local" is revoked or forgotten. See /admin, Runners; a server restart creates a new token file.'}),
+      fatal: message => { console.error(`runner: ${message}`); stop(REFUSED_STATUS); }});
   }
 
   process.on('exit', () => runtimeLock.release());
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => stop(0));
   if (!printConfigurationChecks()) cli.abort('runner', 'Startup aborted: a check failed (see above).');
-  if (remote) connectRemote(); else connect();
+  connectServer();
 }

@@ -5,11 +5,17 @@
 // common/runner-protocol.js unchanged (the `ws` duplex stream). The runner dials out, so it needs no
 // inbound port. A lost connection is retried after 2 s, doubling up to 30 s (it keeps its machines
 // meanwhile); both ends ping every 15 s and drop a connection that stops answering. The server
-// refusing the token (401: unknown or revoked) ends the retries.
-//   startRemote({url, runnerId, authToken, ca, onConnection, report, fatal})  -> {stop()}
+// refusing the token (401: unknown or revoked) ends the retries. The same code serves the registered remote runner
+// and the local runner (runner/local-identity.js); only the way the token is obtained differs.
+//   startRemote({url, runnerId, authToken, ca, onConnection, onLost, report, fatal, refusal})  -> {stop()}
+//     authToken                 the token, or a function that returns it at EVERY attempt (the local runner re-reads its
+//                               file, so a rotation needs no restart) and throws an Error when it is not available now
+//                               (a missing file is a normal retry, never fatal)
 //     onConnection(connection)  a new Connection, once the WebSocket is open (serve it)
-//     report(state, message)    waiting | connected | lost | refused
-//     fatal(message)            the server refused the token: no retry
+//     onLost()                  an established connection ended (called before the retry is scheduled; stop() prevents it)
+//     report(state, message)    waiting | token (not available now) | connected | lost | refused
+//     fatal(message)            the server refused the token (401): no retry; only a network or server problem is retried
+//     refusal                   the text of that message
 const fs = require('fs');
 const WebSocket = require('ws');
 const {Connection} = require('../common/runner-protocol');
@@ -24,9 +30,11 @@ function retryDelay(attempt) {
   return Math.min(MAX_RETRY_MS, FIRST_RETRY_MS * 2 ** attempt);
 }
 
-function startRemote({url, runnerId, authToken, ca = null, onConnection, report, fatal}) {
-  const headers = {Authorization: `Bearer ${authToken}`, 'X-Runner-Id': runnerId};
-  const options = {headers, handshakeTimeout: HANDSHAKE_MS, maxPayload: 20 * 1024 * 1024, ...(ca ? {ca: fs.readFileSync(ca)} : {})};
+const REFUSAL = 'The server refused this runner: its token is unknown or revoked. Register it again with ./scripts/runner.sh register.';
+
+function startRemote({url, runnerId, authToken, ca = null, onConnection, onLost = () => {}, report, fatal, refusal = REFUSAL}) {
+  const tokenNow = typeof authToken === 'function' ? authToken : () => authToken;
+  const options = {handshakeTimeout: HANDSHAKE_MS, maxPayload: 20 * 1024 * 1024, ...(ca ? {ca: fs.readFileSync(ca)} : {})};
   let stopped = false;
   let attempt = 0;
   let timer = null;
@@ -34,7 +42,14 @@ function startRemote({url, runnerId, authToken, ca = null, onConnection, report,
 
   function open() {
     timer = null;
-    const ws = new WebSocket(url, options);
+    let token;
+    try { token = tokenNow(); }
+    catch (error) {
+      report('token', `${error.message}; waiting for it, retrying…`);
+      timer = setTimeout(open, retryDelay(attempt++));
+      return;
+    }
+    const ws = new WebSocket(url, {...options, headers: {Authorization: `Bearer ${token}`, 'X-Runner-Id': runnerId}});
     current = ws;
     let opened = false;
     let settled = false;
@@ -48,8 +63,13 @@ function startRemote({url, runnerId, authToken, ca = null, onConnection, report,
       response.resume();
       const status = response.statusCode;
       ws.terminate();
-      if (status === 401) { settled = true; fatal('The server refused this runner: its token is unknown or revoked. Register it again with ./scripts/runner.sh register.'); }
-      else {
+      if (status === 401) {
+        // A token that changed since this attempt (a server restart that created a new file) is not a refusal: try again.
+        let changed = false;
+        try { changed = tokenNow() !== token; } catch (_) { changed = false; }
+        if (changed) { report('refused', 'The token changed; retrying…'); retry(); }
+        else { settled = true; fatal(refusal); }
+      } else {
         report('refused', status === 409 ? 'The server already has a connection of this runner (the previous one may still be closing). Retrying…' : `The server answered HTTP ${status}. Retrying…`);
         retry();
       }
@@ -61,6 +81,8 @@ function startRemote({url, runnerId, authToken, ca = null, onConnection, report,
       keepAlive(ws);
       const connection = new Connection(WebSocket.createWebSocketStream(ws));
       connection.on('close', error => {
+        if (stopped) return;
+        onLost();
         if (stopped) return;
         report('lost', `Connection to the server lost${error ? ` (${error.message})` : ''}, reconnecting…`);
         settled = false;
@@ -75,4 +97,4 @@ function startRemote({url, runnerId, authToken, ca = null, onConnection, report,
   return {stop() { stopped = true; clearTimeout(timer); if (current) current.terminate(); }};
 }
 
-module.exports = {startRemote, retryDelay, FIRST_RETRY_MS, MAX_RETRY_MS};
+module.exports = {startRemote, REFUSAL, retryDelay, FIRST_RETRY_MS, MAX_RETRY_MS};

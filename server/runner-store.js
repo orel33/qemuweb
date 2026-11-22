@@ -5,8 +5,8 @@
 //   {"schemaVersion": 2, "runners": [{"id": "r-1a2b3c4d", "name": "salle-12", "tokenHash": "<sha256 hex>",
 //     "createdAt": "<ISO>", "lastSeenAt": "<ISO>", "paused": true, "revoked": true}]}
 // One record per runner, the same for all: the id is "r-xxxxxxxx" (registered with a token) or "local"
-// (the runner of the server's machine, created at its first connection by ensureLocal(); its record
-// has no tokenHash: its proof is not a token, and verify() never accepts it). Nobody is trusted by
+// (the runner of the server's machine, created at start by ensureLocal() when the server runs with --local-runner; its
+// record has no tokenHash: its secret is the token file of server/local-runner-token.js, and verify() never accepts it). Nobody is trusted by
 // transport: what a runner may do is decided by its record. Only the hash of a runner's
 // authentication token is stored (32 random bytes, so a plain sha256 is enough); it is compared in
 // constant time. "paused" and "revoked" are written only when set. A revoked runner keeps its record
@@ -93,8 +93,8 @@ function createRunnerStore(file, {now = () => new Date()} = {}) {
       save();
       return {record: {...record}, authToken};
     },
-    // The record of the local runner, created once at its first connection (name "local"); an
-    // existing record, revoked or not, is returned as it is.
+    // The record of the local runner, created once when the server starts with --local-runner (name "local"); an
+    // existing record, revoked or not, is returned as it is (a start never un-revokes it).
     ensureLocal() {
       let record = find(LOCAL_ID);
       if (!record) {
@@ -105,7 +105,7 @@ function createRunnerStore(file, {now = () => new Date()} = {}) {
       return {...record};
     },
     // The record of a runner presenting this ID and token, else null (unknown, wrong token, revoked,
-    // or a record without a token hash: the local runner never authenticates with a token here).
+    // or a record without a token hash: the local runner is checked by server/remote-gateway.js against its token file).
     verify(id, token) {
       const record = typeof id === 'string' && typeof token === 'string' && token.length <= 256 ? find(id) : null;
       const expected = Buffer.from(record?.tokenHash || dummy, 'hex');

@@ -2,20 +2,19 @@
 
 // The command line of the runner, as tables for common/cli.js (which parses them, prints --help and
 // the Options block), the counterpart of server/options.js. A runner has three forms:
-//   runner.sh [options]            local runner: dials the server on its Unix socket (runnerSpec)
+//   runner.sh [options]            local runner (id local): dials ws://127.0.0.1:PORT with the token of a file (runnerSpec)
 //   runner.sh register [options]   one-time registration with a remote server's token (registerSpec)
 //   runner.sh run [options]        remote runner: dials the server over WebSocket, with the
 //                                  credentials `register` wrote to the runner file (runSpec)
-// Settings: {port, connect, runtime, config, exitOnDisconnect, given} locally (runnerOptions adds the
-// socket to dial); {runtime, config, url, ca, insecure, runnerConfig, given} for run; and for register
+// Settings: {port, tokenFile, runtime, config, exitOnDisconnect, given} locally; {runtime, config, url, ca, insecure, runnerConfig, given} for run; and for register
 // {url, token, name, ca, insecure, runtime, runnerConfig, given}.
 const os = require('os');
 const path = require('path');
 const {parseArguments} = require('../common/cli');
 const {defaultRuntime} = require('../common/runtime-dir');
+const {tokenFilePath} = require('../common/local-token');
 
 const DEFAULT_PORT = 3002;
-const RECONNECT_MS = 2000;
 
 // ~/.config/qemuweb-runner/runner.json of the account that runs the runner (no environment variable:
 // --runner-config FILE chooses another file).
@@ -51,26 +50,27 @@ function runnerSpec(root) {
     script: './scripts/runner.sh',
     summary: [
       'The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessions. It dials the',
-      'server on <runtime>/runner-PORT.sock, keeps its sessions if the connection drops and reconnects.',
+      'server of this machine (ws://127.0.0.1:PORT, which runs with --local-runner) as the runner "local", with the token',
+      'the server wrote in a file, read again at every attempt. It keeps its sessions if the connection drops and reconnects;',
+      'it exits with status 78 when the server refuses its token.',
       'Run it as your normal user. For a server on another machine, register once',
       '(./scripts/runner.sh register --help), then ./scripts/runner.sh run (--help). ' + REFUSED
     ].join('\n'),
     environment: ENVIRONMENT,
     options: [
-      {flag: '--port', metavar: 'PORT', kind: 'port', key: 'port', default: DEFAULT_PORT, fallback: String(DEFAULT_PORT), exclusive: ['--connect'],
-        description: 'port of the server to reach: the runner dials DIR/runner-PORT.sock, DIR being its --runtime'},
-      {flag: '--connect', metavar: 'SOCKET', kind: 'path', key: 'connect', default: null, fallback: 'none', showWhenGiven: true,
-        description: 'Unix socket of the server, instead of --port (the two exclude each other)'},
-      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot'),
+      {flag: '--port', metavar: 'PORT', kind: 'port', key: 'port', default: DEFAULT_PORT, fallback: String(DEFAULT_PORT),
+        description: 'port of the server to reach: the runner dials ws://127.0.0.1:PORT/runner/connect'},
+      {flag: '--token-file', metavar: 'FILE', kind: 'path', key: 'tokenFile', default: null, fallback: '<default server directory of the port>/local-runner.token',
+        description: 'token file the server created (--local-runner), read again at every connection attempt; a missing file is waited for, never a token on the command line'},
+      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/); DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot'),
       catalogOption(root),
       {flag: '--exit-on-disconnect', metavar: null, key: 'exitOnDisconnect', default: false, value: true, fallback: 'off',
-        description: `stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect every ${RECONNECT_MS / 1000} seconds)`}
+        description: 'stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect, after 2 seconds, then 4, up to 30)'}
     ],
-    // The default runtime directory is the one of the server this runner serves (its port, or the port named by --connect).
+    // The defaults: the runtime directory and the token file are those of the default directory of the port (common/runtime-dir.js).
     validate(settings) {
-      if (settings.given.has('--runtime')) return;
-      const dialled = settings.connect ? /runner-(\d+)\.sock$/.exec(settings.connect)?.[1] : settings.port;
-      settings.runtime = defaultRuntime(dialled || 'runner');
+      if (!settings.given.has('--runtime')) settings.runtime = defaultRuntime(settings.port);
+      if (!settings.given.has('--token-file')) settings.tokenFile = tokenFilePath(defaultRuntime(settings.port));
     }
   };
 }
@@ -126,14 +126,9 @@ function registerSpec(root) {
   };
 }
 
-// The socket the runner dials: --connect, or <runtime>/runner-<port>.sock.
-function serverSocket(settings) {
-  return settings.connect || path.join(settings.runtime, `runner-${settings.port}.sock`);
-}
-
 // The settings of a command line, or a UsageError (tests; main.js uses commandLine).
 function parseRunnerArguments(argv, {root}) {
   return parseArguments(runnerSpec(root), argv).settings;
 }
 
-module.exports = {runnerSpec, runSpec, registerSpec, serverSocket, parseRunnerArguments, defaultRunnerConfig, DEFAULT_PORT, RECONNECT_MS};
+module.exports = {runnerSpec, runSpec, registerSpec, parseRunnerArguments, defaultRunnerConfig, DEFAULT_PORT};
