@@ -29,7 +29,7 @@ function createSessionRuntime(ctx) {
     };
     const tooLong = [paths.socketPath, paths.socketPath1, paths.monitorPath, paths.guestAgentPath, paths.mgmtPath].find(name => name && Buffer.byteLength(name) > SOCKET_LIMIT);
     if (tooLong) {
-      // The startup check (prepareRuntime) refuses such a directory first; this is the net under it.
+      // The startup check (prepareRunnerRuntime) refuses such a directory first; this is the net under it.
       throw new Error(runtimeTooLong(ctx.runtimeRoot || path.dirname(path.dirname(runtimeDir))) ||
         `Runtime socket path ${tooLong} is longer than ${SOCKET_LIMIT} bytes. Use a shorter --runtime.`);
     }

@@ -11,13 +11,13 @@ const os = require('node:os');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
-const {defaultRuntime} = require('../../common/runtime-dir');
+const {localRunnerRuntime} = require('../../common/runtime-dir');
 const {readArchive} = require('../../runner/archive-zip');
 
 const root = path.resolve(__dirname, '../..');
 const archiveFile = path.join(root, 'examples', 'lan.zip');
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-check-load-start-'));
-let runtimeDir = null; // the default runtime directory of the server's port (common/runtime-dir.js)
+let runtimeDir = null; // the default directory of the local runner of the server's port, l-<port> (common/runtime-dir.js)
 let child;
 let client;
 let testUsers;
@@ -124,7 +124,7 @@ async function run() {
   }
 
   const port = await freePort();
-  runtimeDir = defaultRuntime(port);
+  runtimeDir = localRunnerRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'loader'}]);
   child = spawnServer({port, usersFile: testUsers.file});

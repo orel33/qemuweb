@@ -17,7 +17,7 @@ const {startRemote} = require('../../runner/remote');
 const {load} = require('../../runner/local-identity');
 const {runnerSpec, parseRunnerArguments} = require('../../runner/options');
 const {tokenFilePath} = require('../../common/local-token');
-const {defaultRuntime} = require('../../common/runtime-dir');
+const {serverRuntime, localRunnerRuntime} = require('../../common/runtime-dir');
 
 const root = path.join(__dirname, '..', '..');
 
@@ -146,8 +146,8 @@ test('the connection is lost: onLost runs before the retry (--exit-on-disconnect
 test('the local form of the command line: --port, --token-file, no --connect, no token option; the defaults are those of the port', () => {
   const settings = parseRunnerArguments(['--port', '3011'], {root});
   assert.equal(settings.port, 3011);
-  assert.equal(settings.tokenFile, tokenFilePath(defaultRuntime(3011)));
-  assert.equal(settings.runtime, defaultRuntime(3011));
+  assert.equal(settings.tokenFile, tokenFilePath(serverRuntime(3011)));
+  assert.equal(settings.runtime, localRunnerRuntime(3011));
   assert.equal(parseRunnerArguments(['--port', '3011', '--token-file', '/x/t'], {root}).tokenFile, '/x/t');
   for (const bad of [['--connect', '/x/runner-3011.sock'], ['--token', 'abc'], ['--auth-token', 'abc']]) assert.throws(() => parseRunnerArguments(bad, {root}), /unknown option|Unknown option/i, bad.join(' '));
   assert.ok(!runnerSpec(root).options.some(option => /token$/.test(option.flag) && option.flag !== '--token-file'), 'no option takes a token value');

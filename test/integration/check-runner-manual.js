@@ -23,11 +23,11 @@ const WebSocket = require('ws');
 const {setTimeout: delay} = require('node:timers/promises');
 const {USERS_LOG} = require('../../server/audit');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
-const {defaultRuntime} = require('../../common/runtime-dir');
+const {serverRuntime} = require('../../common/runtime-dir');
 const {tokenFilePath} = require('../../common/local-token');
 
 const root = path.join(__dirname, '..', '..');
-// The default runtime directory of the server's port (/tmp/qw-<login>/<port>), set once the port is chosen.
+// The default directory of the SERVER of the port (/tmp/qw-<login>/<port>), set once the port is chosen.
 let runtime = null;
 let tokenFile = null;
 const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
@@ -119,7 +119,7 @@ const exitOf = child => new Promise(resolve => child.once('exit', (code, signal)
 
 async function run() {
   const port = await freePort();
-  runtime = defaultRuntime(port);
+  runtime = serverRuntime(port);
   tokenFile = tokenFilePath(runtime);
   const baseUrl = `http://127.0.0.1:${port}`;
   scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-rm-'));
@@ -167,7 +167,7 @@ async function run() {
   assert.equal(created.running, true);
   const sessionDir = path.join(runnerRuntime, 'sessions', sessionId);
   assert.ok(fs.existsSync(sessionDir), 'the session is in the runner\'s runtime directory');
-  assert.equal(fs.existsSync(path.join(runtime, 'sessions', sessionId)), false);
+  assert.equal(fs.existsSync(path.join(runtime, 'sessions')), false, 'the server directory has no sessions/ at all');
   assert.equal(fs.existsSync(path.join(runtime, 'users', 'carol')), false, 'the server made no alias');
   assert.equal(fs.readlinkSync(path.join(runnerRuntime, 'users', 'carol')), path.join('..', 'sessions', sessionId), 'the runner made the alias in its own directory');
   assert.match(fs.readFileSync(path.join(runnerRuntime, 'runner.pid'), 'utf8'), /^\d+\n$/, 'the runner holds runner.pid');
