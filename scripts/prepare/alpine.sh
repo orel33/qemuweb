@@ -110,7 +110,7 @@ if wait_for([rb'QEMUNET_ALPINE_STATUS_0', rb'QEMUNET_ALPINE_STATUS_[1-9][0-9]*']
 sock.close()
 PY
   driver_pid=$!
-  echo "  Installing Alpine in a VM (serial log: $serial_log)"
+  build_log_info "Installing Alpine in a VM" "$serial_log"
   if ! watch_vm 'Alpine build' "$driver_pid" "$serial_log" "$ALPINE_DONE" 1 300 ALPINE_FAILURES ALPINE_PHASES; then
     driver_pid=''
     exit 1   # the VM is stopped and the log directory kept by cleanup_alpine_prepare

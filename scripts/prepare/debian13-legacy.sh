@@ -196,7 +196,7 @@ PY
     -nic user,model=e1000 -boot order=c \
     >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
   qemu_pid=$!
-  echo "  Installing Debian in a VM (serial log: $temp_dir/serial.log)"
+  build_log_info "Installing Debian in a VM" "$temp_dir/serial.log"
   # Success: the late command printed its marker and the VM powered off. A VM
   # silent for 15 minutes is stopped (see lib/common.sh for all limits).
   if ! watch_vm "Debian installer build of $id" "$qemu_pid" "$temp_dir/serial.log" \
