@@ -46,7 +46,7 @@ function serverSpec(root) {
         description: 'login lifetime in hours (more than 0, at most 2160), renewed while the user is active'},
       {flag: '--runner-grace', metavar: 'SECONDS', kind: 'integer', key: 'runnerGrace', default: DEFAULT_RUNNER_GRACE, fallback: String(DEFAULT_RUNNER_GRACE),
         max: MAX_RUNNER_GRACE, expected: `a whole number of seconds from 0 to ${MAX_RUNNER_GRACE}`,
-        description: 'how long the sessions of a remote runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once)'},
+        description: 'how long the sessions of a runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once; start.sh and demo.sh pass 0 unless it is given)'},
       {flag: '--trust-proxy', metavar: 'VALUE', kind: 'text', key: 'trustProxy', default: null, fallback: 'unset',
         convert: value => (value === 'true' ? true : /^\d+$/.test(value) ? Number(value) : value),
         description: 'Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS'},

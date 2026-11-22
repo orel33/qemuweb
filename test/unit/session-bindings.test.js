@@ -56,7 +56,7 @@ test('invalid, duplicate, unknown-field and oversized entries are skipped with a
     entry(9, 'carol', 'r-0000000a')
   ]}), message => messages.push(message));
   assert.deepEqual([...parsed.keys()], [ID(1), ID(9)]);
-  assert.equal(messages.length, 10);
+  assert.equal(messages.length, 11, "one message per skipped entry");
   assert.ok(messages.some(message => /duplicate/.test(message)));
 });
 
