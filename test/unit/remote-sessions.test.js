@@ -1,5 +1,4 @@
-// Remote runners in the control plane: placement (pickRunner), the rule that the server touches
-// the files of the local runner only, and the grace period and rebinding after a network cut.
+// Remote runners in the control plane: placement (pickRunner), the grace period and rebinding after a network cut.
 // Runners are in-memory services or fakes; no process, no socket.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -34,12 +33,12 @@ function fakeRunner(registry, id, hello = {}, options = {}) {
   return {client, entry};
 }
 
-test('placement: online, not paused, with an engine, under maxSessions; least loaded wins, local first on a tie', t => {
+test('placement: online, not paused, with an engine, under maxSessions; least loaded wins, the earliest registered on a tie', t => {
   quiet(t);
   const registry = new RunnerRegistry();
   const counts = {local: 1, 'r-00000001': 1, 'r-00000002': 0, 'r-00000003': 0, 'r-00000004': 0, 'r-00000005': 0};
   const sessionsOf = id => counts[id] ?? 0;
-  fakeRunner(registry, 'local', {}, {local: true, trusted: true});
+  fakeRunner(registry, 'local', {}, {registeredAt: 0});
   fakeRunner(registry, 'r-00000001', {limits: {maxSessions: 2}}, {registeredAt: 1});
   assert.equal(registry.pickRunner('a', sessionsOf).id, 'r-00000001', '1/2 beats 1 session without limit');
   fakeRunner(registry, 'r-00000002', {}, {registeredAt: 2});
@@ -52,7 +51,9 @@ test('placement: online, not paused, with an engine, under maxSessions; least lo
   assert.equal(registry.pickRunner('a', sessionsOf).id, 'r-00000001', 'no engine and full runners skipped');
   fakeRunner(registry, 'r-00000005', {}, {registeredAt: 5});
   counts.local = 0; counts['r-00000001'] = 1; counts['r-00000005'] = 0;
-  assert.equal(registry.pickRunner('a', sessionsOf).id, 'local', 'tie: the local runner first');
+  assert.equal(registry.pickRunner('a', sessionsOf).id, 'local', 'tie: the earliest registered (here the record of "local")');
+  registry.get('local').registeredAt = 10;
+  assert.equal(registry.pickRunner('a', sessionsOf).id, 'r-00000005', 'tie: "local" has no special case, its registeredAt decides');
   registry.get('local').client.close();
   assert.equal(registry.pickRunner('a', sessionsOf).id, 'r-00000005', 'the least loaded of the rest');
 });
@@ -74,7 +75,7 @@ test('the server creates no file for any runner, whatever its hello announces, w
   const registry = new RunnerRegistry();
   const manager = new SessionManager({registry, graceSeconds: 0});
   const fake = fakeRunner(registry, 'r-00000001', {runtimeRoot: runtime, sessions: []}, {registeredAt: 1});
-  assert.equal(fake.entry.runtimeRoot, null);
+  assert.equal(fake.entry.runtimeRoot, runtime, 'kept as display text only');
   fake.client.session = id => ({sessionId: id, client: fake.client, events: new EventEmitter(), request: async () => ({})});
   fake.client.release = () => {};
   manager.open('toto');
@@ -174,20 +175,22 @@ test('after the grace period the session is dropped; the runner that returns is 
   assert.equal(far.service.hello().sessions.length, 1, 'the runner still has it');
   await far.connect();
   await until(() => far.service.hello().sessions.length === 0);
-  assert.equal(manager.get('toto'), null, 'never adopted: a remote runner is untrusted');
+  assert.equal(manager.get('toto'), null, 'never adopted: no binding names this runner');
 });
 
-test('the local runner is never kept: its sessions are dropped at once', async t => {
+test('the local runner has no special rule: with no grace its sessions are dropped at once, with a grace they are kept', async t => {
   quiet(t);
-  const runtime = tempDir(t, 'qw-cp-');
-  const registry = new RunnerRegistry();
-  const manager = new SessionManager({registry, graceSeconds: 60});
-  const fake = fakeRunner(registry, 'local', {}, {local: true, trusted: true});
-  fake.client.session = id => ({sessionId: id, client: fake.client, events: new EventEmitter(), request: async () => ({})});
-  fake.client.release = () => {};
-  manager.open('toto');
-  fake.client.close();
-  assert.equal(manager.get('toto'), null);
+  for (const [grace, kept] of [[0, false], [60, true]]) {
+    const registry = new RunnerRegistry();
+    const manager = new SessionManager({registry, graceSeconds: grace});
+    const fake = fakeRunner(registry, 'local');
+    fake.client.session = id => ({sessionId: id, client: fake.client, events: new EventEmitter(), request: async () => ({})});
+    fake.client.release = () => {};
+    manager.open('toto');
+    fake.client.close();
+    assert.equal(manager.get('toto') !== null, kept, `grace ${grace}`);
+    for (const timer of manager.graceTimers.values()) clearTimeout(timer);
+  }
 });
 
 test('a remote runner offers and accepts only the systems whose image it has', async t => {

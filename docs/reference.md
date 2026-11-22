@@ -20,7 +20,7 @@ the server stops. `./scripts/start.sh` (`npm start`) runs the server and a runne
 as two processes and stops both together; if the runner dies, the server closes its sessions and
 `start.sh` ends (nothing is restarted: that is systemd's job in a deployment). A runner started by
 itself (`./scripts/runner.sh`) keeps its machines when the server restarts, and the server adopts
-its sessions again (see [docs/deployment.md](deployment.md#the-runner-process)). Use **Save session** to keep a portable copy; archives do not
+its sessions again, for the owner of its `bindings.json` (see [docs/deployment.md](deployment.md#the-runner-process)). Use **Save session** to keep a portable copy; archives do not
 record the owner, so any user can load them.
 
 ## Server and runner command line
@@ -93,7 +93,7 @@ The server is configured by options only: it reads **no environment variable**.
 | `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
 | `--examples DIR` | `examples/ of the repository` | directory of the example topologies (.topo) and sessions (.zip) offered by the Load dialog (read only; a missing directory means no example) |
 | `--session-hours N` | `12` | login lifetime in hours (more than 0, at most 2160), renewed while the user is active |
-| `--runner-grace SECONDS` | `300` | how long the sessions of a remote runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once) |
+| `--runner-grace SECONDS` | `300` | how long the sessions of a runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once; `start.sh` and `demo.sh` pass 0 unless it is given) |
 | `--trust-proxy VALUE` | `unset` | Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS |
 | `--auth MODE` | `password` | how users are identified: password (QemuWeb login), proxy (identity given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through X-Remote-User, trusted only with a shared X-Proxy-Key; no password login then) |
 | `--proxy-key-file FILE` | `unset` | the key shared with the authenticating front end, sent by it as X-Proxy-Key: one line, or two during a rotation (mode 0600); required by --auth proxy |
@@ -210,12 +210,11 @@ inbound port. Setup, nginx and systemd are in [docs/deployment.md](deployment.md
    stops no machine: the runner reconnects (2 s, doubling up to 30 s) and the server resynchronises.
    If the server refuses the token (revoked), the runner stops its machines and exits with status 1.
 
-The server places each new session on the least loaded online runner that is not paused (the local
-runner first on a tie); a session stays on its runner. While a remote runner is offline, its sessions
+The server places each new session on the least loaded online runner that is not paused (the earliest registered on a tie); a session stays on its runner. While a runner is offline, its sessions
 are kept for `--runner-grace` seconds and answer 503 "offline" (the page says "Runner offline,
-reconnecting…"); then they are dropped. After a server restart a remote runner's sessions are not
-adopted (only the local runner's are) and are deleted when it reconnects. `/admin` can pause (drain),
-revoke and remove a runner; every action is in `admin.log`. `ws://` and `http://` URLs are accepted
+reconnecting…"); then they are dropped. After a server restart the sessions listed in the server's `bindings.json`
+are adopted by their runner when it reconnects, for the owner of the binding (the owner a `hello` announces is ignored); the others are
+deleted. `/admin` can pause (drain), revoke and remove any runner, the local one included; every action is in `admin.log`. `ws://` and `http://` URLs are accepted
 only for this machine unless `--insecure` is given (with a warning).
 
 `./scripts/runner.sh run [options]`:

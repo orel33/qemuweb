@@ -26,6 +26,7 @@ do the same in their own writer.
 | `config.json` (repository root, or `--config`) | user (by hand) | umask | no | `common/system-config.js` (server startup check, every runner) |
 | `users.json` (or `--users`) | `scripts/user.sh`, admin API | 0600 | no | `server/auth/users-store.js` |
 | `runners.json` (or `--runners`) | server | 0600 | no | `server/runner-store.js` |
+| `<server runtime>/bindings.json` | server | 0600 | no | `server/session-bindings.js` |
 | `~/.config/qemuweb-runner/runner.json` (or `--runner-config`) | `runner register` | 0600 | no | `runner/config-file.js` |
 | `<session>/session.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import), `runner/session.js` (start-up pruning) |
 | `<session>/meta.json` | runner | 0600 | never | `scripts/status.js` (age only) |
@@ -167,15 +168,16 @@ Passwords are 1–1024 characters (NFC-normalised before hashing) and never stor
 
 ### 2.3 `runners.json`
 
-`{"schemaVersion": 1, "runners": [...]}`: the remote runners registered with this
-server. Read once at startup, kept in memory, written through at every change
+`{"schemaVersion": 2, "runners": [...]}`: the runners registered with this
+server, the same record for every runner. The local runner (id `local`) has its record created at its
+first connection. An older file (schema 1) is refused: delete it by hand and register the runners again. Read once at startup, kept in memory, written through at every change
 (the server is the only writer).
 
 | Keyword (runner entry) | Values / validation | Default | Flag |
 |:--|:--|:--|:--|
-| `id` | `^r-[0-9a-f]{8}$`, unique | generated | G |
-| `name` | text, printable, at most 64 characters (the ID when empty) | the ID | E |
-| `tokenHash` | 64 lowercase hex: SHA-256 of the authentication token (32 random bytes, base64url); compared in constant time; the token itself is never stored | generated | G |
+| `id` | `local` or `^r-[0-9a-f]{8}$`, unique | generated (`local` is created at the first connection of the local runner) | G |
+| `name` | text, printable, at most 64 characters (the ID when empty) | the ID (`local` for the local runner) | E |
+| `tokenHash` | required except for `local`, which has none (the server never accepts a token for `local`): 64 lowercase hex: SHA-256 of the authentication token (32 random bytes, base64url); compared in constant time; the token itself is never stored | generated | G |
 | `createdAt` | ISO date | registration time | G |
 | `lastSeenAt` | ISO date, set when the runner disconnects | absent | G |
 | `paused` | boolean, written only when `true`: no new session is placed on it | absent | E |
@@ -183,13 +185,27 @@ server. Read once at startup, kept in memory, written through at every change
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "runners": [
+    {"id": "local", "name": "local", "createdAt": "2026-11-02T09:00:00.000Z"},
     {"id": "r-1a2b3c4d", "name": "salle-12", "tokenHash": "<64 hex>",
      "createdAt": "2026-11-02T09:14:00.000Z", "paused": true}
   ]
 }
 ```
+
+Schema 2 of `runners.json` (RUN03b): `local` id, `tokenHash` optional only for `local`; no `trusted`, `local` or
+`transport` field. There is no migration: an older file is refused with a message, the user deletes it by hand.
+
+#### `bindings.json`
+
+`{"schemaVersion": 1, "sessions": [{"id", "owner", "runnerId", "createdAt"}]}` in the server's runtime directory
+(mode 0600, atomic write-through, removed when no session is bound). The server writes a binding before it asks a
+runner to create the session and removes it when the session is deleted or dropped. It is the only source of the owner of a session
+adopted after a server restart (the owner a `hello` announces is ignored). Read at start as untrusted input: `id` is 16 hex
+characters, `owner` a valid login, `runnerId` is `local` or `r-xxxxxxxx`, `createdAt` an ISO date; an invalid or duplicate
+entry (an ID or an owner twice) is skipped with a log line, a corrupt, oversized (over 4 MiB) or other-version file means
+no bindings (said in the log; the sessions of the runners are then deleted when they connect).
 
 ### 2.4 `runner.json` — runner file of a remote runner
 

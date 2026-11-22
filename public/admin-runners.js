@@ -65,7 +65,8 @@ function renderRunners(data, {body, hint, cell, act}) {
       actions.append(button('Revoke', () => act(() => `/runners/${id}/revoke`, 'POST', {title: 'Revoke runner',
         message: `Revoke ${runner.name}? It is disconnected and cannot connect again; its sessions are dropped after the grace period.`, accept: 'Revoke'}), 'Revoke the token of this runner'));
     }
-    if (runner.state === 'revoked') {
+    // No Remove for "local" until its token (RUN03c): forgetting its record would let the retrying runner create a fresh, unrevoked one.
+    if (runner.state === 'revoked' && runner.id !== 'local') {
       actions.append(button('Remove', () => act(() => `/runners/${id}`, 'DELETE'), 'Forget this revoked runner'));
     }
     row.append(cell(name), cell(stateLabel(runner)), cell(where), cell(`${engines}${kvm}`),

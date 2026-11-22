@@ -132,7 +132,7 @@ async function run() {
   await waitFor('the runner connection line', () => /Connected to the server/.test(runnerOutput.get('runner')));
   assert.match(runnerOutput.get('runner'), /Checking dependencies/);
   assert.match(runnerOutput.get('runner'), /Checking configuration/);
-  assert.match(serverOutput, /Runner connected/);
+  assert.match(serverOutput, /Runner local \(local\) connected/);
   const [info] = (await adminRunners(boss)).runners;
   assert.equal((await adminRunners(boss)).connectHint, null);
   console.log(`Manual: runner ${runner.pid} connected (${info.engines.join(', ')}), checks printed by the runner itself`);
@@ -150,6 +150,12 @@ async function run() {
   assert.match(fs.readFileSync(path.join(runnerRuntime, 'runner.pid'), 'utf8'), /^\d+\n$/, 'the runner holds runner.pid');
   const [switchPid] = await waitFor('the runner\'s vde_switch', () => { const found = switchesOf(runner.pid); return found.length ? found : null; });
   assert.equal((await adminRunners(boss)).runners[0].sessions, 1);
+  const bindingsFile = path.join(runtime, 'bindings.json');
+  assert.equal(fs.statSync(bindingsFile).mode & 0o777, 0o600);
+  assert.deepEqual(JSON.parse(fs.readFileSync(bindingsFile, 'utf8')).sessions.map(item => [item.id, item.owner, item.runnerId]), [[sessionId, 'carol', 'local']], 'the server binds the session to its owner and runner');
+  const runnersFile = path.join(path.dirname(testUsers.file), 'runners.json');
+  assert.deepEqual(JSON.parse(fs.readFileSync(runnersFile, 'utf8')).runners.map(item => [item.id, item.name, 'tokenHash' in item]), [['local', 'local', false]], 'the record of the local runner, created at its first connection');
+  assert.equal((await boss.request('/api/admin/runners/local/pause', {method: 'POST'})).paused, true);
   console.log(`Manual: session ${sessionId} runs switch ${switchId} (vde_switch ${switchPid}) on the runner`);
 
   // 4. A second runner is refused; the first one keeps its place.
@@ -179,6 +185,9 @@ async function run() {
   carol = await signIn('carol');
   const again = await carol.request('/api/general-settings');
   assert.equal(again.sessionId, sessionId, 'the user found a different session');
+  const [localRow] = (await adminRunners(boss)).runners;
+  assert.deepEqual([localRow.id, localRow.paused], ['local', true], 'the pause of the local runner survived the server restart');
+  assert.equal((await boss.request('/api/admin/runners/local/resume', {method: 'POST'})).paused, false);
   const nodes = await carol.request('/api/nodes');
   assert.equal(nodes.find(node => node.id === switchId)?.running, true, 'the switch is no longer running');
   assert.equal(alive(switchPid), true);
@@ -206,7 +215,7 @@ async function run() {
   assert.equal(fs.existsSync(sessionDir), false, 'the session directory is left');
   assert.equal(fs.existsSync(path.join(runnerRuntime, 'users')), false, 'the alias is left');
   assert.equal(fs.existsSync(path.join(runnerRuntime, 'runner.pid')), false, 'runner.pid is left');
-  await waitFor('no runner listed', async () => (await adminRunners(boss)).runners.length === 0);
+  await waitFor('the local runner offline', async () => (await adminRunners(boss)).runners.every(item => item.state === 'offline'));
   assert.equal((await carol.fetch('/api/nodes')).status, 503);
   console.log('Manual: runner stopped (SIGTERM), no process or session directory left, the server answers 503 again');
 

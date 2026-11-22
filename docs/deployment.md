@@ -103,12 +103,13 @@ server, connected, refused, lost). A refused option ends either program with sta
   that runner (every session) would reserve more than 90 % of the machine's
   RAM, a `# Warning:` line is added to the host's Log. The host still starts.
 - **Server restart with a separate runner:** the runner keeps its machines. When
-  it reconnects, the server **adopts** each of its sessions for its owner (the
-  login recorded in the session's `meta.json`): the user logs in again (cookies
+  it reconnects, the server **adopts** each of its sessions for the owner recorded in the server's own
+  `bindings.json` (`<runtime>/bindings.json`, mode 0600, written by the server when it opens a session; the owner
+  a runner announces in its `hello` is ignored): the user logs in again (cookies
   do not survive a restart) and finds the same session, machines and consoles,
-  recorded as `session-adopted` in `users.log`. Only the trusted runner of this machine is
-  adopted. A session whose owner is invalid, or already has a session, is
-  deleted on the runner. Sessions the server no longer knows are never kept.
+  recorded as `session-adopted` in `users.log`. This holds for every runner, local or remote, if its
+  session is in `bindings.json`. A session with no binding (a lost `bindings.json`), bound to another runner,
+  or whose owner already has a session, is deleted on the runner. Sessions the server no longer knows are never kept.
 - **Files of the runner:** the server touches no file of any runner. Each runner owns its runtime directory: it creates
   the `users/<login>` aliases (at `session.create`, removed with the session), takes `runner.pid` (a second runner on
   the same directory refuses to start), and at its own start removes the empty `sessions/<id>` directories and the
@@ -229,7 +230,8 @@ troubleshooting) is in [remote-runner-test.md](remote-runner-test.md) (PDF: [pdf
    connection, so the timeout only needs to exceed that. Start the server with `--trust-proxy loopback`
    so that the registration command and the runner's address use the public name.
 3. `--runner-grace SECONDS` (default 300) is how long the sessions of a remote runner that lost
-   its connection are kept; `0` drops them at once, like the local runner.
+   its connection are kept; `0` drops them at once. `./scripts/start.sh` and `demo.sh` pass `--runner-grace 0` unless
+   it is given, because the runner ends with the server there.
 
 ### On the runner machine
 
@@ -256,8 +258,8 @@ registration token is single use and expires (15 minutes, 1 hour or 24 hours, ch
   `--insecure`, which prints a warning: the token and all console traffic are then readable on the network.
 - **Firewall:** nothing to open on the runner; it needs outbound access to the server's HTTPS port.
 - **Network cut:** no machine stops. The runner reconnects after 2 s, then 4, 8, 16 and 30 s; the server keeps its
-  sessions during `--runner-grace` and then drops them (and tells the runner to delete them if it returns). A
-  restart of the server does not adopt a remote runner's sessions: they are deleted when it reconnects.
+  sessions during `--runner-grace` and then drops them (and tells the runner to delete them if it returns). After a
+  restart of the server, the sessions of `bindings.json` that the runner still reports are adopted when it reconnects.
 - **Revocation:** after **Revoke** in `/admin` the server refuses the token (401): the runner stops its machines and exits
   with status 1 instead of retrying. Register it again to bring it back.
 

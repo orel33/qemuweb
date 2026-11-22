@@ -50,11 +50,40 @@ test('verify refuses an unknown runner, a wrong or oversized token and a revoked
   assert.throws(() => store.remove(record.id), /Unknown runner/);
 });
 
-test('runners.json is validated', () => {
+test('runners.json is validated: schema 2, the id "local" or r-xxxxxxxx, tokenHash required except for local', () => {
+  const hash = 'a'.repeat(64);
   assert.throws(() => parseRunners('{'), /Cannot parse/);
-  assert.throws(() => parseRunners('{"schemaVersion":2,"runners":[]}'), /schemaVersion 1/);
-  assert.throws(() => parseRunners('{"schemaVersion":1,"runners":[{"id":"x"}]}'), /invalid/);
-  assert.deepEqual(parseRunners('{"schemaVersion":1,"runners":[]}'), []);
+  assert.throws(() => parseRunners('{"schemaVersion":1,"runners":[]}'), /schemaVersion 2.*delete it by hand/);
+  assert.throws(() => parseRunners('{"schemaVersion":2,"runners":[{"id":"x"}]}'), /invalid/);
+  assert.deepEqual(parseRunners('{"schemaVersion":2,"runners":[]}'), []);
+  assert.equal(parseRunners(`{"schemaVersion":2,"runners":[{"id":"local","name":"local"},{"id":"r-00000001","name":"a","tokenHash":"${hash}"}]}`).length, 2);
+  assert.throws(() => parseRunners('{"schemaVersion":2,"runners":[{"id":"r-00000001","name":"a"}]}'), /invalid runner r-00000001/, 'a remote record needs its hash');
+  assert.throws(() => parseRunners(`{"schemaVersion":2,"runners":[{"id":"remote","name":"a","tokenHash":"${hash}"}]}`), /invalid runner ID/);
+  assert.throws(() => parseRunners('{"schemaVersion":2,"runners":[{"id":"local","name":"a","trusted":true}]}'), /invalid runner entry/, 'no trusted or local field');
+  assert.throws(() => parseRunners('{"schemaVersion":2,"runners":[{"id":"local","name":"a","transport":"unix"}]}'), /invalid runner entry/);
+  assert.throws(() => parseRunners('{"schemaVersion":2,"runners":[{"id":"local","name":"a"},{"id":"local","name":"b"}]}'), /duplicate/);
+});
+
+test('the local record is created once, kept across a restart, and never authenticates with a token', t => {
+  const file = path.join(tmp(t), 'runners.json');
+  let time = Date.parse('2026-11-22T10:00:00Z');
+  const store = createRunnerStore(file, {now: () => new Date(time)});
+  const first = store.ensureLocal();
+  assert.deepEqual(first, {id: 'local', name: 'local', createdAt: '2026-11-22T10:00:00.000Z'});
+  assert.ok(!('tokenHash' in first));
+  time += 3600000;
+  assert.deepEqual(store.ensureLocal(), first, 'reused, registeredAt set once');
+  store.change('local', {paused: true});
+  assert.equal(fs.statSync(file).mode & 0o777, 0o600);
+  const reloaded = createRunnerStore(file);
+  assert.equal(reloaded.count(), 1);
+  assert.deepEqual(reloaded.ensureLocal(), {...first, paused: true}, 'pause survives a restart');
+  assert.equal(JSON.parse(fs.readFileSync(file, 'utf8')).schemaVersion, 2);
+  for (const token of ['', 'local', 'x'.repeat(43), hashToken('x')]) assert.equal(reloaded.verify('local', token), null);
+  reloaded.change('local', {revoked: true});
+  assert.equal(createRunnerStore(file).ensureLocal().revoked, true, 'a revoked record is returned as it is, never silently renewed');
+  reloaded.remove('local');
+  assert.equal(createRunnerStore(file).count(), 0, 'forgotten');
 });
 
 test('a registration token is single use and expires', () => {

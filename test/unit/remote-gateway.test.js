@@ -54,20 +54,20 @@ test('an unknown runner, a wrong token, no credentials or a revoked token are re
   assert.equal(registry.list().length, 0, 'nothing registered');
 });
 
-test('a valid runner is registered as remote, untrusted, and speaks the frame protocol', async t => {
+test('a valid runner is registered with the fields of its record, and speaks the frame protocol', async t => {
   const {dial, good, record, registry} = await setup(t);
   const {ws} = await dial(good);
   assert.ok(ws);
   await new Promise(resolve => setTimeout(resolve, 50));
   const entry = registry.get(record.id);
-  assert.deepEqual([entry.state, entry.local, entry.trusted, entry.name], ['starting', false, false, 'far']);
+  assert.deepEqual([entry.state, entry.name, 'local' in entry, 'trusted' in entry], ['starting', 'far', false, false]);
   assert.ok(entry.address);
   const connection = new Connection(WebSocket.createWebSocketStream(ws));
   const online = once(registry, 'online');
   connection.send({type: 'hello', engines: ['qemu'], runtimeRoot: '/anything', limits: {maxSessions: 2}, sessions: []});
   await online;
   assert.equal(entry.state, 'online');
-  assert.equal(entry.runtimeRoot, null, 'a remote runtime directory is ignored');
+  assert.equal(entry.runtimeRoot, '/anything', 'the announced directory is display text only');
   assert.equal(entry.capabilities.limits.maxSessions, 2);
   // A request goes out as a frame and the answer comes back.
   const answer = entry.client.request('nodes.list', {}, null);
@@ -89,6 +89,16 @@ test('a second connection of a live runner is refused with 409; after the first 
   assert.ok((await dial(good)).ws, 'the runner is back');
   await new Promise(resolve => setTimeout(resolve, 50));
   assert.equal(registry.get(record.id).state, 'starting');
+});
+
+test('the id "local" never authenticates through the WebSocket: its record has no token hash', async t => {
+  const {dial, good, store, registry} = await setup(t);
+  store.ensureLocal();
+  for (const token of [good.Authorization.slice(7), '', 'local', hashLike()]) {
+    assert.equal((await dial({Authorization: `Bearer ${token}`, 'X-Runner-Id': 'local'})).status, 401);
+  }
+  assert.equal(registry.list().length, 0);
+  function hashLike() { return 'a'.repeat(64); }
 });
 
 test('only /runner/connect is the gateway\'s: another upgrade path gets no answer from it (Socket.IO\'s handler owns its own)', async t => {

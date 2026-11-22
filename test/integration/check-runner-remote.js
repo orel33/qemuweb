@@ -162,7 +162,7 @@ async function run() {
   assert.match(output.get('run'), /Checking configuration/);
   assert.doesNotMatch(output.get('run'), new RegExp(identity.authToken), 'the authentication token is never printed');
   const info = (await adminRunners(boss)).runners.find(item => item.id === identity.runnerId);
-  assert.deepEqual([info.name, info.local, info.address], ['test remote', false, '127.0.0.1']);
+  assert.deepEqual([info.name, info.address, 'local' in info], ['test remote', '127.0.0.1', false]);
   carol = await signIn('carol');
   const {sessionId} = await carol.request('/api/general-settings');
   const switchId = newSwitchId();

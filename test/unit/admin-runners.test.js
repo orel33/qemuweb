@@ -11,7 +11,7 @@ const {EventEmitter} = require('node:events');
 const {RunnerRegistry} = require('../../server/runner-registry');
 const {createRunnerStore} = require('../../server/runner-store');
 const {createRegistrationTokens} = require('../../server/runner-registration');
-const {createRunnersRouter, runnerSummaries, connectHint, publicOrigin} = require('../../server/routes/admin-runners');
+const {createRunnersRouter, connectHint, publicOrigin} = require('../../server/routes/admin-runners');
 const {createRegisterRouter, createRateLimiter} = require('../../server/routes/runner-register');
 
 const fakeClient = () => Object.assign(new EventEmitter(), {close() { this.emit('close', null); }});
@@ -53,25 +53,33 @@ test('no runner: an empty list and the command to start one', async t => {
   assert.equal(connectHint({runners: [], port: 4100, runtime: '/rt'}), './scripts/runner.sh --port 4100 --runtime /rt');
 });
 
-test('summaries: the local runner while connected, then the registered remote runners with their state', async t => {
+test('summaries: every registered runner, "local" included, with the same fields and no flag, token or hash', async t => {
   const {registry, store, call, workspaces} = await setup(t);
+  const localRecord = store.ensureLocal();
   const local = fakeClient();
-  registry.add({id: 'local', client: local, local: true, trusted: true});
-  local.emit('hello', {engines: ['qemu'], kvm: true, cpus: 8, memoryBytes: 16 * 2 ** 30, images: {debian: {}, alpine: {}}, warnings: ['x: missing']});
+  registry.add({id: 'local', client: local, name: localRecord.name, registeredAt: Date.parse(localRecord.createdAt)});
+  local.emit('hello', {engines: ['qemu'], kvm: true, cpus: 8, memoryBytes: 16 * 2 ** 30, images: {debian: {}, alpine: {}}, warnings: ['x: missing'], runtimeRoot: '/tmp/qw/3002', pid: 4242});
   const {record} = store.add({name: '<b>far</b>'});
   workspaces.push({session: {runnerId: 'local'}}, {session: {runnerId: record.id}});
   let {body} = await call('GET', '/runners');
   assert.equal(body.connectHint, null);
-  assert.deepEqual(body.runners[0], {id: 'local', name: 'local', local: true, state: 'online', paused: false, lastSeen: null, address: null, engines: ['qemu'], kvm: true,
+  assert.deepEqual(body.runners[0], {id: 'local', name: 'local', state: 'online', paused: false, lastSeen: null, address: null, directory: '/tmp/qw/3002', pid: 4242, engines: ['qemu'], kvm: true,
     cpus: 8, memoryBytes: 16 * 2 ** 30, systems: ['alpine', 'debian'], warnings: ['x: missing'], sessions: 1, maxSessions: null});
-  assert.deepEqual([body.runners[1].name, body.runners[1].state, body.runners[1].local, body.runners[1].sessions], ['<b>far</b>', 'offline', false, 1]);
+  assert.deepEqual(Object.keys(body.runners[1]), Object.keys(body.runners[0]), 'the same fields for every row');
+  assert.deepEqual([body.runners[1].name, body.runners[1].state, body.runners[1].sessions], ['<b>far</b>', 'offline', 1]);
+  const text = JSON.stringify(body);
+  assert.ok(!/"(local|trusted|tokenHash|transport)"\s*:/.test(text) && !text.includes(store.list()[1].tokenHash), 'no flag, no token hash');
   const remote = fakeClient();
   registry.add({id: record.id, client: remote, name: record.name, address: '10.0.0.5'});
   remote.emit('hello', {engines: ['vbox'], limits: {maxSessions: 4}});
   body = (await call('GET', '/runners')).body;
   assert.deepEqual([body.runners[1].state, body.runners[1].address, body.runners[1].maxSessions], ['online', '10.0.0.5', 4]);
   local.close();
-  assert.equal(runnerSummaries({registry, manager: {list: () => []}}).length, 0, 'a lost local runner is not listed');
+  body = (await call('GET', '/runners')).body;
+  assert.deepEqual([body.runners[0].id, body.runners[0].state, body.runners[0].directory, body.runners[0].pid, body.runners[0].address], ['local', 'offline', null, null, null], 'a lost local runner stays listed, offline');
+  assert.equal(body.connectHint, null, 'another runner is online');
+  remote.close();
+  assert.equal((await call('GET', '/runners')).body.connectHint, './scripts/runner.sh', 'no runner online: the hint');
 });
 
 test('a registration token: created once with its command, listed without the secret, single use, audited without the token', async t => {
@@ -112,33 +120,46 @@ test('registration: the token buys an identity once; a wrong or reused token is 
   assert.deepEqual([allow('a'), allow('a'), allow('a'), allow('b')], [true, true, false, true]);
 });
 
-test('pause and resume (the local runner too), revoke disconnects, remove needs an offline revoked runner; all audited', async t => {
+test('pause, resume, revoke and forget work the same for "local" and for a remote runner; all audited', async t => {
   const {registry, store, call, audit} = await setup(t);
+  store.ensureLocal();
   const local = fakeClient();
-  registry.add({id: 'local', client: local, local: true, trusted: true});
+  registry.add({id: 'local', client: local, name: 'local'});
   const {record} = store.add({name: 'far'});
   const remote = fakeClient();
   registry.add({id: record.id, client: remote, name: 'far'});
   remote.emit('hello', {engines: ['qemu']});
   assert.equal((await call('POST', '/runners/local/pause')).body.paused, true);
   assert.equal(registry.get('local').paused, true);
+  assert.equal(store.get('local').paused, true, 'the pause of "local" is written to runners.json');
+  assert.equal(createRunnerStore(store.file).get('local').paused, true, 'and survives a server restart');
+  assert.equal((await call('POST', '/runners/local/resume')).body.paused, false);
+  assert.ok(!store.get('local').paused);
   assert.equal((await call('POST', `/runners/${record.id}/pause`)).body.paused, true);
   assert.equal(store.get(record.id).paused, true);
   assert.equal((await call('POST', `/runners/${record.id}/resume`)).body.paused, false);
   assert.ok(!store.get(record.id).paused);
-  assert.equal((await call('POST', '/runners/local/revoke')).status, 403);
-  assert.equal((await call('DELETE', '/runners/local')).status, 403);
   assert.equal((await call('POST', '/runners/r-00000000/pause')).status, 404);
+  assert.equal((await call('POST', '/runners/remote/pause')).status, 404, 'an invalid id');
   assert.equal((await call('DELETE', `/runners/${record.id}`)).status, 409, 'not revoked');
+  assert.equal((await call('DELETE', '/runners/local')).status, 409, 'local is not revoked either');
   const revoked = await call('POST', `/runners/${record.id}/revoke`);
   assert.equal(revoked.body.state, 'revoked');
   assert.equal(registry.get(record.id).state, 'lost', 'disconnected');
   assert.equal(store.verify(record.id, 'anything'), null);
   assert.equal((await call('DELETE', `/runners/${record.id}`)).status, 200);
-  assert.equal(store.count(), 0);
+  assert.equal(store.get(record.id), null);
   assert.equal(registry.get(record.id), null);
+  const revokedLocal = await call('POST', '/runners/local/revoke');
+  assert.equal(revokedLocal.status, 200);
+  assert.equal(revokedLocal.body.state, 'revoked');
+  assert.equal(registry.get('local').state, 'lost', 'the connection of "local" is closed');
+  assert.equal(store.get('local').revoked, true);
+  assert.equal((await call('DELETE', '/runners/local')).status, 200);
+  assert.equal(store.count(), 0);
+  assert.equal(registry.get('local'), null);
   const actions = audit.map(entry => entry.action);
   for (const action of ['pause-runner', 'resume-runner', 'revoke-runner', 'remove-runner']) assert.ok(actions.includes(action), `${action} audited`);
   assert.ok(audit.every(entry => entry.admin === 'boss'));
-  assert.ok(audit.some(entry => entry.action === 'revoke-runner' && entry.result.startsWith('error')), 'refusals are audited too');
+  assert.ok(audit.some(entry => entry.action === 'remove-runner' && entry.result.startsWith('error')), 'refusals are audited too');
 });
