@@ -270,6 +270,11 @@ for (const format of ['raw', 'vdi']) {
 NODE
 }
 
+if [[ "$force" == true ]]; then
+  echo 'WARNING: --force replaces the selected base images, even while VMs are running.' >&2
+  echo 'Existing QCOW2/VDI working disks may become incompatible with the rebuilt bases.' >&2
+  echo 'The previous RAW/VDI pair will be kept in images/backups/.' >&2
+fi
 # ---------------------------------------------------------------------------
 # One system: sources, then images (with the backup of the existing images under --force and the
 # recording of the hashes). The sequential mode calls it in this shell, one system after the other;
