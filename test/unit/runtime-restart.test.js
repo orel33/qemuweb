@@ -1,5 +1,5 @@
 // Starting again when the runtime directory has vanished (the default one is in /tmp, empty after a reboot)
-// or is only partly there (stale server records, a stale runner socket): a clean new start, never an error.
+// or is only partly there (a stale server record, a stale runner socket): a clean new start, never an error.
 // Temporary directories and an injected identity: the real /tmp/qw-<login> is never touched. No server, no runner.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -54,9 +54,9 @@ test('a partial directory (no sessions/, stale records and socket) starts clean'
   const {options, runtime} = scratch(t);
   fs.mkdirSync(accountRoot(options), {mode: 0o700});
   fs.mkdirSync(runtime, {mode: 0o700});
-  const ids = ['1111111111111111', '2222222222222222'];
   fs.writeFileSync(path.join(runtime, 'server-3002.pid'), `${deadPid()}\n`);
-  fs.writeFileSync(path.join(runtime, 'server-3002.session'), `regular\n${ids.join('\n')}\n`);
+  // A record of an old version is simply ignored (beta rules: no cleanup of leftovers).
+  fs.writeFileSync(path.join(runtime, 'server-3002.session'), 'regular\n1111111111111111\n');
   await leaveStaleSocket(path.join(runtime, 'runner-3002.sock'));
   fs.mkdirSync(path.join(runtime, 'users'));
   fs.symlinkSync('../sessions/1111111111111111', path.join(runtime, 'users', 'carol'));
@@ -65,11 +65,8 @@ test('a partial directory (no sessions/, stale records and socket) starts clean'
   prepareRuntime(runtime, options);
   assert.ok(fs.statSync(path.join(runtime, 'sessions')).isDirectory(), 'sessions/ is created again');
   const instance = new ServerInstance({runtimeRoot: runtime, port: 3002});
-  assert.equal(instance.liveServerSessions().size, 0, 'the records of a dead server protect nothing');
-  instance.pruneEmptyRuntimeSessions();
-  instance.writeRecords([]);
+  instance.writeRecords();
   assert.equal(fs.readFileSync(path.join(runtime, 'server-3002.pid'), 'utf8').trim(), String(process.pid), 'the stale PID record is replaced');
-  assert.equal(fs.readFileSync(path.join(runtime, 'server-3002.session'), 'utf8'), 'regular\n', 'and the stale session list');
   instance.removeRecords();
 
   const gateway = createRunnerGateway({root: runtime, runtimeRoot: runtime, port: 3002, registry: new RunnerRegistry()});
@@ -78,18 +75,18 @@ test('a partial directory (no sessions/, stale records and socket) starts clean'
   assert.equal(fs.statSync(gateway.socketPath).mode & 0o777, 0o600, 'the stale socket is replaced by a live one');
 });
 
-test('two servers of one account keep separate directories: one never sees the sessions or records of the other', t => {
+test('two servers of one account keep separate directories: each writes only its own pid record', t => {
   const {options} = scratch(t);
   const [first, second] = [3002, 3003].map(port => defaultRuntime(port, options));
   prepareRuntime(first, options);
   prepareRuntime(second, options);
   const one = new ServerInstance({runtimeRoot: first, port: 3002});
   const two = new ServerInstance({runtimeRoot: second, port: 3003});
-  one.writeRecords(['aaaaaaaaaaaaaaaa']);
-  assert.equal(one.liveServerSessions().size, 1);
-  assert.equal(two.liveServerSessions().size, 0);
+  one.writeRecords();
+  assert.deepEqual(fs.readdirSync(first).sort(), ['server-3002.pid', 'sessions']);
   assert.deepEqual(fs.readdirSync(second).sort(), ['sessions']);
   one.removeRecords();
+  assert.equal(two.pidFile.endsWith('server-3003.pid'), true);
 });
 
 test('an explicit --runtime that is too long is refused at startup with the numbers, before any session', t => {

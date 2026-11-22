@@ -53,20 +53,30 @@ class Session {
 
   // Removes the runtime directory when the session holds no node, keeping anything unexpected.
   removeIfEmpty() {
-    if (this.nodes.size) return;
-    try {
-      for (const name of ['hosts', 'switches']) {
-        try { fs.rmdirSync(path.join(this.runtimeDir, name)); }
-        catch (error) { if (error.code !== 'ENOENT' && error.code !== 'ENOTEMPTY') throw error; }
-      }
-      if (fs.readdirSync(this.runtimeDir).some(name => !['session.json', 'meta.json'].includes(name))) return;
-      const saved = JSON.parse(fs.readFileSync(this.metadataFile, 'utf8'));
-      if (!Array.isArray(saved.hosts) || saved.hosts.length || !Array.isArray(saved.switches) || saved.switches.length) return;
-      fs.rmSync(this.metaFile, {force: true});
-      fs.unlinkSync(this.metadataFile);
-      fs.rmdirSync(this.runtimeDir);
-    } catch (_) { /* Keep incomplete sessions for inspection or later recovery. */ }
+    if (!this.nodes.size) removeEmptySessionDirectory(this.runtimeDir);
   }
 }
 
-module.exports = {Session, SESSION_ID};
+// Removes a session directory that holds nothing: no file at all, or only the definition of a session without host or
+// switch (session.json, meta.json and empty hosts/ and switches/ directories). Anything else is kept. Returns whether
+// the directory was removed.
+function removeEmptySessionDirectory(directory) {
+  try {
+    for (const name of ['hosts', 'switches']) {
+      try { fs.rmdirSync(path.join(directory, name)); }
+      catch (error) { if (error.code !== 'ENOENT' && error.code !== 'ENOTEMPTY') throw error; }
+    }
+    const files = fs.readdirSync(directory);
+    if (!files.length) { fs.rmdirSync(directory); return true; }
+    if (!files.includes('session.json') || files.some(name => !['session.json', 'meta.json'].includes(name))) return false;
+    const saved = JSON.parse(fs.readFileSync(path.join(directory, 'session.json'), 'utf8'));
+    if (saved.schemaVersion !== SESSION_SCHEMA_VERSION) return false;
+    if (!Array.isArray(saved.hosts) || saved.hosts.length || !Array.isArray(saved.switches) || saved.switches.length) return false;
+    fs.rmSync(path.join(directory, 'meta.json'), {force: true});
+    fs.unlinkSync(path.join(directory, 'session.json'));
+    fs.rmdirSync(directory);
+    return true;
+  } catch (_) { return false; /* Keep incomplete sessions for inspection or later recovery. */ }
+}
+
+module.exports = {Session, SESSION_ID, removeEmptySessionDirectory};

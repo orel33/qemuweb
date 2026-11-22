@@ -7,22 +7,19 @@
 //                 administrator observing the session does not change it
 //   archiveBusy   an archive operation or the deletion is in progress: the session's API
 //                 refuses changes meanwhile
-const path = require('path');
 const crypto = require('crypto');
 
 // Session IDs are 16 hex characters, chosen by the control plane.
 const SESSION_ID = /^[0-9a-f]{16}$/;
 
 class Session {
-  constructor({runtimeRoot, runnerId, id = crypto.randomBytes(8).toString('hex'), owner = null, createdAt = new Date().toISOString()}) {
+  constructor({runnerId, id = crypto.randomBytes(8).toString('hex'), owner = null, createdAt = new Date().toISOString()}) {
     this.id = id;
     this.owner = owner;
     this.createdAt = createdAt;
     this.runnerId = runnerId;
     this.lastActivity = null;
     this.archiveBusy = false;
-    // Where a local runner keeps the session (runtime/users/<login> links to it).
-    this.runtimeDir = path.join(runtimeRoot, 'sessions', id);
   }
 
   touch(time = Date.now()) { this.lastActivity = new Date(time).toISOString(); }

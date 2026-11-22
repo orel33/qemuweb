@@ -68,35 +68,29 @@ test('no candidate: 503 "No runner is available" with the reasons in the log', t
   assert.match(warnings.at(-1), /r-00000001: paused; r-00000002: full \(1\/1\)/);
 });
 
-test('a remote runner that announces the server\'s own runtime directory makes the server touch nothing', t => {
+test('the server creates no file for any runner, whatever its hello announces, with or without a grace period', t => {
   quiet(t);
   const runtime = tempDir(t, 'qw-flag-');
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({runtimeRoot: runtime, registry, graceSeconds: 0});
+  const manager = new SessionManager({registry, graceSeconds: 0});
   const fake = fakeRunner(registry, 'r-00000001', {runtimeRoot: runtime, sessions: []}, {registeredAt: 1});
   assert.equal(fake.entry.runtimeRoot, null);
   fake.client.session = id => ({sessionId: id, client: fake.client, events: new EventEmitter(), request: async () => ({})});
   fake.client.release = () => {};
-  const workspace = manager.open('toto');
-  // Directories the server would delete or link if it believed it shared the runtime.
-  fs.mkdirSync(workspace.session.runtimeDir, {recursive: true});
-  fs.writeFileSync(path.join(workspace.session.runtimeDir, 'precious'), 'x');
-  assert.equal(fs.existsSync(path.join(runtime, 'users')), false, 'no alias was created');
-  assert.equal(manager.sharesRuntime(fake.entry), false);
+  manager.open('toto');
+  assert.deepEqual(fs.readdirSync(runtime), [], 'no alias, no directory');
   fake.client.close();
   assert.equal(manager.get('toto'), null, 'dropped at once without grace');
-  assert.ok(fs.existsSync(path.join(workspace.session.runtimeDir, 'precious')), 'the directory is untouched');
   // The same with a grace period that expires.
-  const slow = new SessionManager({runtimeRoot: runtime, registry: new RunnerRegistry(), graceSeconds: 0.01});
+  const slow = new SessionManager({registry: new RunnerRegistry(), graceSeconds: 0.01});
   const other = fakeRunner(slow.registry, 'r-00000002', {runtimeRoot: runtime}, {registeredAt: 1});
   other.client.session = fake.client.session;
   other.client.release = () => {};
-  const kept = slow.open('titi');
-  fs.mkdirSync(kept.session.runtimeDir, {recursive: true});
+  slow.open('titi');
   other.client.close();
   return new Promise(resolve => setTimeout(resolve, 60)).then(() => {
     assert.equal(slow.get('titi'), null);
-    assert.ok(fs.existsSync(kept.session.runtimeDir), 'still untouched after the grace period');
+    assert.deepEqual(fs.readdirSync(runtime), [], 'still nothing after the grace period');
   });
 });
 
@@ -122,7 +116,7 @@ async function remoteRunner(t, registry, id = 'r-00000001') {
 test('a network cut keeps the session for the grace period; the runner\'s return rebinds the same handle', async t => {
   quiet(t);
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({runtimeRoot: tempDir(t, 'qw-cp-'), registry, graceSeconds: 60});
+  const manager = new SessionManager({registry, graceSeconds: 60});
   const far = await remoteRunner(t, registry);
   const first = await far.connect();
   const workspace = manager.open('toto');
@@ -149,7 +143,7 @@ test('a network cut keeps the session for the grace period; the runner\'s return
 test('a session the runner no longer lists is dropped when it returns', async t => {
   quiet(t);
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({runtimeRoot: tempDir(t, 'qw-cp-'), registry, graceSeconds: 60});
+  const manager = new SessionManager({registry, graceSeconds: 60});
   const far = await remoteRunner(t, registry);
   const first = await far.connect();
   const workspace = manager.open('toto');
@@ -166,7 +160,7 @@ test('a session the runner no longer lists is dropped when it returns', async t 
 test('after the grace period the session is dropped; the runner that returns is told to delete it', async t => {
   quiet(t);
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({runtimeRoot: tempDir(t, 'qw-cp-'), registry, graceSeconds: 0.05});
+  const manager = new SessionManager({registry, graceSeconds: 0.05});
   const far = await remoteRunner(t, registry);
   const first = await far.connect();
   const workspace = manager.open('toto');
@@ -187,7 +181,7 @@ test('the local runner is never kept: its sessions are dropped at once', async t
   quiet(t);
   const runtime = tempDir(t, 'qw-cp-');
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({runtimeRoot: runtime, registry, graceSeconds: 60});
+  const manager = new SessionManager({registry, graceSeconds: 60});
   const fake = fakeRunner(registry, 'local', {}, {local: true, trusted: true});
   fake.client.session = id => ({sessionId: id, client: fake.client, events: new EventEmitter(), request: async () => ({})});
   fake.client.release = () => {};

@@ -4,8 +4,10 @@
 // each leader of its own process group; the runner reaches the server over
 // runtime/runner-<port>.sock; a session works through it (VDE switch start, terminal output,
 // stop). A runner killed with SIGKILL takes its group with it (nothing is restarted): start.sh
-// stops the server and exits with an error, browsers get session-deleted, no process, session
-// directory or socket is left. SIGTERM on start.sh (the harness's stop) stops the runner and the
+// stops the server and exits with an error, browsers get session-deleted, no process or socket is
+// left; the server removes no directory, so the dead runner's session directory (with its switch)
+// stays, and the next runner replaces the stale runner.pid, keeps that non-empty directory and
+// says so in its log (PST01 will decide restore or discard). SIGTERM on start.sh (the harness's stop) stops the runner and the
 // server cleanly: exit code 0, no runner, vde_switch or qemu-system process, no
 // runtime/sessions/<id> and no socket. VDE only: no system image or KVM is needed.
 const assert = require('node:assert/strict');
@@ -145,19 +147,27 @@ async function run() {
   process.kill(runner.pid, 'SIGKILL');
   await waitFor('session-deleted after the runner loss', () => session.events.some(item => item.event === 'session-deleted'));
   await waitFor('no process left in the killed runner group', () => !groupMembers(runner.pid).length);
-  await waitFor('runtime directory of the dropped session removed', () => !fs.existsSync(sessionDir));
+  // The server never removes a path of a runner (docs/runner-model.md R1) and a SIGKILLed runner cannot tidy up: the directory
+  // of the dropped session stays, with its switch inside, until the next runner on that directory starts (see below).
+  assert.ok(fs.existsSync(sessionDir), 'the server removed the runtime directory of the dropped session');
   const failure = await Promise.race([exitedAfterKill, delay(20000).then(() => ({code: 'timeout'}))]);
   assert.ok(failure.code !== 0 && failure.code !== 'timeout', `start.sh did not fail after the runner loss (${failure.signal || failure.code})`);
   await waitFor('no process left under the server group', () => !groupMembers(server.pid).length, 5000);
   assert.equal(fs.existsSync(socketPath), false, 'runner socket left after the runner loss');
+  assert.ok(fs.existsSync(path.join(runtime, 'runner.pid')), 'the killed runner could not release runner.pid');
   assert.match(child.output, /The runner exited/);
-  console.log(`Runner: SIGKILL ended its group and its session; start.sh stopped the server and exited (${failure.code}); nothing restarted`);
+  console.log(`Runner: SIGKILL ended its group and its session (its directory stays: the server removes nothing); start.sh stopped the server and exited (${failure.code}); nothing restarted`);
 
   // A second launch, then the stop: SIGTERM on start.sh leaves no process, session directory or socket.
   child = spawnServer({port, usersFile: testUsers.file});
   await new QemuWebClient(baseUrl).waitForServer(30000, child);
   const again = await new QemuWebClient(baseUrl).signIn(user.login, user.password);
   const next = childOf(child.pid, 'runner/main.js');
+  // The new runner replaces the stale runner.pid and prunes its directory at start: the old session holds a switch, so it is
+  // NOT empty and stays, reported in the runner's log (restore or discard is the PST01 policy; cleanall.sh removes it).
+  await waitFor('the runner reports the non-empty leftover', () => child.output.includes(`Kept 1 non-empty session directory left by an earlier runner: ${sessionId}`), 10000);
+  assert.ok(fs.existsSync(sessionDir), 'the start-up pruning removed a non-empty session directory');
+  assert.equal(fs.readFileSync(path.join(runtime, 'runner.pid'), 'utf8').trim(), String(next.pid), 'runner.pid holds the new runner');
   const nextServer = childOf(child.pid, 'server/main.js');
   assert.ok(next && next.pid !== runner.pid, 'no new runner under the second start.sh');
   const second = await startSwitch(again, 'sw2');
@@ -177,7 +187,10 @@ async function run() {
   await waitFor('server group gone after the stop', () => !groupMembers(nextServer.pid).length, 5000);
   assert.equal(fs.existsSync(freshDir), false, 'runtime/sessions/<id> left after the stop');
   assert.equal(fs.existsSync(socketPath), false, 'runner socket left after the stop');
+  assert.equal(fs.existsSync(path.join(runtime, 'runner.pid')), false, 'runner.pid left after the stop');
   console.log('Runner: SIGTERM on start.sh stopped the runner and the server (exit 0), leaving no process, session directory or socket');
+  // What the SIGKILLed runner left (this test's own debris, on its own random port).
+  fs.rmSync(runtime, {recursive: true, force: true});
 }
 
 async function cleanup() {

@@ -12,7 +12,7 @@ web interface is described in the [user guide](user-guide.md).
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
 | `users.json` | User accounts (see [Users and sessions](user-guide.md#users-and-sessions)); ignored by Git. |
 | `<runtime>/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks (`<host>/disk.qcow2` for QEMU and `<host>/disk.vdi` for VirtualBox, up to one per engine), and sockets. The ID is random. |
-| `<runtime>/users/<login>` | Link to the user's session directory, for administrators. |
+| `<runtime>/users/<login>` | Link to the user's session directory, for administrators; made and removed by the runner in its own directory. |
 | `<runtime>/runner-<port>.sock` | Socket (mode 0600) that the runner, which runs the machines, dials to reach the server. |
 
 `<runtime>` is the runtime directory (below): a node's files are removed with the node or when
@@ -43,10 +43,9 @@ with their arguments, so the process is the Node.js one (`./scripts/status.sh`, 
 
 The port and the runtime directory are options (there is no environment variable for them). The server and the runner started
 with the same `--runtime` (by default the same private directory of the port, see below) share that directory: the server creates
-`runner-<port>.sock` in it and the runner looks for it there. The server cleans the empty sessions and
-aliases only of the local runner (the one on the Unix socket) whose `hello` announces the same runtime
-directory; a runner with another `--runtime`, and every remote runner, is never touched, whatever its
-`hello` says.
+`runner-<port>.sock` in it and the runner looks for it there. Nothing else crosses: the server touches no file of a runner;
+the runner creates the `users/<login>` aliases, removes the empty sessions and dangling aliases it finds at its own
+start, and locks the directory with `runner.pid` (a second runner on it refuses to start).
 
 ### Runtime directory
 
@@ -88,7 +87,7 @@ The server is configured by options only: it reads **no environment variable**.
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--listen PORT` | `3002` | TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-PORT.sock, the socket its runner dials |
-| `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory: sessions of a local runner, users/ aliases, server-PORT.pid and .session, and the socket DIR/runner-PORT.sock; the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets) |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory of the server: server-PORT.pid and the socket DIR/runner-PORT.sock (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets) |
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
 | `--runners FILE` | `runners.json of the repository` | registered remote runners (mode 0600): a hash of the token of each |
 | `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
@@ -140,7 +139,6 @@ Checking configuration…
 
 QemuWeb is ready.
   Web interface      http://127.0.0.1:3002
-  Sessions           /tmp/qw-me/3002/sessions (<runtime>/users/<login> links)
   Stop               Ctrl+C or ./scripts/stop.sh
 ```
 
@@ -152,7 +150,7 @@ The runner is an ordinary unprivileged process; every path is a parameter.
 | --- | --- | --- |
 | `--port PORT` | `3002` | port of the server to reach: the runner dials `DIR/runner-PORT.sock`, DIR being its `--runtime` |
 | `--connect SOCKET` | `none` | Unix socket of the server, instead of `--port` (the two exclude each other) |
-| `--runtime DIR` | `/tmp/qw-<login>/<port>` | where the runner keeps its sessions (`DIR/sessions/<id>/`) and looks for the server socket `DIR/runner-PORT.sock`; the server cleans the empty sessions it leaves there only with the same `--runtime`; default: the private directory of that port in /tmp, lost at a reboot |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot |
 | `--config FILE` | `config.json of the repository` | system catalog (images, memory, QEMU options) |
 | `--exit-on-disconnect` | `off` | stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect every 2 seconds) |
 | `-h`, `--help` | | this text |

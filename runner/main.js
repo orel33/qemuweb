@@ -16,6 +16,7 @@ const path = require('path');
 const fs = require('fs');
 const cli = require('../common/cli');
 const {runnerSpec, runSpec, serverSocket, RECONNECT_MS} = require('./options');
+const {takeRunnerLock, pruneRuntime} = require('./runtime-tidy');
 const {defaultRuntime, prepareRuntime, removeEmptyDefaultRuntime} = require('../common/runtime-dir');
 
 const root = path.join(__dirname, '..');
@@ -44,10 +45,14 @@ function main(remote) {
 
   let commands;
   let runtimeWarning = null;
+  let runtimeLock = null;
   try {
     commands = resolveCommands(root);
     // Before any session exists: the private default directory is created or refused, a --runtime too long for the sockets is refused.
     runtimeWarning = prepareRuntime(options.runtime).warning;
+    // The directory belongs to this runner alone (a live one refuses a second); what an earlier runner left empty is removed.
+    runtimeLock = takeRunnerLock(options.runtime);
+    pruneRuntime(options.runtime);
   } catch (error) {
     cli.abort('runner', error.message);
   }
@@ -78,6 +83,7 @@ function main(remote) {
     await service.shutdown();
     // Empty once this runner's sessions are gone (a server that ended earlier left it to us).
     try { fs.rmdirSync(path.join(options.runtime, 'sessions')); } catch (_) {}
+    runtimeLock.release();
     removeEmptyDefaultRuntime(options.runtime);
     process.exit(code);
   }
@@ -132,6 +138,7 @@ function main(remote) {
       fatal: message => { console.error(`runner: ${message}`); stop(1); }});
   }
 
+  process.on('exit', () => runtimeLock.release());
   for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) process.on(signal, () => stop(0));
   if (!printConfigurationChecks()) cli.abort('runner', 'Startup aborted: a check failed (see above).');
   if (remote) connectRemote(); else connect();

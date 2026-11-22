@@ -7,7 +7,7 @@
 // session, adopted (`session-adopted` in users.log), with its switch still running; a second
 // runner is refused; SIGTERM on the runner leaves no process and no session directory.
 // The runner keeps its sessions in its own short temporary runtime directory (which also makes
-// the server's runtime/ differ from the runner's: the server must create no alias). VDE only: no
+// the server's runtime/ differ from the runner's: the server creates no alias, the runner makes its own and holds runner.pid). VDE only: no
 // system image or KVM is needed.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -145,7 +145,9 @@ async function run() {
   const sessionDir = path.join(runnerRuntime, 'sessions', sessionId);
   assert.ok(fs.existsSync(sessionDir), 'the session is in the runner\'s runtime directory');
   assert.equal(fs.existsSync(path.join(runtime, 'sessions', sessionId)), false);
-  assert.equal(fs.existsSync(path.join(runtime, 'users', 'carol')), false, 'no alias: the runner does not share runtime/');
+  assert.equal(fs.existsSync(path.join(runtime, 'users', 'carol')), false, 'the server made no alias');
+  assert.equal(fs.readlinkSync(path.join(runnerRuntime, 'users', 'carol')), path.join('..', 'sessions', sessionId), 'the runner made the alias in its own directory');
+  assert.match(fs.readFileSync(path.join(runnerRuntime, 'runner.pid'), 'utf8'), /^\d+\n$/, 'the runner holds runner.pid');
   const [switchPid] = await waitFor('the runner\'s vde_switch', () => { const found = switchesOf(runner.pid); return found.length ? found : null; });
   assert.equal((await adminRunners(boss)).runners[0].sessions, 1);
   console.log(`Manual: session ${sessionId} runs switch ${switchId} (vde_switch ${switchPid}) on the runner`);
@@ -181,6 +183,7 @@ async function run() {
   assert.equal(nodes.find(node => node.id === switchId)?.running, true, 'the switch is no longer running');
   assert.equal(alive(switchPid), true);
   assert.equal(fs.existsSync(path.join(runtime, 'users', 'carol')), false);
+  assert.equal(fs.readlinkSync(path.join(runnerRuntime, 'users', 'carol')), path.join('..', 'sessions', sessionId), 'the runner\'s alias survived the server restart');
   const adopted = fs.readFileSync(path.join(logDir, USERS_LOG), 'utf8').split('\n').filter(Boolean).map(line => JSON.parse(line))
     .filter(entry => entry.event === 'session-adopted');
   assert.equal(adopted.length, 1);
@@ -201,6 +204,8 @@ async function run() {
   assert.equal(result.code, 0, `the runner stopped with ${result.signal || result.code}`);
   assert.equal(alive(switchPid), false, 'vde_switch left after the runner stopped');
   assert.equal(fs.existsSync(sessionDir), false, 'the session directory is left');
+  assert.equal(fs.existsSync(path.join(runnerRuntime, 'users')), false, 'the alias is left');
+  assert.equal(fs.existsSync(path.join(runnerRuntime, 'runner.pid')), false, 'runner.pid is left');
   await waitFor('no runner listed', async () => (await adminRunners(boss)).runners.length === 0);
   assert.equal((await carol.fetch('/api/nodes')).status, 503);
   console.log('Manual: runner stopped (SIGTERM), no process or session directory left, the server answers 503 again');

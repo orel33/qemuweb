@@ -109,16 +109,13 @@ server, connected, refused, lost). A refused option ends either program with sta
   recorded as `session-adopted` in `users.log`. Only the trusted runner of this machine is
   adopted. A session whose owner is invalid, or already has a session, is
   deleted on the runner. Sessions the server no longer knows are never kept.
-- **Files shared with the runner:** the server touches the runner's files only
-  for the **local runner** (the one on the Unix socket, never a remote one), and only when it shares its runtime directory
-  with the server, that is when the runner's `runtimeRoot`
-  (announced in `hello`) is the server's own `--runtime` (`/tmp/qw-<login>/<port>` by
-  default, for both; there is no environment variable for it). Then, when a runner connects, the
-  server prunes the empty `sessions/<id>` directories left by earlier servers (sparing the
-  sessions that `hello` reports and those of other live servers), creates the
-  `users/<login>` aliases, and removes the session directories of a runner
-  that is lost (a runner killed by SIGKILL cannot). A runner whose `hello` announces another
-  runtime directory is never touched, and a remote runner is never touched whatever its `hello` says.
+- **Files of the runner:** the server touches no file of any runner. Each runner owns its runtime directory: it creates
+  the `users/<login>` aliases (at `session.create`, removed with the session), takes `runner.pid` (a second runner on
+  the same directory refuses to start), and at its own start removes the empty `sessions/<id>` directories and the
+  dangling aliases that an earlier runner left; a non-empty directory stays (it is reported in the runner's log).
+  A runner killed by SIGKILL therefore leaves its directories until the next runner on that directory starts
+  (`./scripts/cleanall.sh` removes them). Until the default directories are split (RUN03d), the local runner still
+  shares the server's default directory, so the aliases appear where they always did.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
   empty session, recorded as `session-deleted` with the reason `runner lost` in

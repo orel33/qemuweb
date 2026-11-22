@@ -27,7 +27,7 @@ do the same in their own writer.
 | `users.json` (or `--users`) | `scripts/user.sh`, admin API | 0600 | no | `server/auth/users-store.js` |
 | `runners.json` (or `--runners`) | server | 0600 | no | `server/runner-store.js` |
 | `~/.config/qemuweb-runner/runner.json` (or `--runner-config`) | `runner register` | 0600 | no | `runner/config-file.js` |
-| `<session>/session.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import), `server/server-instance.js` (pruning) |
+| `<session>/session.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import), `runner/session.js` (start-up pruning) |
 | `<session>/meta.json` | runner | 0600 | never | `scripts/status.js` (age only) |
 | `<host>/host.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
 | `<switch>/switch.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
@@ -40,8 +40,8 @@ do the same in their own writer.
 never reads `session.json`, `host.json`, `switch.json` or `meta.json` back to
 rebuild a live session: it keeps the state in memory and writes these files so
 that they can be archived and inspected. They are read only when a ZIP is loaded
-(into a staging directory) and, for `session.json`, to prune the empty sessions a
-stopped server left behind. `config.json` is read again at every use (no cache),
+(into a staging directory) and, for `session.json`, to prune the empty sessions an
+earlier runner left behind (at the runner's start). `config.json` is read again at every use (no cache),
 so an edit applies to the next operation without restarting anything.
 
 Companions needed to understand the JSON files:

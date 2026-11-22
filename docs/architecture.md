@@ -225,7 +225,7 @@ The server is split into layers with one-way dependencies:
 | `server/routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream (`importArchive` sends any Readable, an upload or an example file). |
 | `server/examples.js`, `server/routes/examples.js` | The server's examples (`--examples`): `GET /api/examples` lists the regular `.topo` and `.zip` files (name, kind, size, description); `POST /api/examples/file` and `POST /api/examples/load` take a bare file name `{name}`, check it against a fresh listing (400 malformed, 404 unlisted), open it without following links, confirm the kind by content, then feed it to the same runner commands as an upload (`archive.import`, `topology.load`). Read only. |
 | `server/routes/metrics.js` | Per-host CPU and memory metrics. |
-| `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`, `<runtime>/users/<login>` links. |
+| `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`. No file access. |
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
 | `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `local`/`trusted`/`paused` flags and client; `pickRunner(login, sessionsOf)`, the single placement point. |
@@ -233,7 +233,7 @@ The server is split into layers with one-way dependencies:
 | `server/runner-store.js`, `server/runner-registration.js` | `runners.json` (token hashes, 0600, revoked, paused) and the in-memory one-time registration tokens (15 min, 1 h, 24 h). |
 | `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
 | `server/runner-gateway.js` | The runner socket `<runtime>/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
-| `server/server-instance.js` | `<runtime>/server-<port>.pid` and `.session` records (read by `scripts/stop.sh`), pruning of empty sessions left by stopped servers (when a runner sharing `<runtime>/` connects). |
+| `server/server-instance.js` | `<runtime>/server-<port>.pid` (read by `scripts/stop.sh`), the only file the server keeps in its runtime directory. |
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie), `proxy.js` (shared key file, identity from the authenticating front end). |
 | `server/audit.js` | Log directory (`logs/` or `--logs`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
@@ -243,6 +243,7 @@ The server is split into layers with one-way dependencies:
 | `runner/service.js` | Every session of the runner: `session.create`/`session.delete`, command dispatch (404 for an unknown session or node), console input, `hello` with the capabilities, `runtimeRoot` and the sessions (ID, owner, creation date), shutdown. |
 | `runner/endpoint.js` | The runner side of a connection: requests in arrival order, events, console output coalescing and backpressure. |
 | `runner/commands/` | Commands by area (nodes, hosts, settings, topology, archives, consoles); their results are the JSON bodies of the HTTP API. |
+| `runner/runtime-tidy.js` | What the runner keeps in its directory besides sessions: `users/<login>` aliases, start-up pruning of empty session directories and dangling aliases, the `runner.pid` lock. |
 | `runner/session.js` | One session as the runner holds it: engine, nodes, runtime directory, `session.json` (definition), `meta.json` (owner, creation date). |
 | `runner/engine-switch.js` | Changing the session engine with hosts present: refused while a host is up or busy, then each host selects the settings (resolved from its `host.json` config) and the working disk of the new engine; nothing is deleted. |
 | `runner/archive-disks.js`, `runner/media/vdi.js` | Working disks of a ZIP on load: `baseImages` identities per disk format, and the VDI header check. |
@@ -453,7 +454,7 @@ start is a `startvm`); a disk loaded from a ZIP has no registered VirtualBox mac
 so the first start creates the machine around it (`ensureVirtualBoxMachine`). `session.json`,
 `host.json`, `switch.json`, startup scripts, and sockets also live in `<runtime>/`.
 The JSON files are specified in [json-files.md](json-files.md).
-`<runtime>/users/<login>` links to the user's session directory. The session ID
+`<runtime>/users/<login>` (made by the runner) links to the user's session directory. The session ID
 stays random and never contains the login, which keeps socket paths short and
 logins out of archives.
 
@@ -481,7 +482,8 @@ pair (`test/unit/runner-pair.js`).
 | Settings of a host for both engines (`config` keys `keyword`, `keyword:qemu`, `keyword:vbox`) | Runner (in `host.json`) |
 | System catalog (`config.json`), executables, `/dev/kvm`, resource sampling | Runner |
 | Login → session ID, owner, creation date, last activity, archive lock, HTTP routers, Socket.IO rooms, console control, view states, audit logs | Control plane |
-| `<runtime>/users/<login>` alias, `<runtime>/server-<port>.*` records | Control plane (local filesystem only) |
+| `<runtime>/users/<login>` alias, `<runtime>/runner.pid` | Runner |
+| `<runtime>/server-<port>.pid` | Control plane |
 
 The control plane keeps no copy of node records. Everything that reads or
 changes a node (validation of a host configuration, topology loading, archive
@@ -619,9 +621,8 @@ a runner owned by one student, unused). The entry `local` is the
 runner of this machine, which dialled the Unix-socket gateway; a remote runner has
 the ID given at registration (`r-xxxxxxxx`) and stays in the registry, state `lost`, while offline.
 `local` and `trusted` are set only by the Unix-socket gateway: a `hello` is untrusted input, so a remote
-runner is never trusted, and **every filesystem action of the server on a runner's directories**
-(session directory removal, `users/` aliases, pruning) requires `local`; the `runtimeRoot` of a hello is
-kept only for the local runner, to tell whether it shares the server's `<runtime>/`.
+runner is never trusted. The server performs **no filesystem action on a runner's directories**: session directory
+removal (at `session.delete`), `users/` aliases and pruning are the runner's (`runner/runtime-tidy.js`).
 
 The session manager binds each session ID to a runner ID. The control plane
 assigns session IDs (the runner never invents one) and chooses the runner in
@@ -678,13 +679,10 @@ routes answer 503 until one is online.
    (adoption above). Its console shows "Waiting for the server", "Connected",
    "The server refused the connection" (a runner is already connected) and
    "Connection to the server lost".
-6. The server touches a runner's filesystem only for the local runner (`entry.local`, set by the
-   Unix-socket gateway) when it also shares
-   `<runtime>/`, that is when `hello.runtimeRoot` equals the server's
-   `<runtime>/`: it then runs `pruneEmptyRuntimeSessions` when the runner
-   connects (sparing the sessions of that `hello` and those of other live
-   servers), creates the `<runtime>/users/<login>` aliases, and removes the
-   session directories of a lost runner.
+6. The server touches no file of a runner. The runner takes `<runtime>/runner.pid` (a live runner on
+   the directory makes a second one refuse to start), removes at its own start the empty session
+   directories and the dangling `users/<login>` aliases of an earlier runner (non-empty directories stay),
+   creates the alias at `session.create` and removes it with the session at `session.delete`.
 
 **Process groups in `scripts/start.sh`.** The script starts the server and the
 runner each with `setsid`, so a terminal Ctrl+C reaches the script only. When the
@@ -701,8 +699,8 @@ runner's connection drops or its process exits, the registry marks it `lost`:
 1. the control plane drops every session bound to it like a deleted session
    (users.log `session-deleted` with the reason `runner lost`; browsers get
    `session-deleted` and reload into a new, empty session): the VMs died with
-   the runner, so there is nothing to keep. When the runner shared `<runtime>/`,
-   the server removes the runtime directories of those sessions;
+   the runner, so there is nothing to keep. The server removes no directory: what the dead runner
+   left is pruned (empty) or kept (non-empty) by the next runner on that directory, at its start;
 2. nothing restarts the runner. Under `scripts/start.sh` the script kills the
    runner's process group (QEMU and `vde_switch` are in it; `vdeterm` ends with
    its pseudo-terminal) and stops the server; in a deployment systemd restarts

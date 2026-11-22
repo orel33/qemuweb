@@ -28,10 +28,8 @@ if [[ -z "$runtime" ]]; then
   runtime="$(default_runtime "$port")"
 fi
 pid_file="$runtime/server-$port.pid"
-session_file="$runtime/server-$port.session"
 
 if [[ ! -f "$pid_file" ]]; then
-  rm -f -- "$session_file"
   echo "No QemuWeb server tracked on port $port."
   exit 0
 fi
@@ -39,7 +37,6 @@ fi
 read -r pid < "$pid_file"
 if [[ ! "$pid" =~ ^[0-9]+$ ]] || ! kill -0 "$pid" 2>/dev/null; then
   rm -f -- "$pid_file"
-  rm -f -- "$session_file"
   rm -f -- "$runtime/runner-$port.sock"
   echo "No QemuWeb server running on port $port (stale PID removed)."
   exit 0
@@ -62,8 +59,7 @@ kill -TERM "$pid"
 for _ in {1..60}; do
   if ! kill -0 "$pid" 2>/dev/null; then
     rm -f -- "$pid_file"
-    rm -f -- "$session_file"
-    echo 'QemuWeb stopped.'
+      echo 'QemuWeb stopped.'
     # A runner started by hand (./scripts/runner.sh) keeps its VMs and waits for a server again;
     # one started by start.sh (--exit-on-disconnect) stops them and exits by itself.
     while IFS= read -r runner; do
