@@ -11,10 +11,9 @@
 const fs = require('fs');
 const path = require('path');
 const {hashPassword, isPasswordHash} = require('./passwords');
+const {LOGIN_PATTERN} = require('../../common/login');
 
 const ROLES = ['student', 'admin'];
-// The login names runtime/users/<login>: a short, safe character set.
-const LOGIN_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._@-]{0,63}$/;
 
 function validateLogin(login) {
   if (typeof login !== 'string' || !LOGIN_PATTERN.test(login)) {

@@ -61,7 +61,7 @@ function runnerSpec(root) {
         description: 'port of the server to reach: the runner dials DIR/runner-PORT.sock, DIR being its --runtime'},
       {flag: '--connect', metavar: 'SOCKET', kind: 'path', key: 'connect', default: null, fallback: 'none', showWhenGiven: true,
         description: 'Unix socket of the server, instead of --port (the two exclude each other)'},
-      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; the server cleans the empty sessions it leaves there only with the same --runtime; default: the private directory of that port in /tmp, lost at a reboot'),
+      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot'),
       catalogOption(root),
       {flag: '--exit-on-disconnect', metavar: null, key: 'exitOnDisconnect', default: false, value: true, fallback: 'off',
         description: `stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect every ${RECONNECT_MS / 1000} seconds)`}

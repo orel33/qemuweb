@@ -24,6 +24,8 @@ const {knownImageIdentity} = require('./media/image-hash');
 const {configWarnings} = require('./config-warnings');
 const {availableEngines} = require('./preflight');
 const {statusError} = require('./commands/errors');
+const {LOGIN_PATTERN} = require('../common/login');
+const {linkUserAlias, unlinkUserAlias} = require('./runtime-tidy');
 
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
 const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures', 'capture-live', 'guest-info'];
@@ -52,13 +54,15 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
   function createSession({sessionId, owner = null, createdAt}) {
     if (!SESSION_ID.test(sessionId || '')) throw new Error('Invalid session ID.');
     if (sessions.has(sessionId)) throw statusError('Session already exists.', 409);
+    if (owner !== null && (typeof owner !== 'string' || !LOGIN_PATTERN.test(owner))) throw new Error('Invalid session owner.');
     // A new session uses the first engine this runner has (QEMU when it has it).
-    const session = new Session({runtimeRoot, id: sessionId, engine: engines[0], owner: typeof owner === 'string' ? owner : null,
+    const session = new Session({runtimeRoot, id: sessionId, engine: engines[0], owner,
       ...(typeof createdAt === 'string' ? {createdAt} : {})});
     fs.mkdirSync(path.dirname(session.runtimeDir), {recursive: true});
     fs.mkdirSync(session.runtimeDir);
     session.saveMetadata();
     session.saveMeta();
+    if (owner) linkUserAlias(runtimeRoot, owner, sessionId);
     const runner = createSessionRunner({session, commands, root, runtimeRoot, configPath, hostNodes, flow, requireImages});
     const emit = (event, payload) => events.emit('event', sessionId, event, payload);
     for (const event of RUNNER_EVENTS) runner.events.on(event, payload => emit(event, payload));
@@ -78,6 +82,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     sessions.delete(sessionId);
     runner.events.removeAllListeners();
     fs.rmSync(session.runtimeDir, {recursive: true, force: true});
+    if (session.owner) unlinkUserAlias(runtimeRoot, session.owner, sessionId);
     return {deleted: true};
   }
 
@@ -88,6 +93,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
       try { await runner.shutdown(); }
       catch (error) { console.error(`Session ${session.id} shutdown:`, error); }
       session.removeIfEmpty();
+      if (session.owner && !fs.existsSync(session.runtimeDir)) unlinkUserAlias(runtimeRoot, session.owner, session.id);
       runner.events.removeAllListeners();
     }));
     sessions.clear();
