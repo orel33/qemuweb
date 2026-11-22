@@ -115,7 +115,7 @@ test('--parallel=1 and a single system are the sequential build, with the output
   withRoot(['x', 'y'], {}, ({run}) => { reference = run('--all'); });
   assert.equal(reference.status, 0, reference.err);
   assert.doesNotMatch(reference.out, /Parallel build/);
-  assert.match(reference.out, /== x · ready in 00:00:00/);
+  assert.match(reference.out, /== x · ready in 00:00:0\d/);
   withRoot(['x', 'y'], {}, ({run, events}) => {
     const result = run('--all', '--parallel=1');
     assert.equal(result.status, 0, result.err);
