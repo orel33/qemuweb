@@ -27,6 +27,39 @@ a real network cut, pause and revocation.
 | **A. SSH tunnel** (quick test) | REMOTE opens `ssh -N -L` to SERVER; the runner talks to its own 127.0.0.1:3002. No nginx, no TLS to set up. | `http://127.0.0.1:3002` (loopback: no `--insecure` needed) |
 | **B. nginx + HTTPS** (real setup) | REMOTE reaches nginx on SERVER over the network; nginx passes the WebSocket to 127.0.0.1:3002. | `https://qemuweb.example.org` (private CA: add `--ca`) |
 
+## Quick try with `demo.sh` (variant A, ten minutes)
+
+The server of `./scripts/demo.sh` is a ready-made SERVER: port **3003**, a temporary users file (`admin/admin`, `toto/toto`,
+`tutu/tutu`) and its own local runner. It listens on `127.0.0.1` only, so REMOTE reaches it through an SSH tunnel. In the
+commands below `USER@SERVER` is the account and machine where `demo.sh` runs; REMOTE is the other machine (`~/qemuweb` is its clone,
+prepared as in the prerequisites: `npm ci`, QEMU with VDE, access to `/dev/kvm`, the images).
+
+```sh
+# SERVER: start the demo (leave it running)
+./scripts/demo.sh
+
+# REMOTE, terminal 1: the tunnel to the demo server (keep it open)
+ssh -N -L 3003:127.0.0.1:3003 USER@SERVER
+
+# BROWSER on SERVER: http://127.0.0.1:3003, sign in as admin / admin, /admin -> Runners -> "Create registration token"
+# (1 hour), copy the token. The "local" runner is already online.
+
+# REMOTE, terminal 2: register once, then run (the runner file keeps the identity; no --runtime needed: its directory
+# is /tmp/qw-<login>/r-<id> by default)
+./scripts/runner.sh register --url http://127.0.0.1:3003 --token TOKEN --name tralala \
+  --runner-config ~/.config/qemuweb-runner/runner.json
+./scripts/runner.sh run --runner-config ~/.config/qemuweb-runner/runner.json --url http://127.0.0.1:3003
+```
+
+Expect `Connected to the server.` on REMOTE, and in **/admin → Runners** a second row, **tralala** (name) with its `r-xxxxxxxx` ID, online.
+`demo.sh` places the sessions of `toto` and `tutu` on the local runner. To put a session on REMOTE, **pause** the `local` runner in the
+Runners tab (a paused runner receives no new session; the running ones continue), then sign in as **admin** in a private window: the new
+session of `admin` is placed on `tralala` (add a switch and a host, start them: the QEMU and `vde_switch` processes run on REMOTE).
+The two machines of a session always run on the same runner.
+
+Cleanup: Ctrl+C the runner and the tunnel on REMOTE, then Ctrl+C `demo.sh` on SERVER (it deletes its temporary directory). A revoked
+runner (Revoke in the Runners tab) ends with status 78.
+
 ## Prerequisites
 
 | Machine | What it needs |
