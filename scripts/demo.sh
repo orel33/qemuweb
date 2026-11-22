@@ -38,11 +38,11 @@ trap 'exit 130' INT TERM
 
 printf '\n== QemuWeb demo on port %s ==\n' "$port"
 node scripts/demo.js prepare "$demo_dir/users.json"
-# The same two commands as scripts/start.sh (server and runner), with the temporary users file and a
-# temporary runtime directory (its own sessions, deleted when the demo stops; the default
-# /tmp/qw-<login>/<port> would be shared with a start.sh on the same port).
-mkdir -p "$demo_dir/runtime"
-./scripts/start.sh --listen "$port" --runtime "$demo_dir/runtime" --users "$demo_dir/users.json" &
+# The same two commands as scripts/start.sh (server and runner), with the temporary users file and two temporary
+# directories, one per process (the server's and the runner's own sessions, deleted when the demo stops; the defaults
+# /tmp/qw-<login>/<port> and l-<port> would be shared with a start.sh on the same port).
+mkdir -p "$demo_dir/server" "$demo_dir/runner"
+./scripts/start.sh --listen "$port" --runtime "$demo_dir/server" --runner-runtime "$demo_dir/runner" --users "$demo_dir/users.json" &
 demo_server_pid=$!
 node scripts/demo.js load "http://127.0.0.1:$port"
 

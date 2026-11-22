@@ -16,7 +16,7 @@ const fs = require('fs');
 const cli = require('../common/cli');
 const {runnerSpec, runSpec} = require('./options');
 const {takeRunnerLock, pruneRuntime} = require('./runtime-tidy');
-const {defaultRuntime, prepareRuntime, removeEmptyDefaultRuntime} = require('../common/runtime-dir');
+const {prepareRunnerRuntime, removeEmptyDefaultRuntime} = require('../common/runtime-dir');
 
 const root = path.join(__dirname, '..');
 // Exit status of a runner whose token the server refuses (EX_CONFIG): systemd can leave it stopped (RestartPreventExitStatus=78).
@@ -33,7 +33,6 @@ function main(remote) {
   const options = cli.commandLine(spec, process.argv.slice(remote ? 3 : 2));
   // A remote runner takes its server, runtime and certificate authority from the runner file unless an option says otherwise.
   const identity = remote ? require('./remote-identity').load(options) : null;
-  if (!options.runtime) options.runtime = defaultRuntime('runner');
   // The local runner: the server of this machine and the token file (runner/local-identity.js).
   const local = remote ? null : require('./local-identity').load(options);
   cli.printBanner('runner');
@@ -47,8 +46,9 @@ function main(remote) {
   let runtimeLock = null;
   try {
     commands = resolveCommands(root);
-    // Before any session exists: the private default directory is created or refused, a --runtime too long for the sockets is refused.
-    runtimeWarning = prepareRuntime(options.runtime).warning;
+    if (!options.runtime) throw identity.fileError;  // a remote runner without its runner file has no directory to name
+    // Before any session exists: the private default directory is created or refused, a runner directory too long for the sockets is refused.
+    runtimeWarning = prepareRunnerRuntime(options.runtime).warning;
     // The directory belongs to this runner alone (a live one refuses a second); what an earlier runner left empty is removed.
     runtimeLock = takeRunnerLock(options.runtime);
     pruneRuntime(options.runtime);

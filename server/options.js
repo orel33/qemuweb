@@ -7,7 +7,7 @@
 // test/unit/server-startup-report.test.js checks that each option is documented in docs/reference.md.
 const path = require('path');
 const {parseArguments, defaultSettings: cliDefaults, UsageError, invalid} = require('../common/cli');
-const {defaultRuntime} = require('../common/runtime-dir');
+const {serverRuntime} = require('../common/runtime-dir');
 
 const DEFAULT_PORT = 3002;
 const DEFAULT_SESSION_HOURS = 12;
@@ -68,7 +68,7 @@ function serverSpec(root) {
         description: 'marks an ephemeral server of the test scenarios (tests only)'}
     ],
     validate(settings) {
-      if (!settings.given.has('--runtime')) settings.runtime = defaultRuntime(settings.port);
+      if (!settings.given.has('--runtime')) settings.runtime = serverRuntime(settings.port);
       if (settings.authMode === 'proxy' && !settings.proxyKeyFile) {
         throw new UsageError('--auth proxy requires --proxy-key-file FILE');
       }
