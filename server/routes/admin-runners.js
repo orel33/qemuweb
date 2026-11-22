@@ -8,15 +8,15 @@
 //   POST   /runners/:id/pause | /resume     drain: no new session is placed, the running ones continue
 //   POST   /runners/:id/revoke              invalidates the runner and disconnects it (a revoked runner is refused)
 //   DELETE /runners/:id                     forgets an offline, revoked runner
-// The rows are the same for every runner, "local" included (its record is created at its first
-// connection): there is no flag that tells them apart. A runner summary: {id, name, state, paused,
+// The rows are the same for every runner, "local" included (its record is created at start by --local-runner): there is no flag that tells them apart. A runner summary: {id, name, state, paused,
 // lastSeen, address, directory, pid, engines, kvm, cpus, memoryBytes, systems, warnings, sessions,
 // maxSessions}; state is online, starting, offline or revoked; directory and pid are what the runner
 // announced (text for the administrator, never used). Never a token or a token hash.
-// connectHint is the command that starts the local runner, while no runner is online; null otherwise.
+// connectHint is the command that starts the local runner, while no runner is online and the server runs with --local-runner; null otherwise.
 const express = require('express');
 const {LIFETIMES_MINUTES} = require('../runner-registration');
 const {RUNNER_ID} = require('../runner-store');
+const {tokenFilePath} = require('../../common/local-token');
 const DEFAULT_PORT = 3002;
 
 function summarize({entry, record, sessions}) {
@@ -40,10 +40,11 @@ function runnerSummaries({registry, manager, store}) {
   return store.list().map(record => summarize({entry: registry.get(record.id), record, sessions: sessionsOf(record.id)}));
 }
 
-// `runtime`: the --runtime of the server when it was given, else null (the runner's default is the same).
-function connectHint({runners, port, runtime = null}) {
-  if (runners.some(runner => runner.state === 'online')) return null;
-  const options = [port === DEFAULT_PORT ? '' : `--port ${port}`, runtime ? `--runtime ${runtime}` : ''].filter(Boolean);
+// The command that starts the local runner, or null when a runner is online or the server has no --local-runner.
+// `runtime`: the --runtime of the server when it was given, else null (the runner then finds the token file of the default directory of the port).
+function connectHint({runners, port, runtime = null, localRunner = false}) {
+  if (!localRunner || runners.some(runner => runner.state === 'online')) return null;
+  const options = [port === DEFAULT_PORT ? '' : `--port ${port}`, runtime ? `--token-file ${tokenFilePath(runtime)}` : ''].filter(Boolean);
   return ['./scripts/runner.sh', ...options].join(' ');
 }
 
@@ -58,7 +59,7 @@ function publicOrigin(req, trustProxy) {
 
 const registerCommand = (origin, token) => `./scripts/runner.sh register --url ${origin} --token ${token}`;
 
-function createRunnersRouter({manager, store, tokens, audited, port, runtime = null, graceSeconds, trustProxy = false}) {
+function createRunnersRouter({manager, store, tokens, audited, port, runtime = null, localRunner = false, graceSeconds, trustProxy = false}) {
   const router = express.Router();
   const {registry} = manager;
   const summaryOf = id => runnerSummaries({registry, manager, store}).find(runner => runner.id === id);
@@ -66,7 +67,7 @@ function createRunnersRouter({manager, store, tokens, audited, port, runtime = n
 
   router.get('/', (_req, res) => {
     const runners = runnerSummaries({registry, manager, store});
-    res.json({runners, connectHint: connectHint({runners, port, runtime}), registrationTokens: tokens.pending(),
+    res.json({runners, connectHint: connectHint({runners, port, runtime, localRunner}), registrationTokens: tokens.pending(),
       runnerGraceSeconds: graceSeconds, lifetimes: LIFETIMES_MINUTES});
   });
 

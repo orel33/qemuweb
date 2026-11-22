@@ -8,23 +8,24 @@ const test = require('node:test');
 const cli = require('../../common/cli');
 const {serverSpec, parseServerArguments} = require('../../server/options');
 const {defaultRuntime} = require('../../common/runtime-dir');
-const {runnerSpec, runSpec, registerSpec, parseRunnerArguments, serverSocket} = require('../../runner/options');
+const {runnerSpec, runSpec, registerSpec, parseRunnerArguments} = require('../../runner/options');
+const {tokenFilePath} = require('../../common/local-token');
 
 const root = path.join(path.sep, 'srv', 'qemuweb');
 const escape = text => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 const readme = fs.readFileSync(path.join(__dirname, '..', '..', 'docs', 'reference.md'), 'utf8').replace(/`/g, '');
 const blockOf = (spec, settings, derived) => cli.formatOptions(cli.startupRows(spec, settings, derived)).join('\n');
 
-test('server: the defaults are listed, each marked as default, with the derived runner socket', () => {
+test('server: the defaults are listed, each marked as default; --local-runner is off and shows no token file', () => {
   const spec = serverSpec(root);
-  const text = blockOf(spec, parseServerArguments([], {root}), [['Runner socket', path.join(defaultRuntime(3002), 'runner-3002.sock')]]);
+  const text = blockOf(spec, parseServerArguments([], {root}), []);
   assert.match(text, /^Options/);
   assert.doesNotMatch(text, /Settings/);
   for (const [name, value] of [['--listen', '3002'], ['--runtime', defaultRuntime(3002)], ['--users', path.join(root, 'users.json')],
-    ['--runners', path.join(root, 'runners.json')], ['--logs', path.join(root, 'logs')], ['--examples', path.join(root, 'examples')], ['--session-hours', '12'], ['--runner-grace', '300'], ['--trust-proxy', 'unset'], ['--auth', 'password'], ['--proxy-key-file', 'unset'], ['--logout-url', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
+    ['--runners', path.join(root, 'runners.json')], ['--logs', path.join(root, 'logs')], ['--examples', path.join(root, 'examples')], ['--session-hours', '12'], ['--runner-grace', '300'], ['--local-runner', 'off'], ['--trust-proxy', 'unset'], ['--auth', 'password'], ['--proxy-key-file', 'unset'], ['--logout-url', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
-  assert.match(text, new RegExp(`Runner socket +${escape(path.join(defaultRuntime(3002), 'runner-3002.sock'))} +\\(derived\\)`));
+  assert.doesNotMatch(text, /Local runner token|\.sock/);
 });
 
 test('server: given options are shown with their source; the environment is ignored', () => {
@@ -34,15 +35,16 @@ test('server: given options are shown with their source; the environment is igno
     assert.equal(parseServerArguments([], {root}).port, 3002);
     assert.equal(parseServerArguments([], {root}).authMode, 'password');
     const settings = parseServerArguments(['--listen', '3003', '--runtime', '/var/lib/qemuweb', '--users', '/etc/qemuweb/users.json', '--runners', '/etc/qemuweb/runners.json', '--logs', '/var/log/qemuweb', '--examples', '/srv/examples',
-      '--session-hours', '8', '--runner-grace', '60', '--trust-proxy', 'loopback', '--auth', 'proxy', '--proxy-key-file', '/etc/qemuweb/proxy-key', '--logout-url', 'https://qw.example/bye', '--ephemeral'], {root});
-    const text = blockOf(serverSpec(root), settings, [['Runner socket', '/var/lib/qemuweb/runner-3003.sock']]);
+      '--session-hours', '8', '--runner-grace', '60', '--trust-proxy', 'loopback', '--auth', 'proxy', '--proxy-key-file', '/etc/qemuweb/proxy-key', '--logout-url', 'https://qw.example/bye', '--local-runner', '--ephemeral'], {root});
+    const text = blockOf(serverSpec(root), settings, [['Local runner token', tokenFilePath('/var/lib/qemuweb')]]);
     for (const [name, value] of [['--listen', '3003'], ['--runtime', '/var/lib/qemuweb'], ['--users', '/etc/qemuweb/users.json'], ['--runners', '/etc/qemuweb/runners.json'], ['--logs', '/var/log/qemuweb'], ['--examples', '/srv/examples'],
-      ['--session-hours', '8'], ['--runner-grace', '60'], ['--trust-proxy', 'loopback'], ['--auth', 'proxy'], ['--proxy-key-file', '/etc/qemuweb/proxy-key'], ['--logout-url', 'https://qw.example/bye'], ['--ephemeral', 'on']]) {
+      ['--session-hours', '8'], ['--runner-grace', '60'], ['--trust-proxy', 'loopback'], ['--auth', 'proxy'], ['--proxy-key-file', '/etc/qemuweb/proxy-key'], ['--logout-url', 'https://qw.example/bye'], ['--local-runner', 'on'], ['--ephemeral', 'on']]) {
       assert.match(text, new RegExp(`${name} +${escape(value)} +\\(option\\)`), `${name} option`);
     }
     assert.match(text, /--no-auth +off +\(default\)/, '--auth and --no-auth exclude each other');
     assert.equal(settings.authMode, 'proxy');
-    assert.match(text, /\/var\/lib\/qemuweb\/runner-3003\.sock/);
+    assert.match(text, /Local runner token +\/var\/lib\/qemuweb\/local-runner\.token +\(derived\)/);
+    assert.equal(settings.localRunner, true);
     assert.doesNotMatch(text, /PORT|XDG_DATA_HOME|QEMUWEB_/);
   } finally {
     for (const key of Object.keys(process.env)) if (!(key in saved)) delete process.env[key];
@@ -63,25 +65,23 @@ test('server command line: every option, anything else or an invalid value refus
   }
 });
 
-test('runner: defaults, the Options block, the socket to dial and the command line', () => {
+test('runner: defaults, the Options block, the token file and the command line', () => {
   const spec = runnerSpec(root);
   const defaults = parseRunnerArguments([], {root});
-  assert.equal(serverSocket(defaults), path.join(defaultRuntime(3002), 'runner-3002.sock'));
+  assert.equal(defaults.tokenFile, tokenFilePath(defaultRuntime(3002)));
   assert.equal(parseRunnerArguments(['--port', '3010'], {root}).runtime, defaultRuntime(3010), 'the default follows the port');
-  assert.equal(parseRunnerArguments(['--connect', '/x/runner-3011.sock'], {root}).runtime, defaultRuntime(3011), 'or the port of the socket it dials');
-  const text = blockOf(spec, defaults, [['Server socket', serverSocket(defaults)]]);
-  for (const [name, value] of [['--port', '3002'], ['--runtime', defaultRuntime(3002)], ['--config', '/srv/qemuweb/config.json'], ['--exit-on-disconnect', 'off']]) {
+  assert.equal(parseRunnerArguments(['--port', '3010'], {root}).tokenFile, tokenFilePath(defaultRuntime(3010)), 'so does the token file');
+  const text = blockOf(spec, defaults, [['Runner', 'local'], ['Server WebSocket', 'ws://127.0.0.1:3002/runner/connect']]);
+  for (const [name, value] of [['--port', '3002'], ['--token-file', tokenFilePath(defaultRuntime(3002))], ['--runtime', defaultRuntime(3002)], ['--config', '/srv/qemuweb/config.json'], ['--exit-on-disconnect', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
-  assert.doesNotMatch(text, /--connect/, '--connect is listed only when given');
-  assert.match(text, new RegExp(`Server socket +${escape(path.join(defaultRuntime(3002), 'runner-3002.sock'))} +\\(derived\\)`));
-  const given = parseRunnerArguments(['--port', '4100', '--runtime', '/rt', '--config', '/c.json', '--exit-on-disconnect'], {root});
-  assert.equal(serverSocket(given), '/rt/runner-4100.sock');
+  assert.match(text, /Server WebSocket +ws:\/\/127\.0\.0\.1:3002\/runner\/connect +\(derived\)/);
+  assert.doesNotMatch(text, /--connect|\.sock/);
+  const given = parseRunnerArguments(['--port', '4100', '--token-file', '/etc/t', '--runtime', '/rt', '--config', '/c.json', '--exit-on-disconnect'], {root});
+  assert.equal(given.tokenFile, '/etc/t');
   assert.match(blockOf(spec, given, []), /--exit-on-disconnect +on +\(option\)/);
-  const connect = parseRunnerArguments(['--connect', '/run/x.sock'], {root});
-  assert.equal(serverSocket(connect), '/run/x.sock');
-  assert.match(blockOf(spec, connect, []), /--connect +\/run\/x\.sock +\(option\)/);
-  for (const bad of [['--port'], ['--port', 'x'], ['--port', '70000'], ['--connect'], ['--port', '1', '--connect', '/s'], ['--connect', '/s', '--port', '1'], ['--listen', '1'], ['--exit-on-disconnect', 'x']]) {
+  assert.match(blockOf(spec, given, []), /--token-file +\/etc\/t +\(option\)/);
+  for (const bad of [['--port'], ['--port', 'x'], ['--port', '70000'], ['--connect', '/s'], ['--token-file'], ['--token', 'abc'], ['--listen', '1'], ['--exit-on-disconnect', 'x']]) {
     assert.throws(() => parseRunnerArguments(bad, {root}), cli.UsageError, bad.join(' '));
   }
   assert.equal(cli.parseArguments(spec, ['--bogus', '--help']).help, true);

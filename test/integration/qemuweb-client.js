@@ -28,10 +28,12 @@ async function createTestUsers(entries) {
 // Starts QemuWeb on the given port with the users file (password authentication, or `noAuth`),
 // as an ephemeral test server, through the real launch sequence: scripts/start.sh, the server and a
 // runner as two processes. With `standalone` it starts only `node server/main.js` (a runner is
-// started by the test). `logDir` is the --logs directory. The returned ChildProcess keeps the tail
+// started by the test; `localRunner` adds --local-runner, the token file of the runner of this machine). `logDir` is the --logs directory. The returned ChildProcess keeps the tail
 // of its output in `output`. `runnersFile` is the --runners file; by default a file next to the users file (a temporary directory), so that a test never writes the record of the local runner into the runners.json of the repository.
-function spawnServer({port, usersFile, logDir = null, runnersFile = null, noAuth = false, standalone = false}) {
+function spawnServer({port, usersFile, logDir = null, runnersFile = null, noAuth = false, standalone = false, localRunner = false}) {
   const options = ['--listen', String(port), '--users', usersFile, '--ephemeral'];
+  if (localRunner && !standalone) throw new Error('start.sh always passes --local-runner');
+  if (localRunner) options.push('--local-runner');
   if (logDir) options.push('--logs', logDir);
   options.push('--runners', runnersFile || path.join(path.dirname(usersFile), 'runners.json'));
   if (noAuth) options.push('--no-auth');

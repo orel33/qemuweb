@@ -2,7 +2,7 @@
 
 // The command line of the server, as a table for common/cli.js (which parses it, prints --help and
 // the Options block): parsed once into a plain settings object that is passed down: {port,
-// runtime, usersFile, runnersFile, logDir, examplesDir, sessionHours, runnerGrace, trustProxy, authMode, proxyKeyFile, logoutUrl, ephemeral, given}. `given` is
+// runtime, localRunner, usersFile, runnersFile, logDir, examplesDir, sessionHours, runnerGrace, trustProxy, authMode, proxyKeyFile, logoutUrl, ephemeral, given}. `given` is
 // the set of the flags present on the command line. The server reads no environment variable.
 // test/unit/server-startup-report.test.js checks that each option is documented in docs/reference.md.
 const path = require('path');
@@ -22,21 +22,23 @@ function serverSpec(root) {
     node: 'node server/main.js',
     script: './scripts/server.sh',
     summary: [
-      'The QemuWeb server (web interface, accounts, sessions). A local runner (./scripts/runner.sh --port PORT)',
-      'dials it on <runtime>/runner-PORT.sock; a runner on another machine registers with a token created in',
-      '/admin/runners and connects to /runner/connect (WebSocket). Any unknown option, or a value that is',
-      'missing or invalid, is refused (exit status 2).'
+      'The QemuWeb server (web interface, accounts, sessions). Every runner dials /runner/connect (WebSocket) with',
+      'a token: with --local-runner the server creates the token file of the runner of this machine',
+      '(./scripts/runner.sh --port PORT reads it); a runner on another machine registers with a token created in',
+      '/admin/runners. Any unknown option, or a value that is missing or invalid, is refused (exit status 2).'
     ].join('\n'),
     environment: null,
     options: [
       {flag: '--listen', metavar: 'PORT', kind: 'port', key: 'port', default: DEFAULT_PORT, fallback: String(DEFAULT_PORT),
-        description: 'TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-PORT.sock, the socket its runner dials'},
+        description: 'TCP port of the web interface on 127.0.0.1, and of /runner/connect, where the runners connect'},
       {flag: '--runtime', metavar: 'DIR', kind: 'path', key: 'runtime', default: null, fallback: '/tmp/qw-<login>/<port>',
-        description: 'runtime directory of the server: server-PORT.pid and the socket DIR/runner-PORT.sock (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets)'},
+        description: 'runtime directory of the server: server-PORT.pid, bindings.json and the token file local-runner.token (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot'},
+      {flag: '--local-runner', metavar: null, key: 'localRunner', default: false, value: true, fallback: 'off',
+        description: 'accepts the runner of this machine (id local): creates DIR/local-runner.token when missing (mode 0600) and accepts the runner that presents it; ./scripts/runner.sh --port PORT reads it, start.sh and demo.sh pass this option'},
       {flag: '--users', metavar: 'FILE', kind: 'path', key: 'usersFile', default: path.join(root, 'users.json'), fallback: 'users.json of the repository',
         description: 'users file (mode 0600)'},
       {flag: '--runners', metavar: 'FILE', kind: 'path', key: 'runnersFile', default: path.join(root, 'runners.json'), fallback: 'runners.json of the repository',
-        description: 'registered remote runners (mode 0600): a hash of the token of each'},
+        description: 'registered runners (mode 0600): a hash of the token of each remote one'},
       {flag: '--logs', metavar: 'DIR', kind: 'path', key: 'logDir', default: path.join(root, 'logs'), fallback: 'logs/ of the repository',
         description: 'directory of admin.log and users.log (mode 0700)'},
       {flag: '--examples', metavar: 'DIR', kind: 'path', key: 'examplesDir', default: path.join(root, 'examples'), fallback: 'examples/ of the repository',

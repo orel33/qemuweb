@@ -18,7 +18,7 @@ consoles.
 
 ![Architecture: browser, server, local and remote runners, and the hosts and VDE switch of a session](img/architecture.svg)
 
-*Figure 1. The server never starts a virtual machine: a runner does, on this machine (Unix socket) or on another one (WebSocket opened by the runner). Inside a runner, a session is a small LAN as the Graphic view shows it: one `vde_switch` process per switch, one QEMU or VirtualBox process per host, driven through serial and monitor sockets and the guest agent channel.*
+*Figure 1. The server never starts a virtual machine: a runner does, on this machine or on another one (both over the WebSocket opened by the runner, with a token). Inside a runner, a session is a small LAN as the Graphic view shows it: one `vde_switch` process per switch, one QEMU or VirtualBox process per host, driven through serial and monitor sockets and the guest agent channel.*
 
 | Part | Files | Role |
 | --- | --- | --- |
@@ -27,7 +27,7 @@ consoles.
 | Session manager | `server/session-manager.js`, `server/session.js` | Maps a login to its session (ID, owner, runner ID) and creates it on the runner chosen by `pickRunner`. |
 | HTTP API and Socket.IO | `server/routes/`, `server/sockets.js` | One router per session, one command per request and archive streams; Socket.IO rooms `session:<id>`, `observers:<id>`, `node:<id>:<nodeId>`, `console:<id>:<consoleId>`. `server/ws-transports.js` keeps the registry of live connections and their transport (Connections panel of `/admin`, log line for a connection stuck on polling); `server/ws-test.js` is the admin-only `/ws-test` namespace of the Test WebSocket button. |
 | Admin | `server/routes/admin.js`, `server/audit.js` | `/api/admin/*` and `/admin`: list, stop, delete, observe; `logs/admin.log` and `logs/users.log`. |
-| Runner registry and gateways | `server/runner-client.js`, `server/runner-registry.js`, `server/runner-gateway.js`, `server/remote-gateway.js` | Every runner with its client; the local runner over `<runtime>/runner-<port>.sock`, a remote one over the WebSocket `/runner/connect`. |
+| Runner registry and gateways | `server/runner-client.js`, `server/runner-registry.js`, `server/remote-gateway.js`, `server/local-runner-token.js` | Every runner with its client, all over the WebSocket `/runner/connect`; the local runner (id `local`, `--local-runner`) with the token of `<runtime>/local-runner.token`. |
 | Runner | `runner/main.js`, `runner/service.js` | Serves every session of its machine over the runner protocol and launches QEMU, VirtualBox, `vde_switch` and `vdeterm`. |
 
 
@@ -202,7 +202,7 @@ The server is split into layers with one-way dependencies:
   resource sampling timer.
 - **`server/`** is the control plane: `session-manager.js` (one session per user,
   bound to a runner), `runner-client.js`, `runner-registry.js`
-  and `runner-gateway.js` (the runners and their connections), `server-instance.js`
+  and `remote-gateway.js` (the runners and their connections), `server-instance.js`
   (server records used by the scripts) and `auth/` (authentication).
 - **`server/routes/`** and **`server/sockets.js`** form the web layer: HTTP routes by area and
   Socket.IO wiring. `server/main.js` only starts (arguments and checks) and `server/serve.js` wires everything.
@@ -229,16 +229,16 @@ The server is split into layers with one-way dependencies:
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
 | `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `paused` flag, the display-only `runtimeRoot` and `pid` and client (no `local` or `trusted` flag); `pickRunner(login, sessionsOf)`, the single placement point. |
-| `server/remote-gateway.js` | `/runner/connect`: the WebSocket upgrade of remote runners (bearer token and runner ID checked against `runners.json`, 401 / 409), the `ws` duplex stream under a protocol `Connection`, ping/pong (`common/ws-heartbeat.js`). |
+| `server/remote-gateway.js` | `/runner/connect`: the WebSocket upgrade of every runner (bearer token and runner ID checked against `runners.json`, 401 / 409; the id `local` only with `--local-runner` and the token of the file, checked against its in-memory hash in constant time), the `ws` duplex stream under a protocol `Connection`, ping/pong (`common/ws-heartbeat.js`). The address proves nothing (a reverse proxy reaches the server from 127.0.0.1 too): the token is the only proof. |
 | `server/runner-store.js`, `server/runner-registration.js` | `runners.json` (token hashes, 0600, revoked, paused) and the in-memory one-time registration tokens (15 min, 1 h, 24 h). |
 | `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
-| `server/runner-gateway.js` | The runner socket `<runtime>/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as `local` with its record of `runners.json` (created at its first connection; a revoked record is refused, the connection is closed); a second connection is closed. |
+| `server/local-runner-token.js`, `common/local-token.js` | With `--local-runner`: creates `<runtime>/local-runner.token` when missing or unusable (0600, directory 0700, 32 random bytes in base64url, atomic write; a readable file is never rewritten), keeps its sha256 in memory as the secret of the record `local` (which has no hash in `runners.json`), creates that record once (audit `register-local-runner`) and never un-revokes it. `common/local-token.js` is the one place that knows the file name and format. |
 | `server/server-instance.js` | `<runtime>/server-<port>.pid` (read by `scripts/stop.sh`), the only file the server keeps in its runtime directory. |
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie), `proxy.js` (shared key file, identity from the authenticating front end). |
 | `server/audit.js` | Log directory (`logs/` or `--logs`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
-| `runner/main.js` | Runner process entry point, same startup sequence as the server: command line (`common/cli.js`, tables in `runner/options.js`: the local form `--port` or `--connect`, `--runtime`, `--config`, `--exit-on-disconnect`; the `run` and `register` subcommands of a remote runner), banner, `Options`, preflight, its own configuration checks, connection and its state lines. |
-| `runner/remote.js`, `runner/remote-identity.js`, `runner/remote-url.js`, `runner/config-file.js`, `runner/register.js`, `runner/register-command.js` | The remote runner: the outbound WebSocket with its backoff and ping, the runner file `runner.json` (0600), URL rules (`ws://` only for loopback unless `--insecure`), the registration request. `runner/` may require `ws` for this. |
+| `runner/main.js` | Runner process entry point, same startup sequence as the server: command line (`common/cli.js`, tables in `runner/options.js`: the local form `--port`, `--token-file`, `--runtime`, `--config`, `--exit-on-disconnect`; the `run` and `register` subcommands of a remote runner), banner, `Options`, preflight, its own configuration checks, connection and its state lines. |
+| `runner/remote.js`, `runner/local-identity.js`, `runner/remote-identity.js`, `runner/remote-url.js`, `runner/config-file.js`, `runner/register.js`, `runner/register-command.js` | The outbound WebSocket of every runner with its backoff (2 s doubling to 30 s) and ping; the token is a value (remote) or a function read again at every attempt (local: its token file; a missing file or a server that is not up is a retry, only a 401 is fatal: exit status 78); the runner file `runner.json` (0600), URL rules (`ws://` only for loopback unless `--insecure`), the registration request. `runner/` may require `ws` for this. |
 | `runner/index.js` | Runner facade: `createRunnerService`, `serveConnection`, `resolveCommands`. |
 | `runner/service.js` | Every session of the runner: `session.create`/`session.delete`, command dispatch (404 for an unknown session or node), console input, `hello` with the capabilities, `runtimeRoot` and the sessions (ID, owner, creation date), shutdown. |
 | `runner/endpoint.js` | The runner side of a connection: requests in arrival order, events, console output coalescing and backpressure. |
@@ -468,7 +468,7 @@ up its temporary files. A ZIP export can preserve a session explicitly; a
 The runner executes sessions; the control plane (web server) never touches a
 node process, a node record or a runtime file. They talk through one
 connection carrying a small message protocol, the same for the local runner
-(a separate process on a Unix socket) and for remote runners (WebSocket over
+(WebSocket on 127.0.0.1) and for remote runners (WebSocket over
 TLS, milestone 5c). Unit tests run the same protocol over an in-memory stream
 pair (`test/unit/runner-pair.js`).
 
@@ -494,10 +494,8 @@ bodies the routes return today.
 
 ### Transport and framing
 
-One bidirectional byte stream: a Unix stream socket for the local runner. The
-control plane listens on `<runtime>/runner-<port>.sock` (mode 0600) and the
-runner connects to it, the same direction as a remote runner dialling out in
-5c. Frames are length-prefixed:
+One bidirectional byte stream: a WebSocket (`/runner/connect`) that the runner
+dials, for the local runner as for a remote one. Frames are length-prefixed:
 
 ```text
 uint32 BE  length of what follows (1 + payload), at most 16 MiB
@@ -618,10 +616,10 @@ never a global): `id`, `state` (`starting`, `online`, `lost`), the
 capabilities from `hello` (engines, images, capacity, warnings), its
 `paused`, `address` and `ownerLogin` (null for a shared runner; reserved for
 a runner owned by one student, unused). The entry `local` is the
-runner of this machine, which dialled the Unix-socket gateway; a remote runner has
+runner of this machine (`--local-runner`), which dials the WebSocket with the token of its file; a remote runner has
 the ID given at registration (`r-xxxxxxxx`) and stays in the registry, state `lost`, while offline.
-Every runner has a record in `runners.json` (schema 2; the record `local` is created at the first connection and has no token
-hash). Nobody is trusted by transport: there is no `trusted` or `local` flag, a `hello` is untrusted input and what a runner may do
+Every runner has a record in `runners.json` (schema 2; the record `local` is created by `--local-runner` at start and has no token
+hash: its secret is the token file). Nobody is trusted by transport: there is no `trusted` or `local` flag, a `hello` is untrusted input and what a runner may do
 is decided by its record (paused, revoked). The server performs **no filesystem action on a runner's directories**: session directory
 removal (at `session.delete`), `users/` aliases and pruning are the runner's (`runner/runtime-tidy.js`).
 
@@ -646,9 +644,9 @@ by hand, or as a systemd service. The server only listens; a runner dials in at
 any time, and the server serves browsers without waiting for it. Session
 routes answer 503 until one is online.
 
-1. The server (`server/runner-gateway.js`) listens on `<runtime>/runner-<port>.sock`
-   (mode 0600). It accepts one connection when no runner is registered or the
-   registered one is lost, and closes any other at once.
+1. The server (`server/remote-gateway.js`) listens for the upgrade of `/runner/connect`.
+   It accepts one connection per runner ID (409 for a second), after checking the
+   token (401); the local runner presents the token of `<runtime>/local-runner.token`.
 2. The runner resolves its executables (`runner/preflight.js`), prints its
    configuration warnings, connects and sends `hello`. A runner that cannot
    start (an executable missing) prints its message and exits.
@@ -721,14 +719,13 @@ student's lab machine (roadmap, "Personal runners").
 
 - It assumes no root, no capability, no dedicated system account, and writes
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
-  `--connect <socket>` (control connection), `--runtime <dir>` (sessions,
-  default `/tmp/qw-<login>/<port>` (common/runtime-dir.js), shared with the server), `--config <file>` (system catalog,
-  default the project's `config.json`). `--port PORT` is `--connect <this
-  project>/…/runner-<n>.sock` (in the runtime directory). `scripts/runner.sh` gets no `--runtime`: it derives the same directory from `--port`.
+  `--port PORT` (the server, `ws://127.0.0.1:PORT`), `--token-file <file>` (the token of the server, default the file of the default directory of the port), `--runtime <dir>` (sessions,
+  default `/tmp/qw-<login>/<port>` (common/runtime-dir.js)), `--config <file>` (system catalog,
+  default the project's `config.json`).
   The 5c configuration (`~/.config/qemuweb-runner/runner.json`, systemd
   `--user` unit) is out of scope here.
-- The control socket is created by the control plane with mode 0600 in
-  `<runtime>/`, a directory the same user owns.
+- The local runner's credential is the token file the server creates (mode 0600) in its own
+  directory; the runner reads it at every connection attempt and it is never on a command line.
 - QEMU and VDE run unprivileged; only `/dev/kvm` needs the `kvm` group. The
   runner announces what it can do in `hello` instead of failing late:
   `engines` (QEMU needs its emulator and disk tool, VirtualBox `VBoxManage`;
@@ -788,7 +785,7 @@ the trust model of the local runner: the control plane must not trust it.
 
 ### Runner model (RUN03, design study)
 
-Decided (22 November 2026), not yet implemented: option C: the local runner becomes a runner like the others: same WebSocket path and token as a remote runner
+Decided (22 November 2026), implemented in steps RUN03a to RUN03c (the local runner over the WebSocket with a token file, no Unix socket), RUN03d to RUN03f remaining: option C: the local runner becomes a runner like the others: same WebSocket path and token as a remote runner
 (no Unix socket), own directory, no file shared with the server, one adoption rule from a persisted binding. The study, the options and the decision list are in
 [runner-model.md](runner-model.md). Until the user validates it, the sections above describe the code as it is.
 

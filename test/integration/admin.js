@@ -396,7 +396,15 @@ async function run() {
   const text = fs.readFileSync(auditFile, 'utf8');
   assert.equal(fs.statSync(logDir).mode & 0o777, 0o700);
   assert.equal(fs.statSync(auditFile).mode & 0o777, 0o600);
-  const lines = text.trimEnd().split('\n').map(line => JSON.parse(line));
+  const allLines = text.trimEnd().split('\n').map(line => JSON.parse(line));
+  // The server itself writes one line when it creates the record of its local runner (start.sh runs it with --local-runner): the first line, by "server",
+  // with no token or hash. Every other line is an action of the administrator.
+  const serverLines = allLines.filter(line => line.admin === 'server');
+  assert.equal(serverLines.length, 1);
+  assert.deepEqual([serverLines[0].action, serverLines[0].target, serverLines[0].result], ['register-local-runner', {runnerId: 'local'}, 'ok']);
+  assert.equal(allLines[0], serverLines[0], 'written at start, before any administrator action');
+  assert.deepEqual(Object.keys(serverLines[0]).sort(), ['action', 'admin', 'result', 'target', 'time'], 'no token, no hash');
+  const lines = allLines.filter(line => line.admin !== 'server');
   const actions = lines.map(line => line.action);
   const count = (action, target = () => true) => lines.filter(line => line.action === action && target(line.target)).length;
   // 'observe' is written by the server when an observation period starts (the first open observer

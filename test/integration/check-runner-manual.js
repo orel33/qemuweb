@@ -1,11 +1,14 @@
 'use strict';
 
-// The manual mode: the server run alone (`node server/main.js`) spawns nothing and answers 503 until a
-// runner, started by hand (runner/main.js --connect), dials <runtime>/runner-<port>.sock (the default runtime directory of the port). A session
+// The manual mode: the server run alone (`node server/main.js --local-runner`) spawns nothing and answers 503 until a
+// runner, started by hand (runner/main.js --port N --token-file F), dials ws://127.0.0.1:<port> with the token the server wrote
+// in <runtime>/local-runner.token (never on a command line). The id local is refused without that token. A session
 // runs on that runner (VDE switch); the runner and its switch SURVIVE a SIGKILL of the server;
 // a new server on the same port is joined again by the runner, and the user finds the SAME
 // session, adopted (`session-adopted` in users.log), with its switch still running; a second
-// runner is refused; SIGTERM on the runner leaves no process and no session directory.
+// runner is refused (409); SIGTERM on the runner leaves no process and no session directory. A lost token file is
+// recreated by a server restart and a runner that waited for it connects; a revoked local runner exits with status 78
+// and stays refused after a server restart.
 // The runner keeps its sessions in its own short temporary runtime directory (which also makes
 // the server's runtime/ differ from the runner's: the server creates no alias, the runner makes its own and holds runner.pid). VDE only: no
 // system image or KVM is needed.
@@ -16,14 +19,17 @@ const http = require('node:http');
 const os = require('node:os');
 const path = require('node:path');
 const {spawn} = require('node:child_process');
+const WebSocket = require('ws');
 const {setTimeout: delay} = require('node:timers/promises');
 const {USERS_LOG} = require('../../server/audit');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
 const {defaultRuntime} = require('../../common/runtime-dir');
+const {tokenFilePath} = require('../../common/local-token');
 
 const root = path.join(__dirname, '..', '..');
 // The default runtime directory of the server's port (/tmp/qw-<login>/<port>), set once the port is chosen.
 let runtime = null;
+let tokenFile = null;
 const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
 const sockets = [];
 const runners = [];
@@ -74,13 +80,14 @@ function switchesOf(pid) {
 
 function startServer(port, logDir) {
   serverOutput = '';
-  const child = spawnServer({port, usersFile: testUsers.file, standalone: true, logDir});
+  const child = spawnServer({port, usersFile: testUsers.file, standalone: true, localRunner: true, logDir});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   return child;
 }
 
 function startRunner(port, runnerRuntime, label) {
-  const child = spawn(process.execPath, ['runner/main.js', '--connect', path.join(runtime, `runner-${port}.sock`), '--runtime', runnerRuntime], {cwd: root, stdio: ['ignore', 'pipe', 'pipe']});
+  const child = spawn(process.execPath, ['runner/main.js', '--port', String(port), '--token-file', tokenFile, '--runtime', runnerRuntime], {cwd: root, stdio: ['ignore', 'pipe', 'pipe']});
+  child.label = label;
   runnerOutput.set(label, '');
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => runnerOutput.set(label, (runnerOutput.get(label) + data).slice(-12000)));
   runners.push(child);
@@ -101,10 +108,19 @@ function recorder(client, label) {
 
 const select = (socket, nodeId) => new Promise(resolve => socket.emit('select-node', nodeId, `t-${nodeId}`, resolve));
 const adminRunners = boss => boss.request('/api/admin/runners');
+// The HTTP status of an upgrade to /runner/connect with these headers (101 when it is accepted).
+const dial = (port, headers) => new Promise(resolve => {
+  const ws = new WebSocket(`ws://127.0.0.1:${port}/runner/connect`, {headers});
+  ws.once('open', () => { ws.terminate(); resolve(101); });
+  ws.once('unexpected-response', (_request, response) => { response.resume(); resolve(response.statusCode); });
+  ws.once('error', () => resolve(0));
+});
+const exitOf = child => new Promise(resolve => child.once('exit', (code, signal) => resolve({code, signal})));
 
 async function run() {
   const port = await freePort();
   runtime = defaultRuntime(port);
+  tokenFile = tokenFilePath(runtime);
   const baseUrl = `http://127.0.0.1:${port}`;
   scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-rm-'));
   const runnerRuntime = path.join(scratch, 'rt');
@@ -120,11 +136,17 @@ async function run() {
   let carol = await signIn('carol');
   assert.equal((await carol.fetch('/api/nodes')).status, 503, 'a session route answers 503 without a runner');
   const before = await adminRunners(boss);
-  assert.deepEqual(before.runners, []);
+  assert.deepEqual(before.runners.map(item => [item.id, item.state]), [['local', 'offline']], 'the record of the local runner, created by --local-runner');
   assert.match(before.connectHint, /scripts\/runner\.sh --port \d+$/);
   assert.match(serverOutput, /No runner connected/);
-  assert.equal(fs.statSync(path.join(runtime, `runner-${port}.sock`)).mode & 0o777, 0o600);
-  console.log('Manual: no runner, session routes answer 503, /api/admin/runners is empty with its hint');
+  assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600, 'the token file is not 0600');
+  const firstToken = fs.readFileSync(tokenFile, 'utf8').trim();
+  assert.ok(!serverOutput.includes(firstToken) && !JSON.stringify(before).includes(firstToken), 'the token is shown');
+  // The proxy path cannot stand in for the token: from 127.0.0.1 too, the id local needs it.
+  assert.equal(await dial(port, {'X-Runner-Id': 'local'}), 401, 'local without a token');
+  assert.equal(await dial(port, {'X-Runner-Id': 'local', Authorization: 'Bearer wrong'}), 401, 'local with a wrong token');
+  assert.equal(await dial(port, {'X-Runner-Id': 'local', Authorization: `Bearer ${firstToken}`, 'X-Forwarded-For': '10.0.0.1'}), 101, 'local with its token');
+  console.log('Manual: no runner, session routes answer 503, the local record exists with its token file, local needs the token');
 
   // 2. A runner started by hand connects; it prints its own checks.
   const runner = startRunner(port, runnerRuntime, 'runner');
@@ -133,6 +155,7 @@ async function run() {
   assert.match(runnerOutput.get('runner'), /Checking dependencies/);
   assert.match(runnerOutput.get('runner'), /Checking configuration/);
   assert.match(serverOutput, /Runner local \(local\) connected/);
+  assert.ok(!(fs.readFileSync(`/proc/${runner.pid}/cmdline`, 'utf8')).includes(firstToken), 'the token is on the runner command line');
   const [info] = (await adminRunners(boss)).runners;
   assert.equal((await adminRunners(boss)).connectHint, null);
   console.log(`Manual: runner ${runner.pid} connected (${info.engines.join(', ')}), checks printed by the runner itself`);
@@ -154,13 +177,13 @@ async function run() {
   assert.equal(fs.statSync(bindingsFile).mode & 0o777, 0o600);
   assert.deepEqual(JSON.parse(fs.readFileSync(bindingsFile, 'utf8')).sessions.map(item => [item.id, item.owner, item.runnerId]), [[sessionId, 'carol', 'local']], 'the server binds the session to its owner and runner');
   const runnersFile = path.join(path.dirname(testUsers.file), 'runners.json');
-  assert.deepEqual(JSON.parse(fs.readFileSync(runnersFile, 'utf8')).runners.map(item => [item.id, item.name, 'tokenHash' in item]), [['local', 'local', false]], 'the record of the local runner, created at its first connection');
+  assert.deepEqual(JSON.parse(fs.readFileSync(runnersFile, 'utf8')).runners.map(item => [item.id, item.name, 'tokenHash' in item]), [['local', 'local', false]], 'the record of the local runner has no token hash');
   assert.equal((await boss.request('/api/admin/runners/local/pause', {method: 'POST'})).paused, true);
   console.log(`Manual: session ${sessionId} runs switch ${switchId} (vde_switch ${switchPid}) on the runner`);
 
   // 4. A second runner is refused; the first one keeps its place.
   const intruder = startRunner(port, path.join(scratch, 'rt2'), 'intruder');
-  await waitFor('the second runner refused', () => /refused the connection/.test(runnerOutput.get('intruder')), 10000);
+  await waitFor('the second runner refused', () => /already has a connection of this runner/.test(runnerOutput.get('intruder')), 10000);
   assert.equal((await adminRunners(boss)).runners.length, 1);
   assert.equal(alive(runner.pid), true);
   intruder.kill('SIGTERM');
@@ -181,7 +204,8 @@ async function run() {
   server = startServer(port, logDir);
   await new QemuWebClient(baseUrl).waitForServer(30000, () => server.exitCode === null);
   boss = await signIn('boss');
-  await waitFor('the runner back (at most 5 s)', async () => (await adminRunners(boss)).runners.some(item => item.state === 'online'), 8000);
+  assert.equal(fs.readFileSync(tokenFile, 'utf8').trim(), firstToken, 'the restart rewrote a readable token file');
+  await waitFor('the runner back (its retries double up to 30 s)', async () => (await adminRunners(boss)).runners.some(item => item.state === 'online'), 40000);
   carol = await signIn('carol');
   const again = await carol.request('/api/general-settings');
   assert.equal(again.sessionId, sessionId, 'the user found a different session');
@@ -219,9 +243,40 @@ async function run() {
   assert.equal((await carol.fetch('/api/nodes')).status, 503);
   console.log('Manual: runner stopped (SIGTERM), no process or session directory left, the server answers 503 again');
 
+  // 8. A lost token file: a runner started meanwhile waits for it (no exit), and the next server start recreates it.
   server.kill('SIGTERM');
   assert.equal((await new Promise(resolve => server.once('exit', code => resolve(code)))), 0);
-  assert.equal(fs.existsSync(path.join(runtime, `runner-${port}.sock`)), false, 'runner socket left after shutdown');
+  fs.rmSync(tokenFile);
+  const waiting = startRunner(port, path.join(scratch, 'rt2'), 'waiting');
+  await waitFor('the runner waits for the token file', () => /does not exist/.test(runnerOutput.get('waiting')), 15000);
+  assert.equal(waiting.exitCode, null, 'the runner exited for a missing token file');
+  server = startServer(port, logDir);
+  await new QemuWebClient(baseUrl).waitForServer(30000, () => server.exitCode === null);
+  assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600);
+  assert.notEqual(fs.readFileSync(tokenFile, 'utf8').trim(), firstToken, 'the lost file was not recreated with a new token');
+  boss = await signIn('boss');
+  await waitFor('the waiting runner online with the new token', async () => (await adminRunners(boss)).runners.some(item => item.state === 'online'), 40000);
+  console.log('Manual: token file lost, a runner waited for it, the server restart recreated it and the runner connected');
+
+  // 9. Revoked: the runner exits with status 78 and a server restart does not un-revoke it.
+  const waitingExit = exitOf(waiting);
+  assert.equal((await boss.request('/api/admin/runners/local/revoke', {method: 'POST'})).state, 'revoked');
+  const refused = await Promise.race([waitingExit, delay(40000).then(() => ({code: 'timeout'}))]);
+  assert.equal(refused.code, 78, `the revoked runner exited with ${refused.signal || refused.code}`);
+  assert.match(runnerOutput.get('waiting'), /refused the local runner/);
+  server.kill('SIGTERM');
+  assert.equal((await new Promise(resolve => server.once('exit', code => resolve(code)))), 0);
+  server = startServer(port, logDir);
+  await new QemuWebClient(baseUrl).waitForServer(30000, () => server.exitCode === null);
+  assert.match(serverOutput, /The local runner is revoked: it stays refused/);
+  const stillRefused = startRunner(port, path.join(scratch, 'rt3'), 'revoked');
+  const again2 = await Promise.race([exitOf(stillRefused), delay(40000).then(() => ({code: 'timeout'}))]);
+  assert.equal(again2.code, 78, 'a --local-runner start un-revoked the local runner');
+  console.log('Manual: a revoked local runner exits with status 78 and stays refused after a server restart');
+
+  server.kill('SIGTERM');
+  assert.equal((await new Promise(resolve => server.once('exit', code => resolve(code)))), 0);
+  fs.rmSync(runtime, {recursive: true, force: true});
 }
 
 async function cleanup() {
@@ -232,6 +287,7 @@ async function cleanup() {
       await Promise.race([new Promise(resolve => child.once('exit', resolve)), delay(12000).then(() => child.kill('SIGKILL'))]);
     }
   }
+  if (runtime) fs.rmSync(runtime, {recursive: true, force: true});
 }
 
 run().then(() => console.log('Manual runner test passed.')).catch(error => {

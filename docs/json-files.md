@@ -194,7 +194,7 @@ first connection. An older file (schema 1) is refused: delete it by hand and reg
 }
 ```
 
-Schema 2 of `runners.json` (RUN03b): `local` id, `tokenHash` optional only for `local`; no `trusted`, `local` or
+Schema 2 of `runners.json` (RUN03b): `local` id, `tokenHash` optional only for `local` (its secret is the token file `<server runtime>/local-runner.token`, RUN03c: 32 random bytes in base64url, one line, mode 0600, created by the server with `--local-runner`; the server keeps only its sha256 in memory and the file is not a JSON format); no `trusted`, `local` or
 `transport` field. There is no migration: an older file is refused with a message, the user deletes it by hand.
 
 #### `bindings.json`

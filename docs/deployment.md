@@ -45,12 +45,14 @@ The server reads no environment variable: its options are on the command line of
 ## The runner process
 
 The server does not run the machines itself: a **runner** (`runner/main.js`)
-does. A runner always dials the server, on the Unix socket
-`<runtime>/runner-<port>.sock` (mode 0600, so only the server's own account can
-connect). The server never reaches out to a runner, and the web interface only
-manages runners (the **Runners** section of `/admin`). One local runner is accepted on the
-Unix socket; a second connection is refused. Runners on other machines connect over
-the network with their own token: see [Remote runners](#remote-runners).
+does. A runner always dials the server, over the WebSocket `/runner/connect`, with a token.
+The local runner (`--local-runner` on the server, `runner.sh --port PORT` on the runner) reads the token the server wrote in
+`<server runtime>/local-runner.token` (mode 0600, in a directory only the account can enter; read again at every connection
+attempt, so nobody types it and it is on no command line). The server never reaches out to a runner, and the web interface only
+manages runners (the **Runners** section of `/admin`). A second connection of one runner is refused (409). Runners on other machines connect over
+the network with their own token: see [Remote runners](#remote-runners). A **lost token file** is recreated by the next
+server start (the runner waits for it and reconnects); to **rotate** it, remove the file and restart the server; a runner
+whose token the server refuses (revoked in `/admin`, or forgotten) exits with status 78 and a restart never un-revokes it.
 
 There is one way to start it, in every environment:
 
@@ -91,8 +93,8 @@ server, connected, refused, lost). A refused option ends either program with sta
   only a warning line ("the live view of captures is unavailable") and the dialog says so. The PCAP
   files of a capture are written by QEMU itself and need nothing else.
 - **Startup failure:** a missing common tool or no engine at all stops the
-  runner with its message (`scripts/start.sh` then ends). Another server already using the socket of
-  the same port is refused.
+  runner with its message (`scripts/start.sh` then ends). A server that is not up yet is no failure: the runner
+  waits and retries.
 - **Configuration warnings:** the runner prints one line per warning about
   `config.json` on this machine, marked with a warning icon (a system whose base
   image is missing, with the `prepare.sh` command to run; default memory or
@@ -153,7 +155,7 @@ After=network.target
 [Service]
 User=qemuweb
 WorkingDirectory=/srv/qemuweb
-ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb --users /etc/qemuweb/users.json --logs /var/log/qemuweb --trust-proxy loopback
+ExecStart=/usr/bin/node server/main.js --listen 3002 --local-runner --runtime /var/lib/qemuweb/server --users /etc/qemuweb/users.json --logs /var/log/qemuweb --trust-proxy loopback
 KillSignal=SIGTERM
 TimeoutStopSec=30
 Restart=on-failure
@@ -162,17 +164,21 @@ Restart=on-failure
 WantedBy=multi-user.target
 
 # ~qemuweb/.config/systemd/user/qemuweb-runner.service (systemd --user, loginctl enable-linger qemuweb)
+[Unit]
+After=qemuweb-server.service
+
 [Service]
 WorkingDirectory=/srv/qemuweb
-ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --runtime /var/lib/qemuweb
+ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --token-file /var/lib/qemuweb/server/local-runner.token --runtime /var/lib/qemuweb/runner
 KillMode=mixed
 Restart=on-failure
+RestartPreventExitStatus=78
 ```
 
-Both are given the same `--runtime` (here `/var/lib/qemuweb`, state kept apart from the code;
-the default is `/tmp/qw-<login>/3002`, lost at a reboot): the runner socket `runner-<port>.sock` is in it, and it
-is what lets the server manage the runner's sessions. The directory must exist and belong to the
-`qemuweb` account. Restarts
+The server is started with `--local-runner`; it creates the token file `local-runner.token` in its `--runtime` (here `/var/lib/qemuweb/server`,
+state kept apart from the code; the default is `/tmp/qw-<login>/3002`, lost at a reboot) and the runner gets its path with `--token-file`,
+with its own `--runtime` directory. Both directories must exist and belong to the `qemuweb` account. `RestartPreventExitStatus=78`
+keeps systemd from restarting a runner that the server refused (revoked). Restarts
 are systemd's job (`Restart=`): QemuWeb never restarts a process itself.
 `KillMode=mixed` sends SIGTERM to the runner only, which stops its machines in
 order; SIGKILL goes to every remaining process of the unit (QEMU, `vde_switch`)

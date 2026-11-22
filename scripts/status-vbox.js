@@ -27,21 +27,12 @@ function vboxProcessesOf(entries, runnerPid) {
   return [...entries].filter(entry => entry.vbox && entry.vbox.runnerPid === runnerPid);
 }
 
-// The runtime directory a server or a runner works in, from its command line: --runtime, else the folder
-// of the socket it dials (--connect), else the default directory of its port (--listen of a server,
-// --port of a runner, 3002), see common/runtime-dir.js.
+// The runtime directory a server or a runner works in, from its command line: --runtime, else the default
+// directory of its port (--listen of a server, --port of a runner, 3002), see common/runtime-dir.js.
 function runtimeOfProcess(args) {
   const runtime = / --runtime (\S+)/.exec(args)?.[1];
   if (runtime) return runtime;
-  const socket = /(\S*runner-\d+\.sock)/.exec(args)?.[1];
-  if (socket) return path.dirname(socket);
   return defaultRuntime(/ --(?:listen|port) (\d+)( |$)/.exec(args)?.[1] || '3002');
-}
-
-// The directory a runner dials the server in: the folder of its --connect socket, else the default of its port.
-function dialledRuntime(args) {
-  const socket = /(\S*runner-\d+\.sock)/.exec(args)?.[1];
-  return socket ? path.dirname(socket) : defaultRuntime(/ --port (\d+)( |$)/.exec(args)?.[1] || '3002');
 }
 
 const runnerSessionsDir = args => path.join(runtimeOfProcess(args), 'sessions');
@@ -74,4 +65,4 @@ function readVirtualBoxMemory(uuid, run) {
   return memoryCache.get(uuid);
 }
 
-module.exports = {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, dialledRuntime, runnerSessionsDir, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory};
+module.exports = {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, runnerSessionsDir, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory};

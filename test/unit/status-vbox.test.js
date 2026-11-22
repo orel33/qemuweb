@@ -37,9 +37,8 @@ test('the VMs of a runner are those whose name carries its pid; the others are l
   assert.deepEqual(vboxProcessesOf(entries, 5), []);
 });
 
-test('the sessions directory of a runner: --runtime, the socket it dials, else the default directory of its port', () => {
+test('the sessions directory of a runner: --runtime, else the default directory of its port', () => {
   assert.equal(runnerSessionsDir('node /p/runner/main.js --runtime /data/rt --port 3002'), '/data/rt/sessions');
-  assert.equal(runnerSessionsDir('node runner/main.js --connect /srv/rt/runner-3002.sock'), '/srv/rt/sessions');
   assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3002'), path.join(defaultRuntime(3002), 'sessions'));
   assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3010'), path.join(defaultRuntime(3010), 'sessions'));
 });
