@@ -38,7 +38,9 @@ QemuWeb targets **Ubuntu 24.04 on x86-64**.
    - `qemu-system-x86_64 -netdev help` must list `vde`. If it does not, see
      [QEMU without VDE support](#qemu-without-vde-support).
    - Your user must be able to read and write `/dev/kvm`. If not, run
-     `sudo usermod -aG kvm $USER` and log in again.
+     `sudo usermod -aG kvm $USER` and log in again (details and diagnosis:
+     [QEMU hosts disabled: /dev/kvm](#qemu-hosts-disabled-devkvm-missing-or-not-accessible)).
+     This applies to **every machine that runs a runner**, the server's and each remote runner's.
 
 4. Clone, install, prepare one image, and start:
 
@@ -320,6 +322,31 @@ module is still the old one).
   hdds` show nothing of it.
 
 ## Troubleshooting
+
+### QEMU hosts disabled: /dev/kvm missing or not accessible
+
+The runner prints, at start (and `/admin` shows it in its Warnings column):
+
+```text
+⚠ QEMU is installed but /dev/kvm is missing or not accessible: QEMU hosts cannot start (add this user to the kvm group, or use VirtualBox).
+```
+
+QemuWeb starts QEMU only with `-accel kvm`, so without `/dev/kvm` the runner still connects (VirtualBox hosts and the
+administration keep working) but QEMU hosts are disabled. On the machine of the runner, with the account that runs it:
+
+```sh
+ls -l /dev/kvm; id; lsmod | grep -E "^kvm"; grep -c -E "vmx|svm" /proc/cpuinfo; systemd-detect-virt
+```
+
+| What you see | Cause | Fix |
+| --- | --- | --- |
+| `/dev/kvm` exists (`root:kvm`), but `kvm` is not in `id` | The account is not in the `kvm` group (an ACL `+` after the mode may give access to a local graphical session only, not to `ssh` or a service) | `sudo usermod -aG kvm <account>`, then log out and in again (or `newgrp kvm`), and restart the runner |
+| No `/dev/kvm`, no `kvm_intel` or `kvm_amd` in `lsmod` | The module is not loaded | `sudo modprobe kvm_intel` (or `kvm_amd`); if it fails, the next row |
+| `grep -c` answers `0` | Virtualization is off in the firmware (BIOS/UEFI), or the machine is itself a virtual machine without **nested virtualization** (`systemd-detect-virt` says `kvm`, `vmware`...) | Enable VT-x/AMD-V in the firmware, or enable nested virtualization on the hypervisor |
+
+A runner started by `systemd` gets the group from its unit: `SupplementaryGroups=kvm` (the CREMI unit has it). A runner
+inside a container needs `/dev/kvm` passed to it and the host's `kvm` group ID. Check with `test -r /dev/kvm -a -w /dev/kvm && echo kvm-ok`
+as the account of the runner.
 
 ### QEMU without VDE support
 

@@ -219,6 +219,11 @@ The frame protocol of the local runner runs unchanged over a WebSocket on the pa
 > runs the machines under the account that starts it with no confinement, and the server relies on
 > its answers. Never use a machine you do not control, and never root. A runner per student is a later idea.
 
+**What a runner machine needs**: QEMU with VDE support (`qemu-system-x86_64 -netdev help` lists `vde`), `vde2`, `qemu-img`, `genisoimage`,
+Node.js, the base images of the systems it runs (copied or built with `scripts/prepare.sh`), and **access to `/dev/kvm` for the account that
+runs it** (`sudo usermod -aG kvm <account>`, then log in again; a unit needs `SupplementaryGroups=kvm`). Without it the runner connects and
+VirtualBox hosts work, but QEMU hosts are disabled with a warning (diagnosis: [install.md](install.md#qemu-hosts-disabled-devkvm-missing-or-not-accessible)).
+
 A step-by-step sheet for testing one remote runner (diagram, every option spelled out, expected results,
 troubleshooting) is in [remote-runner-test.md](remote-runner-test.md) (PDF: [pdf/remote-runner-test.pdf](pdf/remote-runner-test.pdf)).
 

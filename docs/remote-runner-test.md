@@ -66,7 +66,7 @@ cd ~/qemuweb && git pull
 
 ```sh
 git clone https://github.com/orel33/qemuweb.git ~/qemuweb && cd ~/qemuweb && npm ci
-id -nG | grep -w kvm                          # must answer (else: usermod -aG kvm)
+id -nG | grep -w kvm                          # must answer (else: usermod -aG kvm, log in again: docs/install.md, "QEMU hosts disabled")
 qemu-system-x86_64 -netdev help | grep vde    # must list vde
 
 # images: copy them from SERVER (same files, same hashes), run on SERVER:
