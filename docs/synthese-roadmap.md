@@ -26,6 +26,7 @@ De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | **0.9.4** | Console ttyS1 : indice quand elle est vide et vérification dans `prepare.sh --list` ; images Alpine et OpenWrt construites **derrière le proxy du CREMI** ; `prepare.sh --hash` signale les images manquantes |
 | **0.9.5** | Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>` : fin de l'erreur « Runtime socket path is too long » (TOD02, validée) ; la taille de la police n'est plus affichée entre A− et A+ (elle reste dans l'infobulle) |
 | **0.9.6** | **Adresse IP en direct** de chaque interface (avec son préfixe) dans la vue graphique, lue par l'agent invité de QEMU (`GAG01`) ; commande `scripts/guest-agent.sh` ; `prepare.sh` sans argument liste les images (et indique l'agent et ttyS1), `--system <id\|all>` et `--all` pour construire (`PRP02`) |
+| *main, non publié* | **Runner local comme les autres** (RUN03a à f) : connexion WebSocket avec un fichier de jeton, un dossier par processus, sessions restaurées hors ligne et perte forcée ; page Admin avec colonnes Nom et ID ; `prepare.sh --parallel` ; schéma d'architecture mis à jour |
 
 ## Décisions attendues
 
@@ -50,10 +51,10 @@ De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | SVC01 | Services systemd, rotation des journaux, renouvellement du certificat, contrôles au démarrage | 2 |
 | DOC01 | Un seul parcours d'installation documenté, guide utilisateur à jour | 1 |
 | PRP01 | **Fait (0.9.4)** : Construction des images derrière le proxy du CREMI sans option particulière | 1 |
-| TOD02 | **Fait (fusionnée, à valider).** Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>`, court et privé : fin de l'erreur « Runtime socket path is too long » | 2 |
-| RUN03 | **Prochaine étape d'architecture, à préparer maintenant** : le runner local devient un runner comme les autres (dossier propre, aucun fichier partagé avec le serveur) ; conception d'abord | 4 |
+| TOD02 | **Fait (0.9.5).** Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>`, court et privé : fin de l'erreur « Runtime socket path is too long » | 2 |
+| RUN03 | **Fait (a à f, non publié)** : le runner local devient un runner comme les autres (WebSocket et fichier de jeton, un dossier par processus, plus de fichier partagé avec le serveur, sessions restaurées hors ligne au redémarrage du serveur, perte forcée) ; mise à jour du CREMI par une procédure unique | 4 |
 | GAG02 | Adresse IP en direct des machines VirtualBox (Guest Additions), symétrique de GAG01 qui le fait pour QEMU | 3 |
-| PST01 | **Étude, fusionnée avec l'ancienne RUN02** : persistance des sessions du serveur et des runners (coupure brutale, redémarrage, panne réseau, perte forcée par l'administrateur) ; plusieurs politiques à comparer, **rien n'est décidé** | 4 |
+| PST01 | **Étude** (suite de RUN03, qui a déjà livré le lien session-runner et la restauration hors ligne) : politiques de persistance après un reboot ou une coupure, pour le serveur et pour le runner ; plusieurs politiques à comparer, **rien n'est décidé** | 3 |
 | SEC01 | Mot de passe minimal, ralentissement des échecs de connexion, contrôle de l'origine, déconnexion révocable | 3 |
 | SEC02 | Liste blanche des commandes de l'hyperviseur et quotas (machine, session, serveur) | 3 |
 | SEC04 | Runner sous un compte dédié, un cgroup par session limitant mémoire et processeur | 4 |

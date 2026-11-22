@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (0.9.6)
+## Where we are (main after 0.9.6)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
@@ -26,6 +26,9 @@ monitor command on their own hosts, and there are no quotas and no jail.
 | Auth and capture | `--auth password|proxy` only (expired SSO session, two shared keys for a rotation); traffic capture: PCAP of a host interface through QEMU's `filter-dump`, a Capture button and dialog in the pane bar (Play, Stop, Download, live view inside, saved at once, discarded at close) | **0.9.1** |
 | Files and dependencies | One **Load** menu (From User Files, From Server examples) and one **Save**; Load Session and Load Topology share one dialog style and always close the previous session; `examples/` (renamed from `demo/`) with `--examples`; `tcpdump` a declared dependency of the runner (`TCPDUMP` in `.env`) | **0.9.2** |
 | Admin tabs, VirtualBox, engine per session | The Admin page in tabs (Sessions, Accounts, Runners, WebSocket, Logs; the tab in the URL; only the visible tab refreshes; badges); the VirtualBox engine repaired (clear start errors, a runner-wide KVM/VirtualBox exclusion that names no other session, a dialog for start failures, cleanup without `--delete`, `status.sh` showing `vbox` hosts); **Engine:** selector in the header, changeable while the session is idle; `host.json` format 2 with settings per engine (`keyword:qemu`, `keyword:vbox`); working disks per engine (`disk.qcow2`, `disk.vdi`) in the session ZIP | **0.9.3** |
+| Prepare and ttyS1, runtime directory | Alpine and OpenWrt images built behind the HTTP proxy (PRP01), ttyS1 empty-console hint and `prepare.sh --list` notes (BUG10, BUG01), default runtime directory `/tmp/qw-<login>/<port>` (TOD02) | 0.9.4, 0.9.5 |
+| Guest agent, prepare.sh command line | Live address with prefix of each interface in the Graphic view through the QEMU guest agent, `scripts/guest-agent.sh`, `guestAgent` profile keyword, `config.json` schema 2 (GAG01); `prepare.sh` lists by default, `--system <id\|all>` or `--all`, `--parallel[=N]`, the log path printed (PRP02, PRP03) | **0.9.6** |
+| Runner model (RUN03a to f) | The local runner is a runner like the others: it connects over the WebSocket with a token file (`--local-runner`), the Unix socket is gone; one identity model (`runners.json` schema 2, no trusted flag); one directory per process (server `<port>`, runner `l-<port>`, `r-<id>`); the server touches no file of a runner; `bindings.json`, sessions restored offline at start, one grace rule, forced loss; CREMI units and upgrade procedure | main, not yet released |
 
 Formats: from 0.9.0, every change of a format increments its number and comes with an explicit decision on
 compatibility.
@@ -229,7 +232,7 @@ What separates a deployment that works from one you can operate calmly.
     (unit, Apache site) instead of copying them; `deploy/cremi/deploy-cremi.md` becomes a short recipe that links to
     it; the remote runner test sheet no longer repeats the runner installation.
   - Bring `docs/user-guide.md` up to date (serial ports, `start.sh`, runner commands, Follow).
-- [ ] **PRP01** (S) `prepare.sh`.
+- [x] **PRP01** (S) `prepare.sh`.
   - The Debian ISO and its `SHA512SUMS` come from `cdimage.debian.org`, which the CREMI squid has answered 503 for:
     a setting for the base URL (or another host), or document placing both in `sources/debian13-legacy/` by hand.
   - Alpine and OpenWrt builds do not use the proxy yet.
@@ -247,7 +250,7 @@ What separates a deployment that works from one you can operate calmly.
 
 - **RUN02** (robust runners) is **merged into PST01** below: one site on the persistence of the sessions of the server and
   of the runners. Its points are kept there, as items of the study.
-- [ ] **RUN03** (L, design first, **next architecture step, prepared now**) The **local runner becomes a runner like the others**: same relation to the server as a
+- [x] **RUN03** (L, design first, **next architecture step, prepared now**) The **local runner becomes a runner like the others**: same relation to the server as a
   remote runner, only the transport differs (a Unix socket instead of a WebSocket with a token). Today it differs in
   one respect that matters: the server **shares files** with it (`docs/deployment.md`, "Files shared with the
   runner"), and only with the local runner, only when its `hello` announces the server's own runtime directory:
@@ -548,7 +551,7 @@ personal runner and any guest access exist only for trusted users.
   **Verified in the CAP01 spike**: `netdev_add` works at runtime, but `device_add` fails with "Bus 'pcie.0' does not support hotplugging"
   and a `pcie-root-port` cannot be added at runtime either, so free `pcie-root-port` devices must be declared at boot (a few per host).
   Host Settings > Network then applies live when the host runs; the guest kernel must handle the hot-plug (Debian does).
-- [ ] **GAG01** (L, **study then feature, extended 21 November 2026**: live address with prefix on the Graphic view, QEMU) **Feasibility of showing the IP addresses of running hosts (and more) with the QEMU guest agent.** Today QemuWeb knows
+- [x] **GAG01** (L, **study then feature, extended 21 November 2026**: live address with prefix on the Graphic view, QEMU) **Feasibility of showing the IP addresses of running hosts (and more) with the QEMU guest agent.** Today QemuWeb knows
   nothing of what runs inside a guest (the cards of the Graphic view show no address, see GRA03). The QEMU guest agent
   (`qemu-ga`, Debian/Ubuntu package `qemu-guest-agent`) answers the host over a **virtio-serial channel** named
   `org.qemu.guest_agent.0`, which QEMU exposes as a Unix socket (`-chardev socket,id=qga,path=<node dir>/qga.sock,server=on,wait=off`,
@@ -765,12 +768,12 @@ commit message.
 
 ### BUGFIX
 
-- [ ] **BUG01** `prepare.sh --hash --system ID` reports nothing and exits 0 when the system is not built yet. In
+- [x] **BUG01** `prepare.sh --hash --system ID` reports nothing and exits 0 when the system is not built yet. In
   `write_image_hashes` (`scripts/prepare.sh`), `if [[ ! -s "$image" ]]; then continue; fi` skips a missing or empty image
   silently, so the command can succeed having recorded nothing. Print `ID.raw: no image` (and `ID.vdi`) and exit non-zero
   when a targeted system has no image at all (only one of the two formats is a warning); with no `--system`, list the
   systems not built as skipped, and exit non-zero only if no image was found anywhere. A test of the status and messages.
-- [ ] **BUG10** (**priority**, reported by the user on 20 November 2026) **The second serial console (ttyS1) no longer works.** Debian hosts have two
+- [x] **BUG10** (**priority**, reported by the user on 20 November 2026) **The second serial console (ttyS1) no longer works.** Debian hosts have two
   serial ports (`serialPorts:qemu: ["ttyS0", "ttyS1"]` in `config.json` for `debian13-legacy` and `debian13-cloud`); the pane view
   "Console (ttyS1)" (`data-view="console2"`, console id by `public/console-id.js`) and the socket `serial1.sock` come from the second
   `-serial unix:<node dir>/serial1.sock` that `runner/engines/qemu.js` adds only when `node.launchSettings.serialPorts.length >= 2`.
@@ -820,7 +823,7 @@ commit message.
 
 - [ ] **TOD01** `status.sh`, `killall.sh` and `cleanall.sh` only know the default `runtime/`: add `--runtime DIR` to each, as
   `start.sh` and `stop.sh` have.
-- [ ] **TOD02** Report a `runtime/` path longer than 49 characters at startup (the sockets of a node must fit in 107 bytes),
+- [x] **TOD02** Report a `runtime/` path longer than 49 characters at startup (the sockets of a node must fit in 107 bytes),
   in the server and the runner, with the `--runtime` hint; today it only fails when the first node is created. Or shorten
   the node socket paths with a short alias directory. (M)
 - [ ] **TOD03** More `config.json` warnings at startup, beyond the engine, KVM and serial port checks.
