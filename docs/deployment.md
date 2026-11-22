@@ -40,7 +40,7 @@ The server reads no environment variable: its options are on the command line of
 | `--session-hours` | `12` (default) | Login lifetime, renewed while the user is active. |
 | `--users` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
 | `--logs` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
-| `--runtime` | recommended | State directory on a persistent disk, e.g. `/var/lib/qemuweb` (give the runner the same one). Without it the default is the private `/tmp/qw-<login>/<port>`, emptied by a reboot: the sessions are lost (see [the reference](reference.md#runtime-directory)). At most 49 bytes. |
+| `--runtime` | recommended | State directory of the server (pid record, `bindings.json`, `local-runner.token`) on a persistent disk, e.g. `/var/lib/qemuweb/server`; the runner has its own (`/var/lib/qemuweb/runner`), never the same one. No length limit. Without it the default is the private `/tmp/qw-<login>/<port>`, emptied by a reboot (see [the reference](reference.md#runtime-directory)). |
 
 ## The runner process
 
@@ -57,9 +57,10 @@ whose token the server refuses (revoked in `/admin`, or forgotten) exits with st
 There is one way to start it, in every environment:
 
 - **`./scripts/start.sh`** (what `npm start`, `scripts/demo.sh` and the integration tests
-  use) starts `./scripts/server.sh --listen PORT --runtime DIR` and, once the socket exists, `./scripts/runner.sh
-  --port PORT --runtime DIR --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
-  and `[runner]`. Ctrl+C or SIGTERM stops the runner first (it stops every machine), kills what
+  use) starts `./scripts/server.sh --listen PORT --runtime DIR --local-runner` and, once the server listens, `./scripts/runner.sh
+  --port PORT --token-file DIR/local-runner.token --runtime RDIR --exit-on-disconnect`, each in its own process group, with output lines prefixed `[server]`
+  and `[runner]`. `--runtime DIR` is the **server** directory (default `/tmp/qw-<login>/<port>`), `--runner-runtime RDIR` the
+  **runner** one (default `/tmp/qw-<login>/l-<port>`); both are printed at start, and a `--runtime` given alone says where the runner keeps its sessions. Ctrl+C or SIGTERM stops the runner first (it stops every machine), kills what
   is left of its group (QEMU, `vde_switch`), then stops the server, and exits 0. When the runner
   ends for any reason (even SIGKILL), what is left of its group is killed at once and the
   server is stopped; when the server dies, the runner ends with it. In both cases the script
@@ -117,8 +118,10 @@ server, connected, refused, lost). A refused option ends either program with sta
   the same directory refuses to start), and at its own start removes the empty `sessions/<id>` directories and the
   dangling aliases that an earlier runner left; a non-empty directory stays (it is reported in the runner's log).
   A runner killed by SIGKILL therefore leaves its directories until the next runner on that directory starts
-  (`./scripts/cleanall.sh` removes them). Until the default directories are split (RUN03d), the local runner still
-  shares the server's default directory, so the aliases appear where they always did.
+  (`./scripts/cleanall.sh` removes them). By default the local runner's directory is `/tmp/qw-<login>/l-<port>` and a remote
+  runner's `/tmp/qw-<login>/r-<6 hex digits of its id>`: the aliases are there, not in the server's directory (`/tmp/qw-<login>/<port>`, which
+  holds only `server-<port>.pid`, `bindings.json` and `local-runner.token`). An old `/tmp/qw-<login>/<port>` with `sessions/` or `users/` is not used by the
+  runner any more: delete it by hand.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
   empty session, recorded as `session-deleted` with the reason `runner lost` in
@@ -176,7 +179,7 @@ RestartPreventExitStatus=78
 ```
 
 The server is started with `--local-runner`; it creates the token file `local-runner.token` in its `--runtime` (here `/var/lib/qemuweb/server`,
-state kept apart from the code; the default is `/tmp/qw-<login>/3002`, lost at a reboot) and the runner gets its path with `--token-file`,
+state kept apart from the code, no length limit; the default is `/tmp/qw-<login>/3002`, lost at a reboot) and the runner gets its path with `--token-file`,
 with its own `--runtime` directory. Both directories must exist and belong to the `qemuweb` account. `RestartPreventExitStatus=78`
 keeps systemd from restarting a runner that the server refused (revoked). Restarts
 are systemd's job (`Restart=`): QemuWeb never restarts a process itself.
@@ -256,7 +259,7 @@ the `kvm` group for `/dev/kvm`):
 directory 0700, file 0600): the server URL, the runner ID, the runner's own token, its name, and optionally
 the `runtime` and `ca` given to `register` and hand-written `limits` (`maxSessions`, `memoryBytes`, `cpus`). A
 registration token is single use and expires (15 minutes, 1 hour or 24 hours, chosen in `/admin`). Sessions live in
-`<runtime>/sessions/` of the machine (`--runtime`, default `/tmp/qw-<login>/runner`, lost at a reboot of the machine).
+`<runtime>/sessions/` of the machine (`--runtime`, default `/tmp/qw-<login>/r-<6 hex digits of the runner ID>`: one directory per runner, lost at a reboot of the machine).
 
 - **TLS:** use an `https://` URL. A server certificate signed by a private authority needs
   `--ca FILE` (the PEM file; `register` keeps it in `runner.json`), or `NODE_EXTRA_CA_CERTS=file` in the environment.

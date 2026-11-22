@@ -278,7 +278,7 @@ error (status 2) and nothing is sent.
 
 `HOST` is a node ID (`h-...`), a host name or a unique prefix of either (names come from `host.json`); with no
 `HOST`, the only host that has a `qga.sock` is used. Several matches are listed and the command stops (status 2): it
-never guesses. The runtime directory is the default one of the port (`/tmp/qw-<login>/<port>`, port 3002) or
+never guesses. The runtime directory is the default one of the local runner of the port (`/tmp/qw-<login>/l-<port>`, port 3002) or
 `--runtime`. The runner polls the same socket every 5 s and the channel serves one client at a time: a refused or
 closed connection is retried 3 times, 1 s apart, and the command says so. Replies are never printed as received
 (validated strings only, control characters removed). Status: 0 ok, 1 error or no answer, 2 usage or ambiguity.

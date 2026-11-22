@@ -17,10 +17,12 @@ const http = require('node:http');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
-const {defaultRuntime} = require('../../common/runtime-dir');
+const {serverRuntime, localRunnerRuntime} = require('../../common/runtime-dir');
 
 const root = path.join(__dirname, '..', '..');
-// The default runtime directory of the server's port (/tmp/qw-<login>/<port>), set once the port is chosen.
+// The default directories of the port (common/runtime-dir.js), set once the port is chosen: the server's (/tmp/qw-<login>/<port>: pid record,
+// token file, no sessions/) and the local runner's (/tmp/qw-<login>/l-<port>: sessions, aliases, runner.pid).
+let serverDir = null;
 let runtime = null;
 const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
 let child;
@@ -95,9 +97,10 @@ async function startSwitch(client, name) {
 
 async function run() {
   const port = await freePort();
-  runtime = defaultRuntime(port);
+  serverDir = serverRuntime(port);
+  runtime = localRunnerRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
-  const tokenFile = path.join(runtime, 'local-runner.token');
+  const tokenFile = path.join(serverDir, 'local-runner.token');
   testUsers = await createTestUsers([{login: 'carol'}]);
   child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
@@ -118,6 +121,9 @@ async function run() {
   assert.match(child.output, /\[runner\] /);
   assert.match(child.output, /QemuWeb is ready\./);
   assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600, 'the token file is not 0600');
+  assert.equal(fs.existsSync(path.join(serverDir, 'sessions')), false, 'the server directory has no sessions/');
+  assert.ok(fs.existsSync(path.join(runtime, 'runner.pid')), 'the runner has its own directory l-<port> (runner.pid; an empty sessions/ is pruned at start)');
+  assert.match(runner.cmdline, new RegExp(`--runtime ${runtime.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), 'start.sh passes the runner its own directory');
   const token = fs.readFileSync(tokenFile, 'utf8').trim();
   assert.ok(token.length >= 32);
   assert.match(runner.cmdline, new RegExp(`--port ${port} --token-file ${tokenFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
@@ -195,6 +201,7 @@ async function run() {
   console.log('Runner: SIGTERM on start.sh stopped the runner and the server (exit 0), leaving no process or session directory');
   // What the SIGKILLed runner left (this test's own debris, on its own random port).
   fs.rmSync(runtime, {recursive: true, force: true});
+  fs.rmSync(serverDir, {recursive: true, force: true});
 }
 
 async function cleanup() {

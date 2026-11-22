@@ -1,18 +1,21 @@
 'use strict';
 
-// The runtime directory: where a runner keeps the sessions (<runtime>/sessions/<id>/) and the users/ aliases,
-// and where the server keeps server-<port>.pid, bindings.json and local-runner.token (the runner link is a WebSocket, no
-// socket). The node sockets of a runner (serial, monitor, VDE) live under its directory and a Unix socket path is limited
-// to 107 bytes, so the DEFAULT is a short private directory per account and per server port, in /tmp:
+// The runtime directories (docs/runner-model.md, R1 and R2). Each process owns its own directory:
+//   server  <server dir>/  server-<port>.pid, bindings.json, local-runner.token; no socket, so NO length limit
+//   runner  <runner dir>/  sessions/<id>/ (the node sockets), users/<login> aliases, runner.pid
+// The node sockets of a runner live under its directory and a Unix socket path is limited to 107 bytes, so the
+// DEFAULTS are short private directories per account, in /tmp (the runner link is a WebSocket, no socket):
 //
-//   /tmp/qw-<login>/<port>      server and local runner (the port is the server's --listen, default 3002; RUN03d separates them)
-//   /tmp/qw-<login>/runner      a remote runner (runner.sh run) without --runtime
+//   /tmp/qw-<login>/<port>       the server (the port is its --listen, default 3002)
+//   /tmp/qw-<login>/l-<port>     the local runner, started with --port <port> (7 characters at most)
+//   /tmp/qw-<login>/r-<id6>      a remote runner: the first 6 hex digits of its runner id (8 characters)
 //
+// Two runners of one account never share a directory by default, and a runner never shares the server's.
 // <login> is the account that runs the process (os.userInfo().username, `id -un` in the scripts, which call
-// this file: `node common/runtime-dir.js path PORT`), each character outside [A-Za-z0-9._-] replaced by "_";
+// this file: `node common/runtime-dir.js path server|local PORT`), each character outside [A-Za-z0-9._-] replaced by "_";
 // an empty name, or one of more than 32 characters, is replaced by the numeric user ID. --runtime DIR
-// replaces the default and is used as given (the CREMI services pass /var/lib/qemuweb). Nothing in /tmp
-// survives a reboot of the machine: sessions are disposable, Save session (ZIP) keeps work.
+// replaces the default and is used as given (the CREMI services pass /var/lib/qemuweb/server and /var/lib/qemuweb/runner).
+// Nothing in /tmp survives a reboot of the machine: sessions are disposable, Save session (ZIP) keeps work.
 //
 // The default directories are created with mode 0700 and, when they exist already, REFUSED unless they are
 // real directories (no symbolic link) owned by this user and closed to group and others: /tmp is shared,
@@ -48,9 +51,14 @@ function accountRoot({tmpRoot = TMP_ROOT, identity = currentIdentity()} = {}) {
   return path.join(tmpRoot, `qw-${accountLabel(identity)}`);
 }
 
-// name: the server port, or "runner" for a remote runner.
-function defaultRuntime(name, options = {}) {
-  return path.join(accountRoot(options), String(name));
+// The default directory of the server of a port, of the local runner that dials that port, and of a remote runner
+// (runnerId is `r-` and 8 hex digits, runner/store).
+const serverRuntime = (port, options = {}) => path.join(accountRoot(options), String(port));
+const localRunnerRuntime = (port, options = {}) => path.join(accountRoot(options), `l-${port}`);
+function remoteRunnerRuntime(runnerId, options = {}) {
+  const match = /^r-([0-9a-f]{6})[0-9a-f]*$/.exec(String(runnerId));
+  if (!match) throw new Error(`Invalid runner ID "${runnerId}": cannot name its default runtime directory.`);
+  return path.join(accountRoot(options), `r-${match[1]}`);
 }
 
 const isDefaultRuntime = (runtime, options = {}) => path.dirname(path.resolve(runtime)) === accountRoot(options);
@@ -113,12 +121,9 @@ function storageWarning(directory, {statfs = fs.statfsSync, lowSpace = LOW_SPACE
   } catch (_) { return null; }
 }
 
-// Prepares the runtime directory at startup (before any session exists): the default one is created
-// private or refused; one given with --runtime is only created. Refuses a directory too long for the
-// sockets. Returns {created, warning}. `options` is for tests: {tmpRoot, identity, statfs}.
-function prepareRuntime(runtime, options = {}) {
-  const tooLong = runtimeTooLong(runtime);
-  if (tooLong) throw new Error(tooLong);
+// Prepares a runtime directory at startup (before anything is created in it): a default one is created
+// private or refused; one given with --runtime is only created. `options` is for tests: {tmpRoot, identity, statfs}.
+function prepareDirectory(runtime, options) {
   const existed = fs.existsSync(runtime);
   if (isDefaultRuntime(runtime, options)) {
     const uid = options.identity ? options.identity.uid : process.getuid();
@@ -127,31 +132,42 @@ function prepareRuntime(runtime, options = {}) {
   } else {
     fs.mkdirSync(runtime, {recursive: true});
   }
-  fs.mkdirSync(path.join(runtime, 'sessions'), {recursive: true});
   fs.accessSync(runtime, fs.constants.W_OK);
   return {created: !existed, warning: storageWarning(runtime, options)};
 }
 
-// At the end of a server or a runner: removes the default directory of a port once nothing is left in it
+// The server directory holds no socket: no length limit, no sessions/. Returns {created, warning}.
+const prepareServerRuntime = (runtime, options = {}) => prepareDirectory(runtime, options);
+
+// A runner directory: refused when too long for the node sockets, sessions/ created. Returns {created, warning}.
+function prepareRunnerRuntime(runtime, options = {}) {
+  const tooLong = runtimeTooLong(runtime);
+  if (tooLong) throw new Error(tooLong);
+  const result = prepareDirectory(runtime, options);
+  fs.mkdirSync(path.join(runtime, 'sessions'), {recursive: true});
+  return result;
+}
+
+// At the end of a server or a runner: removes a default directory once nothing is left in it
 // (a directory given with --runtime is never removed).
 function removeEmptyDefaultRuntime(runtime, options = {}) {
   if (!isDefaultRuntime(runtime, options)) return;
   try { fs.rmdirSync(runtime); } catch (_) { /* Not empty (the other process still uses it), or gone. */ }
 }
 
-module.exports = {NODE_FILES, removeEmptyDefaultRuntime, SOCKET_LIMIT, MAX_LOGIN, accountLabel, accountRoot, defaultRuntime, isDefaultRuntime, ensurePrivateDirectory,
-  socketPathsBelowRuntime, runtimeBudget, runtimeTooLong, storageWarning, prepareRuntime};
+module.exports = {NODE_FILES, removeEmptyDefaultRuntime, SOCKET_LIMIT, MAX_LOGIN, accountLabel, accountRoot, serverRuntime, localRunnerRuntime, remoteRunnerRuntime, isDefaultRuntime, ensurePrivateDirectory,
+  socketPathsBelowRuntime, runtimeBudget, runtimeTooLong, storageWarning, prepareServerRuntime, prepareRunnerRuntime};
 
-// The scripts ask for the default directory: `node common/runtime-dir.js path PORT|runner`; with `prepare`
-// instead of `path` it is also created or refused.
+// The scripts ask for the default directory: `node common/runtime-dir.js path server PORT|local PORT|remote ID`, or `root` for
+// /tmp/qw-<login>; with `prepare` instead of `path` it is also created or refused.
 if (require.main === module) {
-  const [command, name = '3002'] = process.argv.slice(2);
-  if (!['path', 'prepare'].includes(command) || !/^(\d{1,5}|runner)$/.test(name)) {
-    console.error('Usage: node common/runtime-dir.js path|prepare PORT|runner');
-    process.exit(2);
-  }
-  const runtime = defaultRuntime(name);
-  try { if (command === 'prepare') prepareRuntime(runtime); }
+  const [command, kind, value] = process.argv.slice(2);
+  const usage = () => { console.error('Usage: node common/runtime-dir.js path|prepare server PORT | local PORT | remote ID\n       node common/runtime-dir.js root'); process.exit(2); };
+  if (command === 'root' && !kind) { console.log(accountRoot()); process.exit(0); }
+  const port = /^\d{1,5}$/.test(value || '') && Number(value) >= 1 && Number(value) <= 65535;
+  if (!['path', 'prepare'].includes(command) || !((['server', 'local'].includes(kind) && port) || (kind === 'remote' && /^r-[0-9a-f]{8}$/.test(value || '')))) usage();
+  const runtime = kind === 'server' ? serverRuntime(value) : kind === 'local' ? localRunnerRuntime(value) : remoteRunnerRuntime(value);
+  try { if (command === 'prepare') (kind === 'server' ? prepareServerRuntime : prepareRunnerRuntime)(runtime); }
   catch (error) { console.error(error.message); process.exit(1); }
   console.log(runtime);
 }

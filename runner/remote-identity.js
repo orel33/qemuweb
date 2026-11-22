@@ -8,6 +8,7 @@ const fs = require('fs');
 const cli = require('../common/cli');
 const {readRunnerConfig} = require('./config-file');
 const {serverUrls} = require('./remote-url');
+const {remoteRunnerRuntime} = require('../common/runtime-dir');
 
 const octal = mode => (mode & 0o777).toString(8).padStart(4, '0');
 
@@ -25,6 +26,8 @@ function load(options) {
       options.sources[flag] = 'runner file';
     }
   }
+  // No --runtime and none in the runner file: the default directory is named after the runner's id (two runners of one account never share one).
+  if (!options.runtime && config) options.runtime = remoteRunnerRuntime(config.runnerId);
   let urls = null;
   let urlError = null;
   if (options.url) {
@@ -44,7 +47,7 @@ function load(options) {
     return ok;
   }
 
-  return {config, urls, printChecks,
+  return {config, fileError, urls, printChecks,
     derivedRows: () => [['Runner', config ? `${config.name} (${config.runnerId})` : 'not registered'], ...(urls ? [['Server WebSocket', urls.connectUrl]] : [])]};
 }
 

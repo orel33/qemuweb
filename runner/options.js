@@ -11,7 +11,7 @@
 const os = require('os');
 const path = require('path');
 const {parseArguments} = require('../common/cli');
-const {defaultRuntime} = require('../common/runtime-dir');
+const {localRunnerRuntime, serverRuntime} = require('../common/runtime-dir');
 const {tokenFilePath} = require('../common/local-token');
 
 const DEFAULT_PORT = 3002;
@@ -29,8 +29,8 @@ const ENVIRONMENT = [{
 
 const REFUSED = 'Any unknown option, or a value that is missing or invalid, is refused (exit status 2).';
 
-// --runtime: the default is computed by the spec's validate (a local runner) or by main.js (a remote one), common/runtime-dir.js.
-function runtimeOption(description, fallback = '/tmp/qw-<login>/<port>') {
+// --runtime: the default is computed by the spec's validate (a local runner: l-<port>) or by runner/remote-identity.js (a remote one: r-<id6>), common/runtime-dir.js.
+function runtimeOption(description, fallback) {
   return {flag: '--runtime', metavar: 'DIR', kind: 'path', key: 'runtime', default: null, fallback, description};
 }
 
@@ -62,15 +62,15 @@ function runnerSpec(root) {
         description: 'port of the server to reach: the runner dials ws://127.0.0.1:PORT/runner/connect'},
       {flag: '--token-file', metavar: 'FILE', kind: 'path', key: 'tokenFile', default: null, fallback: '<default server directory of the port>/local-runner.token',
         description: 'token file the server created (--local-runner), read again at every connection attempt; a missing file is waited for, never a token on the command line'},
-      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/); DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot'),
+      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/); DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory /tmp/qw-<login>/l-PORT, lost at a reboot, never the server\'s directory', '/tmp/qw-<login>/l-<port>'),
       catalogOption(root),
       {flag: '--exit-on-disconnect', metavar: null, key: 'exitOnDisconnect', default: false, value: true, fallback: 'off',
         description: 'stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect, after 2 seconds, then 4, up to 30)'}
     ],
-    // The defaults: the runtime directory and the token file are those of the default directory of the port (common/runtime-dir.js).
+    // The defaults: the runtime directory and the token file are the default ones of the port: the local runner's own directory, and local-runner.token in the server's directory (common/runtime-dir.js).
     validate(settings) {
-      if (!settings.given.has('--runtime')) settings.runtime = defaultRuntime(settings.port);
-      if (!settings.given.has('--token-file')) settings.tokenFile = tokenFilePath(defaultRuntime(settings.port));
+      if (!settings.given.has('--runtime')) settings.runtime = localRunnerRuntime(settings.port);
+      if (!settings.given.has('--token-file')) settings.tokenFile = tokenFilePath(serverRuntime(settings.port));
     }
   };
 }
@@ -89,7 +89,7 @@ function runSpec(root) {
     ].join('\n'),
     environment: ENVIRONMENT,
     options: [
-      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/); default: the "runtime" of the runner file, else a private directory in /tmp (lost at a reboot)', '/tmp/qw-<login>/runner'),
+      runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/); default: the "runtime" of the runner file, else the private directory /tmp/qw-<login>/r-<6 hex digits of the runner ID> (lost at a reboot)', '/tmp/qw-<login>/r-<runner ID>'),
       catalogOption(root),
       {flag: '--url', metavar: 'URL', kind: 'text', key: 'url', default: null, fallback: 'the runner file',
         description: 'server URL (https://host); default: the one that register wrote in the runner file'},
@@ -120,7 +120,7 @@ function registerSpec(root) {
         description: 'name shown in /admin/runners (up to 64 characters)'},
       caOption('PEM file of the certificate authority that signed the server certificate (self-signed); kept in the runner file'),
       insecureOption,
-      runtimeOption('sessions directory the runner will use, kept in the runner file; default: not kept, the runner then uses a private directory in /tmp', '/tmp/qw-<login>/runner'),
+      runtimeOption('sessions directory the runner will use, kept in the runner file; default: not kept, the runner then uses /tmp/qw-<login>/r-<6 hex digits of the runner ID>', '/tmp/qw-<login>/r-<runner ID>'),
       runnerConfigOption('where to write the runner file (directory 0700, file 0600)')
     ]
   };

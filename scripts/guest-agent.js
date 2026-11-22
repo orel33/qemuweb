@@ -10,14 +10,14 @@
 //     info         the agent version and the commands it reports as enabled
 //     interfaces   a table NIC NAME MAC ADDRESS/PREFIX, then what the Graphic view shows per NIC
 //     HOST         a node ID (h-...), a host name or a unique prefix of either; optional when exactly one host
-//                  has a qga.sock. The runtime directory is the default one of the port (default 3002),
-//                  /tmp/qw-<login>/<port>, or --runtime DIR. Exit status: 0 ok, 1 error or no answer, 2 usage or ambiguity.
+//                  has a qga.sock. The runtime directory is the default one of the local runner of the port (default 3002),
+//                  /tmp/qw-<login>/l-<port>, or --runtime DIR (the directory of a runner). Exit status: 0 ok, 1 error or no answer, 2 usage or ambiguity.
 // Docs: docs/guest-agent.md.
 const fs = require('fs');
 const path = require('path');
 const {queryAgent, ALLOWED_COMMANDS} = require('../runner/guest-agent');
 const {parseGuestInterfaces, nicIndexes, matchAddresses} = require('../common/guest-addresses');
-const {defaultRuntime, runtimeTooLong, SOCKET_LIMIT, NODE_FILES} = require('../common/runtime-dir');
+const {localRunnerRuntime, runtimeTooLong, SOCKET_LIMIT, NODE_FILES} = require('../common/runtime-dir');
 
 const COMMANDS = {ping: 'guest-ping', info: 'guest-info', interfaces: 'guest-network-get-interfaces'};
 const ATTEMPTS = 3;
@@ -168,7 +168,7 @@ async function run(argv, io) {
   try {
     const options = parseArguments(argv);
     if (options.help) { io.out(`${USAGE}\n`); return 0; }
-    const runtime = options.runtime || defaultRuntime(options.port);
+    const runtime = options.runtime || localRunnerRuntime(options.port);
     const host = chooseHost(discover(runtime), options.host);
     const problem = socketPathProblem(runtime, host.socket);
     if (problem) throw new CliError(problem);

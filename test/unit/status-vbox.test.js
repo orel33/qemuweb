@@ -7,8 +7,8 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
-const {defaultRuntime} = require('../../common/runtime-dir');
-const {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('../../scripts/status-vbox');
+const {serverRuntime, localRunnerRuntime} = require('../../common/runtime-dir');
+const {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, runtimeOfProcess, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('../../scripts/status-vbox');
 
 const HEADLESS_1 = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-1478098-7535bdff74b4f486-h-d1cacd841664407c --startvm a34c81c3-5414-4b9f-810d-6d999d37b156 --vrde config';
 const HEADLESS_2 = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-1478098-7535bdff74b4f486-h-c0abdd91a8684ce2 --startvm af201149-3b0b-4df8-bf06-7b463909c3fa --vrde config';
@@ -37,10 +37,21 @@ test('the VMs of a runner are those whose name carries its pid; the others are l
   assert.deepEqual(vboxProcessesOf(entries, 5), []);
 });
 
-test('the sessions directory of a runner: --runtime, else the default directory of its port', () => {
+test('the sessions directory of a runner: --runtime, else its own default l-<port> (never the server\'s), unknown for a remote runner', () => {
   assert.equal(runnerSessionsDir('node /p/runner/main.js --runtime /data/rt --port 3002'), '/data/rt/sessions');
-  assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3002'), path.join(defaultRuntime(3002), 'sessions'));
-  assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3010'), path.join(defaultRuntime(3010), 'sessions'));
+  assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3002'), path.join(localRunnerRuntime(3002), 'sessions'));
+  assert.equal(runnerSessionsDir('node /p/runner/main.js --port 3010'), path.join(localRunnerRuntime(3010), 'sessions'));
+  assert.equal(runnerSessionsDir('node /p/runner/main.js'), path.join(localRunnerRuntime(3002), 'sessions'), 'the default port');
+  assert.notEqual(runnerSessionsDir('node /p/runner/main.js --port 3010'), path.join(serverRuntime(3010), 'sessions'));
+  // A remote runner takes the name of its directory from the runner file: not on its command line.
+  assert.equal(runnerSessionsDir('node /p/runner/main.js run'), null);
+  assert.equal(runnerSessionsDir('node /p/runner/main.js run --runtime /data/r'), '/data/r/sessions');
+});
+
+test('the directory of a server: --runtime, else its default <port> from --listen', () => {
+  assert.equal(runtimeOfProcess('node /p/server/main.js --listen 3010'), serverRuntime(3010));
+  assert.equal(runtimeOfProcess('node /p/server/main.js'), serverRuntime(3002));
+  assert.equal(runtimeOfProcess('node /p/server/main.js --listen 3010 --runtime /var/s'), '/var/s');
 });
 
 test('the host line of a VirtualBox VM mirrors QEMU: the same tag position, the memory in MB', () => {

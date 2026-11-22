@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const cli = require('../../common/cli');
 const {serverSpec, parseServerArguments} = require('../../server/options');
-const {defaultRuntime} = require('../../common/runtime-dir');
+const {serverRuntime, localRunnerRuntime} = require('../../common/runtime-dir');
 const {runnerSpec, runSpec, registerSpec, parseRunnerArguments} = require('../../runner/options');
 const {tokenFilePath} = require('../../common/local-token');
 
@@ -21,7 +21,7 @@ test('server: the defaults are listed, each marked as default; --local-runner is
   const text = blockOf(spec, parseServerArguments([], {root}), []);
   assert.match(text, /^Options/);
   assert.doesNotMatch(text, /Settings/);
-  for (const [name, value] of [['--listen', '3002'], ['--runtime', defaultRuntime(3002)], ['--users', path.join(root, 'users.json')],
+  for (const [name, value] of [['--listen', '3002'], ['--runtime', serverRuntime(3002)], ['--users', path.join(root, 'users.json')],
     ['--runners', path.join(root, 'runners.json')], ['--logs', path.join(root, 'logs')], ['--examples', path.join(root, 'examples')], ['--session-hours', '12'], ['--runner-grace', '300'], ['--local-runner', 'off'], ['--trust-proxy', 'unset'], ['--auth', 'password'], ['--proxy-key-file', 'unset'], ['--logout-url', 'unset'], ['--no-auth', 'off'], ['--ephemeral', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
@@ -68,11 +68,13 @@ test('server command line: every option, anything else or an invalid value refus
 test('runner: defaults, the Options block, the token file and the command line', () => {
   const spec = runnerSpec(root);
   const defaults = parseRunnerArguments([], {root});
-  assert.equal(defaults.tokenFile, tokenFilePath(defaultRuntime(3002)));
-  assert.equal(parseRunnerArguments(['--port', '3010'], {root}).runtime, defaultRuntime(3010), 'the default follows the port');
-  assert.equal(parseRunnerArguments(['--port', '3010'], {root}).tokenFile, tokenFilePath(defaultRuntime(3010)), 'so does the token file');
+  assert.equal(defaults.tokenFile, tokenFilePath(serverRuntime(3002)), 'the token file is in the SERVER directory');
+  assert.equal(defaults.runtime, localRunnerRuntime(3002), 'the runner directory is its own: l-<port>');
+  assert.notEqual(defaults.runtime, serverRuntime(3002));
+  assert.equal(parseRunnerArguments(['--port', '3010'], {root}).runtime, localRunnerRuntime(3010), 'the default follows the port');
+  assert.equal(parseRunnerArguments(['--port', '3010'], {root}).tokenFile, tokenFilePath(serverRuntime(3010)), 'so does the token file');
   const text = blockOf(spec, defaults, [['Runner', 'local'], ['Server WebSocket', 'ws://127.0.0.1:3002/runner/connect']]);
-  for (const [name, value] of [['--port', '3002'], ['--token-file', tokenFilePath(defaultRuntime(3002))], ['--runtime', defaultRuntime(3002)], ['--config', '/srv/qemuweb/config.json'], ['--exit-on-disconnect', 'off']]) {
+  for (const [name, value] of [['--port', '3002'], ['--token-file', tokenFilePath(serverRuntime(3002))], ['--runtime', localRunnerRuntime(3002)], ['--config', '/srv/qemuweb/config.json'], ['--exit-on-disconnect', 'off']]) {
     assert.match(text, new RegExp(`${name} +${escape(value)} +\\(default\\)`), `${name} default`);
   }
   assert.match(text, /Server WebSocket +ws:\/\/127\.0\.0\.1:3002\/runner\/connect +\(derived\)/);

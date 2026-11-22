@@ -12,12 +12,12 @@ const http = require('node:http');
 const path = require('node:path');
 const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
-const {defaultRuntime} = require('../../common/runtime-dir');
+const {localRunnerRuntime} = require('../../common/runtime-dir');
 const {setDisabled} = require('../../server/auth/users-store');
 
 const root = path.join(__dirname, '..', '..');
 const newId = kind => `${kind === 'switch' ? 's' : 'h'}-${crypto.randomBytes(8).toString('hex')}`;
-let runtimeDir = null; // the default runtime directory of the server's port (common/runtime-dir.js)
+let runtimeDir = null; // the default directory of the local runner of the server's port, l-<port> (common/runtime-dir.js)
 let child;
 let testUsers;
 let serverOutput = '';
@@ -86,7 +86,7 @@ function sessionProcesses(sessionId) {
 
 async function run() {
   const port = await freePort();
-  runtimeDir = defaultRuntime(port);
+  runtimeDir = localRunnerRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'boss', role: 'admin'}, {login: 'alice'}, {login: 'bob'}, {login: 'carol'}, {login: 'dave'}]);
   // A log directory the server must create itself, inside the temporary users directory.

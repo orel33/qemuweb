@@ -55,7 +55,7 @@ If `qemu-system-x86_64 -netdev help` does not list `vde`, see
 
 ## Where the sessions live
 
-By default the sessions of a server live in a short private directory of `/tmp` (`/tmp/qw-<login>/<port>`), so that Unix socket paths always fit. They do not survive a reboot of the machine: sessions are disposable, **Save session** (ZIP) keeps work, and `--runtime DIR` on a persistent disk changes that (see [docs/reference.md](docs/reference.md#runtime-directory)).
+By default the sessions of a server live in a short private directory of `/tmp` for its local runner (`/tmp/qw-<login>/l-<port>`; the server keeps its own, `/tmp/qw-<login>/<port>`), so that Unix socket paths always fit. They do not survive a reboot of the machine: sessions are disposable, **Save session** (ZIP) keeps work, and `--runtime DIR` on a persistent disk changes that (see [docs/reference.md](docs/reference.md#runtime-directory)).
 
 ## Documentation
 
