@@ -11,7 +11,8 @@
 //   scripts/status.sh --watch|-w [SECS]   refresh every SECS seconds (default 2) until Ctrl+C
 //   scripts/status.sh --details        also list the processes of each switch (vde_switch, vdeterm); d toggles it with --watch
 //   scripts/status.sh --no-color       plain text (also when NO_COLOR is set or stdout is not a terminal)
-// A server's port and runtime directory are read from its command line (default: /tmp/qw-<login>/<port>).
+// A server's port is read from its command line (--listen); a runner is paired with the server of its port (--port) and its directory
+// (sessions, users/ aliases, meta.json) is read from its own command line (--runtime, default /tmp/qw-<login>/l-<port>).
 const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
@@ -30,7 +31,7 @@ function parseArguments(argv) {
     else if ((arg === '--pid' || arg === '--server-pid') && /^\d+$/.test(argv[i + 1] || '')) options.pid = Number(argv[++i]);
     else if (arg === '--watch' || arg === '-w') options.watch = /^\d+(\.\d+)?$/.test(argv[i + 1] || '') ? Number(argv[++i]) : 2;
     else if (arg === '-h' || arg === '--help') {
-      const lines = fs.readFileSync(__filename, 'utf8').split("\n").slice(2, 14);
+      const lines = fs.readFileSync(__filename, 'utf8').split("\n").slice(2, 15);
       console.log(lines.map(line => line.replace(/^\/\/ ?/, '')).join('\n'));
       process.exit(0);
     } else { console.error(`Usage: scripts/status.sh [--all | --pid PID] [--details] [--watch|-w [SECONDS]] [--no-color]`); process.exit(2); }

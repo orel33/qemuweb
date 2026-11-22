@@ -7,7 +7,7 @@
 // That name ties a process to its runner, its session and its node; a VM with another name
 // (one of the user's own) is never shown. Pure functions, no I/O except readVirtualBoxMemory.
 const path = require('path');
-const {defaultRuntime} = require('../common/runtime-dir');
+const {serverRuntime, localRunnerRuntime} = require('../common/runtime-dir');
 
 const VM_NAME = /^qemuweb-(\d+)-([0-9a-f]{16})-(h-[0-9a-f]{16})$/;
 
@@ -27,15 +27,24 @@ function vboxProcessesOf(entries, runnerPid) {
   return [...entries].filter(entry => entry.vbox && entry.vbox.runnerPid === runnerPid);
 }
 
-// The runtime directory a server or a runner works in, from its command line: --runtime, else the default
-// directory of its port (--listen of a server, --port of a runner, 3002), see common/runtime-dir.js.
+// The runtime directory a server or a runner works in, from its command line: --runtime, else the default of its kind
+// (common/runtime-dir.js): /tmp/qw-<login>/<port> for a server (--listen, 3002), /tmp/qw-<login>/l-<port> for a local runner (--port, 3002).
+// A remote runner (`runner/main.js run`) without --runtime takes the name from its runner file: not known here, null.
 function runtimeOfProcess(args) {
   const runtime = / --runtime (\S+)/.exec(args)?.[1];
   if (runtime) return runtime;
-  return defaultRuntime(/ --(?:listen|port) (\d+)( |$)/.exec(args)?.[1] || '3002');
+  if (/(^| )(\S*\/)?runner\/main\.js( |$)/.test(args)) {
+    if (/runner\/main\.js (run|register)( |$)/.test(args)) return null;
+    return localRunnerRuntime(/ --port (\d+)( |$)/.exec(args)?.[1] || '3002');
+  }
+  return serverRuntime(/ --listen (\d+)( |$)/.exec(args)?.[1] || '3002');
 }
 
-const runnerSessionsDir = args => path.join(runtimeOfProcess(args), 'sessions');
+// The sessions directory of a runner, or null when its directory is unknown.
+const runnerSessionsDir = args => {
+  const runtime = runtimeOfProcess(args);
+  return runtime ? path.join(runtime, 'sessions') : null;
+};
 
 // "memory=512" of `VBoxManage showvminfo --machinereadable`, in MB, or null.
 function memoryFromShowVmInfo(text) {
