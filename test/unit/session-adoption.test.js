@@ -310,3 +310,36 @@ test('reportedSessions keeps the valid session IDs of a hello and nothing else',
   assert.equal(reportedSessions(null).size, 0);
   assert.equal(reportedSessions({sessions: 'x'}).size, 0);
 });
+
+test('after the adoption nothing is dropped when the former grace period would have ended', async t => {
+  const {manager, bindings, service, registry, restore, events} = await setup(t, {graceSeconds: 0.08});
+  await service.handle('session.create', ID(1), {owner: 'toto'});
+  bind(bindings, ID(1), 'toto');
+  restore();
+  manager.resync(registry.get('local'), service.hello()); // the hello itself, without the registry event
+  assert.equal(manager.graceLeft('local'), null, 'the timer is cancelled by the reconciliation');
+  await new Promise(resolve => setTimeout(resolve, 250));
+  assert.ok(manager.get('toto'), 'the session of a runner that is back is still there');
+  assert.deepEqual(events.filter(item => item[0] === 'removed'), []);
+  assert.deepEqual(runnerSessions(service), [ID(1)]);
+});
+
+test('a runner that connects and drops before its hello does not restart the grace period: it runs from the restore', async t => {
+  quiet(t);
+  const registry = new RunnerRegistry();
+  const bindings = createSessionBindings();
+  const manager = new SessionManager({registry, graceSeconds: 0.2, bindings});
+  t.after(() => manager.cancelGrace('local'));
+  bind(bindings, ID(1), 'toto');
+  manager.restore(record);
+  const removed = [];
+  manager.on('removed', (_workspace, _by, reason) => removed.push(reason));
+  const end = manager.graceEnds.get('local');
+  await new Promise(resolve => setTimeout(resolve, 80));
+  const client = Object.assign(new (require('node:events').EventEmitter)(), {close() {}});
+  registry.add({id: 'local', client});
+  client.emit('close', null); // lost before any hello
+  assert.equal(manager.graceEnds.get('local'), end, 'the deadline is the original one');
+  await settle(() => removed.length === 1);
+  assert.deepEqual(removed, ['runner offline too long']);
+});

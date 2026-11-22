@@ -83,8 +83,9 @@ class SessionManager extends EventEmitter {
   }
 
   // The sessions of an offline runner are dropped after the grace period (a hello of the runner cancels it).
+  // A timer already running is kept: the period runs from the first loss (or from the restore), never from a later one.
   armGrace(runnerId) {
-    this.cancelGrace(runnerId);
+    if (this.graceTimers.has(runnerId)) return;
     this.graceEnds.set(runnerId, Date.now() + this.graceMs);
     const timer = setTimeout(() => {
       this.graceTimers.delete(runnerId);
@@ -220,6 +221,8 @@ class SessionManager extends EventEmitter {
   // or every session if bindings.json was lost): the server deletes only through session.delete.
   // Every binding has a workspace since restore(), so a binding the hello does not report goes with its session.
   resync(entry, hello) {
+    // Every session of this runner is reconciled below (adopted or dropped): nothing is left to wait for.
+    this.cancelGrace(entry.id);
     const reported = reportedSessions(hello);
     for (const workspace of this.list()) {
       if (workspace.session.runnerId !== entry.id) continue;
