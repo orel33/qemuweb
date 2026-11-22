@@ -70,7 +70,7 @@ title, offers it only when the server has `VBoxManage`).
 ## Starting the server and the runner by hand
 
 `./start.sh` is the same as these two commands, run in two terminals from the
-repository root (port 3002 and the runtime directory `/tmp/qw-<login>/3002` by default, for both):
+repository root (port 3002; the server directory is `/tmp/qw-<login>/3002` and the runner's own `/tmp/qw-<login>/l-3002` by default):
 
 ```sh
 ./scripts/server.sh                          # terminal 1: the server (web interface, accounts, sessions)
@@ -340,11 +340,11 @@ start on another port with `./start.sh --listen 3003`.
 
 ### The runtime directory is refused or too long
 
-The runtime directory defaults to `/tmp/qw-<login>/<port>` (see [the reference](reference.md#runtime-directory)), so
-the location of the project no longer matters. Two messages can still appear at startup:
+The runtime directories default to `/tmp/qw-<login>/<port>` for the server and `/tmp/qw-<login>/l-<port>` for the local runner (see [the reference](reference.md#runtime-directory)), so
+the location of the project no longer matters. `./start.sh --runtime DIR` moves the server's directory only; add `--runner-runtime DIR` for the runner's. Two messages can still appear at startup:
 
-- `… is too long (N bytes) … Use a shorter --runtime.` Only with an explicit `--runtime`: a Unix socket path is limited
-  to 107 bytes, which leaves 49 bytes for the runtime directory (the message gives the exact numbers). Choose a shorter one.
+- `… is too long (N bytes) … Use a shorter --runtime.` Only for the runner, with an explicit `--runtime` (the server's directory has no limit): a Unix socket path is limited
+  to 107 bytes, which leaves 49 bytes for the runner's directory (the message gives the exact numbers). Choose a shorter one.
 - `/tmp/qw-<login> … refusing to use it`: the directory exists but is a symbolic link, belongs to someone else, or is open to group or
   others. Someone else created it, or it was changed: look at it, delete it if it is yours, or use `--runtime DIR`.
 

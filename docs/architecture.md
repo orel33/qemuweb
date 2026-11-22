@@ -233,7 +233,7 @@ The server is split into layers with one-way dependencies:
 | `server/runner-store.js`, `server/runner-registration.js` | `runners.json` (token hashes, 0600, revoked, paused) and the in-memory one-time registration tokens (15 min, 1 h, 24 h). |
 | `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
 | `server/local-runner-token.js`, `common/local-token.js` | With `--local-runner`: creates `<runtime>/local-runner.token` when missing or unusable (0600, directory 0700, 32 random bytes in base64url, atomic write; a readable file is never rewritten), keeps its sha256 in memory as the secret of the record `local` (which has no hash in `runners.json`), creates that record once (audit `register-local-runner`) and never un-revokes it. `common/local-token.js` is the one place that knows the file name and format. |
-| `server/server-instance.js` | `<runtime>/server-<port>.pid` (read by `scripts/stop.sh`), the only file the server keeps in its runtime directory. |
+| `server/server-instance.js` | `<server runtime>/server-<port>.pid` (read by `scripts/stop.sh`), written in the server's own directory (beside `bindings.json` and `local-runner.token`). |
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie), `proxy.js` (shared key file, identity from the authenticating front end). |
 | `server/audit.js` | Log directory (`logs/` or `--logs`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
 | `server/console-control.js` | Exclusive per-session control lock (held by an admin's login) with its 10-minute idle timer. |
@@ -482,8 +482,8 @@ pair (`test/unit/runner-pair.js`).
 | Settings of a host for both engines (`config` keys `keyword`, `keyword:qemu`, `keyword:vbox`) | Runner (in `host.json`) |
 | System catalog (`config.json`), executables, `/dev/kvm`, resource sampling | Runner |
 | Login → session ID, owner, creation date, last activity, archive lock, HTTP routers, Socket.IO rooms, console control, view states, audit logs | Control plane |
-| `<runtime>/users/<login>` alias, `<runtime>/runner.pid` | Runner |
-| `<runtime>/server-<port>.pid` | Control plane |
+| `<runner runtime>/users/<login>` alias, `<runner runtime>/runner.pid` (the runner's own directory, never the server's) | Runner |
+| `<server runtime>/server-<port>.pid`, `bindings.json`, `local-runner.token` (the server's own directory: no socket, no length limit, no `sessions/`) | Control plane |
 
 The control plane keeps no copy of node records. Everything that reads or
 changes a node (validation of a host configuration, topology loading, archive
@@ -719,8 +719,9 @@ student's lab machine (roadmap, "Personal runners").
 
 - It assumes no root, no capability, no dedicated system account, and writes
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
-  `--port PORT` (the server, `ws://127.0.0.1:PORT`), `--token-file <file>` (the token of the server, default the file of the default directory of the port), `--runtime <dir>` (sessions,
-  default `/tmp/qw-<login>/<port>` (common/runtime-dir.js)), `--config <file>` (system catalog,
+  `--port PORT` (the server, `ws://127.0.0.1:PORT`), `--token-file <file>` (the token of the server, default the file of the default SERVER directory of the port), `--runtime <dir>` (sessions,
+  default `/tmp/qw-<login>/l-<port>` for the local runner and `/tmp/qw-<login>/r-<6 hex digits of its id>` for a remote one: one directory per runner,
+  within the 49-byte budget of the node sockets (common/runtime-dir.js)), `--config <file>` (system catalog,
   default the project's `config.json`).
   The 5c configuration (`~/.config/qemuweb-runner/runner.json`, systemd
   `--user` unit) is out of scope here.
