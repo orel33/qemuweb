@@ -1,17 +1,15 @@
 // Starting again when the runtime directory has vanished (the default one is in /tmp, empty after a reboot)
-// or is only partly there (a stale server record, a stale runner socket): a clean new start, never an error.
+// or is only partly there (a stale server record, an unusable token file): a clean new start, never an error.
 // Temporary directories and an injected identity: the real /tmp/qw-<login> is never touched. No server, no runner.
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const {spawn, spawnSync} = require('node:child_process');
-const {once} = require('node:events');
+const {spawnSync} = require('node:child_process');
 const {defaultRuntime, accountRoot, prepareRuntime, runtimeBudget} = require('../../common/runtime-dir');
 const {ServerInstance} = require('../../server/server-instance');
-const {createRunnerGateway} = require('../../server/runner-gateway');
-const {RunnerRegistry} = require('../../server/runner-registry');
+const {ensureLocalRunnerToken} = require('../../server/local-runner-token');
 const {checkRuntime} = require('../../server/startup-checks');
 
 const alice = {username: 'alice', uid: process.getuid()};
@@ -28,15 +26,6 @@ function deadPid() {
   return spawnSync(process.execPath, ['-e', '0']).pid;
 }
 
-// A socket file left by a process that was killed (a real stale Unix socket).
-async function leaveStaleSocket(file) {
-  const child = spawn(process.execPath, ['-e', "require('net').createServer().listen(process.argv[1], () => process.stdout.write('up'))", file], {stdio: ['ignore', 'pipe', 'ignore']});
-  await once(child.stdout, 'data');
-  child.kill('SIGKILL');
-  await once(child, 'exit');
-  assert.ok(fs.existsSync(file), 'the socket file is left behind');
-}
-
 test('after a reboot the runtime directory is gone: it is created again, private and empty', t => {
   const {tmpRoot, options, runtime} = scratch(t);
   prepareRuntime(runtime, options);
@@ -50,14 +39,15 @@ test('after a reboot the runtime directory is gone: it is created again, private
   assert.ok(fs.existsSync(tmpRoot));
 });
 
-test('a partial directory (no sessions/, stale records and socket) starts clean', async t => {
+test('a partial directory (no sessions/, a stale record, a half-written token file) starts clean', t => {
   const {options, runtime} = scratch(t);
   fs.mkdirSync(accountRoot(options), {mode: 0o700});
   fs.mkdirSync(runtime, {mode: 0o700});
   fs.writeFileSync(path.join(runtime, 'server-3002.pid'), `${deadPid()}\n`);
   // A record of an old version is simply ignored (beta rules: no cleanup of leftovers).
   fs.writeFileSync(path.join(runtime, 'server-3002.session'), 'regular\n1111111111111111\n');
-  await leaveStaleSocket(path.join(runtime, 'runner-3002.sock'));
+  // The token file of an old run that holds no token: the server writes a new one.
+  fs.writeFileSync(path.join(runtime, 'local-runner.token'), 'half');
   fs.mkdirSync(path.join(runtime, 'users'));
   fs.symlinkSync('../sessions/1111111111111111', path.join(runtime, 'users', 'carol'));
   assert.equal(fs.existsSync(path.join(runtime, 'sessions')), false);
@@ -69,10 +59,9 @@ test('a partial directory (no sessions/, stale records and socket) starts clean'
   assert.equal(fs.readFileSync(path.join(runtime, 'server-3002.pid'), 'utf8').trim(), String(process.pid), 'the stale PID record is replaced');
   instance.removeRecords();
 
-  const gateway = createRunnerGateway({root: runtime, runtimeRoot: runtime, port: 3002, registry: new RunnerRegistry()});
-  await gateway.start();
-  t.after(() => gateway.close());
-  assert.equal(fs.statSync(gateway.socketPath).mode & 0o777, 0o600, 'the stale socket is replaced by a live one');
+  const token = ensureLocalRunnerToken(runtime);
+  assert.equal(token.created, true, 'the unusable token file is replaced');
+  assert.equal(fs.statSync(token.file).mode & 0o777, 0o600);
 });
 
 test('two servers of one account keep separate directories: each writes only its own pid record', t => {

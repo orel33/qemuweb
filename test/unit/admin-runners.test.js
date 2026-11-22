@@ -17,7 +17,7 @@ const {createRegisterRouter, createRateLimiter} = require('../../server/routes/r
 const fakeClient = () => Object.assign(new EventEmitter(), {close() { this.emit('close', null); }});
 
 // An HTTP server around the router, as admin.js mounts it (same `audited` contract).
-async function setup(t, {trustProxy = false} = {}) {
+async function setup(t, {trustProxy = false, localRunner = true} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-adminr-'));
   const registry = new RunnerRegistry();
   const store = createRunnerStore(path.join(dir, 'runners.json'));
@@ -34,7 +34,7 @@ async function setup(t, {trustProxy = false} = {}) {
   app.use(express.json());
   app.use((req, _res, next) => { req.user = {login: 'boss', role: 'admin'}; next(); });
   app.use('/api/runner/register', createRegisterRouter({tokens, store, audit: {record: (admin, action, target, result) => audit.push({admin, action, target, result})}}));
-  app.use('/runners', createRunnersRouter({manager, store, tokens, audited, port: 3002, graceSeconds: 300, trustProxy}));
+  app.use('/runners', createRunnersRouter({manager, store, tokens, audited, port: 3002, graceSeconds: 300, trustProxy, localRunner}));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.close(); server.closeAllConnections(); fs.rmSync(dir, {recursive: true, force: true}); });
@@ -50,7 +50,9 @@ test('no runner: an empty list and the command to start one', async t => {
   const {call} = await setup(t);
   const {body} = await call('GET', '/runners');
   assert.deepEqual([body.runners, body.connectHint, body.registrationTokens, body.runnerGraceSeconds, body.lifetimes], [[], './scripts/runner.sh', [], 300, [15, 60, 1440]]);
-  assert.equal(connectHint({runners: [], port: 4100, runtime: '/rt'}), './scripts/runner.sh --port 4100 --runtime /rt');
+  assert.equal(connectHint({runners: [], port: 4100, runtime: '/rt', localRunner: true}), './scripts/runner.sh --port 4100 --token-file /rt/local-runner.token');
+  assert.equal(connectHint({runners: [], port: 3002, localRunner: true}), './scripts/runner.sh');
+  assert.equal(connectHint({runners: [], port: 4100, runtime: '/rt'}), null, 'a server without --local-runner has no local runner to start');
 });
 
 test('summaries: every registered runner, "local" included, with the same fields and no flag, token or hash', async t => {
