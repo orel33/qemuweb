@@ -17,8 +17,8 @@ generic reference is [docs/deployment.md](../../docs/deployment.md).
    Apache2: TLS (CREMI wildcard certificate), OpenID (mod_auth_openidc), X-Remote-User + X-Proxy-Key
         |  HTTP and WebSocket on 127.0.0.1:3002
         v
-   qemuweb-server  --auth proxy        <--- Unix socket, no network --->        qemuweb-runner (local)
-                                                                                 QEMU, VDE
+   qemuweb-server  --auth proxy   <-- WebSocket, 127.0.0.1, token file --> qemuweb-runner (local)
+                                                                          QEMU, VDE
 
   v0-qemuweb  --->  outbound proxy "proxy" (squid, http://proxy:3128/)  --->  Internet (apt, npm, ISO, images)
 ```
@@ -46,6 +46,10 @@ The relay and the proxies belong to the CREMI: what QemuWeb needs from them is l
 
 Two paths skip OpenID, because a runner has no browser: `/runner/connect` (WebSocket) and `/api/runner/register`. They
 use the runner's own token, and Apache gives them `AuthType None`.
+
+The local runner takes a shorter path: it dials `ws://127.0.0.1:3002/runner/connect` itself (the loopback hop, no relay, no Apache, no
+OpenID) with the token in `/var/lib/qemuweb/server/local-runner.token`, which `qemuweb-server --local-runner` wrote. It is the same
+path and the same token check as a remote runner's; only the token comes from a file instead of a registration.
 
 ## Outbound path: the machine to the Internet
 
@@ -133,8 +137,9 @@ the polling fallback, and measures the round trip.
 
 A runner on another machine dials **out** to `https://qemuweb.emi.u-bordeaux.fr/runner/connect` with its token: it needs
 no inbound port, only HTTPS to the public name (through the CREMI network, or the outbound proxy from outside it if
-the runner's machine uses one). The relay and Apache pass the WebSocket as above. The local runner never uses the
-network: it talks to the server on a Unix socket under `/var/lib/qemuweb`.
+the runner's machine uses one). The relay and Apache pass the WebSocket as above. The local runner never leaves the
+machine: it dials `ws://127.0.0.1:3002/runner/connect` (the same path as a remote runner, but directly, not through Apache or the
+relay) with the token that the server wrote in `/var/lib/qemuweb/server/local-runner.token`.
 
 ## Symptoms and causes
 
