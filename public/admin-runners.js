@@ -1,4 +1,4 @@
-// "Runners" panel of /admin: the local and the registered remote runners with their state, engines,
+// "Runners" panel of /admin: every registered runner (the local one included, no row is special) with its state, engines,
 // resources, configuration warnings and sessions; pause (drain), revoke and remove; registration
 // tokens for new remote runners (the command is shown once). A runner dials the server
 // (docs/deployment.md). Text that comes from a runner (its name, address, warnings) is always
@@ -45,19 +45,28 @@ function renderRunners(data, {body, hint, cell, act}) {
     const kvm = runner.engines.includes('qemu') ? (runner.kvm ? ', KVM' : ', no KVM') : '';
     const name = document.createElement('div');
     name.textContent = runner.name;
-    name.append(Object.assign(document.createElement('small'), {textContent: ` ${runner.local ? 'local' : `remote ${runner.id}`}`}));
-    const where = runner.state === 'online' || runner.state === 'starting' ? (runner.address || 'this machine') : `last seen ${when(runner.lastSeen)}`;
+    name.append(Object.assign(document.createElement('small'), {textContent: ` ${runner.id}`}));
+    const where = document.createElement('div');
+    where.textContent = runner.state === 'online' || runner.state === 'starting' ? (runner.address || 'this machine') : `last seen ${when(runner.lastSeen)}`;
+    // What the runner announced (display only): its directory and process ID.
+    const announced = [runner.directory, runner.pid ? `pid ${runner.pid}` : ''].filter(Boolean).join(' · ');
+    if (announced) {
+      const small = Object.assign(document.createElement('small'), {textContent: announced});
+      small.style.display = 'block';
+      where.append(small);
+    }
     const actions = document.createElement('div');
     actions.className = 'admin-actions';
     const id = encodeURIComponent(runner.id);
     actions.append(runner.paused
       ? button('Resume', () => act(() => `/runners/${id}/resume`, 'POST'), 'Resume: new sessions can be placed on this runner again')
       : button('Pause', () => act(() => `/runners/${id}/pause`, 'POST'), 'Pause: no new session is placed here; the running ones continue'));
-    if (!runner.local && runner.state !== 'revoked') {
+    if (runner.state !== 'revoked') {
       actions.append(button('Revoke', () => act(() => `/runners/${id}/revoke`, 'POST', {title: 'Revoke runner',
         message: `Revoke ${runner.name}? It is disconnected and cannot connect again; its sessions are dropped after the grace period.`, accept: 'Revoke'}), 'Revoke the token of this runner'));
     }
-    if (!runner.local && runner.state === 'revoked') {
+    // No Remove for "local" until its token (RUN03c): forgetting its record would let the retrying runner create a fresh, unrevoked one.
+    if (runner.state === 'revoked' && runner.id !== 'local') {
       actions.append(button('Remove', () => act(() => `/runners/${id}`, 'DELETE'), 'Forget this revoked runner'));
     }
     row.append(cell(name), cell(stateLabel(runner)), cell(where), cell(`${engines}${kvm}`),

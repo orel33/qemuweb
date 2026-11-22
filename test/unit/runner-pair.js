@@ -21,7 +21,7 @@ async function runnerPair(t, {prefix = 'qw-pair-'} = {}) {
   const [controlSide, runnerSide] = duplexPair();
   const client = new RunnerClient(new Connection(controlSide));
   const registry = new RunnerRegistry();
-  const entry = registry.add({id: 'local', client, local: true, trusted: true});
+  const entry = registry.add({id: 'local', client});
   const hello = once(registry, 'online');
   serveConnection(new Connection(runnerSide), service);
   await hello;

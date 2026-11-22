@@ -7,7 +7,7 @@
 //   runner   the session's handle on its runner client (server/runner-client.js session())
 // The control plane chooses the session ID and the runner (registry.pickRunner, once, at
 // creation); the runner holds everything else. A session whose runner is lost is dropped
-// like a deleted one, except for a remote runner: its sessions are kept for `graceSeconds`
+// like a deleted one, except that its sessions are kept for `graceSeconds`
 // (--runner-grace; 0 drops them at once), during which they answer 503 "offline". When the
 // runner returns (same ID) with a hello that lists a session, the session is bound to the new
 // connection again (the handle is the same object, so routers and sockets keep working); a
@@ -15,8 +15,9 @@
 // deleted on the runner when it returns (it is then unknown to the control plane).
 // The server touches no file of any runner: the users/<login> aliases, the session directories and their removal
 // belong to the runner (runner/runtime-tidy.js), which removes a session's directory at session.delete.
-// A trusted runner (the local one) that reconnects after a server restart keeps its sessions:
-// the server adopts them, each for its owner (see resync).
+// A runner that reconnects after a server restart keeps its sessions: the server adopts each one
+// for the owner of its binding (server/session-bindings.js, written by the server itself); the owner
+// a hello announces is never used (see resync).
 // Events: 'connectivity' (workspace, online) when the runner of a kept session goes offline or returns,
 // 'created' (workspace, {adopted}) once a workspace exists, `adopted` when it was
 // taken over from a runner's hello instead of opened by the user, 'removed' (workspace, by, reason) after
@@ -24,20 +25,14 @@
 // with a reason ('runner lost', 'creation failed') when the session was dropped.
 const {EventEmitter} = require('events');
 const {Session, SESSION_ID} = require('./session');
-const {LOGIN_PATTERN} = require('./auth/users-store');
+const {createSessionBindings} = require('./session-bindings');
 
-// The sessions a hello announces, as a Map of session ID -> {sessionId, owner, createdAt}.
-// Everything is checked here: an entry without a valid ID is ignored; an owner that is not a
-// valid login becomes null (the session is then never adopted); a bad date becomes the
-// adoption time.
+// The session IDs a hello announces, in order. Everything else a hello says about a session
+// (its owner, its date) is ignored: the owner comes from the server's own bindings.
 function reportedSessions(hello) {
-  const reported = new Map();
+  const reported = new Set();
   for (const item of Array.isArray(hello?.sessions) ? hello.sessions : []) {
-    if (!item || typeof item !== 'object' || typeof item.sessionId !== 'string' || !SESSION_ID.test(item.sessionId) || reported.has(item.sessionId)) continue;
-    const owner = typeof item.owner === 'string' && LOGIN_PATTERN.test(item.owner) ? item.owner : null;
-    const createdAt = typeof item.createdAt === 'string' && item.createdAt.length <= 40 && Number.isFinite(Date.parse(item.createdAt))
-      ? item.createdAt : new Date().toISOString();
-    reported.set(item.sessionId, {sessionId: item.sessionId, owner, createdAt});
+    if (item && typeof item === 'object' && typeof item.sessionId === 'string' && SESSION_ID.test(item.sessionId)) reported.add(item.sessionId);
   }
   return reported;
 }
@@ -45,9 +40,10 @@ function reportedSessions(hello) {
 class SessionManager extends EventEmitter {
   // registry: server/runner-registry.js. Sessions bound to a lost runner are dropped, and on a
   // runner's hello the sessions are resynchronised (see resync).
-  constructor({registry, graceSeconds = 0}) {
+  constructor({registry, graceSeconds = 0, bindings = createSessionBindings()}) {
     super();
     this.registry = registry;
+    this.bindings = bindings;
     this.workspaces = new Map();
     this.deleting = new Set();
     this.graceMs = graceSeconds * 1000;
@@ -68,9 +64,9 @@ class SessionManager extends EventEmitter {
     return entry?.state === 'online' && entry.client === workspace.runner.client;
   }
 
-  // A lost runner: the local one, or any when there is no grace period, drops its sessions at once.
+  // A lost runner drops its sessions at once when there is no grace period.
   runnerLost(entry) {
-    if (entry.local || !this.graceMs) return this.dropRunnerSessions(entry.id, 'runner lost');
+    if (!this.graceMs) return this.dropRunnerSessions(entry.id, 'runner lost');
     const kept = this.list().filter(workspace => workspace.session.runnerId === entry.id);
     if (!kept.length) return;
     console.log(`Runner ${entry.id} is offline; its ${kept.length} session${kept.length === 1 ? '' : 's'} kept for ${this.graceMs / 1000} s.`);
@@ -104,6 +100,8 @@ class SessionManager extends EventEmitter {
     while (ids.has(session.id));
     const runner = entry.client.session(session.id);
     const workspace = {owner: login, session, runner};
+    // Bound before the runner is asked: a crash in between leaves a binding without a session, never the reverse.
+    this.bindings.set({id: session.id, owner: login, runnerId: entry.id, createdAt: session.createdAt});
     this.workspaces.set(login, workspace);
     runner.request('session.create', {owner: login, createdAt: session.createdAt}).catch(error => {
       console.error(`Cannot create session ${session.id}: ${error.message}`);
@@ -113,7 +111,7 @@ class SessionManager extends EventEmitter {
     return workspace;
   }
 
-  // Takes over a session a runner already runs, for its owner (same path as open() afterwards).
+  // Takes over a session a runner already runs, for the owner of its binding (same path as open() afterwards).
   adopt(entry, {sessionId, owner, createdAt}) {
     const session = new Session({runnerId: entry.id, id: sessionId, owner, createdAt});
     const workspace = {owner, session, runner: entry.client.session(sessionId)};
@@ -150,6 +148,7 @@ class SessionManager extends EventEmitter {
 
   forget(workspace) {
     this.workspaces.delete(workspace.owner);
+    this.bindings.remove(workspace.session.id);
     this.registry.get(workspace.session.runnerId)?.client.release(workspace.session.id);
   }
 
@@ -158,12 +157,11 @@ class SessionManager extends EventEmitter {
   }
 
   // On a runner's hello: a session bound to it that it does not report is gone; one it reports
-  // is bound to the new connection (a remote runner that came back). A reported
-  // session the control plane does not know is ADOPTED when all of these hold, else deleted:
-  //   - the runner is trusted (entry.trusted: the local runner only; a hello is untrusted input
-  //     and a later, remote runner never chooses the owner of a session);
-  //   - its owner is a valid login (LOGIN_PATTERN) and has no workspace yet: one session per
-  //     user, so a second session of the same owner is deleted, never adopted.
+  // is bound to the new connection (a runner that came back). A reported session the control plane
+  // does not know is ADOPTED only when the server's own binding says it belongs to this runner, for
+  // the owner of that binding (the hello never chooses an owner); else it is deleted. One session
+  // per user: if the owner already has a workspace, the other session is deleted. A binding of this
+  // runner that the hello does not report is stale and dropped.
   resync(entry, hello) {
     const reported = reportedSessions(hello);
     for (const workspace of this.list()) {
@@ -174,13 +172,19 @@ class SessionManager extends EventEmitter {
         this.emit('connectivity', workspace, true);
       }
     }
-    for (const item of reported.values()) {
-      if (this.sessionIds().includes(item.sessionId)) continue;
-      if (entry.trusted === true && item.owner && !this.workspaces.has(item.owner) && !this.deleting.has(item.owner)) {
-        this.adopt(entry, item);
+    const known = new Set(this.sessionIds());
+    for (const sessionId of reported) {
+      if (known.has(sessionId)) continue;
+      const binding = this.bindings.get(sessionId);
+      if (binding && binding.runnerId === entry.id && !this.workspaces.has(binding.owner) && !this.deleting.has(binding.owner)) {
+        this.adopt(entry, {sessionId, owner: binding.owner, createdAt: binding.createdAt});
       } else {
-        entry.client.request('session.delete', {}, item.sessionId).catch(error => console.error(`Cannot delete unknown session ${item.sessionId}: ${error.message}`));
+        if (binding && binding.runnerId === entry.id) this.bindings.remove(sessionId);
+        entry.client.request('session.delete', {}, sessionId).catch(error => console.error(`Cannot delete unknown session ${sessionId}: ${error.message}`));
       }
+    }
+    for (const binding of this.bindings.list()) {
+      if (binding.runnerId === entry.id && !reported.has(binding.id) && !known.has(binding.id)) this.bindings.remove(binding.id);
     }
   }
 }

@@ -5,7 +5,7 @@
 # [runner].
 #   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --users FILE, --runners FILE, --logs DIR, --examples DIR, --session-hours N, --runner-grace SECONDS,
 #                                          --trust-proxy VALUE, --auth MODE, --proxy-key-file FILE, --logout-url URL, --no-auth, --ephemeral: see node server/main.js --help)
-# The server gets all of them; the runner gets --port PORT (the server's --listen), --runtime DIR (when
+# The server gets all of them (and --runner-grace 0 unless given); the runner gets --port PORT (the server's --listen), --runtime DIR (when
 # given; the default is /tmp/qw-<login>/<port> for both, common/runtime-dir.js) and --exit-on-disconnect. A refused option is reported by the server (exit status 2, nothing started).
 # Each process leads its own process group (setsid): a terminal Ctrl+C reaches this script only.
 # Ctrl+C or SIGTERM stops the runner first (it stops every machine, within a bounded delay), kills
@@ -28,6 +28,7 @@ usage() {
 # then ends with its status). Only --listen and --runtime are read here, for the runner and its socket.
 port=3002
 runtime=''
+grace_given=0
 server_args=()
 while (( $# )); do
   case "$1" in
@@ -38,6 +39,7 @@ while (( $# )); do
       (( $# )) || break
       case "${server_args[-1]}" in
         --listen) port="$1" ;;
+        --runner-grace) grace_given=1 ;;
         --runtime) runtime="$(realpath -m -- "$1")" ;;
       esac
       server_args+=("$1")
@@ -45,6 +47,10 @@ while (( $# )); do
     *) server_args+=("$1"); shift ;;
   esac
 done
+
+# The runner ends with the server and a lost runner is not coming back: unless the user gave --runner-grace,
+# its sessions are dropped at once (0), as before the local runner became a runner like the others.
+(( grace_given )) || server_args+=(--runner-grace 0)
 
 # The default runtime directory, from the same rule as the server's (an invalid port is refused by the server).
 if [[ -z "$runtime" && "$port" =~ ^[0-9]+$ ]]; then

@@ -228,11 +228,11 @@ The server is split into layers with one-way dependencies:
 | `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`. No file access. |
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
-| `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `local`/`trusted`/`paused` flags and client; `pickRunner(login, sessionsOf)`, the single placement point. |
+| `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `paused` flag, the display-only `runtimeRoot` and `pid` and client (no `local` or `trusted` flag); `pickRunner(login, sessionsOf)`, the single placement point. |
 | `server/remote-gateway.js` | `/runner/connect`: the WebSocket upgrade of remote runners (bearer token and runner ID checked against `runners.json`, 401 / 409), the `ws` duplex stream under a protocol `Connection`, ping/pong (`common/ws-heartbeat.js`). |
 | `server/runner-store.js`, `server/runner-registration.js` | `runners.json` (token hashes, 0600, revoked, paused) and the in-memory one-time registration tokens (15 min, 1 h, 24 h). |
 | `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
-| `server/runner-gateway.js` | The runner socket `<runtime>/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as the trusted `local`; a second connection is closed. |
+| `server/runner-gateway.js` | The runner socket `<runtime>/runner-<port>.sock`: stale-socket check, mode 0600, one runner at a time, registered as `local` with its record of `runners.json` (created at its first connection; a revoked record is refused, the connection is closed); a second connection is closed. |
 | `server/server-instance.js` | `<runtime>/server-<port>.pid` (read by `scripts/stop.sh`), the only file the server keeps in its runtime directory. |
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie), `proxy.js` (shared key file, identity from the authenticating front end). |
 | `server/audit.js` | Log directory (`logs/` or `--logs`), `admin.log` (audit log of administrator actions) and `users.log` (user events), JSON lines, and reading their last entries. |
@@ -522,7 +522,7 @@ hello     runner -> CP, first message of every connection
           {type:'hello', protocol:1, pid, engines:['qemu'|'vbox'...], kvm,
            cpus, memoryBytes, images:{<system>:{raw?, vdi?}} (each {size, sha256|null}),
            warnings:[<sentence>...] (config.json against this machine, max 20),
-           runtimeRoot (the runner's runtime directory; only the local runner's is kept),
+           runtimeRoot (the runner's runtime directory: display text in /admin, never used),
            limits:{maxSessions} (optional, from the runner file),
            sessions:[{sessionId, engine, owner, createdAt, nodes:[<listNodes entry>...]}]}
 request   CP -> runner  {type:'request', id, command, sessionId?, args}
@@ -616,12 +616,13 @@ Order is kept since nothing is dropped.
 with its own client (`server/runner-client.js`, one instance per connection,
 never a global): `id`, `state` (`starting`, `online`, `lost`), the
 capabilities from `hello` (engines, images, capacity, warnings), its
-`local`, `trusted`, `paused`, `address` and `ownerLogin` (null for a shared runner; reserved for
+`paused`, `address` and `ownerLogin` (null for a shared runner; reserved for
 a runner owned by one student, unused). The entry `local` is the
 runner of this machine, which dialled the Unix-socket gateway; a remote runner has
 the ID given at registration (`r-xxxxxxxx`) and stays in the registry, state `lost`, while offline.
-`local` and `trusted` are set only by the Unix-socket gateway: a `hello` is untrusted input, so a remote
-runner is never trusted. The server performs **no filesystem action on a runner's directories**: session directory
+Every runner has a record in `runners.json` (schema 2; the record `local` is created at the first connection and has no token
+hash). Nobody is trusted by transport: there is no `trusted` or `local` flag, a `hello` is untrusted input and what a runner may do
+is decided by its record (paused, revoked). The server performs **no filesystem action on a runner's directories**: session directory
 removal (at `session.delete`), `users/` aliases and pruning are the runner's (`runner/runtime-tidy.js`).
 
 The session manager binds each session ID to a runner ID. The control plane
@@ -654,16 +655,15 @@ routes answer 503 until one is online.
 3. On `hello`, the control plane resynchronises (`SessionManager.resync`): a
    session bound to that runner but absent from `hello` is dropped (as below).
    A session reported by the runner that the control plane does not know is
-   **adopted** when the runner is trusted (the local slot), its `sessionId`
-   matches the ID pattern, its `owner` is a valid login and that owner has no
-   workspace yet: the server creates the workspace for the owner (same path as
-   opening a session: router, sockets, `session-adopted` in `users.log`).
-   Otherwise (another session for the same owner, an invalid owner or ID, an
-   untrusted runner) it is deleted with `session.delete`. The browsers log in
+   **adopted** when its `sessionId` matches the ID pattern, the server's own
+   binding (`<runtime>/bindings.json`, `server/session-bindings.js`, written before `session.create`) says that it belongs
+   to this runner, and the owner of the binding has no workspace yet: the server creates the workspace for that owner
+   (same path as opening a session: router, sockets, `session-adopted` in `users.log`). The `owner` and `createdAt` a `hello`
+   announces are ignored. Otherwise (no binding, a binding to another runner, another session for the same owner, an invalid ID)
+   it is deleted with `session.delete`; a binding of this runner that the `hello` does not report is dropped. The browsers log in
    again after a server restart and `select-node` re-attaches their consoles;
    the `lastActivity` of an adopted session is unknown, so it counts from its
-   creation date. Untrusted runners (5c) never choose an owner: adoption is
-   gated by `entry.trusted`.
+   creation date. No runner ever chooses an owner: adoption follows the server's bindings.
 4. Server stop (SIGINT, SIGTERM, `./scripts/stop.sh`): the server only closes
    the socket and exits; it removes the socket. What happens to the machines
    is the runner's choice (next point). `scripts/start.sh` stops its runner
@@ -756,17 +756,16 @@ A remote runner is the same protocol over a WebSocket (`/runner/connect`, `ws` d
 `X-Runner-Id`. The server keeps only a sha256 of each token (`runners.json`) and compares it in constant
 time; unknown or revoked is 401 (the runner stops), a second live connection of an ID is 409. A runner gets its
 identity once by redeeming a single-use, time-limited **registration token** created by an admin
-(`POST /api/runner/register`, the one unauthenticated route). It is never trusted and never local.
+(`POST /api/runner/register`, the one unauthenticated route). Nobody is trusted by transport.
 
 Both ends ping every 15 s and terminate a connection that misses a pong; the runner reconnects after 2 s doubling to
-30 s and keeps its machines meanwhile. On a loss of a **remote** runner the session manager keeps its sessions for
-`--runner-grace` seconds (0: drop at once, as for the local runner): the handle (`client.session(id)`) is
+30 s and keeps its machines meanwhile. On a loss of a runner the session manager keeps its sessions for
+`--runner-grace` seconds (0: drop at once): the handle (`client.session(id)`) is
 a stable object, routes answer 503 (`manager.available`), and pages get `runner-state {online: false}`. When the
 runner returns (same ID) and its `hello` lists a session, the new client **adopts** the handle (`RunnerClient.adopt`):
 routers, Socket.IO rooms and event subscribers keep working, `runner-state {online: true}` makes the pages select
 their consoles again (the runner kept the output); a session the hello no longer lists is dropped, one the server
-no longer knows (grace expired) is deleted on the runner. A remote runner's unknown sessions are never adopted, so a
-server restart ends them.
+no longer knows (grace expired) is deleted on the runner. A session of a runner that the server's `bindings.json` does not list is never adopted.
 
 ### Multiple runners and untrusted runners
 

@@ -7,7 +7,7 @@
 // token is checked against the hash in runners.json (server/runner-store.js) before the upgrade:
 //   401  unknown runner, wrong token or revoked token (the runner stops retrying)
 //   409  this runner is already connected (one live connection per runner ID)
-// An accepted connection is a REMOTE runner: never trusted, never local (server/runner-registry.js).
+// Nobody is trusted by transport: what a runner may do is decided by its record (server/runner-store.js).
 // Only the path /runner/connect is handled here; Socket.IO keeps its own upgrades. Both ends
 // ping every 15 seconds and drop a connection that stops answering (common/ws-heartbeat.js).
 const WebSocket = require('ws');

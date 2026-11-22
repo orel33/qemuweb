@@ -14,6 +14,7 @@ const {createRunnerStore} = require('./runner-store');
 const {createRegistrationTokens} = require('./runner-registration');
 const {createRegisterRouter} = require('./routes/runner-register');
 const {ServerInstance} = require('./server-instance');
+const {createSessionBindings} = require('./session-bindings');
 const {removeEmptyDefaultRuntime} = require('../common/runtime-dir');
 const {SessionManager} = require('./session-manager');
 const {attachSockets} = require('./sockets');
@@ -41,23 +42,24 @@ function serve({root, settings}) {
   // One session per user, each with its own HTTP router, executed by a runner that dials
   // <runtime>/runner-<port>.sock (server/runner-gateway.js), started by ./scripts/runner.sh.
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({registry, graceSeconds: settings.runnerGrace});
-  const gateway = createRunnerGateway({root, runtimeRoot: runtime, port, registry});
-  // Remote runners (registered with a token, runners.json) dial /runner/connect on this HTTP server.
+  // The server's own record of which session belongs to whom and to which runner (bindings.json):
+  // the only source of the owner of a session adopted after a restart.
+  const bindings = createSessionBindings(path.join(runtime, 'bindings.json'));
+  const manager = new SessionManager({registry, graceSeconds: settings.runnerGrace, bindings});
+  // Every runner has a record in runners.json; the one of the local runner is created at its first connection.
   const runnerStore = createRunnerStore(settings.runnersFile);
+  const gateway = createRunnerGateway({root, runtimeRoot: runtime, port, registry, store: runnerStore});
+  // Remote runners (registered with a token) dial /runner/connect on this HTTP server.
   const runnerTokens = createRegistrationTokens();
   const remoteGateway = createRemoteGateway({server, registry, store: runnerStore, trustProxy: settings.trustProxy !== null});
-  const runnerLabel = entry => (entry.local ? 'Runner' : `Runner ${entry.name} (${entry.id})`);
+  const runnerLabel = entry => `Runner ${entry.name} (${entry.id})`;
   registry.on('online', (entry, hello) => {
     const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
     console.log(`${runnerLabel(entry)} connected${entry.address ? ` from ${entry.address}` : ''} (engines: ${engines || 'none'}).`);
   });
   registry.on('lost', entry => {
-    if (entry.local) console.log(`Runner disconnected. Start one with ${RUNNER_HINT}.`);
-    else {
-      console.log(`${runnerLabel(entry)} disconnected.`);
-      try { runnerStore.change(entry.id, {lastSeenAt: new Date().toISOString()}); } catch (_) { /* Removed meanwhile. */ }
-    }
+    console.log(`${runnerLabel(entry)} disconnected.${registry.list().some(other => other.state === 'online') ? '' : ` Start one with ${RUNNER_HINT}.`}`);
+    try { runnerStore.change(entry.id, {lastSeenAt: new Date().toISOString()}); } catch (_) { /* Removed meanwhile. */ }
   });
   manager.on('created', (workspace, {adopted}) => {
     const {session, runner} = workspace;

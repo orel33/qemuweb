@@ -1,19 +1,26 @@
 'use strict';
 
-// runners.json: the remote runners registered with this server (repository root by default, or the
+// runners.json: the runners registered with this server (repository root by default, or the
 // --runners option), next to users.json. Mode 0600, never committed. Layout:
-//   {"schemaVersion": 1, "runners": [{"id": "r-1a2b3c4d", "name": "salle-12", "tokenHash": "<sha256 hex>",
+//   {"schemaVersion": 2, "runners": [{"id": "r-1a2b3c4d", "name": "salle-12", "tokenHash": "<sha256 hex>",
 //     "createdAt": "<ISO>", "lastSeenAt": "<ISO>", "paused": true, "revoked": true}]}
-// Only the hash of a runner's authentication token is stored (the token is 32 random bytes, so a
-// plain sha256 is enough); it is compared in constant time. "paused" and "revoked" are written only
-// when set. A revoked runner keeps its record (so that the administrator sees it) until it is removed.
+// One record per runner, the same for all: the id is "r-xxxxxxxx" (registered with a token) or "local"
+// (the runner of the server's machine, created at its first connection by ensureLocal(); its record
+// has no tokenHash: its proof is not a token, and verify() never accepts it). Nobody is trusted by
+// transport: what a runner may do is decided by its record. Only the hash of a runner's
+// authentication token is stored (32 random bytes, so a plain sha256 is enough); it is compared in
+// constant time. "paused" and "revoked" are written only when set. A revoked runner keeps its record
+// (so that the administrator sees it) until it is removed.
 // The store is read once, kept in memory and written through (atomically) at every change: the
 // server is the only writer.
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 
-const RUNNER_ID = /^r-[0-9a-f]{8}$/;
+const {RUNNERS_SCHEMA_VERSION} = require('../common/schema-versions');
+
+const LOCAL_ID = 'local';
+const RUNNER_ID = /^(?:local|r-[0-9a-f]{8})$/;
 const MAX_NAME = 64;
 const FIELDS = ['id', 'name', 'tokenHash', 'createdAt', 'lastSeenAt', 'paused', 'revoked'];
 
@@ -29,8 +36,8 @@ function parseRunners(text, file = 'runners.json') {
   let data;
   try { data = JSON.parse(text); }
   catch (error) { throw new Error(`Cannot parse ${file}: ${error.message}`); }
-  if (!data || data.schemaVersion !== 1 || !Array.isArray(data.runners) || Object.keys(data).some(key => !['schemaVersion', 'runners'].includes(key))) {
-    throw new Error(`${file} must contain schemaVersion 1 and a runners array.`);
+  if (!data || data.schemaVersion !== RUNNERS_SCHEMA_VERSION || !Array.isArray(data.runners) || Object.keys(data).some(key => !['schemaVersion', 'runners'].includes(key))) {
+    throw new Error(`${file} must contain schemaVersion ${RUNNERS_SCHEMA_VERSION} and a runners array (an older file is not read: delete it by hand and register the runners again).`);
   }
   const ids = new Set();
   for (const runner of data.runners) {
@@ -38,7 +45,9 @@ function parseRunners(text, file = 'runners.json') {
     if (typeof runner.id !== 'string' || !RUNNER_ID.test(runner.id)) throw new Error(`${file}: invalid runner ID.`);
     if (ids.has(runner.id)) throw new Error(`${file}: duplicate runner ${runner.id}.`);
     ids.add(runner.id);
-    if (typeof runner.name !== 'string' || typeof runner.tokenHash !== 'string' || !/^[0-9a-f]{64}$/.test(runner.tokenHash)) throw new Error(`${file}: invalid runner ${runner.id}.`);
+    if (typeof runner.name !== 'string') throw new Error(`${file}: invalid runner ${runner.id}.`);
+    // The token hash is required, except for the local runner, which has none.
+    if (runner.tokenHash === undefined ? runner.id !== LOCAL_ID : typeof runner.tokenHash !== 'string' || !/^[0-9a-f]{64}$/.test(runner.tokenHash)) throw new Error(`${file}: invalid runner ${runner.id}.`);
     for (const key of ['createdAt', 'lastSeenAt']) if (runner[key] !== undefined && !Number.isFinite(Date.parse(runner[key]))) throw new Error(`${file}: invalid ${key} for ${runner.id}.`);
     for (const key of ['paused', 'revoked']) if (runner[key] !== undefined && typeof runner[key] !== 'boolean') throw new Error(`${file}: "${key}" must be true or false for ${runner.id}.`);
   }
@@ -57,7 +66,7 @@ function readRunners(file) {
 function writeRunners(file, runners) {
   const clean = runners.map(runner => Object.fromEntries(FIELDS.filter(key => runner[key] !== undefined && runner[key] !== false).map(key => [key, runner[key]])));
   const temporary = path.join(path.dirname(file), `.${path.basename(file)}.${process.pid}.tmp`);
-  fs.writeFileSync(temporary, `${JSON.stringify({schemaVersion: 1, runners: clean}, null, 2)}\n`, {mode: 0o600});
+  fs.writeFileSync(temporary, `${JSON.stringify({schemaVersion: RUNNERS_SCHEMA_VERSION, runners: clean}, null, 2)}\n`, {mode: 0o600});
   fs.chmodSync(temporary, 0o600);
   fs.renameSync(temporary, file);
 }
@@ -84,12 +93,24 @@ function createRunnerStore(file, {now = () => new Date()} = {}) {
       save();
       return {record: {...record}, authToken};
     },
-    // The record of a runner presenting this ID and token, else null (unknown, wrong token, revoked).
+    // The record of the local runner, created once at its first connection (name "local"); an
+    // existing record, revoked or not, is returned as it is.
+    ensureLocal() {
+      let record = find(LOCAL_ID);
+      if (!record) {
+        record = {id: LOCAL_ID, name: LOCAL_ID, createdAt: now().toISOString()};
+        records.push(record);
+        save();
+      }
+      return {...record};
+    },
+    // The record of a runner presenting this ID and token, else null (unknown, wrong token, revoked,
+    // or a record without a token hash: the local runner never authenticates with a token here).
     verify(id, token) {
       const record = typeof id === 'string' && typeof token === 'string' && token.length <= 256 ? find(id) : null;
-      const expected = Buffer.from(record ? record.tokenHash : dummy, 'hex');
+      const expected = Buffer.from(record?.tokenHash || dummy, 'hex');
       const valid = crypto.timingSafeEqual(expected, Buffer.from(hashToken(token ?? ''), 'hex'));
-      return record && valid && !record.revoked ? {...record} : null;
+      return record && record.tokenHash && valid && !record.revoked ? {...record} : null;
     },
     change(id, fields) {
       const record = find(id);
@@ -107,4 +128,4 @@ function createRunnerStore(file, {now = () => new Date()} = {}) {
   };
 }
 
-module.exports = {createRunnerStore, parseRunners, readRunners, writeRunners, hashToken, cleanName, RUNNER_ID, MAX_NAME};
+module.exports = {createRunnerStore, parseRunners, readRunners, writeRunners, hashToken, cleanName, RUNNER_ID, LOCAL_ID, MAX_NAME};

@@ -29,11 +29,11 @@ async function createTestUsers(entries) {
 // as an ephemeral test server, through the real launch sequence: scripts/start.sh, the server and a
 // runner as two processes. With `standalone` it starts only `node server/main.js` (a runner is
 // started by the test). `logDir` is the --logs directory. The returned ChildProcess keeps the tail
-// of its output in `output`. `runnersFile` is the --runners file (remote runners registered).
+// of its output in `output`. `runnersFile` is the --runners file; by default a file next to the users file (a temporary directory), so that a test never writes the record of the local runner into the runners.json of the repository.
 function spawnServer({port, usersFile, logDir = null, runnersFile = null, noAuth = false, standalone = false}) {
   const options = ['--listen', String(port), '--users', usersFile, '--ephemeral'];
   if (logDir) options.push('--logs', logDir);
-  if (runnersFile) options.push('--runners', runnersFile);
+  options.push('--runners', runnersFile || path.join(path.dirname(usersFile), 'runners.json'));
   if (noAuth) options.push('--no-auth');
   const stdio = ['ignore', 'pipe', 'pipe'];
   const child = standalone
@@ -110,7 +110,7 @@ class QemuWebClient {
           listening = response.status === 200 || response.status === 401;
         } catch (_) { /* Not listening yet. */ }
       }
-      if (listening && (!runnerNeeded || /Runner connected/.test(child.output))) return;
+      if (listening && (!runnerNeeded || /Runner \S+ \(\S+\) connected/.test(child.output))) return;
       await new Promise(resolve => setTimeout(resolve, 200));
     }
     throw new Error(`QemuWeb did not start within ${timeoutMs} ms.`);
