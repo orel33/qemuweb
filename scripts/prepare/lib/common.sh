@@ -431,6 +431,20 @@ serial_strip() {
 # serial_has FILE REGEX: is REGEX (case-insensitive) in the normalised log FILE?
 serial_has() { LC_ALL=C grep -aqiE -- "$2" "$1"; }
 
+# build_follow_info TITLE LOG [SOCKET KIND]: where to follow a build, printed when its VM starts. The
+# serial log is a plain file: follow it with tail -f (it holds terminal escape sequences, as the VM
+# wrote them). The control socket of the build VM (the serial socket of Alpine and OpenWrt, the QMP
+# socket of the Debian cloud build) is informational: a QEMU server socket accepts ONE client, and the
+# build holds it, so never connect to it. The Debian legacy build has no socket (its serial port is the
+# log file itself). prepare.sh --parallel reads the "log:" and "socket:" lines back from the job log
+# (job_paths): keep the format "    log:    <path>  (follow: ..." and "    socket: <path>  (...".
+build_follow_info() {
+  local title="$1" log="$2" socket="${3:-}" kind="${4:-}"
+  echo "  $title"
+  echo "    log:    $log  (follow: tail -f $log)"
+  if [[ -n "$socket" ]]; then echo "    socket: $socket  ($kind socket, held by the build: do not connect)"; fi
+}
+
 # Stop a VM (SIGTERM, then SIGKILL after 5 s) and reap it.
 vm_stop() {
   local pid="$1" i

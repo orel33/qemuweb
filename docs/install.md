@@ -110,6 +110,7 @@ bash scripts/prepare.sh --list               # show prepared images and the stat
 bash scripts/prepare.sh --hash               # (all systems) record image hashes without building (reports missing images)
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/  # behind an HTTP proxy
+bash scripts/prepare.sh --system all --parallel  # build the systems at the same time (at most 4); --parallel=N: at most N (1 to 8)
 bash scripts/prepare.sh --system <id> --follow  # also show the last 20 lines of the build log
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/ -6  # the build VM reaches the proxy over IPv6
 ```
@@ -130,6 +131,29 @@ for a missing one, and exits with status 2 when `--system` names a system withou
 (or when no system has an image, or a hash cannot be written); one missing format is only a warning. Restore an image from
 `images/backups/` together with its `.sha256` file, since an older image is not detected
 when its newer hash file is left in place.
+
+### Building several systems at once
+
+`--system all --parallel` (or `--all --parallel`) builds the systems at the same time instead of
+one after the other: `--parallel` runs as many builds as there are systems, at most 4, and
+`--parallel=N` (1 to 8) at most N (`--parallel=1` is the sequential build, and the option has no
+effect for one system). The builds share nothing: each one has its own `sources/<system>/`,
+`images/<system>.*`, scratch directory and build VM (QEMU user-mode network, no fixed port), and
+no two systems download the same file. Each build writes its whole output to
+`sources/.prepare/.parallel.XXXXXX/<system>.log` (the paths are printed at the start); the terminal
+shows one status line per system (state, elapsed time, phase), redrawn in place, or plain
+`<system>: started / done in HH:MM:SS / FAILED` lines without a terminal. A failed build does not
+stop the others: the summary lists every system with its time, then the end of each failed log, and
+the exit status is 1 (the logs are kept; after a full success they are removed). Ctrl+C or SIGTERM
+stops all the builds and their VMs (with `--force`, the previous images of the interrupted systems
+are put back). `--follow` cannot be used with `--parallel`: follow a build with `tail -f` on its
+log (below).
+
+Several Debian VMs at once are heavy: each build VM takes 0.25 to 2 GB of memory (Debian Legacy:
+2 GB and 2 cores; the others 1 GB or less) and an image build writes several GB. `prepare.sh`
+warns (it does not refuse) when less than 2 GB of memory is available per build, when the machine has
+fewer cores than builds, or when less than 10 GB are free in `images/` or `sources/`; lower
+`--parallel=N` in that case. KVM serves several VMs at once.
 
 ### Behind an HTTP proxy
 
@@ -177,6 +201,22 @@ build within seconds (the VM has no stall of more than 5 minutes, and `apk` is s
 The strings are in `scripts/prepare/lib/common.sh` (`ALPINE_FAILURES`, `OPENWRT_FAILURES`);
 they come from the failing Alpine log recorded at the CREMI, the OpenWrt ones are not yet checked
 against a real failure.
+
+Where to follow a build from another terminal: when its VM starts, each build prints the
+serial log and the control socket of the VM, for example
+
+```text
+  Installing Alpine in a VM
+    log:    /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.log  (follow: tail -f /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.log)
+    socket: /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.sock  (serial socket, held by the build: do not connect)
+```
+
+Copy the `tail -f` command. The socket is informational: a QEMU server socket accepts one client
+and the build holds it, so follow the log file, never the socket. Alpine and OpenWrt show their
+serial socket, the Debian cloud build its QMP socket, and the Debian legacy build only the log
+(its serial port is the file itself). With `--parallel` the same lines are in the log of each
+build (`<system>.log`), the status without a terminal prints `<system>: build VM started, serial log <path>`,
+and the final summary gives the paths that still exist (a successful build removes its directory).
 
 While the VM runs, one status line shows a gauge, an estimated percentage, the phase,
 the elapsed time and the size of the serial log, for example
