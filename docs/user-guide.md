@@ -97,7 +97,13 @@ count). Next to each user, a green dot shows **online** when a browser of that
 user is connected (**online ×n** for several tabs; the tooltip gives the count),
 or **offline**; the admin's own row is online. A session lives on the server
 whether or not its user is connected: it is created at the user's first
-request and kept after logging out or closing the browser. From there an admin
+request and kept after logging out or closing the browser. When the runner of a session is offline (a network cut, a restart of the
+runner or of the server), the user's page says "Runner offline, reconnecting…" and requests answer "The runner of your session is offline; it comes back or
+your session is dropped after N seconds": the session is kept for `--runner-grace` seconds (counted from the start after a server restart), is bound
+again with its machines and consoles when the runner returns, and is dropped when the time is over (the next request opens a new, empty
+session). While it waits, a user cannot delete it and gets no second session; the row of an offline session reads **runner offline**
+in **Sessions**. In **Runners**, **Drop sessions** drops the sessions of an offline runner at once (confirmation asked); **Revoke** does too;
+an offline runner row shows the seconds left before its sessions are dropped. From there an admin
 can:
 
 - **Observe** a session: `/?observe=<login>` opens the normal interface on the

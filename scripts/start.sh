@@ -62,8 +62,10 @@ while (( $# )); do
   esac
 done
 
-# The runner ends with the server and a lost runner is not coming back: unless the user gave --runner-grace,
-# its sessions are dropped at once (0), as before the local runner became a runner like the others.
+# The runner ends with the server (--exit-on-disconnect) and a runner that stopped is not coming back: unless the user
+# gave --runner-grace, sessions are dropped at once (0). The same rule holds for every runner: the grace period only
+# matters when the runner outlives the connection, which this script never does (a server-only restart needs server.sh
+# and runner.sh in two terminals, see docs/deployment.md).
 (( grace_given )) || server_args+=(--runner-grace 0)
 # The local runner is the one this script starts: the server creates its token file.
 (( local_given )) || server_args+=(--local-runner)

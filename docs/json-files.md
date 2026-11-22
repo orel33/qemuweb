@@ -201,8 +201,9 @@ Schema 2 of `runners.json` (RUN03b): `local` id, `tokenHash` optional only for `
 
 `{"schemaVersion": 1, "sessions": [{"id", "owner", "runnerId", "createdAt"}]}` in the server's runtime directory
 (mode 0600, atomic write-through, removed when no session is bound). The server writes a binding before it asks a
-runner to create the session and removes it when the session is deleted or dropped. It is the only source of the owner of a session
-adopted after a server restart (the owner a `hello` announces is ignored). Read at start as untrusted input: `id` is 16 hex
+runner to create the session and removes it when the session is deleted or dropped. At the next server start each binding becomes an
+offline session for its owner (`SessionManager.restore`), bound again when its runner reports it: it is the only source of the owner of a session
+taken over after a server restart (the owner a `hello` announces is ignored). A binding whose runner record is forgotten or revoked is dropped at start; a session of a runner that no binding names is deleted on that runner. Read at start as untrusted input: `id` is 16 hex
 characters, `owner` a valid login, `runnerId` is `local` or `r-xxxxxxxx`, `createdAt` an ISO date; an invalid or duplicate
 entry (an ID or an owner twice) is skipped with a log line, a corrupt, oversized (over 4 MiB) or other-version file means
 no bindings (said in the log; the sessions of the runners are then deleted when they connect).

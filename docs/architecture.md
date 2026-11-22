@@ -225,7 +225,8 @@ The server is split into layers with one-way dependencies:
 | `server/routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream (`importArchive` sends any Readable, an upload or an example file). |
 | `server/examples.js`, `server/routes/examples.js` | The server's examples (`--examples`): `GET /api/examples` lists the regular `.topo` and `.zip` files (name, kind, size, description); `POST /api/examples/file` and `POST /api/examples/load` take a bare file name `{name}`, check it against a fresh listing (400 malformed, 404 unlisted), open it without following links, confirm the kind by content, then feed it to the same runner commands as an upload (`archive.import`, `topology.load`). Read only. |
 | `server/routes/metrics.js` | Per-host CPU and memory metrics. |
-| `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, dropping the sessions of a lost runner, resynchronisation on a runner's `hello`. No file access. |
+| `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, the offline restore of `bindings.json` at start, the grace period of a lost runner, dropping its sessions (grace over, revoke, forced loss), resynchronisation on a runner's `hello`. No file access. |
+| `server/offline-runner.js` | The placeholder client behind which a restored session waits for its runner (503, no input, no stream); replaced by the real client at the runner's `hello`. |
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
 | `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `paused` flag, the display-only `runtimeRoot` and `pid` and client (no `local` or `trusted` flag); `pickRunner(login, sessionsOf)`, the single placement point. |
@@ -652,16 +653,22 @@ routes answer 503 until one is online.
    start (an executable missing) prints its message and exits.
 3. On `hello`, the control plane resynchronises (`SessionManager.resync`): a
    session bound to that runner but absent from `hello` is dropped (as below).
-   A session reported by the runner that the control plane does not know is
-   **adopted** when its `sessionId` matches the ID pattern, the server's own
-   binding (`<runtime>/bindings.json`, `server/session-bindings.js`, written before `session.create`) says that it belongs
-   to this runner, and the owner of the binding has no workspace yet: the server creates the workspace for that owner
-   (same path as opening a session: router, sockets, `session-adopted` in `users.log`). The `owner` and `createdAt` a `hello`
-   announces are ignored. Otherwise (no binding, a binding to another runner, another session for the same owner, an invalid ID)
-   it is deleted with `session.delete`; a binding of this runner that the `hello` does not report is dropped. The browsers log in
-   again after a server restart and `select-node` re-attaches their consoles;
-   the `lastActivity` of an adopted session is unknown, so it counts from its
-   creation date. No runner ever chooses an owner: adoption follows the server's bindings.
+   A session bound to that runner that `hello` reports and whose handle still
+   sits on a closed client (a runner that came back, or a session **restored** at the server start) is taken over by the new
+   client (`RunnerClient.adopt`); a restored one then emits `adopted` (`session-adopted` in `users.log`). A session reported by the runner that
+   the control plane does not know (no binding, a lost `bindings.json`, a session dropped after the grace period, a session bound to another
+   runner, an invalid ID is ignored) is deleted with `session.delete`: no runner ever chooses an owner, and the server never removes a file of a runner.
+   At the server start `SessionManager.restore()` (called by `server/serve.js`) turned each binding of
+   `<runtime>/bindings.json` (`server/session-bindings.js`, written before `session.create`) into a workspace for its owner behind a
+   **placeholder client** (`server/offline-runner.js`: a `RunnerClient` on a connection that is closed for good, so
+   requests answer 503 and input is dropped), with its router, so that the user finds his offline session ("The runner of your session is offline; it
+   comes back or your session is dropped after N seconds.", `manager.offlineMessage`) and `manager.open()` never places a second one.
+   The `lastActivity` of a restored session counts from the restore. A binding whose runner record is forgotten or revoked, or any
+   binding with `--runner-grace 0`, is dropped at once; the others share one grace timer per runner, started at the restore
+   (`manager.graceLeft(runnerId)` gives the seconds left, shown in `/admin`). The browsers log in
+   again after a server restart and `select-node` re-attaches their consoles.
+   State of a bound session: online, offline (runner lost: grace timer; or restored), then online again (`hello` lists it), or dropped (`hello` without it,
+   grace over, runner revoked, forced loss `POST /api/admin/runners/:id/drop-sessions`); the user cannot delete a session while its runner is offline.
 4. Server stop (SIGINT, SIGTERM, `./scripts/stop.sh`): the server only closes
    the socket and exits; it removes the socket. What happens to the machines
    is the runner's choice (next point). `scripts/start.sh` stops its runner
@@ -758,12 +765,12 @@ identity once by redeeming a single-use, time-limited **registration token** cre
 
 Both ends ping every 15 s and terminate a connection that misses a pong; the runner reconnects after 2 s doubling to
 30 s and keeps its machines meanwhile. On a loss of a runner the session manager keeps its sessions for
-`--runner-grace` seconds (0: drop at once): the handle (`client.session(id)`) is
+`--runner-grace` seconds (0: drop at once; the same for every runner, the local one included): the handle (`client.session(id)`) is
 a stable object, routes answer 503 (`manager.available`), and pages get `runner-state {online: false}`. When the
 runner returns (same ID) and its `hello` lists a session, the new client **adopts** the handle (`RunnerClient.adopt`):
 routers, Socket.IO rooms and event subscribers keep working, `runner-state {online: true}` makes the pages select
 their consoles again (the runner kept the output); a session the hello no longer lists is dropped, one the server
-no longer knows (grace expired) is deleted on the runner. A session of a runner that the server's `bindings.json` does not list is never adopted.
+no longer knows (grace expired) is deleted on the runner. A session that the server's `bindings.json` does not list for that runner is never adopted.
 
 ### Multiple runners and untrusted runners
 
@@ -786,7 +793,7 @@ the trust model of the local runner: the control plane must not trust it.
 
 ### Runner model (RUN03, design study)
 
-Decided (22 November 2026), implemented in steps RUN03a to RUN03c (the local runner over the WebSocket with a token file, no Unix socket), RUN03d to RUN03f remaining: option C: the local runner becomes a runner like the others: same WebSocket path and token as a remote runner
+Decided (22 November 2026), implemented in steps RUN03a to RUN03e (the local runner over the WebSocket with a token file, no Unix socket, one directory per process, the binding and the uniform grace), RUN03f remaining (CREMI and documentation): option C: the local runner becomes a runner like the others: same WebSocket path and token as a remote runner
 (no Unix socket), own directory, no file shared with the server, one adoption rule from a persisted binding. The study, the options and the decision list are in
 [runner-model.md](runner-model.md). Until the user validates it, the sections above describe the code as it is.
 

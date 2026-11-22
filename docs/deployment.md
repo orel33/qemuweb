@@ -105,14 +105,33 @@ server, connected, refused, lost). A refused option ends either program with sta
 - **Start-time memory warning:** when a host starts and the hosts running on
   that runner (every session) would reserve more than 90 % of the machine's
   RAM, a `# Warning:` line is added to the host's Log. The host still starts.
-- **Server restart with a separate runner:** the runner keeps its machines. When
-  it reconnects, the server **adopts** each of its sessions for the owner recorded in the server's own
+- **Server restart with a separate runner (RUN03e):** the runner keeps its machines. At start the server reads its own
   `bindings.json` (`<runtime>/bindings.json`, mode 0600, written by the server when it opens a session; the owner
-  a runner announces in its `hello` is ignored): the user logs in again (cookies
-  do not survive a restart) and finds the same session, machines and consoles,
-  recorded as `session-adopted` in `users.log`. This holds for every runner, local or remote, if its
-  session is in `bindings.json`. A session with no binding (a lost `bindings.json`), bound to another runner,
-  or whose owner already has a session, is deleted on the runner. Sessions the server no longer knows are never kept.
+  a runner announces in its `hello` is ignored) and **restores** each binding as a session that is **offline**, for its owner:
+  the user logs in again (cookies do not survive a restart) and gets "The runner of your session is offline; it comes back or
+  your session is dropped after N seconds." (503), never a new empty session on another runner. When the runner reconnects (2 s
+  doubling to 30 s) and its `hello` lists the session, it is **adopted**: same session, machines and consoles,
+  recorded as `session-adopted` in `users.log`. This holds for every runner, local or remote. The grace period
+  (`--runner-grace`) counts **from the start of the server** for restored sessions: if the runner has not come back
+  by then the session is dropped (`session-deleted`, reason `runner offline too long`) and the runner, when it returns, is told to
+  delete it. A session the server does not know (no binding: a lost `bindings.json`, a session that was dropped, one bound to another runner)
+  is deleted on the runner; a binding whose runner is forgotten or revoked, or with `--runner-grace 0`, is dropped at once
+  (`runner lost`). The server never removes a file of a runner: it only sends `session.delete`.
+  To test it by hand, use two terminals, not `start.sh` (which stops the runner with the server and passes `--runner-grace 0`):
+  ```bash
+  ./scripts/server.sh --listen 3003 --local-runner --runner-grace 300     # terminal 1 (add your --users, --logs ...)
+  ./scripts/runner.sh --port 3003                                          # terminal 2, no --exit-on-disconnect
+  ```
+  The server prints its directory (`/tmp/qw-<login>/3003`, with `local-runner.token`), the runner finds that token file by default and keeps
+  its own directory `/tmp/qw-<login>/l-3003` (with `--runtime DIR` on the server add `--token-file DIR/local-runner.token` to the runner).
+  Log in, start a machine, then press Ctrl+C in terminal 1 **only** and start the same command again. The first request of the
+  user answers the offline message above (the page says "Runner offline, reconnecting…"), `/admin`, Runners, shows the seconds left, and after the
+  runner's retry ("Runner local (local) connected" in the server log) the session, its machines and consoles are back and
+  `logs/users.log` has a `session-adopted` line.
+- **Forced loss:** an administrator who knows that a runner will not come back uses **Drop sessions** in `/admin`, Runners
+  (`POST /api/admin/runners/<id>/drop-sessions`, only for an offline or revoked runner, with a confirmation): its sessions are dropped at once, without
+  waiting for the grace period (`session-deleted`, reason `runner lost`; `admin.log` names the runner and the number of sessions). **Revoke** drops them at once too.
+  The user of an offline session cannot delete it himself (the runner does the deleting): he waits for the runner, for the end of the grace period or for the administrator.
 - **Files of the runner:** the server touches no file of any runner. Each runner owns its runtime directory: it creates
   the `users/<login>` aliases (at `session.create`, removed with the session), takes `runner.pid` (a second runner on
   the same directory refuses to start), and at its own start removes the empty `sessions/<id>` directories and the
@@ -124,8 +143,8 @@ server, connected, refused, lost). A refused option ends either program with sta
   runner any more: delete it by hand.
 - **Runner crash:** the server keeps running; the sessions that ran on the
   runner are closed (their machines are gone; users' pages reload into a new,
-  empty session, recorded as `session-deleted` with the reason `runner lost` in
-  `users.log`). Nothing restarts the runner by itself: under `scripts/start.sh`
+  empty session once the grace period ends, recorded as `session-deleted` with the reason `runner offline too long` (`runner lost`
+  when its next `hello` no longer lists them, or with `--runner-grace 0`) in `users.log`). Nothing restarts the runner by itself: under `scripts/start.sh`
   the script kills what is left of the runner's process group (QEMU belongs to
   it) and stops the server, and systemd's `Restart=` policy restarts the
   services in a deployment. A runner killed outside `start.sh` may leave
@@ -238,8 +257,8 @@ troubleshooting) is in [remote-runner-test.md](remote-runner-test.md) (PDF: [pdf
    `proxy_read_timeout` and the small body limit.) Both ends also ping every 15 seconds and drop a dead
    connection, so the timeout only needs to exceed that. Start the server with `--trust-proxy loopback`
    so that the registration command and the runner's address use the public name.
-3. `--runner-grace SECONDS` (default 300) is how long the sessions of a remote runner that lost
-   its connection are kept; `0` drops them at once. `./scripts/start.sh` and `demo.sh` pass `--runner-grace 0` unless
+3. `--runner-grace SECONDS` (default 300) is how long the sessions of a runner (any runner, the local one included) that lost
+   its connection, or that the server restored at its start, are kept offline; `0` drops them at once. `./scripts/start.sh` and `demo.sh` pass `--runner-grace 0` unless
    it is given, because the runner ends with the server there.
 
 ### On the runner machine
@@ -299,7 +318,7 @@ WantedBy=default.target
 **Runners** in `/admin` lists the local runner and every registered one: state (online, offline since, paused, revoked),
 last seen, remote address, engines, CPU and memory, systems, warnings, sessions and limit. It creates registration
 tokens (the command is shown once), **pauses** a runner (drain: no new session, the running ones continue),
-**revokes** it, and removes an offline revoked one. The local runner can be paused but not revoked or removed.
+**revokes** it (its sessions are dropped at once), **drops the sessions** of an offline runner without waiting for the grace period (confirmation asked), shows the seconds left before an offline runner's sessions are dropped, and removes an offline revoked one. The same actions apply to every row, the local runner included.
 Every action is in `logs/admin.log`; a token is never logged. A new session goes to the least loaded online runner
 that is not paused and is under its `maxSessions`; when there is none the user gets 503 "No runner is available" and the
 server log gives the reasons.
@@ -350,7 +369,7 @@ never written; reading the session list or the logs is not logged.
 | `proxy-refused` | `reason`: `wrong proxy key`, `invalid login` or `account disabled`. A request that carries a wrong `X-Proxy-Key` is also answered with 403. |
 | `login-failed` | none; `user` is the login name that was tried (control characters removed, at most 64 characters), whether or not the account exists. |
 | `session-created` | `sessionId`. |
-| `session-adopted` | `sessionId`. The server restarted and a runner that kept its machines reconnected: its session was taken over for its owner. |
+| `session-adopted` | `sessionId`. The server restarted, restored the session offline from `bindings.json`, and the runner that kept its machines reconnected: the session is bound to it again. |
 | `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it; `null` when the session was dropped), and `reason` when it was dropped: `runner lost` (its runner died) or `creation failed`. |
 | `node-created` | `nodeId`, `kind` (`host` or `switch`). |
 | `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Resume all**, **Stop all** and the removal of every node: `all`). |
