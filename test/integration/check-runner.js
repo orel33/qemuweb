@@ -122,7 +122,7 @@ async function run() {
   assert.match(child.output, /QemuWeb is ready\./);
   assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600, 'the token file is not 0600');
   assert.equal(fs.existsSync(path.join(serverDir, 'sessions')), false, 'the server directory has no sessions/');
-  assert.ok(fs.existsSync(path.join(runtime, 'sessions')), 'the runner has its own directory l-<port>');
+  assert.ok(fs.existsSync(path.join(runtime, 'runner.pid')), 'the runner has its own directory l-<port> (runner.pid; an empty sessions/ is pruned at start)');
   assert.match(runner.cmdline, new RegExp(`--runtime ${runtime.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`), 'start.sh passes the runner its own directory');
   const token = fs.readFileSync(tokenFile, 'utf8').trim();
   assert.ok(token.length >= 32);

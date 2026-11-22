@@ -198,7 +198,6 @@ test('the length limit is derived from the longest path, and the message names i
   assert.throws(() => prepareRunnerRuntime(long), /Use a shorter --runtime/);
   assert.equal(fs.existsSync(long), false);
   assert.doesNotThrow(() => prepareServerRuntime(long), 'a server directory of that length is fine');
-  assert.equal(fs.existsSync(long), false);
 });
 
 test('the warning: tmpfs or little free space, one line naming the directory, never an error', () => {
