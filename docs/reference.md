@@ -87,7 +87,7 @@ The server is configured by options only: it reads **no environment variable**.
 | Option | Default | Effect |
 | --- | --- | --- |
 | `--listen PORT` | `3002` | TCP port of the web interface on 127.0.0.1; also names <runtime>/runner-PORT.sock, the socket its runner dials |
-| `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory: server-PORT.pid, the socket DIR/runner-PORT.sock and, for a runner, sessions/, users/ aliases and runner.pid; the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets) |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory of the server: server-PORT.pid and the socket DIR/runner-PORT.sock (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot; keep a given one short (Unix sockets) |
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
 | `--runners FILE` | `runners.json of the repository` | registered remote runners (mode 0600): a hash of the token of each |
 | `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
@@ -150,7 +150,7 @@ The runner is an ordinary unprivileged process; every path is a parameter.
 | --- | --- | --- |
 | `--port PORT` | `3002` | port of the server to reach: the runner dials `DIR/runner-PORT.sock`, DIR being its `--runtime` |
 | `--connect SOCKET` | `none` | Unix socket of the server, instead of `--port` (the two exclude each other) |
-| `--runtime DIR` | `/tmp/qw-<login>/<port>` | where the runner keeps its sessions (`DIR/sessions/<id>/`) and looks for the server socket `DIR/runner-PORT.sock`; the server cleans the empty sessions it leaves there only with the same `--runtime`; default: the private directory of that port in /tmp, lost at a reboot |
+| `--runtime DIR` | `/tmp/qw-<login>/<port>` | where the runner keeps its sessions (DIR/sessions/<id>/) and looks for the server socket DIR/runner-PORT.sock; DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory of that port in /tmp, lost at a reboot |
 | `--config FILE` | `config.json of the repository` | system catalog (images, memory, QEMU options) |
 | `--exit-on-disconnect` | `off` | stop every machine and exit when the server connection is lost (default: keep the sessions and reconnect every 2 seconds) |
 | `-h`, `--help` | | this text |
