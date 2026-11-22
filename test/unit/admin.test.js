@@ -204,11 +204,16 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', asyn
   const session = new Session({runtimeRoot: '/nonexistent', runnerId: 'local', owner: 'toto', createdAt: '2026-01-01T00:00:00.000Z'});
   const runner = {request: async command => { assert.equal(command, 'session.summary'); return counts; }};
   const summary = await sessionSummary({owner: 'toto', session, runner}, 'boss', 2);
-  assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, sessionId: session.id, createdAt: '2026-01-01T00:00:00.000Z',
+  assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, runnerOffline: false, sessionId: session.id, createdAt: '2026-01-01T00:00:00.000Z',
     lastActivity: '2026-01-01T00:00:00.000Z', nodes: 4, hosts: 3, switches: 1, runningHosts: 2, runningSwitches: 1,
     reservedRamMb: 1536, cpuPercent: 12.5, active: true});
   assert.equal((await sessionSummary({owner: 'boss', session, runner}, 'boss')).own, true);
   assert.equal((await sessionSummary({owner: 'boss', session, runner}, 'boss')).browsers, 0);
+  // A session whose runner is offline is listed, with no counts, instead of failing the whole list.
+  const offline = {request: async () => { throw Object.assign(new Error('The runner is offline; reconnecting…'), {status: 503}); }};
+  const lost = await sessionSummary({owner: 'toto', session, runner: offline}, 'boss');
+  assert.deepEqual([lost.runnerOffline, lost.nodes, lost.runningHosts, lost.active, lost.login], [true, 0, 0, false, 'toto']);
+  await assert.rejects(sessionSummary({owner: 'toto', session, runner: {request: async () => { throw new Error('boom'); }}}, 'boss'), /boom/);
 });
 
 test('session control is exclusive per session, renewed by input and released once', t => {

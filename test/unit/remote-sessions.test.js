@@ -12,6 +12,7 @@ const {Connection} = require('../../common/runner-protocol');
 const {RunnerClient} = require('../../server/runner-client');
 const {RunnerRegistry} = require('../../server/runner-registry');
 const {SessionManager} = require('../../server/session-manager');
+const {createSessionBindings} = require('../../server/session-bindings');
 const {root, commands} = require('./runner-pair');
 
 const quiet = t => { t.mock.method(console, 'warn', () => {}); t.mock.method(console, 'log', () => {}); };
@@ -176,6 +177,41 @@ test('after the grace period the session is dropped; the runner that returns is 
   await far.connect();
   await until(() => far.service.hello().sessions.length === 0);
   assert.equal(manager.get('toto'), null, 'never adopted: no binding names this runner');
+});
+
+test('a server restart keeps the sessions of a local and of a remote runner: restored offline, adopted at each hello, unknown ones deleted', async t => {
+  quiet(t);
+  const registry = new RunnerRegistry();
+  const bindings = createSessionBindings();
+  const near = await remoteRunner(t, registry, 'local');
+  const far = await remoteRunner(t, registry, 'r-00000001');
+  const ID = n => n.toString(16).padStart(16, '0');
+  // Before the restart the runners already ran machines for their users; the server's bindings name the owners.
+  for (const [service, id, owner, node] of [[near.service, ID(1), 'toto', 's-00000000000000a1'], [far.service, ID(2), 'titi', 's-00000000000000a2']]) {
+    await service.handle('session.create', id, {owner});
+    await service.handle('switch.create', id, {id: node, name: 'sw', autostart: false});
+  }
+  await far.service.handle('session.create', ID(3), {owner: 'ghost'});
+  bindings.set({id: ID(1), owner: 'toto', runnerId: 'local', createdAt: '2026-01-02T03:04:05.000Z'});
+  bindings.set({id: ID(2), owner: 'titi', runnerId: 'r-00000001', createdAt: '2026-01-02T03:04:05.000Z'});
+  const manager = new SessionManager({registry, graceSeconds: 60, bindings});
+  t.after(() => { manager.cancelGrace('local'); manager.cancelGrace('r-00000001'); });
+  const adopted = [];
+  manager.on('adopted', workspace => adopted.push(workspace.owner));
+  manager.restore(() => ({}));
+  assert.deepEqual(manager.list().map(workspace => [workspace.owner, manager.available(workspace)]), [['toto', false], ['titi', false]]);
+  assert.throws(() => registry.pickRunner('new'), error => error.status === 503, 'no runner is online: no new session opens elsewhere');
+  const toto = manager.get('toto');
+  assert.equal(manager.open('toto'), toto);
+  await far.connect();
+  assert.equal(manager.available(manager.get('titi')), true);
+  assert.equal(manager.available(toto), false, 'the local runner has not come back yet');
+  await near.connect();
+  assert.deepEqual(adopted.sort(), ['titi', 'toto']);
+  assert.ok(JSON.stringify(await toto.runner.request('nodes.list')).includes('s-00000000000000a1'), 'the local runner\'s machine');
+  assert.ok(JSON.stringify(await manager.get('titi').runner.request('nodes.list')).includes('s-00000000000000a2'), 'the remote runner\'s machine');
+  await until(() => !far.service.hello().sessions.some(item => item.sessionId === ID(3)));
+  assert.deepEqual(far.service.hello().sessions.map(item => item.sessionId), [ID(2)], 'the unknown session was deleted, the bound one kept');
 });
 
 test('the local runner has no special rule: with no grace its sessions are dropped at once, with a grace they are kept', async t => {

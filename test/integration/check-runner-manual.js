@@ -243,6 +243,18 @@ async function run() {
   assert.equal((await carol.fetch('/api/nodes')).status, 503);
   console.log('Manual: runner stopped (SIGTERM), no process or session directory left, the server answers 503 again');
 
+  // 7b. The session waits offline: its user sees why, the administrator sees the grace left and can force the loss.
+  const waitingReply = await carol.fetch('/api/nodes');
+  assert.match((await waitingReply.json()).error, /^The runner of your session is offline; it comes back or your session is dropped after \d+ seconds?\.$/);
+  const [offlineRow] = (await adminRunners(boss)).runners;
+  assert.deepEqual([offlineRow.sessions, Number.isInteger(offlineRow.graceLeft)], [1, true], 'the Runners tab counts the session and shows the seconds left');
+  const sessionRows = await boss.request('/api/admin/sessions');
+  assert.deepEqual(sessionRows.filter(row => row.login === 'carol').map(row => row.runnerOffline), [true], 'the supervision list shows the offline session');
+  assert.equal((await boss.fetch('/api/admin/runners/local/drop-sessions', {method: 'POST'})).status, 200);
+  assert.equal((await adminRunners(boss)).runners[0].sessions, 0);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(logDir, USERS_LOG), 'utf8').split('\n').filter(Boolean).filter(line => /session-deleted/.test(line)).at(-1)).target.reason, 'runner lost');
+  console.log('Manual: the offline session told its user why, the forced loss dropped it at once (users.log: runner lost)');
+
   // 8. A lost token file: a runner started meanwhile waits for it (no exit), and the next server start recreates it.
   server.kill('SIGTERM');
   assert.equal((await new Promise(resolve => server.once('exit', code => resolve(code)))), 0);

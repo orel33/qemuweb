@@ -23,7 +23,17 @@ async function setup(t, {trustProxy = false, localRunner = true} = {}) {
   const store = createRunnerStore(path.join(dir, 'runners.json'));
   const tokens = createRegistrationTokens();
   const workspaces = [];
-  const manager = {registry, list: () => workspaces};
+  // What the router uses of the SessionManager: the sessions per runner, the grace left, the forced drop.
+  const graces = new Map();
+  const dropped = [];
+  const manager = {registry, list: () => workspaces, graceLeft: id => graces.get(id) ?? null,
+    sessionsOf: id => workspaces.filter(workspace => workspace.session.runnerId === id).length,
+    dropRunnerSessions(id, reason) {
+      const mine = workspaces.filter(workspace => workspace.session.runnerId === id);
+      for (const workspace of mine) workspaces.splice(workspaces.indexOf(workspace), 1);
+      dropped.push([id, reason, mine.length]);
+      return mine.length;
+    }};
   const audit = [];
   const audited = async (req, res, action, target, run, status = () => 400) => {
     try { const result = await run(); audit.push({admin: req.user.login, action, target, result: 'ok'}); res.json(result); }
@@ -43,7 +53,7 @@ async function setup(t, {trustProxy = false, localRunner = true} = {}) {
     const response = await fetch(base + url, {method, headers: {'Content-Type': 'application/json', ...headers}, body: body === undefined ? undefined : JSON.stringify(body)});
     return {status: response.status, body: await response.json()};
   };
-  return {registry, store, tokens, workspaces, audit, call};
+  return {registry, store, tokens, workspaces, audit, call, graces, dropped};
 }
 
 test('no runner: an empty list and the command to start one', async t => {
@@ -66,7 +76,7 @@ test('summaries: every registered runner, "local" included, with the same fields
   let {body} = await call('GET', '/runners');
   assert.equal(body.connectHint, null);
   assert.deepEqual(body.runners[0], {id: 'local', name: 'local', state: 'online', paused: false, lastSeen: null, address: null, directory: '/tmp/qw/3002', pid: 4242, engines: ['qemu'], kvm: true,
-    cpus: 8, memoryBytes: 16 * 2 ** 30, systems: ['alpine', 'debian'], warnings: ['x: missing'], sessions: 1, maxSessions: null});
+    cpus: 8, memoryBytes: 16 * 2 ** 30, systems: ['alpine', 'debian'], warnings: ['x: missing'], sessions: 1, maxSessions: null, graceLeft: null});
   assert.deepEqual(Object.keys(body.runners[1]), Object.keys(body.runners[0]), 'the same fields for every row');
   assert.deepEqual([body.runners[1].name, body.runners[1].state, body.runners[1].sessions], ['<b>far</b>', 'offline', 1]);
   const text = JSON.stringify(body);
@@ -164,4 +174,50 @@ test('pause, resume, revoke and forget work the same for "local" and for a remot
   for (const action of ['pause-runner', 'resume-runner', 'revoke-runner', 'remove-runner']) assert.ok(actions.includes(action), `${action} audited`);
   assert.ok(audit.every(entry => entry.admin === 'boss'));
   assert.ok(audit.some(entry => entry.action === 'remove-runner' && entry.result.startsWith('error')), 'refusals are audited too');
+});
+
+test('revoking a runner drops its sessions at once, without waiting for the grace period', async t => {
+  const {registry, store, call, workspaces, dropped, audit} = await setup(t);
+  const {record} = store.add({name: 'far'});
+  const remote = fakeClient();
+  registry.add({id: record.id, client: remote, name: 'far'});
+  remote.emit('hello', {engines: ['qemu']});
+  workspaces.push({session: {runnerId: record.id}}, {session: {runnerId: 'local'}});
+  assert.equal((await call('POST', `/runners/${record.id}/revoke`)).status, 200);
+  assert.deepEqual(dropped, [[record.id, 'runner lost', 1]], 'only the sessions of that runner, with the usual reason');
+  assert.equal(workspaces.length, 1);
+  assert.deepEqual(audit.at(-1), {admin: 'boss', action: 'revoke-runner', target: {runnerId: record.id}, result: 'ok'});
+});
+
+test('forced loss: drops the sessions of an offline runner at once, refused while it is online, audited with the count', async t => {
+  const {registry, store, call, workspaces, dropped, audit, graces} = await setup(t);
+  store.ensureLocal();
+  const {record} = store.add({name: 'far'});
+  const remote = fakeClient();
+  registry.add({id: record.id, client: remote, name: 'far'});
+  remote.emit('hello', {engines: ['qemu']});
+  workspaces.push({session: {runnerId: record.id}}, {session: {runnerId: record.id}}, {session: {runnerId: 'local'}});
+  const online = await call('POST', `/runners/${record.id}/drop-sessions`);
+  assert.equal(online.status, 409);
+  assert.match(online.body.error, /online/);
+  assert.equal(workspaces.length, 3, 'nothing was dropped');
+  remote.close();
+  graces.set(record.id, 120);
+  let {body} = await call('GET', '/runners');
+  assert.deepEqual([body.runners[1].state, body.runners[1].sessions, body.runners[1].graceLeft], ['offline', 2, 120], 'the seconds left are shown');
+  assert.equal(body.runners[0].graceLeft, null);
+  const forced = await call('POST', `/runners/${record.id}/drop-sessions`);
+  assert.equal(forced.status, 200);
+  assert.equal(forced.body.dropped, 2);
+  assert.deepEqual(dropped, [[record.id, 'runner lost', 2]]);
+  assert.equal(forced.body.runner.sessions, 0);
+  assert.deepEqual(audit.at(-1), {admin: 'boss', action: 'drop-runner-sessions', target: {runnerId: record.id, sessions: 2}, result: 'ok'});
+  assert.ok(!/token|hash/i.test(JSON.stringify(audit.at(-1))), 'no secret in the audit line');
+  assert.equal((await call('POST', '/runners/r-00000000/drop-sessions')).status, 404, 'an unknown runner');
+  assert.equal((await call('POST', '/runners/remote/drop-sessions')).status, 404, 'an invalid id');
+  // A runner that never connected since the server start (only restored sessions) is offline too.
+  workspaces.push({session: {runnerId: 'local'}});
+  assert.equal((await call('POST', '/runners/local/drop-sessions')).body.dropped, 2);
+  body = (await call('GET', '/runners')).body;
+  assert.equal(body.runners[0].sessions, 0);
 });
