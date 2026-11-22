@@ -44,7 +44,7 @@ function renderRunners(data, {body, hint, cell, act}) {
     const engines = runner.engines.map(engine => (engine === 'vbox' ? 'VirtualBox' : 'QEMU')).join(', ') || 'none';
     const kvm = runner.engines.includes('qemu') ? (runner.kvm ? ', KVM' : ', no KVM') : '';
     const where = document.createElement('div');
-    where.textContent = runner.state === 'online' || runner.state === 'starting' ? (runner.address || 'this machine') : `last seen ${when(runner.lastSeen)}`;
+    where.textContent = runner.state === 'online' || runner.state === 'starting' ? (runner.address || 'this machine') : `last seen ${when(runner.lastSeen)}${runner.graceLeft === null ? '' : `, its sessions are dropped in ${runner.graceLeft} s`}`;
     // What the runner announced (display only): its directory and process ID.
     const announced = [runner.directory, runner.pid ? `pid ${runner.pid}` : ''].filter(Boolean).join(' · ');
     if (announced) {
@@ -58,9 +58,14 @@ function renderRunners(data, {body, hint, cell, act}) {
     actions.append(runner.paused
       ? button('Resume', () => act(() => `/runners/${id}/resume`, 'POST'), 'Resume: new sessions can be placed on this runner again')
       : button('Pause', () => act(() => `/runners/${id}/pause`, 'POST'), 'Pause: no new session is placed here; the running ones continue'));
+    if (runner.state === 'offline' || runner.state === 'revoked') {
+      actions.append(button('Drop sessions', () => act(() => `/runners/${id}/drop-sessions`, 'POST', {title: 'Drop sessions',
+        message: `Drop the ${runner.sessions} session${runner.sessions === 1 ? '' : 's'} of ${runner.name} now, without waiting for the grace period? Their users get empty sessions; if the runner returns, it is told to delete them.`, accept: 'Drop'}),
+      'The runner is not coming back: drop its sessions at once'));
+    }
     if (runner.state !== 'revoked') {
       actions.append(button('Revoke', () => act(() => `/runners/${id}/revoke`, 'POST', {title: 'Revoke runner',
-        message: `Revoke ${runner.name}? It is disconnected and cannot connect again; its sessions are dropped after the grace period.`, accept: 'Revoke'}), 'Revoke the token of this runner'));
+        message: `Revoke ${runner.name}? It is disconnected and cannot connect again; its sessions are dropped at once.`, accept: 'Revoke'}), 'Revoke the token of this runner'));
     }
     if (runner.state === 'revoked') {
       actions.append(button('Remove', () => act(() => `/runners/${id}`, 'DELETE'), 'Forget this revoked runner'));
@@ -104,7 +109,7 @@ export function createRunnersPanel({api, cell, confirm, elements}) {
       }
       renderRunners(data, {body, hint, cell, act});
       renderPending(data, {pending, act});
-      status.textContent = `Sessions of a remote runner that lost its connection are kept ${data.runnerGraceSeconds} s.`;
+      status.textContent = `Sessions of a runner that lost its connection (or of a server that restarted) are kept ${data.runnerGraceSeconds} s.`;
     } catch (problem) { status.textContent = `Not updated: ${problem.message}`; }
   }
   // confirmation: {title, message, accept} asked first; the path is built lazily, the result shown by refresh.

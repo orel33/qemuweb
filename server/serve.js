@@ -67,11 +67,17 @@ function serve({root, settings}) {
     console.log(`${runnerLabel(entry)} disconnected.${registry.list().some(other => other.state === 'online') || !startHint ? '' : ` Start one with ${startHint}.`}`);
     try { runnerStore.change(entry.id, {lastSeenAt: new Date().toISOString()}); } catch (_) { /* Removed meanwhile. */ }
   });
-  manager.on('created', (workspace, {adopted}) => {
+  manager.on('created', (workspace, {restored}) => {
     const {session, runner} = workspace;
     workspace.router = createSessionRouter({session, runner, userLog, audit, examplesDir: settings.examplesDir});
-    userLog.record(workspace.owner, adopted ? 'session-adopted' : 'session-created', {sessionId: session.id});
-    console.log(`Session ${session.id} ${adopted ? 'adopted from the runner' : 'opened'} for ${workspace.owner}.`);
+    // A session restored from bindings.json is not a new session: users.log hears of it when its runner takes it over (below), or drops it.
+    if (restored) return console.log(`Session ${session.id} of ${workspace.owner} restored offline (runner ${session.runnerId}).`);
+    userLog.record(workspace.owner, 'session-created', {sessionId: session.id});
+    console.log(`Session ${session.id} opened for ${workspace.owner}.`);
+  });
+  manager.on('adopted', ({session, owner}) => {
+    userLog.record(owner, 'session-adopted', {sessionId: session.id});
+    console.log(`Session ${session.id} of ${owner} adopted again from runner ${session.runnerId}.`);
   });
   manager.on('removed', (workspace, by, reason) => {
     userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by, ...(reason ? {reason} : {})});
@@ -121,8 +127,10 @@ function serve({root, settings}) {
       catch (error) { return res.status(503).json({error: error.message}); }
       req.workspace.session.touch();
     }
-    // The runner of a kept session is offline (a network cut): the page stays and recovers.
-    if (!manager.available(req.workspace)) return res.status(503).json({error: 'The runner of this session is offline; reconnecting…'});
+    // The runner of a kept or restored session is offline (a network cut, a restart): the page stays and recovers.
+    if (!manager.available(req.workspace)) {
+      return res.status(503).json({error: req.observed ? 'The runner of this session is offline.' : manager.offlineMessage(req.workspace)});
+    }
     req.workspace.router(req, res, next);
   });
 
@@ -135,6 +143,8 @@ function serve({root, settings}) {
     console.error('server: Server error:', error);
     process.exitCode = 1;
   });
+  // The sessions of bindings.json come back offline, for their users, until their runners connect (the grace period counts from now).
+  manager.restore(runnerId => runnerStore.get(runnerId));
   // HTTP opens at once; a runner may connect at any time (session routes answer 503 until then).
   server.listen(port, '127.0.0.1', onListening);
 

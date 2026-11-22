@@ -106,11 +106,11 @@ function presence(browsers, own) {
 }
 
 // "active": at least one running node; "idle": none (as in the observation drop-down).
-function sessionState(active) {
+function sessionState(active, runnerOffline = false) {
   const element = document.createElement('span');
   element.className = 'session-state';
   element.dataset.state = active ? 'active' : 'idle';
-  element.textContent = active ? 'active' : 'idle';
+  element.textContent = runnerOffline ? 'runner offline' : active ? 'active' : 'idle';
   return element;
 }
 
@@ -175,7 +175,7 @@ function renderSessions(sessions) {
         if (!await confirmDialog('Delete session', `Delete the session of ${session.login}? Every host and switch stops and is removed, with its disks.`, [], 'Delete')) return;
         runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}`, {method: 'DELETE'}));
       }, 'Delete session: every host and switch is removed, with its disks'));
-    row.append(cell(check), cell(user), cell(sessionState(session.active)), cell(shortDateTime(session.createdAt)),
+    row.append(cell(check), cell(user), cell(sessionState(session.active, session.runnerOffline)), cell(shortDateTime(session.createdAt)),
       cell(`${plural(session.hosts, 'host')}, ${plural(session.switches, 'switch')}`),
       cell(`${session.runningHosts} / ${session.hosts}`),
       cell(session.reservedRamMb ? `${session.reservedRamMb} MB` : '—'),
