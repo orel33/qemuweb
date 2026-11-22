@@ -6,6 +6,7 @@
 // in clear text (HTTP).
 //   node common/bind.js runner-host ADDRESS   the address the local runner dials for a server bound to ADDRESS
 //                                             (used by scripts/lib/runtime.sh, start.sh and demo.sh)
+//   node common/bind.js is-loopback ADDRESS   exit status 0 for a loopback address, 1 for another one, 2 for no address
 const net = require('net');
 
 const DEFAULT_ADDRESS = '127.0.0.1';
@@ -42,8 +43,10 @@ module.exports = {DEFAULT_ADDRESS, parseAddress, isWildcard, isLoopback, isLoopb
 if (require.main === module) {
   const [command, address] = process.argv.slice(2);
   try {
-    if (command !== 'runner-host' || address === undefined) throw new Error('Usage: node common/bind.js runner-host ADDRESS');
-    console.log(runnerHost(parseAddress(address)));
+    if (!['runner-host', 'is-loopback'].includes(command) || address === undefined) throw new Error('Usage: node common/bind.js runner-host|is-loopback ADDRESS');
+    parseAddress(address);
+    if (command === 'is-loopback') process.exit(isLoopback(address) ? 0 : 1);
+    console.log(runnerHost(address));
   } catch (error) {
     console.error(error.message);
     process.exit(2);
