@@ -13,6 +13,7 @@ const {createLogDir} = require('./audit');
 const {createUsersStore} = require('./auth/users-store');
 const {readProxyKeys} = require('./auth/proxy');
 const {readRunners} = require('./runner-store');
+const {listenLine, listenWarning} = require('./listen');
 
 const octal = mode => (mode & 0o777).toString(8).padStart(4, '0');
 
@@ -36,6 +37,12 @@ function checkDependencies({packageInfo, nodeVersion = process.version, nodePath
   }
   cli.pass(`Node.js  ${nodePath}  (${nodeVersion}${range ? `, requires ${range}` : ''})`);
   return true;
+}
+
+// The listening address (--bind): a line, and a warning when it is not loopback.
+function checkListen(settings) {
+  cli.pass(listenLine(settings));
+  for (const line of listenWarning(settings)) cli.warning(line);
 }
 
 function checkCatalog(root) {
@@ -84,7 +91,7 @@ function checkRuntime(settings) {
 function checkStartup({root, settings}) {
   cli.heading('Checking configuration…');
   let ok = true;
-  for (const [label, check] of [['config.json', () => checkCatalog(root)], [path.basename(settings.usersFile), () => checkUsers(settings)],
+  for (const [label, check] of [['listen address', () => checkListen(settings)], ['config.json', () => checkCatalog(root)], [path.basename(settings.usersFile), () => checkUsers(settings)],
     [path.basename(settings.runnersFile), () => checkRunners(settings)], ['logs directory', () => checkLogDir(settings)], ['runtime directory', () => checkRuntime(settings)]]) {
     try { check(); }
     catch (error) {

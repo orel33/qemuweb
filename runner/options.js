@@ -2,17 +2,18 @@
 
 // The command line of the runner, as tables for common/cli.js (which parses them, prints --help and
 // the Options block), the counterpart of server/options.js. A runner has three forms:
-//   runner.sh [options]            local runner (id local): dials ws://127.0.0.1:PORT with the token of a file (runnerSpec)
+//   runner.sh [options]            local runner (id local): dials ws://HOST:PORT (HOST: --host, 127.0.0.1) with the token of a file (runnerSpec)
 //   runner.sh register [options]   one-time registration with a remote server's token (registerSpec)
 //   runner.sh run [options]        remote runner: dials the server over WebSocket, with the
 //                                  credentials `register` wrote to the runner file (runSpec)
-// Settings: {port, tokenFile, runtime, config, exitOnDisconnect, given} locally; {runtime, config, url, ca, insecure, runnerConfig, given} for run; and for register
+// Settings: {host, port, tokenFile, runtime, config, exitOnDisconnect, given} locally; {runtime, config, url, ca, insecure, runnerConfig, given} for run; and for register
 // {url, token, name, ca, insecure, runtime, runnerConfig, given}.
 const os = require('os');
 const path = require('path');
-const {parseArguments} = require('../common/cli');
+const {parseArguments, invalid} = require('../common/cli');
 const {localRunnerRuntime, serverRuntime} = require('../common/runtime-dir');
 const {tokenFilePath} = require('../common/local-token');
+const {DEFAULT_ADDRESS, parseAddress} = require('../common/bind');
 
 const DEFAULT_PORT = 3002;
 
@@ -50,7 +51,7 @@ function runnerSpec(root) {
     script: './scripts/runner.sh',
     summary: [
       'The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessions. It dials the',
-      'server of this machine (ws://127.0.0.1:PORT, which runs with --local-runner) as the runner "local", with the token',
+      'server of this machine (ws://HOST:PORT, 127.0.0.1 unless --host; the server runs with --local-runner) as the runner "local", with the token',
       'the server wrote in a file, read again at every attempt. It keeps its sessions if the connection drops and reconnects;',
       'it exits with status 78 when the server refuses its token.',
       'Run it as your normal user. For a server on another machine, register once',
@@ -59,7 +60,12 @@ function runnerSpec(root) {
     environment: ENVIRONMENT,
     options: [
       {flag: '--port', metavar: 'PORT', kind: 'port', key: 'port', default: DEFAULT_PORT, fallback: String(DEFAULT_PORT),
-        description: 'port of the server to reach: the runner dials ws://127.0.0.1:PORT/runner/connect'},
+        description: 'port of the server to reach: the runner dials ws://HOST:PORT/runner/connect'},
+      {flag: '--host', metavar: 'ADDRESS', kind: 'text', key: 'host', default: DEFAULT_ADDRESS, fallback: DEFAULT_ADDRESS,
+        convert: value => {
+          try { return parseAddress(value); } catch (error) { throw invalid('--host', value, `an IPv4 or IPv6 address (${error.message})`); }
+        },
+        description: 'address of the server to reach, for a server that listens on an address other than loopback (its --bind): an IPv4 or IPv6 address, never a host name; start.sh and demo.sh pass it'},
       {flag: '--token-file', metavar: 'FILE', kind: 'path', key: 'tokenFile', default: null, fallback: '<default server directory of the port>/local-runner.token',
         description: 'token file the server created (--local-runner), read again at every connection attempt; a missing file is waited for, never a token on the command line'},
       runtimeOption('where the runner keeps its sessions (DIR/sessions/<id>/); DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory /tmp/qw-<login>/l-PORT, lost at a reboot, never the server\'s directory', '/tmp/qw-<login>/l-<port>'),
