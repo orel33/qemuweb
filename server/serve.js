@@ -24,9 +24,11 @@ const {createAuth} = require('./auth');
 const {ADMIN_LOG, USERS_LOG, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
 const {connectHint} = require('./routes/admin-runners');
+const {bannerLines} = require('./listen');
+const {runnerHost} = require('../common/bind');
 
 function serve({root, settings}) {
-  const {runtime, port} = settings;
+  const {runtime, port, bind} = settings;
   const instance = new ServerInstance({runtimeRoot: runtime, port});
 
   const app = express();
@@ -57,7 +59,7 @@ function serve({root, settings}) {
   const runnerTokens = createRegistrationTokens();
   const remoteGateway = createRemoteGateway({server, registry, store: runnerStore, trustProxy: settings.trustProxy !== null, localRunner});
   // The command that starts the local runner (null without --local-runner), shown while no runner is online.
-  const startHint = localRunner ? connectHint({runners: [], port, runtime: settings.given.has('--runtime') ? runtime : null, localRunner: true}) : null;
+  const startHint = localRunner ? connectHint({runners: [], port, runtime: settings.given.has('--runtime') ? runtime : null, localRunner: true, host: runnerHost(bind)}) : null;
   const runnerLabel = entry => `Runner ${entry.name} (${entry.id})`;
   registry.on('online', (entry, hello) => {
     const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
@@ -109,7 +111,7 @@ function serve({root, settings}) {
   // X-Observe (admins, read-only) and the admin API come before anything that could open or
   // change the caller's own session.
   app.use('/api', observationGate(manager, {controlHeld: sockets.controlHeld}));
-  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, runtime: settings.given.has('--runtime') ? runtime : null, localRunner: localRunner !== null,
+  app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, host: runnerHost(bind), runtime: settings.given.has('--runtime') ? runtime : null, localRunner: localRunner !== null,
     runnerStore, runnerTokens, runnerGrace: settings.runnerGrace, trustProxy: settings.trustProxy !== null}));
   // Self-service deletion: stops and removes every node, then the session; the next request
   // opens a new, empty session.
@@ -140,18 +142,23 @@ function serve({root, settings}) {
       process.exit(1);
       return;
     }
+    if (error.code === 'EADDRNOTAVAIL') {
+      console.error(`server: Cannot listen on ${bind}: this machine has no such address. Check it with ip addr, or use --bind 0.0.0.0 for every interface.`);
+      process.exit(1);
+      return;
+    }
     console.error('server: Server error:', error);
     process.exitCode = 1;
   });
   // The sessions of bindings.json come back offline, for their users, until their runners connect (the grace period counts from now).
   manager.restore(runnerId => runnerStore.get(runnerId));
   // HTTP opens at once; a runner may connect at any time (session routes answer 503 until then).
-  server.listen(port, '127.0.0.1', onListening);
+  server.listen(port, bind, onListening);
 
   function onListening() {
     instance.writeRecords();
     console.log('QemuWeb is ready.');
-    console.log(`  Web interface      http://127.0.0.1:${port}`);
+    for (const line of bannerLines({bind, port})) console.log(line);
     console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
     console.log(startHint ? `No runner connected. Start one with ${startHint}, or run ./scripts/start.sh for the server and a runner.\n`
       : 'No runner connected. This server has no local runner (--local-runner): register a remote runner in /admin, Runners.\n');

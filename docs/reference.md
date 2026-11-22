@@ -41,8 +41,9 @@ with their arguments, so the process is the Node.js one (`./scripts/status.sh`, 
   `Checking dependencies…` and `Checking configuration…`, with `✓` (ok), `⚠` (warning), `✗`
   (failure, the program then stops with `Startup aborted`) and `-` (not applicable).
 
-The port and the runtime directory are options (there is no environment variable for them). The runner link is a WebSocket
-(`ws://127.0.0.1:<port>/runner/connect`), like that of a remote runner, with a token. With `--local-runner` the server creates
+The port, the listening address and the runtime directory are options (there is no environment variable for them). The server listens on `127.0.0.1`
+unless `--bind ADDRESS` says otherwise (a LAN test: [deployment.md](deployment.md#listening-on-another-address-lan-test-no-proxy)). The runner link is a WebSocket
+(`ws://127.0.0.1:<port>/runner/connect`, or `ws://ADDRESS:<port>` with the runner's `--host ADDRESS`), like that of a remote runner, with a token. With `--local-runner` the server creates
 `<runtime>/local-runner.token` (mode 0600, only when missing or unusable; a readable file is never rewritten) and keeps only its hash in
 memory; the runner of this machine (`runner.sh --port PORT [--token-file FILE]`, by default the file of the default SERVER directory of the port) reads it
 at every connection attempt, so nobody types a token and none is on a command line. The one file that crosses is that credential: the server touches
@@ -94,7 +95,8 @@ The server is configured by options only: it reads **no environment variable**.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--listen PORT` | `3002` | TCP port of the web interface on 127.0.0.1, and of /runner/connect, where the runners connect |
+| `--listen PORT` | `3002` | TCP port of the web interface, and of /runner/connect, where the runners connect (on the address of --bind) |
+| `--bind ADDRESS` | `127.0.0.1` | address of this machine the server listens on: an IPv4 or IPv6 address (never a host name), or 0.0.0.0 or :: for every interface; the default is loopback; any other address opens the web interface, the consoles and /runner/connect to the network in clear text (HTTP): refused with --no-auth, and with --auth proxy unless --trust-proxy is given |
 | `--runtime DIR` | `/tmp/qw-<login>/<port>` | runtime directory of the server: server-PORT.pid, bindings.json and the token file local-runner.token (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot |
 | `--local-runner` | `off` | accepts the runner of this machine (id local): creates DIR/local-runner.token when missing (mode 0600) and accepts the runner that presents it; ./scripts/runner.sh --port PORT reads it, start.sh and demo.sh pass this option |
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
@@ -161,7 +163,8 @@ The runner is an ordinary unprivileged process; every path is a parameter.
 
 | Option | Default | Effect |
 | --- | --- | --- |
-| `--port PORT` | `3002` | port of the server to reach: the runner dials ws://127.0.0.1:PORT/runner/connect |
+| `--port PORT` | `3002` | port of the server to reach: the runner dials ws://HOST:PORT/runner/connect |
+| `--host ADDRESS` | `127.0.0.1` | address of the server to reach, for a server that listens on an address other than loopback (its --bind): an IPv4 or IPv6 address, never a host name; start.sh and demo.sh pass it |
 | `--token-file FILE` | `<default server directory of the port>/local-runner.token` | token file the server created (--local-runner), read again at every connection attempt; a missing file is waited for, never a token on the command line |
 | `--runtime DIR` | `/tmp/qw-<login>/l-<port>` | where the runner keeps its sessions (DIR/sessions/<id>/); DIR/users/<login> links to them, runner.pid locks the directory (one runner at a time); default: the private directory /tmp/qw-<login>/l-PORT, lost at a reboot, never the server's directory |
 | `--config FILE` | `config.json of the repository` | system catalog (images, memory, QEMU options) |

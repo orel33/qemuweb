@@ -17,6 +17,17 @@ local_runner_token_file() {
   node "$(dirname -- "${BASH_SOURCE[0]}")/../../common/local-token.js" path "$1"
 }
 
+# local_runner_host BIND: the address the local runner dials for a server bound to BIND (the rule is common/bind.js: a wildcard is
+# reached on 127.0.0.1, a specific address on itself). Fails (status 2) when BIND is not an IPv4 or IPv6 address.
+local_runner_host() {
+  node "$(dirname -- "${BASH_SOURCE[0]}")/../../common/bind.js" runner-host "$1"
+}
+
+# is_loopback_address ADDRESS: succeeds for a loopback address (common/bind.js).
+is_loopback_address() {
+  node "$(dirname -- "${BASH_SOURCE[0]}")/../../common/bind.js" is-loopback "$1"
+}
+
 # default_account_root: /tmp/qw-<login>, the directory that holds every default runtime directory of this account.
 default_account_root() {
   node "$(dirname -- "${BASH_SOURCE[0]}")/../../common/runtime-dir.js" root

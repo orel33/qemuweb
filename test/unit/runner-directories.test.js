@@ -99,7 +99,7 @@ test('start.sh: --runtime is the server directory, --runner-runtime the runner o
   assert.doesNotMatch(text, /server_args\+=\("--runner-runtime"/);
   const serverBranch = /--runner-runtime\)\n([\s\S]*?)shift ;;/.exec(text)[1];
   assert.doesNotMatch(serverBranch, /server_args/);
-  assert.match(text, /scripts\/runner\.sh --port "\$port" --token-file "\$token_file" "\$\{runtime_args\[@\]\}" --exit-on-disconnect/);
+  assert.match(text, /scripts\/runner\.sh --port "\$port" "\$\{host_args\[@\]\}" --token-file "\$token_file" "\$\{runtime_args\[@\]\}" --exit-on-disconnect/);
 });
 
 test('demo.sh: one temporary directory with two subdirectories, the server\'s and the runner\'s', () => {

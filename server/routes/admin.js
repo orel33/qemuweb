@@ -86,7 +86,7 @@ function adminPage(root) {
 // server/ws-transports.js: the Connections panel); logDir holds admin.log and users.log; `port` is the
 // server's port and `runtime` its --runtime when given, else null, `localRunner` whether it runs with --local-runner (the Runners panel, routes/admin-runners.js,
 // which also takes the runners store, the registration tokens, --runner-grace and whether a proxy is trusted).
-function createAdminRouter({manager, auth, audit, disconnectUser, browsers, connections, logDir, port, runtime, localRunner = false, runnerStore, runnerTokens, runnerGrace, trustProxy}) {
+function createAdminRouter({manager, auth, audit, disconnectUser, browsers, connections, logDir, port, host, runtime, localRunner = false, runnerStore, runnerTokens, runnerGrace, trustProxy}) {
   const router = express.Router();
   const usersFile = auth.usersFile;
   router.use(auth.requireAdmin);
@@ -134,7 +134,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, conn
   // Live Socket.IO connections and the transport each one uses: {total, websocket, polling, items}. Read-only.
   router.get('/connections', (_req, res) => res.json(connections()));
 
-  router.use('/runners', createRunnersRouter({manager, store: runnerStore, tokens: runnerTokens, audited, port, runtime, localRunner, graceSeconds: runnerGrace, trustProxy}));
+  router.use('/runners', createRunnersRouter({manager, store: runnerStore, tokens: runnerTokens, audited, port, host, runtime, localRunner, graceSeconds: runnerGrace, trustProxy}));
 
   router.post('/sessions/delete', (req, res) => {
     const logins = req.body?.logins;

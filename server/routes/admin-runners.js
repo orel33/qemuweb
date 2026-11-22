@@ -18,6 +18,7 @@ const express = require('express');
 const {LIFETIMES_MINUTES} = require('../runner-registration');
 const {RUNNER_ID} = require('../runner-store');
 const {tokenFilePath} = require('../../common/local-token');
+const {DEFAULT_ADDRESS, isLoopbackHostname} = require('../../common/bind');
 const DEFAULT_PORT = 3002;
 
 function summarize({entry, record, sessions, graceLeft = null}) {
@@ -42,10 +43,10 @@ function runnerSummaries({registry, manager, store}) {
 }
 
 // The command that starts the local runner, or null when a runner is online or the server has no --local-runner.
-// `runtime`: the --runtime of the server when it was given, else null (the runner then finds the token file of the default directory of the port).
-function connectHint({runners, port, runtime = null, localRunner = false}) {
+// `host`: the address the local runner dials (common/bind.js runnerHost of --bind). `runtime`: the --runtime of the server when it was given, else null (the runner then finds the token file of the default directory of the port).
+function connectHint({runners, port, host = DEFAULT_ADDRESS, runtime = null, localRunner = false}) {
   if (!localRunner || runners.some(runner => runner.state === 'online')) return null;
-  const options = [port === DEFAULT_PORT ? '' : `--port ${port}`, runtime ? `--token-file ${tokenFilePath(runtime)}` : ''].filter(Boolean);
+  const options = [port === DEFAULT_PORT ? '' : `--port ${port}`, host === DEFAULT_ADDRESS ? '' : `--host ${host}`, runtime ? `--token-file ${tokenFilePath(runtime)}` : ''].filter(Boolean);
   return ['./scripts/runner.sh', ...options].join(' ');
 }
 
@@ -58,9 +59,13 @@ function publicOrigin(req, trustProxy) {
   return /^[A-Za-z0-9.[\]:-]{1,255}$/.test(host) && ['http', 'https'].includes(protocol) ? `${protocol}://${host}` : '<server URL>';
 }
 
-const registerCommand = (origin, token) => `./scripts/runner.sh register --url ${origin} --token ${token}`;
+// A plain http:// origin that is not this machine needs --insecure on the runner's side (runner/remote-url.js refuses it otherwise).
+const registerCommand = (origin, token) => {
+  const plainRemote = origin.startsWith('http://') && !isLoopbackHostname(new URL(origin).hostname);
+  return `./scripts/runner.sh register --url ${origin} --token ${token}${plainRemote ? ' --insecure' : ''}`;
+};
 
-function createRunnersRouter({manager, store, tokens, audited, port, runtime = null, localRunner = false, graceSeconds, trustProxy = false}) {
+function createRunnersRouter({manager, store, tokens, audited, port, host, runtime = null, localRunner = false, graceSeconds, trustProxy = false}) {
   const router = express.Router();
   const {registry} = manager;
   const summaryOf = id => runnerSummaries({registry, manager, store}).find(runner => runner.id === id);
@@ -68,7 +73,7 @@ function createRunnersRouter({manager, store, tokens, audited, port, runtime = n
 
   router.get('/', (_req, res) => {
     const runners = runnerSummaries({registry, manager, store});
-    res.json({runners, connectHint: connectHint({runners, port, runtime, localRunner}), registrationTokens: tokens.pending(),
+    res.json({runners, connectHint: connectHint({runners, port, host, runtime, localRunner}), registrationTokens: tokens.pending(),
       runnerGraceSeconds: graceSeconds, lifetimes: LIFETIMES_MINUTES});
   });
 

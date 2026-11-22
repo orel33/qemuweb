@@ -3,7 +3,7 @@
 // Runner process entry point. A runner is an ordinary unprivileged process: every path is a
 // parameter, nothing is written outside them. Three forms (runner/options.js, node runner/main.js
 // --help, docs/reference.md "Server and runner command line"), started by scripts/runner.sh:
-//   runner.sh [options]            local runner (id local): WebSocket to ws://127.0.0.1:PORT with the token of a file
+//   runner.sh [options]            local runner (id local): WebSocket to ws://HOST:PORT (--host, 127.0.0.1) with the token of a file
 //                                  (also through scripts/start.sh, with a [runner] prefix)
 //   runner.sh run [options]        remote runner: outbound WebSocket to the server of the runner file
 //   runner.sh register [options]   one-time registration (runner/register-command.js)

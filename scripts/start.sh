@@ -3,10 +3,10 @@
 # runner (the process that runs the machines), each as its own command. This is the only way to
 # start QemuWeb here, in development and in the tests. Output lines are prefixed [server] and
 # [runner].
-#   ./scripts/start.sh [server options] [--runner-runtime DIR]   (--listen PORT, --runtime DIR, --local-runner, --users FILE, --runners FILE, --logs DIR, --examples DIR, --session-hours N, --runner-grace SECONDS,
+#   ./scripts/start.sh [server options] [--runner-runtime DIR]   (--listen PORT, --bind ADDRESS, --runtime DIR, --local-runner, --users FILE, --runners FILE, --logs DIR, --examples DIR, --session-hours N, --runner-grace SECONDS,
 #                                          --trust-proxy VALUE, --auth MODE, --proxy-key-file FILE, --logout-url URL, --no-auth, --ephemeral: see node server/main.js --help)
 # The server gets all of them but --runner-runtime (plus --local-runner, and --runner-grace 0 unless given); the runner gets --port PORT
-# (the server's --listen), --token-file FILE (local-runner.token in the SERVER's directory, which the server creates; the path only, never
+# (the server's --listen), --host ADDRESS when the server's --bind is a specific address (the runner dials it; for 0.0.0.0 or ::, and by default, it dials 127.0.0.1; common/bind.js), --token-file FILE (local-runner.token in the SERVER's directory, which the server creates; the path only, never
 # the token), --runtime DIR (--runner-runtime when given) and --exit-on-disconnect. Two directories, two owners: --runtime is the server's
 # (default /tmp/qw-<login>/<port>), --runner-runtime the runner's (default /tmp/qw-<login>/l-<port>, never the server's), see common/runtime-dir.js;
 # both are printed at start. The runner starts once the server listens on its port. A refused option is reported by the server (exit status 2, nothing started).
@@ -30,6 +30,7 @@ usage() {
 # The options are the server's: it validates them and refuses what it does not know (this script
 # then ends with its status). Only --listen and --runtime are read here, for the runner and its token file; --runner-runtime is this script's own.
 port=3002
+bind=127.0.0.1
 runtime=''
 runner_runtime=''
 runner_given=0
@@ -40,12 +41,13 @@ server_args=()
 while (( $# )); do
   case "$1" in
     -h|--help) usage; exit 0 ;;
-    --listen|--runtime|--users|--runners|--logs|--examples|--session-hours|--runner-grace|--trust-proxy)
+    --listen|--bind|--runtime|--users|--runners|--logs|--examples|--session-hours|--runner-grace|--trust-proxy)
       server_args+=("$1")
       shift
       (( $# )) || break
       case "${server_args[-1]}" in
         --listen) port="$1" ;;
+        --bind) bind="$1" ;;
         --runner-grace) grace_given=1 ;;
         --runtime) runtime="$(realpath -m -- "$1")"; runtime_given=1 ;;
       esac
@@ -89,6 +91,12 @@ if [[ -n "$runtime" ]]; then
   # --runtime moved to the server's directory only (it also held the runner's sessions before the runner got its own directory).
   [[ "$runtime_given" != 1 || "$runner_given" == 1 ]] || echo "The runner keeps its sessions in $runner_runtime; add --runner-runtime DIR to move them."
 fi
+
+# The address the local runner dials: the server's --bind, a wildcard being reached on loopback (common/bind.js). An invalid --bind is
+# refused by the server (exit status 2): the default stands in until then.
+runner_host="$(local_runner_host "$bind" 2>/dev/null)" || runner_host=127.0.0.1
+host_args=()
+[[ "$runner_host" == 127.0.0.1 ]] || host_args=(--host "$runner_host")
 
 server_pid=''
 runner_pid=''
@@ -135,12 +143,12 @@ setsid ./scripts/server.sh "${server_args[@]}" > >(sed -u 's/^/[server] /') 2>&1
 server_pid=$!
 listening=0
 for _ in {1..150}; do
-  if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then listening=1; break; fi
+  if (exec 3<>"/dev/tcp/$runner_host/$port") 2>/dev/null; then listening=1; break; fi
   kill -0 "$server_pid" 2>/dev/null || break
   sleep 0.2
 done
 if (( listening )) && [[ -n "$token_file" ]] && kill -0 "$server_pid" 2>/dev/null; then
-  setsid ./scripts/runner.sh --port "$port" --token-file "$token_file" "${runtime_args[@]}" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
+  setsid ./scripts/runner.sh --port "$port" "${host_args[@]}" --token-file "$token_file" "${runtime_args[@]}" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
   runner_pid=$!
 elif kill -0 "$server_pid" 2>/dev/null; then
   echo "The server does not listen on port $port after 30 seconds; stopping it." >&2

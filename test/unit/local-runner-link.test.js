@@ -16,6 +16,7 @@ const {createRunnerStore} = require('../../server/runner-store');
 const {startRemote} = require('../../runner/remote');
 const {load} = require('../../runner/local-identity');
 const {runnerSpec, parseRunnerArguments} = require('../../runner/options');
+const {parseServerArguments} = require('../../server/options');
 const {tokenFilePath} = require('../../common/local-token');
 const {serverRuntime, localRunnerRuntime} = require('../../common/runtime-dir');
 
@@ -29,7 +30,9 @@ async function setup(t) {
   const serverDir = path.join(dir, 'server');
   const localRunner = startLocalRunner({runtime: serverDir, store, audit: {record() {}}, log: {log() {}, warn() {}}});
   const gateway = createRemoteGateway({server, registry, store, localRunner});
-  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  // The address comes from the server's own option, given explicitly (LST01): the server listens on --bind, the runner dials --host.
+  const bind = parseServerArguments(['--bind', '127.0.0.1'], {root}).bind;
+  await new Promise(resolve => server.listen(0, bind, resolve));
   const links = [];
   t.after(() => {
     for (const link of links) link.stop();
@@ -40,7 +43,7 @@ async function setup(t) {
   });
   const port = server.address().port;
   const tokenFile = localRunner.file;
-  const options = {port, tokenFile};
+  const options = {host: parseRunnerArguments(['--host', bind], {root}).host, port, tokenFile};
   const identity = load(options);
   // The runner's side, with retries shortened.
   const dial = (extra = {}) => {
@@ -146,12 +149,13 @@ test('the connection is lost: onLost runs before the retry (--exit-on-disconnect
 test('the local form of the command line: --port, --token-file, no --connect, no token option; the defaults are those of the port', () => {
   const settings = parseRunnerArguments(['--port', '3011'], {root});
   assert.equal(settings.port, 3011);
+  assert.equal(settings.host, '127.0.0.1');
   assert.equal(settings.tokenFile, tokenFilePath(serverRuntime(3011)));
   assert.equal(settings.runtime, localRunnerRuntime(3011));
   assert.equal(parseRunnerArguments(['--port', '3011', '--token-file', '/x/t'], {root}).tokenFile, '/x/t');
   for (const bad of [['--connect', '/x/runner-3011.sock'], ['--token', 'abc'], ['--auth-token', 'abc']]) assert.throws(() => parseRunnerArguments(bad, {root}), /unknown option|Unknown option/i, bad.join(' '));
   assert.ok(!runnerSpec(root).options.some(option => /token$/.test(option.flag) && option.flag !== '--token-file'), 'no option takes a token value');
-  const identity = load({port: 3011, tokenFile: '/x/t'});
+  const identity = load(settings);
   assert.equal(identity.urls.connectUrl, 'ws://127.0.0.1:3011/runner/connect');
   assert.deepEqual(identity.derivedRows(), [['Runner', 'local'], ['Server WebSocket', 'ws://127.0.0.1:3011/runner/connect']]);
 });
@@ -159,7 +163,7 @@ test('the local form of the command line: --port, --token-file, no --connect, no
 test('start.sh passes the path of the token file, never its content, and waits for the port', () => {
   const script = fs.readFileSync(path.join(root, 'scripts', 'start.sh'), 'utf8');
   assert.match(script, /--token-file "\$token_file"/);
-  assert.match(script, /\/dev\/tcp\/127\.0\.0\.1\/\$port/, 'it waits for the port to listen');
+  assert.match(script, /\/dev\/tcp\/\$runner_host\/\$port/, 'it waits for the port to listen');
   assert.ok(!/\b(cat|head|<)\b[^\n]*token_file/.test(script.replace(/#[^\n]*/g, '')), 'start.sh never reads the token');
   assert.match(script, /--local-runner/);
   assert.ok(!/runner-[^ ]*\.sock/.test(script));

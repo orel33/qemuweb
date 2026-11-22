@@ -2,12 +2,13 @@
 
 // The command line of the server, as a table for common/cli.js (which parses it, prints --help and
 // the Options block): parsed once into a plain settings object that is passed down: {port,
-// runtime, localRunner, usersFile, runnersFile, logDir, examplesDir, sessionHours, runnerGrace, trustProxy, authMode, proxyKeyFile, logoutUrl, ephemeral, given}. `given` is
+// bind, runtime, localRunner, usersFile, runnersFile, logDir, examplesDir, sessionHours, runnerGrace, trustProxy, authMode, proxyKeyFile, logoutUrl, ephemeral, given}. `given` is
 // the set of the flags present on the command line. The server reads no environment variable.
 // test/unit/server-startup-report.test.js checks that each option is documented in docs/reference.md.
 const path = require('path');
 const {parseArguments, defaultSettings: cliDefaults, UsageError, invalid} = require('../common/cli');
 const {serverRuntime} = require('../common/runtime-dir');
+const {DEFAULT_ADDRESS, parseAddress, isLoopback} = require('../common/bind');
 
 const DEFAULT_PORT = 3002;
 const DEFAULT_SESSION_HOURS = 12;
@@ -30,7 +31,12 @@ function serverSpec(root) {
     environment: null,
     options: [
       {flag: '--listen', metavar: 'PORT', kind: 'port', key: 'port', default: DEFAULT_PORT, fallback: String(DEFAULT_PORT),
-        description: 'TCP port of the web interface on 127.0.0.1, and of /runner/connect, where the runners connect'},
+        description: 'TCP port of the web interface, and of /runner/connect, where the runners connect (on the address of --bind)'},
+      {flag: '--bind', metavar: 'ADDRESS', kind: 'text', key: 'bind', default: DEFAULT_ADDRESS, fallback: DEFAULT_ADDRESS,
+        convert: value => {
+          try { return parseAddress(value); } catch (error) { throw invalid('--bind', value, `an IPv4 or IPv6 address of this machine (${error.message})`); }
+        },
+        description: 'address of this machine the server listens on: an IPv4 or IPv6 address (never a host name), or 0.0.0.0 or :: for every interface; the default is loopback; any other address opens the web interface, the consoles and /runner/connect to the network in clear text (HTTP): refused with --no-auth, and with --auth proxy unless --trust-proxy is given'},
       {flag: '--runtime', metavar: 'DIR', kind: 'path', key: 'runtime', default: null, fallback: '/tmp/qw-<login>/<port>',
         description: 'runtime directory of the server: server-PORT.pid, bindings.json and the token file local-runner.token (a runner keeps its own sessions/, users/ aliases and runner.pid in its --runtime); the default is private, in /tmp, and lost at a reboot'},
       {flag: '--local-runner', metavar: null, key: 'localRunner', default: false, value: true, fallback: 'off',
@@ -71,6 +77,13 @@ function serverSpec(root) {
       if (!settings.given.has('--runtime')) settings.runtime = serverRuntime(settings.port);
       if (settings.authMode === 'proxy' && !settings.proxyKeyFile) {
         throw new UsageError('--auth proxy requires --proxy-key-file FILE');
+      }
+      // A listening address that is not loopback exposes the server to the network in clear text (HTTP): see docs/deployment.md.
+      if (!isLoopback(settings.bind)) {
+        if (settings.authMode === 'off') throw new UsageError(`--no-auth cannot be used with --bind ${settings.bind}: without authentication every visitor of the network would get the shared administrator session. Bind to 127.0.0.1, or drop --no-auth`);
+        if (settings.authMode === 'proxy' && !settings.given.has('--trust-proxy')) {
+          throw new UsageError(`--auth proxy with --bind ${settings.bind} needs --trust-proxy VALUE: this mode trusts the identity headers of the front end, which assumes that only the front end can reach the server (firewall)`);
+        }
       }
     }
   };
