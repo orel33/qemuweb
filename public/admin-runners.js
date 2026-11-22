@@ -45,7 +45,8 @@ function renderRunners(data, {body, hint, cell, act}) {
     const kvm = runner.engines.includes('qemu') ? (runner.kvm ? ', KVM' : ', no KVM') : '';
     const name = document.createElement('div');
     name.textContent = runner.name;
-    name.append(Object.assign(document.createElement('small'), {textContent: ` ${runner.id}`}));
+    // The record of the local runner is named after its id ("local"): show the id only when it adds something.
+    if (runner.id !== runner.name) name.append(Object.assign(document.createElement('small'), {textContent: ` ${runner.id}`}));
     const where = document.createElement('div');
     where.textContent = runner.state === 'online' || runner.state === 'starting' ? (runner.address || 'this machine') : `last seen ${when(runner.lastSeen)}`;
     // What the runner announced (display only): its directory and process ID.
