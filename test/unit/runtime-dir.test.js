@@ -130,7 +130,6 @@ test('worst case: a 32 character login, the largest port and the longest identif
     const paths = sessionPaths(id, id.startsWith('s-') ? 'switch' : 'host');
     built.push(paths.socketPath, paths.socketPath1, paths.monitorPath, ...(paths.mgmtPath ? [paths.mgmtPath, path.join(paths.socketDir, 'ctl')] : []));
   }
-  built.push(path.join(runtime, 'runner-65535.sock'));
   for (const file of built) assert.ok(Buffer.byteLength(file) <= SOCKET_LIMIT, `${file} is ${Buffer.byteLength(file)} bytes`);
   const longest = Math.max(...built.map(file => Buffer.byteLength(file)));
   assert.equal(longest, 104, "the longest path is 104 bytes, 3 under the limit");

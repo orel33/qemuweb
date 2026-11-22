@@ -1,11 +1,11 @@
 'use strict';
 
-// The runtime directory: where a server and its local runner keep the sessions (<runtime>/sessions/<id>/),
-// the users/ aliases, server-<port>.pid and .session and the socket runner-<port>.sock. Every Unix socket
-// of QemuWeb lives under it and a socket path is limited to 107 bytes, so the DEFAULT is a short private
-// directory per account and per server port, in /tmp:
+// The runtime directory: where a runner keeps the sessions (<runtime>/sessions/<id>/) and the users/ aliases,
+// and where the server keeps server-<port>.pid, bindings.json and local-runner.token (the runner link is a WebSocket, no
+// socket). The node sockets of a runner (serial, monitor, VDE) live under its directory and a Unix socket path is limited
+// to 107 bytes, so the DEFAULT is a short private directory per account and per server port, in /tmp:
 //
-//   /tmp/qw-<login>/<port>      server and local runner (the port is the server's --listen, default 3002)
+//   /tmp/qw-<login>/<port>      server and local runner (the port is the server's --listen, default 3002; RUN03d separates them)
 //   /tmp/qw-<login>/runner      a remote runner (runner.sh run) without --runtime
 //
 // <login> is the account that runs the process (os.userInfo().username, `id -un` in the scripts, which call
@@ -71,8 +71,8 @@ function ensurePrivateDirectory(directory, uid) {
   if (stat.mode & 0o077) throw refuse(`is accessible by group or others (mode ${(stat.mode & 0o777).toString(8).padStart(4, '0')}, expected 0700)`);
 }
 
-// Every socket path the runner and the server build, relative to the runtime directory, for the longest
-// identifiers (a 16 hex session ID, h-/s- and 16 hex node IDs, a 5 digit port).
+// Every Unix socket path the runner builds (the node sockets), relative to the runtime directory, for the longest
+// identifiers (a 16 hex session ID, h-/s- and 16 hex node IDs).
 function socketPathsBelowRuntime() {
   const session = path.join('sessions', HEX16);
   const files = [];
@@ -81,7 +81,6 @@ function socketPathsBelowRuntime() {
     files.push(...[NODE_FILES.serial0, NODE_FILES.serial1, NODE_FILES.monitor, NODE_FILES.qga].map(name => path.join(node, name)));
     if (prefix === 's') files.push(path.join(node, NODE_FILES.mgmt), path.join(node, NODE_FILES.vde, VDE_CONTROL));
   }
-  files.push('runner-65535.sock');
   return files;
 }
 

@@ -15,7 +15,7 @@
 const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
-const {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, dialledRuntime, runnerSessionsDir, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('./status-vbox');
+const {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, runnerSessionsDir, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('./status-vbox');
 
 const ROOT = path.resolve(__dirname, '..');
 const SESSION_PATH = /(\/[^\s,]*?\/sessions)\/([0-9a-f]{16})(?:\/([hs]-[0-9a-f]{16}))?/;
@@ -303,9 +303,9 @@ function serverReport({entry, root, port}, style) {
   return lines;
 }
 
-// The server port a runner dials: --port PORT, or runner-N.sock in --connect.
+// The server port a local runner dials (--port PORT): a runner and a server are paired by this port.
 function runnerPort(entry) {
-  const match = / --port (\d+)( |$)/.exec(entry.args) || /runner-(\d+)\.sock/.exec(entry.args);
+  const match = / --port (\d+)( |$)/.exec(entry.args);
   return match ? Number(match[1]) : null;
 }
 
@@ -314,7 +314,7 @@ function runnerPort(entry) {
 // server is away, so it is not an orphan: it waits for a server.
 function standaloneRunnerReport(table, entry, servers, style, details) {
   const port = runnerPort(entry);
-  const connected = port !== null && servers.some(server => server.port === port && server.runtime === dialledRuntime(entry.args));
+  const connected = port !== null && servers.some(server => server.port === port);
   const machines = machineProcesses(table, entry);
   const label = connected ? 'Runner' : 'Runner (waiting for a server)';
   return [`${runnerLine(entry, machines, style, label)}${port ? style.dim(` · port ${port}`) : ''}`,
@@ -331,13 +331,13 @@ function report(options) {
   const runners = [...table.values()].filter(entry => entry.uid === process.getuid() && isRunner(entry));
   for (const server of servers) {
     lines.push('', ...serverReport(server, style));
-    if (server.port && !runners.some(entry => runnerPort(entry) === server.port && dialledRuntime(entry.args) === server.runtime)) {
+    if (server.port && !runners.some(entry => runnerPort(entry) === server.port)) {
       lines.push(style.dim('   no runner connected: start one with ./scripts/runner.sh'));
     }
   }
   for (const entry of runners) {
     // Without --all, only the runners of this project and of the servers shown.
-    if (!options.all && projectRoot(entry) !== ROOT && !servers.some(server => server.runtime === dialledRuntime(entry.args))) continue;
+    if (!options.all && projectRoot(entry) !== ROOT && !servers.some(server => server.port === runnerPort(entry))) continue;
     lines.push('', ...standaloneRunnerReport(table, entry, servers, style, options.details));
   }
   if (!servers.length && !lines.some(line => line.includes('Runner ('))) {

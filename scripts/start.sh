@@ -3,10 +3,12 @@
 # runner (the process that runs the machines), each as its own command. This is the only way to
 # start QemuWeb here, in development and in the tests. Output lines are prefixed [server] and
 # [runner].
-#   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --users FILE, --runners FILE, --logs DIR, --examples DIR, --session-hours N, --runner-grace SECONDS,
+#   ./scripts/start.sh [server options]   (--listen PORT, --runtime DIR, --local-runner, --users FILE, --runners FILE, --logs DIR, --examples DIR, --session-hours N, --runner-grace SECONDS,
 #                                          --trust-proxy VALUE, --auth MODE, --proxy-key-file FILE, --logout-url URL, --no-auth, --ephemeral: see node server/main.js --help)
-# The server gets all of them (and --runner-grace 0 unless given); the runner gets --port PORT (the server's --listen), --runtime DIR (when
-# given; the default is /tmp/qw-<login>/<port> for both, common/runtime-dir.js) and --exit-on-disconnect. A refused option is reported by the server (exit status 2, nothing started).
+# The server gets all of them (plus --local-runner, and --runner-grace 0 unless given); the runner gets --port PORT (the server's --listen),
+# --token-file FILE (local-runner.token in the server's runtime directory, which the server creates; the path only, never the token),
+# --runtime DIR (when given; the default is /tmp/qw-<login>/<port> for both, common/runtime-dir.js) and --exit-on-disconnect. The runner
+# starts once the server listens on its port. A refused option is reported by the server (exit status 2, nothing started).
 # Each process leads its own process group (setsid): a terminal Ctrl+C reaches this script only.
 # Ctrl+C or SIGTERM stops the runner first (it stops every machine, within a bounded delay), kills
 # what is left of its group (QEMU, vde_switch), then stops the server, and exits 0. When the
@@ -25,10 +27,11 @@ usage() {
   echo "Usage: $0 [server options]   (node server/main.js --help lists them; --listen PORT and --runtime DIR also go to the runner)"
 }
 # The options are the server's: it validates them and refuses what it does not know (this script
-# then ends with its status). Only --listen and --runtime are read here, for the runner and its socket.
+# then ends with its status). Only --listen and --runtime are read here, for the runner and its token file.
 port=3002
 runtime=''
 grace_given=0
+local_given=0
 server_args=()
 while (( $# )); do
   case "$1" in
@@ -44,6 +47,7 @@ while (( $# )); do
       esac
       server_args+=("$1")
       shift ;;
+    --local-runner) local_given=1; server_args+=("$1"); shift ;;
     *) server_args+=("$1"); shift ;;
   esac
 done
@@ -51,15 +55,20 @@ done
 # The runner ends with the server and a lost runner is not coming back: unless the user gave --runner-grace,
 # its sessions are dropped at once (0), as before the local runner became a runner like the others.
 (( grace_given )) || server_args+=(--runner-grace 0)
+# The local runner is the one this script starts: the server creates its token file.
+(( local_given )) || server_args+=(--local-runner)
 
-# The default runtime directory, from the same rule as the server's (an invalid port is refused by the server).
-if [[ -z "$runtime" && "$port" =~ ^[0-9]+$ ]]; then
-  source "$root/scripts/lib/runtime.sh"
-  runtime="$(default_runtime "$port")"
-  runtime_args=()
-else
+# The default runtime directory, from the same rule as the server's (an invalid port is refused by the server), and the token
+# file the server creates in it (the same rules for the server and the runner: common/runtime-dir.js, common/local-token.js).
+source "$root/scripts/lib/runtime.sh"
+runtime_args=()
+if [[ -n "$runtime" ]]; then
   runtime_args=(--runtime "$runtime")
+elif [[ "$port" =~ ^[0-9]+$ ]]; then
+  runtime="$(default_runtime "$port")"
 fi
+token_file=''
+[[ -n "$runtime" ]] && token_file="$(local_runner_token_file "$runtime")"
 
 server_pid=''
 runner_pid=''
@@ -100,19 +109,23 @@ stop_all() {
 trap 'stop_all; exit 0' INT TERM
 trap stop_all EXIT
 
-# The server listens on <runtime>/runner-<port>.sock. A runner started with --exit-on-disconnect does
-# not retry a first connection that fails, so it starts once the socket exists (a dead server
-# takes its runner with it, and the script ends when either one exits).
+# The runner starts once the server listens on its port (the token file exists by then: the server creates it before it
+# listens). It would retry anyway, but a dead server must not leave it waiting: this script ends when either one exits.
 setsid ./scripts/server.sh "${server_args[@]}" > >(sed -u 's/^/[server] /') 2>&1 &
 server_pid=$!
+listening=0
 for _ in {1..150}; do
-  [[ -n "$runtime" && -S "$runtime/runner-$port.sock" ]] && break
+  if (exec 3<>"/dev/tcp/127.0.0.1/$port") 2>/dev/null; then listening=1; break; fi
   kill -0 "$server_pid" 2>/dev/null || break
   sleep 0.2
 done
-if kill -0 "$server_pid" 2>/dev/null; then
-  setsid ./scripts/runner.sh --port "$port" "${runtime_args[@]}" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
+if (( listening )) && [[ -n "$token_file" ]] && kill -0 "$server_pid" 2>/dev/null; then
+  setsid ./scripts/runner.sh --port "$port" --token-file "$token_file" "${runtime_args[@]}" --exit-on-disconnect > >(sed -u 's/^/[runner] /') 2>&1 &
   runner_pid=$!
+elif kill -0 "$server_pid" 2>/dev/null; then
+  echo "The server does not listen on port $port after 30 seconds; stopping it." >&2
+  stop_all
+  exit 1
 fi
 
 while kill -0 "$server_pid" 2>/dev/null && [[ -n "$runner_pid" ]] && kill -0 "$runner_pid" 2>/dev/null; do sleep 0.5; done
@@ -124,7 +137,9 @@ if ! kill -0 "$server_pid" 2>/dev/null; then
   echo "The server exited (status $status); stopping the runner." >&2
 else
   wait "$runner_pid" 2>/dev/null || status=$?
-  echo "The runner exited (status $status); stopping the server." >&2
+  note=''
+  (( status != 78 )) || note=', the server refused its token'
+  echo "The runner exited (status $status$note); stopping the server." >&2
 fi
 stop_all
 exit "$status"
