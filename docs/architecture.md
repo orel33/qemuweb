@@ -670,7 +670,7 @@ routes answer 503 until one is online.
    State of a bound session: online, offline (runner lost: grace timer; or restored), then online again (`hello` lists it), or dropped (`hello` without it,
    grace over, runner revoked, forced loss `POST /api/admin/runners/:id/drop-sessions`); the user cannot delete a session while its runner is offline.
 4. Server stop (SIGINT, SIGTERM, `./scripts/stop.sh`): the server only closes
-   the socket and exits; it removes the socket. What happens to the machines
+   its connections and exits (it removes nothing of a runner). What happens to the machines
    is the runner's choice (next point). `scripts/start.sh` stops its runner
    first (SIGTERM: the runner destroys every node of every session and removes
    `<runtime>/sessions/<id>/`), kills what is left of its process group, then
@@ -756,7 +756,7 @@ student's lab machine (roadmap, "Personal runners").
 
 ### Remote runners (5c)
 
-A remote runner is the same protocol over a WebSocket (`/runner/connect`, `ws` duplex stream under a
+A remote runner is the same protocol (the local runner uses the very same path with the token file of the server, instead of a registration) over a WebSocket (`/runner/connect`, `ws` duplex stream under a
 `Connection`), dialled **by the runner**, which authenticates with `Authorization: Bearer <authToken>` and
 `X-Runner-Id`. The server keeps only a sha256 of each token (`runners.json`) and compares it in constant
 time; unknown or revoked is 401 (the runner stops), a second live connection of an ID is 409. A runner gets its
@@ -793,9 +793,9 @@ the trust model of the local runner: the control plane must not trust it.
 
 ### Runner model (RUN03, design study)
 
-Decided (22 November 2026), implemented in steps RUN03a to RUN03e (the local runner over the WebSocket with a token file, no Unix socket, one directory per process, the binding and the uniform grace), RUN03f remaining (CREMI and documentation): option C: the local runner becomes a runner like the others: same WebSocket path and token as a remote runner
+Decided (22 November 2026) and implemented in steps RUN03a to RUN03f (the local runner over the WebSocket with a token file, no Unix socket, one directory per process, the binding and the uniform grace, the CREMI units and the documentation): option C: the local runner becomes a runner like the others: same WebSocket path and token as a remote runner
 (no Unix socket), own directory, no file shared with the server, one adoption rule from a persisted binding. The study, the options and the decision list are in
-[runner-model.md](runner-model.md). Until the user validates it, the sections above describe the code as it is.
+[runner-model.md](runner-model.md); the sections above describe the code as it is.
 
 ### Testing
 

@@ -31,7 +31,7 @@ a real network cut, pause and revocation.
 
 | Machine | What it needs |
 | --- | --- |
-| <span class="where">SERVER</span> | The repository at `~/qemuweb` on `main` (0.9.0-beta.5.1 or later), `npm ci` done, an admin account and a student account (`./scripts/user.sh list`). **No local runner** for the first test, so that the session can only go to REMOTE. |
+| <span class="where">SERVER</span> | The repository at `~/qemuweb` on `main` (0.9.0-beta.5.1 or later), `npm ci` done, an admin account and a student account (`./scripts/user.sh list`). **No local runner** for the first test (the server is started without `--local-runner`), so that the session can only go to REMOTE. |
 | <span class="where rem">REMOTE</span> | A normal account (never root) in the `kvm` group; the repository at `~/qemuweb`; Node.js 24, `npm ci`, QEMU with VDE support, `vde2`, `genisoimage`, `python3`; the base images of the systems to test in `~/qemuweb/images/`. |
 
 ## Step 0 · Start the server <span class="where">SERVER</span>
@@ -178,7 +178,7 @@ sudo iptables -D OUTPUT -p tcp --dport 443 -j DROP
 
 1. **Pause** `salle-test` in /admin → Runners: a new user gets no session (*No runner is available*),
    toto's session goes on. Then **Resume**.
-2. **Revoke**: the runner stops its machines and exits with status 1 and does not reconnect. Check on
+2. **Revoke**: the runner stops its machines and exits with status 78 and does not reconnect. Check on
    REMOTE: no QEMU left under `~/qemuweb/runtime`. Then **Remove**.
 3. On SERVER: `tail -n 20 ~/qemuweb/logs/admin.log` lists every action, never a token.
 
@@ -197,7 +197,7 @@ rm -f ~/.config/qemuweb-runner/runner.json
 | Symptom | Cause and fix |
 | --- | --- |
 | `register` fails, token refused | Used or expired token: create a new one in /admin → Runners. Check the URL answers (Step 2). |
-| `run` exits at once with status 1 | The server refused the token (runner revoked or removed): register again with a new token. |
+| `run` exits at once with status 78 | The server refused the token (runner revoked or removed): register again with a new token. |
 | 409 on connection | That runner is already connected from another process: stop the other one. |
 | "No runner is available" for a user | The runner is paused, offline, or at its `maxSessions`; the server log gives the reasons. |
 | A system is missing in the Add host dialog | Its image is not installed on REMOTE (Step 1). |

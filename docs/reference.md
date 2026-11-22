@@ -223,7 +223,7 @@ inbound port. Setup, nginx and systemd are in [docs/deployment.md](deployment.md
    (`"limits": {"maxSessions": 4, "memoryBytes": 17179869184, "cpus": 8}`, edited by hand).
 3. `./scripts/runner.sh run` opens an outbound WebSocket (`/runner/connect`) and keeps it. A network cut
    stops no machine: the runner reconnects (2 s, doubling up to 30 s) and the server resynchronises.
-   If the server refuses the token (revoked), the runner stops its machines and exits with status 1.
+   If the server refuses the token (revoked), the runner stops its machines and exits with status 78.
 
 The server places each new session on the least loaded online runner that is not paused (the earliest registered on a tie); a session stays on its runner. While a runner is offline, its sessions
 are kept for `--runner-grace` seconds and answer 503 "offline" (the page says "Runner offline,

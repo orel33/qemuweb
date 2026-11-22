@@ -289,7 +289,7 @@ registration token is single use and expires (15 minutes, 1 hour or 24 hours, ch
   sessions during `--runner-grace` and then drops them (and tells the runner to delete them if it returns). After a
   restart of the server, the sessions of `bindings.json` that the runner still reports are adopted when it reconnects.
 - **Revocation:** after **Revoke** in `/admin` the server refuses the token (401): the runner stops its machines and exits
-  with status 1 instead of retrying. Register it again to bring it back.
+  with status 78 instead of retrying. Register it again to bring it back.
 
 A `systemd --user` unit (run `loginctl enable-linger` for the account so that it starts at boot):
 
@@ -305,8 +305,8 @@ WorkingDirectory=%h/qemuweb
 ExecStart=%h/qemuweb/scripts/runner.sh run
 KillMode=mixed
 Restart=on-failure
-# A revoked runner exits with status 1 and must not loop: remove the unit, or register it again.
-RestartPreventExitStatus=1
+# A revoked runner exits with status 78 and must not loop: remove the unit, or register it again.
+RestartPreventExitStatus=78
 # Private certificate authority: Environment=NODE_EXTRA_CA_CERTS=%h/ca.pem
 
 [Install]

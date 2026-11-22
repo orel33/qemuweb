@@ -73,11 +73,13 @@ title, offers it only when the server has `VBoxManage`).
 repository root (port 3002; the server directory is `/tmp/qw-<login>/3002` and the runner's own `/tmp/qw-<login>/l-3002` by default):
 
 ```sh
-./scripts/server.sh                          # terminal 1: the server (web interface, accounts, sessions)
-./scripts/runner.sh                          # terminal 2: the runner (QEMU and VDE processes)
-./scripts/server.sh --listen 3003            # another port: the runner names the same one
+./scripts/server.sh --local-runner           # terminal 1: the server (web interface, accounts, sessions); it creates the token file of the local runner
+./scripts/runner.sh                          # terminal 2: the runner (QEMU and VDE processes); it dials the server with that token
+./scripts/server.sh --listen 3003 --local-runner   # another port: the runner names the same one
 ./scripts/runner.sh --port 3003
 ```
+
+Without `--local-runner` the server accepts no local runner (only remote ones, see [deployment](deployment.md#remote-runners)).
 
 The runner connects to the server of its `--port` and reconnects by itself, so
 the two can start in either order. Run it as your normal user, never as root.
@@ -93,8 +95,8 @@ options; a refused option prints `<program>: <message>` and a `Usage:` line, exi
 | See the servers, runners and machines of this project | `./scripts/status.sh` (`-w` to refresh, `--all` for other projects) |
 | Stop everything, including leftovers after a crash | `./scripts/killall.sh` |
 
-After a server restart, the runner's sessions are adopted again: users find
-their machines still running.
+After a server restart, the runner's sessions are restored offline and bound again when the runner reconnects
+(a few seconds): users find their machines still running.
 
 ## Images
 
