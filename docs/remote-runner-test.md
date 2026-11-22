@@ -25,6 +25,7 @@ a real network cut, pause and revocation.
 | Variant | Network path from REMOTE to the server | URL used by the runner |
 | --- | --- | --- |
 | **A. SSH tunnel** (quick test) | REMOTE opens `ssh -N -L` to SERVER; the runner talks to its own 127.0.0.1:3002. No nginx, no TLS to set up. | `http://127.0.0.1:3002` (loopback: no `--insecure` needed) |
+| **C. LAN, no tunnel** (quick test, plain HTTP) | REMOTE dials the address of SERVER directly: the server is started with `--bind ADDRESS`. No SSH, no nginx, no TLS: the traffic and the token are readable on the network, so a trusted LAN only. | `http://ADDRESS:3003` with `--insecure` |
 | **B. nginx + HTTPS** (real setup) | REMOTE reaches nginx on SERVER over the network; nginx passes the WebSocket to 127.0.0.1:3002. | `https://qemuweb.example.org` (private CA: add `--ca`) |
 
 ## Quick try with `demo.sh` (variant A, ten minutes)
@@ -59,6 +60,39 @@ The two machines of a session always run on the same runner.
 
 Cleanup: Ctrl+C the runner and the tunnel on REMOTE, then Ctrl+C `demo.sh` on SERVER (it deletes its temporary directory). A revoked
 runner (Revoke in the Runners tab) ends with status 78.
+
+## Variant C · no tunnel: the server listens on the LAN address (plain HTTP, `--insecure`)
+
+For two machines of a trusted LAN: SERVER `prout` (192.168.0.101) runs the demo, REMOTE `tralala` (192.168.0.100) dials it directly. HTTP is
+clear text: the registration token, the runner token, the passwords of the demo (`admin/admin`...) and the consoles are readable on the
+network. Never on a shared or untrusted network ([rules](deployment.md#listening-on-another-address-lan-test-no-proxy): `--no-auth` is refused with such an address).
+
+```sh
+# SERVER (prout): the firewall lets REMOTE in (once), then the demo listens on the LAN address
+sudo ufw allow from 192.168.0.100 to any port 3003 proto tcp
+./scripts/demo.sh --bind 192.168.0.101
+# or, by hand, the server only (then add --local-runner and a runner, or none for a first test):
+#   ./scripts/server.sh --listen 3003 --bind 192.168.0.101 --runtime ~/qemuweb/runtime --users ~/qemuweb/users.json \
+#     --runners ~/qemuweb/runners.json --logs ~/qemuweb/logs --runner-grace 300
+
+# BROWSER (anywhere on the LAN): http://192.168.0.101:3003, sign in as admin / admin, /admin -> Runners -> "Create registration token"
+# (the command shown there already ends with --insecure)
+
+# REMOTE (tralala): check that the server answers, register once, then run
+curl -s -o /dev/null -w '%{http_code}\n' http://192.168.0.101:3003/auth/me     # 401: reachable
+./scripts/runner.sh register --url http://192.168.0.101:3003 --token TOKEN --name tralala --insecure \
+  --runner-config ~/.config/qemuweb-runner/runner.json
+./scripts/runner.sh run --runner-config ~/.config/qemuweb-runner/runner.json --url http://192.168.0.101:3003 --insecure
+```
+
+> **Expect:** on SERVER, `listen address  192.168.0.101:3003  (network address)` and the warning block in `Checking configuration…`, then
+> `Web interface      http://192.168.0.101:3003`; on REMOTE the warning that the URL is not encrypted, then `Connected to the server.`; in
+> **/admin → Runners**, `tralala` online with its address `192.168.0.100`. Then pause the `local` runner and place the session of `admin` on
+> `tralala`, as in the quick try above.
+
+`--bind 0.0.0.0` (every interface) also works; the demo then prints the local URL `http://127.0.0.1:3003`, and `http://<address of this machine>:3003`
+is the one to give. A local runner started by hand against a server bound to one address needs `--host`:
+`./scripts/runner.sh --port 3003 --host 192.168.0.101 --token-file TOKENFILE` (start.sh and demo.sh do it).
 
 ## Prerequisites
 
@@ -234,7 +268,8 @@ rm -f ~/.config/qemuweb-runner/runner.json
 | 409 on connection | That runner is already connected from another process: stop the other one. |
 | "No runner is available" for a user | The runner is paused, offline, or at its `maxSessions`; the server log gives the reasons. |
 | A system is missing in the Add host dialog | Its image is not installed on REMOTE (Step 1). |
-| A plain `http://` URL is refused | Only loopback is accepted without `--insecure`; use variant A or `https://`. |
+| A plain `http://` URL is refused | Only loopback is accepted without `--insecure`; use variant A, variant C (`--insecure`, trusted LAN) or `https://`. |
+| Variant C: REMOTE cannot reach the server | The firewall of SERVER (`ufw allow from <REMOTE IP> to any port 3003 proto tcp`), or the server was started without `--bind` (it then listens on 127.0.0.1 only; check the `listen address` line). `Cannot listen on ...: this machine has no such address` means a wrong `--bind`. |
 | Sessions gone after restarting the server | Known limit: a server restart deletes the sessions of a remote runner (see `docs/roadmap.md`, PST01). |
 
 ---

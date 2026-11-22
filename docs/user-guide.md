@@ -179,6 +179,7 @@ browser's cookie (and, behind OpenID, ends the OpenID session); see [docs/deploy
 | --- | --- | --- |
 | `--users FILE` | `users.json` | Users file. |
 | `--session-hours N` | `12` | Login lifetime, renewed while the user is active. |
+| `--bind ADDRESS` | `127.0.0.1` | Address the server listens on (an IPv4 or IPv6 address). Another address than loopback is plain HTTP, for a trusted LAN test only: see [docs/deployment.md](deployment.md#listening-on-another-address-lan-test-no-proxy). |
 | `--trust-proxy VALUE` | unset | Express `trust proxy` value behind a reverse proxy (for example `loopback`), so that cookies get `Secure` over HTTPS. |
 | `--auth MODE` | `password` | `password`, `proxy` (the identity is given by an authenticating front end, for example Apache with mod_auth_openidc for OpenID, but also SAML, CAS, LDAP..., through `X-Remote-User`, trusted only with a shared `X-Proxy-Key`; no password login then). |
 | `--proxy-key-file FILE` | unset | The key shared with the front end, mode 0600: one line, or two lines during a rotation (either is accepted); required by `proxy`. |

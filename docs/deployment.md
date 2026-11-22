@@ -1,6 +1,7 @@
 # Deployment behind nginx
 
-QemuWeb always listens on `127.0.0.1`. To open it to students, put a reverse
+QemuWeb listens on `127.0.0.1` unless `--bind ADDRESS` says otherwise (a LAN test only, see
+[Listening on another address](#listening-on-another-address-lan-test-no-proxy)). To open it to students, put a reverse
 proxy in front of it that terminates TLS and forwards HTTP and WebSocket
 traffic. This page uses nginx; any proxy with the same features works.
 
@@ -287,7 +288,7 @@ registration token is single use and expires (15 minutes, 1 hour or 24 hours, ch
 
 - **TLS:** use an `https://` URL. A server certificate signed by a private authority needs
   `--ca FILE` (the PEM file; `register` keeps it in `runner.json`), or `NODE_EXTRA_CA_CERTS=file` in the environment.
-- **Unencrypted URLs:** `http://` and `ws://` are accepted only for this machine (loopback), for tests. Another host needs
+- **Unencrypted URLs:** `http://` and `ws://` are accepted only for this machine (loopback), for tests. Another host (a server started with `--bind`, see above) needs
   `--insecure`, which prints a warning: the token and all console traffic are then readable on the network.
 - **Firewall:** nothing to open on the runner; it needs outbound access to the server's HTTPS port.
 - **Network cut:** no machine stops. The runner reconnects after 2 s, then 4, 8, 16 and 30 s; the server keeps its
@@ -388,6 +389,36 @@ admin does while observing (that goes to `admin.log`).
 
 Both files grow without limit: rotate them with `logrotate` (`copytruncate`)
 if needed.
+
+## Listening on another address (LAN test, no proxy)
+
+**Production keeps the default: `--bind 127.0.0.1` (loopback), behind nginx or Apache.** At the CREMI nothing changes: the units in
+`deploy/cremi/` never pass `--bind`, the server answers only to the proxy of its own machine, and TLS is terminated by the proxy.
+
+`--bind ADDRESS` lets the server listen on another address of the machine, for a test on a trusted network where a remote runner (or a
+browser) must reach the server without an SSH tunnel and without a proxy. `ADDRESS` is an IPv4 or IPv6 literal of this machine (never a host
+name: nothing is resolved), or `0.0.0.0` / `::` for every interface; `--listen PORT` stays the port. It is **plain HTTP**: the web
+interface, the Socket.IO consoles and `/runner/connect` (the runner token) are readable and modifiable by anyone on the path. The rules:
+
+| Case | What the server does |
+| --- | --- |
+| `--bind` not given, or a loopback address | Nothing changes. |
+| Any other address | Starts, and prints a warning in `Checking configuration…`: traffic, passwords, the session cookie and the runner token travel unencrypted; use only on a trusted LAN, or keep loopback behind a TLS proxy. |
+| `--no-auth` with such an address | **Refused** (exit status 2). No option overrides it: everyone on the network would get the shared administrator session. |
+| `--auth proxy` with such an address | **Refused** (exit status 2) unless `--trust-proxy VALUE` is given: this mode trusts the identity headers of the front end (guarded by `X-Proxy-Key`), which assumes that only the front end can reach the server. Give `--trust-proxy` only when a firewall guarantees it. |
+| `--auth password` (the default) | Allowed, with the warning. Use strong passwords. |
+
+The session cookie follows the request: it gets `Secure` only over HTTPS (directly, or through a proxy named by `--trust-proxy`), so it works
+over plain HTTP on a LAN; without `--trust-proxy` the `X-Forwarded-*` headers are ignored. The client address that is logged (a login, a runner in
+`/admin`) is the socket's, as before.
+
+The local runner of `start.sh` and `demo.sh` follows the server: for a specific address (`--bind 192.168.0.101`) it is started with
+`--host 192.168.0.101`; for `0.0.0.0` or `::`, and by default, it dials `127.0.0.1`. A runner started by hand needs `--host` too
+(`./scripts/runner.sh --port 3003 --host 192.168.0.101`); the `/admin` hint says so. A remote runner uses `--url http://ADDRESS:PORT --insecure`
+(a plain `http://` URL to another machine needs `--insecure`, and prints a warning).
+
+Firewall: open the port only to the machines you expect, for example `sudo ufw allow from 192.168.0.100 to any port 3003 proto tcp`.
+The exact commands of a test are in [remote-runner-test.md](remote-runner-test.md) (variant C). TLS served by QemuWeb itself is not available yet.
 
 ## 3. nginx
 

@@ -60,9 +60,11 @@ runner (the process that runs the machines), each as its own command, with outpu
 restarts, run `./scripts/server.sh` in one terminal and `./scripts/runner.sh` in another (see
 [docs/deployment.md](deployment.md#the-runner-process)).
 
-The server listens only on `127.0.0.1`. To use it from another machine, forward
+The server listens only on `127.0.0.1` by default. To use it from another machine, forward
 the port over SSH (`ssh -L 3002:127.0.0.1:3002 <server>`) or put it behind
-nginx with TLS: see [docs/deployment.md](deployment.md).
+nginx with TLS: see [docs/deployment.md](deployment.md). For a test on a trusted LAN, `--bind ADDRESS`
+(for example `./start.sh --bind 192.168.0.101`) listens on another address, in clear text, with the rules of
+[Listening on another address](deployment.md#listening-on-another-address-lan-test-no-proxy).
 
 VirtualBox is optional: install it separately to provide `VBoxManage` (see
 [VirtualBox](#virtualbox)). The VirtualBox engine is disabled in the Web

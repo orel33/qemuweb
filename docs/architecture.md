@@ -213,7 +213,7 @@ The server is split into layers with one-way dependencies:
 | --- | --- |
 | `server/main.js` | Entry point: command line (`common/cli.js`, table in `server/options.js`), banner, `Options`, `Checking dependencies…`, then `server/startup-checks.js` (`Checking configuration…`: `config.json`, users file, log and runtime directories); the web stack is loaded only after these pass, so `--help` and a refused option answer at once. |
 | `server/serve.js` | Wiring of the web stack: runner gateway, HTTP server (opened at once; a runner connects at any time), Socket.IO, authentication, session manager and routes. |
-| `server/options.js` | The server's command line table (`--listen`, `--runtime`, `--users`, `--runners`, `--logs`, `--examples`, `--session-hours`, `--runner-grace`, `--trust-proxy`, `--auth`, `--proxy-key-file`, `--logout-url`, `--no-auth`, `--ephemeral`), anything else refused with exit status 2. |
+| `server/options.js` | The server's command line table (`--listen`, `--bind`, `--runtime`, `--users`, `--runners`, `--logs`, `--examples`, `--session-hours`, `--runner-grace`, `--trust-proxy`, `--auth`, `--proxy-key-file`, `--logout-url`, `--no-auth`, `--ephemeral`), anything else refused with exit status 2 (`--bind` takes an IPv4 or IPv6 literal; a non-loopback address is refused with `--no-auth`, and with `--auth proxy` unless `--trust-proxy` is given). |
 | `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
 | `server/routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
@@ -233,6 +233,7 @@ The server is split into layers with one-way dependencies:
 | `server/remote-gateway.js` | `/runner/connect`: the WebSocket upgrade of every runner (bearer token and runner ID checked against `runners.json`, 401 / 409; the id `local` only with `--local-runner` and the token of the file, checked against its in-memory hash in constant time), the `ws` duplex stream under a protocol `Connection`, ping/pong (`common/ws-heartbeat.js`). The address proves nothing (a reverse proxy reaches the server from 127.0.0.1 too): the token is the only proof. |
 | `server/runner-store.js`, `server/runner-registration.js` | `runners.json` (token hashes, 0600, revoked, paused) and the in-memory one-time registration tokens (15 min, 1 h, 24 h). |
 | `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
+| `server/listen.js`, `common/bind.js` | The HTTP surface (web interface, Socket.IO, `/runner/connect`) listens on `127.0.0.1` unless `--bind ADDRESS` names another address, in clear text: `server/listen.js` writes the `listen address` line, the warning of a non-loopback address and the banner URLs; `common/bind.js` is the ONE place of the rules (an IPv4 or IPv6 literal, loopback, wildcard, and the address the local runner dials: `--host`, derived from `--bind` by `start.sh` and `demo.sh`). Production keeps loopback behind nginx or Apache. |
 | `server/local-runner-token.js`, `common/local-token.js` | With `--local-runner`: creates `<runtime>/local-runner.token` when missing or unusable (0600, directory 0700, 32 random bytes in base64url, atomic write; a readable file is never rewritten), keeps its sha256 in memory as the secret of the record `local` (which has no hash in `runners.json`), creates that record once (audit `register-local-runner`) and never un-revokes it. `common/local-token.js` is the one place that knows the file name and format. |
 | `server/server-instance.js` | `<server runtime>/server-<port>.pid` (read by `scripts/stop.sh`), written in the server's own directory (beside `bindings.json` and `local-runner.token`). |
 | `server/auth/` | `index.js` facade (login routes, middleware, `requireAdmin`, Socket.IO handshake, `currentUser`), `users-store.js` (`users.json` and the account operations shared by `scripts/user.js` and the admin API), `passwords.js` (scrypt), `cookie.js` (signed cookie), `proxy.js` (shared key file, identity from the authenticating front end). |
@@ -469,7 +470,7 @@ up its temporary files. A ZIP export can preserve a session explicitly; a
 The runner executes sessions; the control plane (web server) never touches a
 node process, a node record or a runtime file. They talk through one
 connection carrying a small message protocol, the same for the local runner
-(WebSocket on 127.0.0.1) and for remote runners (WebSocket over
+(WebSocket on 127.0.0.1, or on the server's `--bind` address with the runner's `--host`) and for remote runners (WebSocket over
 TLS, milestone 5c). Unit tests run the same protocol over an in-memory stream
 pair (`test/unit/runner-pair.js`).
 
@@ -726,7 +727,7 @@ student's lab machine (roadmap, "Personal runners").
 
 - It assumes no root, no capability, no dedicated system account, and writes
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
-  `--port PORT` (the server, `ws://127.0.0.1:PORT`), `--token-file <file>` (the token of the server, default the file of the default SERVER directory of the port), `--runtime <dir>` (sessions,
+  `--port PORT` (the server, `ws://127.0.0.1:PORT`), `--host ADDRESS` (the server's address when it is not loopback: `ws://ADDRESS:PORT`), `--token-file <file>` (the token of the server, default the file of the default SERVER directory of the port), `--runtime <dir>` (sessions,
   default `/tmp/qw-<login>/l-<port>` for the local runner and `/tmp/qw-<login>/r-<6 hex digits of its id>` for a remote one: one directory per runner,
   within the 49-byte budget of the node sockets (common/runtime-dir.js)), `--config <file>` (system catalog,
   default the project's `config.json`).
