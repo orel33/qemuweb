@@ -5,7 +5,7 @@ After=network.target
 [Service]
 User=qemuweb
 WorkingDirectory=/srv/qemuweb
-ExecStart=/usr/bin/node server/main.js --listen 3002 --runtime /var/lib/qemuweb --users /etc/qemuweb/users.json --runners /etc/qemuweb/runners.json --logs /var/log/qemuweb --session-hours 12 --runner-grace 300 --trust-proxy loopback --auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye
+ExecStart=/usr/bin/node server/main.js --listen 3002 --local-runner --runtime /var/lib/qemuweb/server --users /etc/qemuweb/users.json --runners /etc/qemuweb/runners.json --logs /var/log/qemuweb --session-hours 12 --runner-grace 300 --trust-proxy loopback --auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye
 KillSignal=SIGTERM
 TimeoutStopSec=30
 Restart=on-failure

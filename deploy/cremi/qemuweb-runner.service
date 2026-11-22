@@ -1,17 +1,20 @@
 [Unit]
 Description=QemuWeb runner (local, runs the machines of this server)
 After=qemuweb-server.service
+Wants=qemuweb-server.service
 
 [Service]
 User=qemuweb
 SupplementaryGroups=kvm
 WorkingDirectory=/srv/qemuweb
-ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --runtime /var/lib/qemuweb
+ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --token-file /var/lib/qemuweb/server/local-runner.token --runtime /var/lib/qemuweb/runner
 # SIGTERM goes to the runner only, which stops its machines in order; SIGKILL goes to what is left
 # (QEMU, vde_switch) after the stop timeout.
 KillMode=mixed
 TimeoutStopSec=60
+# Exit status 78: the server refused the token (the runner was revoked); do not restart in a loop.
 Restart=on-failure
+RestartPreventExitStatus=78
 
 [Install]
 WantedBy=multi-user.target

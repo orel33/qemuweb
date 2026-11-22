@@ -4,8 +4,8 @@
 #   ./deploy/cremi/qwctl.sh status [server|runner|all]
 #   ./deploy/cremi/qwctl.sh start|stop|restart [server|runner|all]   (default: all)
 #   ./deploy/cremi/qwctl.sh logs [server|runner|all] [LINES]         (last lines of the journal, default 20)
-# Restarting the server alone keeps the machines (the runner holds them). Stopping or restarting the runner
-# stops every machine of the local runner: the script asks first (-y answers yes).
+# Restarting the server alone keeps the machines (the runner holds them; the sessions come back when it reconnects).
+# Stopping or restarting the runner stops every machine of the local runner: the script asks first (-y answers yes).
 set -euo pipefail
 
 SERVER=qemuweb-server

@@ -97,11 +97,12 @@
 
   <!-- Runner links -->
   <line x1="290" y1="264" x2="215" y2="318" stroke="#14284a" stroke-width="2.2" marker-end="url(#a)" marker-start="url(#a)"/>
-  <text x="200" y="293" text-anchor="end" font-size="9.5" fill="#14284a">runner protocol</text>
-  <text x="200" y="305" text-anchor="end" font-size="9" fill="#33415a">Unix socket</text>
+  <text x="200" y="281" text-anchor="end" font-size="9.5" fill="#14284a">runner protocol</text>
+  <text x="200" y="293" text-anchor="end" font-size="9" fill="#33415a">WebSocket + token file</text>
+  <text x="200" y="305" text-anchor="end" font-size="9" fill="#33415a">(127.0.0.1)</text>
   <line x1="530" y1="264" x2="615" y2="318" stroke="#14284a" stroke-width="2.2" stroke-dasharray="6 3" marker-end="url(#a)" marker-start="url(#a)"/>
   <text x="626" y="293" font-size="9.5" fill="#14284a">runner protocol</text>
-  <text x="626" y="305" font-size="9" fill="#33415a">WebSocket opened by the runner</text>
+  <text x="626" y="305" font-size="9" fill="#33415a">WebSocket, registered with a token</text>
 
   <!-- Local runner -->
   <rect x="14" y="318" width="390" height="298" rx="8" fill="#ffffff" stroke="#14284a" stroke-width="1.8"/>

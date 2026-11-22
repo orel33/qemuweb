@@ -24,8 +24,8 @@ session; teachers observe it, take control to help, and clean up at the end of t
 - The **server** (Node.js, Express, Socket.IO) serves the web interface, authenticates users, keeps one session
   per user and relays the consoles. It starts no machine.
 - A **runner** runs the machines of the sessions placed on it: QEMU or VirtualBox, a `vde_switch` per switch,
-  serial consoles over Unix sockets. The local runner dials the server on a Unix socket; a remote one opens an
-  outbound WebSocket with its own token and needs no inbound port.
+  serial consoles over Unix sockets. Every runner opens an outbound WebSocket to the server and shows a token: the local
+  one reads it from a file that the server writes (`--local-runner`), a remote one has its own and needs no inbound port.
 - The **browser** (ES modules, xterm.js, a network graph) needs no plugin.
 
 More in [docs/architecture.md](docs/architecture.md).
