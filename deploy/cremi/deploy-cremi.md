@@ -366,7 +366,7 @@ sudo -u qemuweb sh -c 'test -w /dev/kvm && echo kvm-ok'
 **17. Base image.** `bash scripts/prepare.sh --system all` builds the images of the four systems (Debian 13 Legacy, Debian 13 Cloud, Alpine, OpenWrt;
 `--system all --parallel` builds them at the same time if the machine has at least 8 GB of free memory and 4 cores, with one log per system: see "Building several systems at once" in `docs/install.md`)
 on this machine behind the CREMI proxy, which it reads from `https_proxy` (see "Outbound path" in `cremi-architecture.md`);
-to check a build, run for example `bash scripts/prepare.sh --system alpine --force --follow` on the server. If a build
+to follow a build, run `tail -f` on the log file that the build prints when its VM starts. If a build
 fails (the report names the unreachable host and the log directory) or the Debian ISO host answers `503`, the **fallback**
 is to build the image on the **workstation** and copy it. On the workstation, in the repository (the second command records the SHA-256 files that `rsync` copies; `-a`
 keeps the dates, `-S` keeps the file sparse):

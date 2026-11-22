@@ -117,7 +117,7 @@ sock.sendall(b'poweroff\r')
 sock.close()
 PY
   driver_pid=$!
-  build_follow_info "Customizing OpenWrt in a VM" "$serial_log" "$serial_socket" serial
+  build_log_info "Customizing OpenWrt in a VM" "$serial_log"
   if ! watch_vm 'OpenWrt build' "$driver_pid" "$serial_log" "$OPENWRT_DONE" 1 300 OPENWRT_FAILURES OPENWRT_PHASES; then
     driver_pid=''
     exit 1   # the VM is stopped and the log directory kept by cleanup_openwrt_prepare

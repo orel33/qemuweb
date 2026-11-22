@@ -7,8 +7,8 @@ usage() {
   cat <<'HELP'
 Usage: bash scripts/prepare.sh                      (same as --list: nothing is built)
        bash scripts/prepare.sh --list
-       bash scripts/prepare.sh --system <id|all> [--force] [--proxy <url>] [-6] [--follow[=N] | --parallel[=N]]
-       bash scripts/prepare.sh --all [--force] [--proxy <url>] [-6] [--follow[=N] | --parallel[=N]]   (same as --system all)
+       bash scripts/prepare.sh --system <id|all> [--force] [--proxy <url>] [-6] [--parallel[=N]]
+       bash scripts/prepare.sh --all [--force] [--proxy <url>] [-6] [--parallel[=N]]   (same as --system all)
        bash scripts/prepare.sh --hash [--system <id|all>]
        bash scripts/prepare.sh --help
 
@@ -23,7 +23,7 @@ The elapsed time of each step and the system total are displayed.
                    or "unknown"; every raw image gets "guest agent: yes (restricted)", "yes (NOT
                    restricted)", "no" or "unknown" (best effort, read-only, needs debugfs).
 --system <id|all>  Prepare one configured system, or every one with "all" ("all" is reserved:
-                   no system can have this ID). Required by --force, --proxy, -6 and --follow.
+                   no system can have this ID). Required by --force, --proxy, -6 and --parallel.
 --all              Same as --system all.
 --force            Rebuild and replace existing images. Save the old pair in
                    images/backups/ for recovery. Running VMs and old working
@@ -39,19 +39,16 @@ The elapsed time of each step and the system total are displayed.
 -6, --ipv6         The build VM reaches the proxy over IPv6 (the proxy name is resolved to its
                    IPv6 address, written in brackets). Without it the VM goes out in IPv4, which
                    a proxy may refuse while it accepts this machine over IPv6.
---follow[=N]       Show the last N lines (20 by default, 1 to 100) of the build VM's serial log
-                   under the progress line, redrawn in place on a terminal; without a terminal,
-                   the new log lines are printed as they appear.
 --parallel[=N]     Build several systems at the same time (useful with --system all): at most N at
                    once (1 to 8), or without N as many as there are systems, at most 4. --parallel=1
                    is the sequential build. Each build writes its whole output to its own log,
-                   sources/.prepare/.parallel.XXXXXX/<id>.log (the paths are printed: follow one
-                   with tail -f), and one status line per system is shown (redrawn in place on a
-                   terminal). A failed system does not stop the others; the summary lists every
+                   sources/.prepare/.parallel.XXXXXX/<id>.log (the paths are printed at the start
+                   of each build: follow one with tail -f), and one status line per system is
+                   shown (redrawn in place on a terminal). A failed system does not stop the others; the summary lists every
                    system and the end of each failed log, the exit status is non-zero. Ctrl+C
                    stops every build and its VM. Warns when the machine has less than 2 GB of free
                    memory per build, fewer cores than builds or less than 10 GB of free disk.
-                   Without --system all it has no effect (one system). Not with --follow.
+                   Without --system all it has no effect (one system).
 --hash             Only record the SHA-256 of the existing images in images/<sysname>.raw.sha256
                    and .vdi.sha256 (sha256sum format), without building anything. Every build
                    records them itself; the server uses a hash file that is not older than its
@@ -78,7 +75,6 @@ force=false
 hash_only=false
 proxy_set=false
 proxy_value=''
-follow_lines=0
 ipv6=0
 parallel_set=false
 parallel_max=0   # --parallel=N; 0: as many as there are systems, at most 4
@@ -95,11 +91,7 @@ while (( $# )); do
       system_given=true; selected_system="$2"; shift 2 ;;
     --force) force=true; shift ;;
     -6|--ipv6) ipv6=1; shift ;;
-    --follow) follow_lines=20; shift ;;
-    --follow=*)
-      follow_lines="${1#--follow=}"
-      [[ "$follow_lines" =~ ^[0-9]+$ ]] && (( follow_lines >= 1 && follow_lines <= 100 )) || fail '--follow=N needs a number of lines from 1 to 100.'
-      shift ;;
+    --follow|--follow=*) fail '--follow was removed: follow the build with tail -f on the log file printed at the start of the build.' ;;
     --parallel) parallel_set=true; parallel_max=0; shift ;;
     --parallel=*)
       parallel_max="${1#--parallel=}"
@@ -120,19 +112,15 @@ build_options=()
 [[ "$force" == true ]] && build_options+=(--force)
 [[ "$proxy_set" == true ]] && build_options+=(--proxy)
 (( ipv6 == 1 )) && build_options+=(--ipv6)
-(( follow_lines > 0 )) && build_options+=(--follow)
 [[ "$parallel_set" == true ]] && build_options+=(--parallel)
 if [[ "$hash_only" == true && ( "$list_only" == true || ${#build_options[@]} -gt 0 ) ]]; then
-  fail '--hash cannot be combined with --list, --force, --proxy, --ipv6, --follow or --parallel.'
+  fail '--hash cannot be combined with --list, --force, --proxy, --ipv6 or --parallel.'
 fi
 if [[ "$list_only" == true && ( "$system_given" == true || ${#build_options[@]} -gt 0 ) ]]; then
   fail '--list cannot be combined with preparation options.'
 fi
 if [[ "$hash_only" == false && "$list_only" == false && "$system_given" == false ]]; then
   fail "${build_options[*]} needs a system: choose --system <id|all>."
-fi
-if [[ "$parallel_set" == true && $follow_lines -gt 0 ]]; then
-  fail '--parallel cannot be combined with --follow: the builds would mix their output. Each build has its own log (the paths are printed at the start): follow one with tail -f.'
 fi
 # "all" is every system (reserved word); an empty selection below means the same for --hash.
 if [[ "$selected_system" == all ]]; then selected_system=''; fi
@@ -195,7 +183,7 @@ NODE
   exit 0
 fi
 
-export QEMUWEB_PREPARE_FOLLOW="$follow_lines" QEMUWEB_PREPARE_IPV6="$ipv6"
+export QEMUWEB_PREPARE_IPV6="$ipv6"
 target_ids=("${system_ids[@]}")
 if [[ -n "$selected_system" ]]; then
   found=false
@@ -397,7 +385,7 @@ build_system() {
 # ---------------------------------------------------------------------------
 job_state=()   # queued | running | done | FAILED | stopped
 job_pid=() job_start=() job_time=() job_code=() job_log=()
-job_serial=() job_socket=()   # the serial log and the control socket of the build VM, read back from the job log
+job_serial=()   # the serial log of the build VM, read back from the job log
 status_rows=0
 
 # Progress of a job, from its own log: the last progress line of the build VM, or the last "== id · ..." line.
@@ -408,11 +396,10 @@ job_progress() {
   printf '%s' "$line"
 }
 
-# The "log:" and "socket:" lines of build_follow_info (scripts/prepare/lib/common.sh) in the job log.
+# The "log:" line of build_log_info (scripts/prepare/lib/common.sh) in the job log.
 job_paths() {
   local i="$1"
   job_serial[i]=$(sed -nE 's/^    log: +(.*)  \(follow: .*$/\1/p' "${job_log[$i]}" 2>/dev/null | head -n 1 || true)
-  job_socket[i]=$(sed -nE 's/^    socket: +(.*)  \(.* socket, held by.*$/\1/p' "${job_log[$i]}" 2>/dev/null | head -n 1 || true)
 }
 
 status_line() {
@@ -478,7 +465,7 @@ run_parallel() {
   for i in "${!target_ids[@]}"; do
     job_state[i]=queued
     job_log[i]="$run_dir/${target_ids[$i]}.log"
-    job_serial[i]=''; job_socket[i]=''
+    job_serial[i]=''
   done
   trap 'parallel_abort 130' INT
   trap 'parallel_abort 143' TERM
@@ -505,7 +492,7 @@ run_parallel() {
       for i in "${!target_ids[@]}"; do
         if [[ "${job_state[$i]}" == running && -z "${job_serial[$i]}" ]]; then
           job_paths "$i"
-          if [[ -n "${job_serial[$i]}" ]]; then echo "${target_ids[$i]}: build VM started, serial log ${job_serial[$i]}${job_socket[$i]:+ (socket ${job_socket[$i]}, informational: do not connect)}"; fi
+          if [[ -n "${job_serial[$i]}" ]]; then echo "${target_ids[$i]}: build VM started, serial log ${job_serial[$i]}"; fi
         fi
       done
     fi
@@ -561,7 +548,6 @@ if (( jobs_to_run > 1 )); then
     printf '  %-*s  %-6s  %s  log %s\n' "$id_width" "${target_ids[$i]}" "${job_state[$i]}" "$(format_duration "${job_time[$i]}")" "${job_log[$i]}"
     # The build VM directory is removed after a success: only existing files are shown.
     if [[ -n "${job_serial[$i]}" && -e "${job_serial[$i]}" ]]; then printf '  %*s  serial log %s  (tail -f)\n' "$id_width" '' "${job_serial[$i]}"; fi
-    if [[ -n "${job_socket[$i]}" && -e "${job_socket[$i]}" ]]; then printf '  %*s  socket %s  (informational: held by the build, do not connect)\n' "$id_width" '' "${job_socket[$i]}"; fi
     if [[ "${job_state[$i]}" == FAILED ]]; then
       failed_count=$((failed_count + 1))
       if (( job_code[i] > worst )); then worst=${job_code[$i]}; fi

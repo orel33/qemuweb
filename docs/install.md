@@ -111,7 +111,6 @@ bash scripts/prepare.sh --hash               # (all systems) record image hashes
 bash scripts/prepare.sh --system <id> --force  # rebuild one system
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/  # behind an HTTP proxy
 bash scripts/prepare.sh --system all --parallel  # build the systems at the same time (at most 4); --parallel=N: at most N (1 to 8)
-bash scripts/prepare.sh --system <id> --follow  # also show the last 20 lines of the build log
 bash scripts/prepare.sh --system <id> --proxy http://proxy:3128/ -6  # the build VM reaches the proxy over IPv6
 ```
 
@@ -146,8 +145,7 @@ shows one status line per system (state, elapsed time, phase), redrawn in place,
 stop the others: the summary lists every system with its time, then the end of each failed log, and
 the exit status is 1 (the logs are kept; after a full success they are removed). Ctrl+C or SIGTERM
 stops all the builds and their VMs (with `--force`, the previous images of the interrupted systems
-are put back). `--follow` cannot be used with `--parallel`: follow a build with `tail -f` on its
-log (below).
+are put back). Follow one build with `tail -f` on its log (below).
 
 Several Debian VMs at once are heavy: each build VM takes 0.25 to 2 GB of memory (Debian Legacy:
 2 GB and 2 cores; the others 1 GB or less) and an image build writes several GB. `prepare.sh`
@@ -190,7 +188,7 @@ reachable. The ISO and the images are downloaded with `curl`; a failed download 
 
 ### Progress and failures of a build
 
-The Alpine and OpenWrt builds show the same status line, `--follow` and failure report as the
+The Alpine and OpenWrt builds show the same status line and failure report as the
 Debian ones (their phases come from markers that the build script prints and from the Alpine
 installer's steps). The log shows for Alpine the failure of an unreachable mirror
 (`wget: can't connect to remote host`, `No mirror found`, `unable to select packages`) and for
@@ -202,21 +200,24 @@ The strings are in `scripts/prepare/lib/common.sh` (`ALPINE_FAILURES`, `OPENWRT_
 they come from the failing Alpine log recorded at the CREMI, the OpenWrt ones are not yet checked
 against a real failure.
 
-Where to follow a build from another terminal: when its VM starts, each build prints the
-serial log and the control socket of the VM, for example
+To follow a build from another terminal, copy the `tail -f` command that each build prints when
+its VM starts (the full path of the serial log, in the scratch directory of the build):
 
 ```text
   Installing Alpine in a VM
-    log:    /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.log  (follow: tail -f /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.log)
-    socket: /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.sock  (serial socket, held by the build: do not connect)
+    log: /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.log  (follow: tail -f /srv/qemuweb/sources/.prepare/.alpine-prepare.AbC123/alpine-serial.log)
 ```
 
-Copy the `tail -f` command. The socket is informational: a QEMU server socket accepts one client
-and the build holds it, so follow the log file, never the socket. Alpine and OpenWrt show their
-serial socket, the Debian cloud build its QMP socket, and the Debian legacy build only the log
-(its serial port is the file itself). With `--parallel` the same lines are in the log of each
-build (`<system>.log`), the status without a terminal prints `<system>: build VM started, serial log <path>`,
-and the final summary gives the paths that still exist (a successful build removes its directory).
+The log holds the terminal escape sequences of the guest console, as the VM wrote them; for a clean
+view, filter them out:
+
+```sh
+tail -f <log> | sed -u 's/\x1b\[[0-9;?]*[A-Za-z]//g'
+```
+
+With `--parallel` the same line is in the log of each build (`<system>.log`), the status without a
+terminal prints `<system>: build VM started, serial log <path>`, and the final summary gives the
+serial log paths that still exist (a successful build removes its directory).
 
 While the VM runs, one status line shows a gauge, an estimated percentage, the phase,
 the elapsed time and the size of the serial log, for example
@@ -225,10 +226,6 @@ place on a terminal, and printed every 30 seconds otherwise. The percentage is a
 estimate by phase read from the serial log (the steps of the installer, the stages of
 cloud-init), not a measure of work: it never goes back and reaches 100% only at the end.
 Cloud-init prints nothing while it installs packages, so that phase is long.
-
-`--follow` (or `--follow=N`, 1 to 100 lines) shows the last 20 lines of the serial log
-under the status line, redrawn in place on a terminal, so that a long phase can be watched.
-Without a terminal (a pipe, a file) the new log lines are printed as they appear.
 
 The build stops at once (status 1) when the log shows an error that will not recover,
 such as the installer's `Bad archive mirror` dialog; it then prints the last 20 lines

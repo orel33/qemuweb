@@ -3,7 +3,7 @@
 // scripts/prepare.sh --parallel[=N]: several systems built at the same time. The real script runs in a
 // temporary project root whose per-system scripts are STUBS (they log "+id" when the build starts and "-id"
 // when it ends in events.log, print the same "where to follow" block as the real builds through
-// build_follow_info, and sleep), so nothing is downloaded or built and the overlap can be measured.
+// build_log_info, and sleep), so nothing is downloaded or built and the overlap can be measured.
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -33,7 +33,7 @@ id=${id}; events='${root}/events.log'
 if [[ "$1" == --sources ]]; then echo "sources of $id"; exit 0; fi
 echo "+$id" >> "$events"
 echo "$$" > '${root}/${id}.pid'
-build_follow_info "Installing $id in a VM" "$RUNTIME/$id-serial.log" "$RUNTIME/$id.sock" serial
+build_log_info "Installing $id in a VM" "$RUNTIME/$id-serial.log"
 echo "[###-------]  30%  Fake phase of $id  00:01  log 1 KB"
 sleep ${failing ? failSleep : (sleeps[id] ?? sleep)}
 ${failing ? `echo "-$id FAILED" >> "$events"; echo "boom $id" >&2; exit 1` : `echo "-$id" >> "$events"; echo raw > '${root}/images/'$id.raw; echo vdi > '${root}/images/'$id.vdi`}
@@ -74,7 +74,7 @@ test('--parallel builds two systems at the same time: they overlap, in about the
     // without a terminal: plain lines
     assert.match(result.out, /^x: started, log .*\/x\.log$/m);
     assert.match(result.out, /^y: started, log .*\/y\.log$/m);
-    assert.match(result.out, /^x: build VM started, serial log .*\/x-serial\.log \(socket .*\/x\.sock, informational: do not connect\)$/m);
+    assert.match(result.out, /^x: build VM started, serial log .*\/x-serial\.log$/m);
     assert.match(result.out, /^x: done in 00:00:0\d$/m);
     assert.match(result.out, /^y: done in 00:00:0\d$/m);
     assert.match(result.out, /^ {2}x +done +00:00:0\d +log .*\/x\.log$/m);
@@ -134,13 +134,13 @@ test('--parallel=1 and a single system are the sequential build, with the output
   });
 });
 
-test('the sequential build shows where to follow it: serial log, tail -f command and the control socket', () => {
+test('the sequential build shows where to follow it: serial log and the tail -f command, no socket', () => {
   withRoot(['x'], {}, ({run}) => {
     const result = run('--system', 'x');
     assert.equal(result.status, 0, result.err);
     assert.match(result.out, /^ {2}Installing x in a VM$/m);
-    assert.match(result.out, /^ {4}log: {4}(\S+\/sources\/\.prepare\/x-serial\.log) {2}\(follow: tail -f \1\)$/m);
-    assert.match(result.out, /^ {4}socket: \S+\/x\.sock {2}\(serial socket, held by the build: do not connect\)$/m);
+    assert.match(result.out, /^ {4}log: (\S+\/sources\/\.prepare\/x-serial\.log) {2}\(follow: tail -f \1\)$/m);
+    assert.doesNotMatch(result.out, /socket/);
   });
 });
 
@@ -185,7 +185,7 @@ test('with --force, each job saves its images in the backup directory of the run
   });
 });
 
-test('--parallel is refused with --list, --hash and --follow, and its number is checked', () => {
+test('--parallel is refused with --list and --hash, and its number is checked', () => {
   withRoot(['x', 'y'], {}, ({run, events}) => {
     let result = run('--list', '--parallel');
     assert.equal(result.status, 2);
@@ -195,11 +195,6 @@ test('--parallel is refused with --list, --hash and --follow, and its number is 
     assert.match(result.err, /--hash cannot be combined with .*--parallel/);
     result = run('--hash', '--parallel=2', '--system', 'all');
     assert.equal(result.status, 2);
-    for (const args of [['--all', '--parallel', '--follow'], ['--all', '--follow=5', '--parallel=2'], ['--system', 'x', '--parallel', '--follow']]) {
-      result = run(...args);
-      assert.equal(result.status, 2, args.join(' '));
-      assert.match(result.err, /--parallel cannot be combined with --follow/);
-    }
     for (const value of ['0', '9', 'x', '', '2.5']) {
       result = run('--all', `--parallel=${value}`);
       assert.equal(result.status, 2, value);

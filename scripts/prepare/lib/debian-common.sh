@@ -177,7 +177,7 @@ NETWORK_CONFIG
       -drive "file=$seed,media=cdrom,readonly=on" -boot order=c -nic user,model=virtio-net-pci \
       >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
     qemu_pid=$!
-    build_follow_info "Building the image in a VM" "$serial_log" "$qmp_socket" QMP
+    build_log_info "Building the image in a VM" "$serial_log"
     # Success: our marker and cloud-init's last line are both in the log. Cloud-init
     # prints nothing while it installs packages, so a silent VM is only reported
     # (no stall limit); the total limit in lib/common.sh still applies.

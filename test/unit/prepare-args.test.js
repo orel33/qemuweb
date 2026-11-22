@@ -101,9 +101,9 @@ test('--all is the same as --system all, and cannot be combined with --system', 
   });
 });
 
-test('--force, --proxy, -6 and --follow without --system are errors, never a build', () => {
+test('--force, --proxy, -6 and --parallel without --system are errors, never a build', () => {
   withRoot(({run, calls}) => {
-    for (const args of [['--force'], ['--proxy', 'http://proxy:3128/'], ['-6'], ['--follow'], ['--follow=5'], ['--force', '--follow']]) {
+    for (const args of [['--force'], ['--proxy', 'http://proxy:3128/'], ['-6'], ['--parallel'], ['--parallel=2'], ['--force', '--parallel']]) {
       const result = run(...args);
       assert.equal(result.status, 2, args.join(' '));
       assert.match(result.err, /choose --system <id\|all>/, args.join(' '));
@@ -115,12 +115,12 @@ test('--force, --proxy, -6 and --follow without --system are errors, never a bui
 
 test('--list cannot be combined with preparation options, and --hash neither', () => {
   withRoot(({run, calls}) => {
-    for (const option of [['--force'], ['--proxy', 'none'], ['-6'], ['--follow'], ['--system', 'x']]) {
+    for (const option of [['--force'], ['--proxy', 'none'], ['-6'], ['--parallel'], ['--system', 'x']]) {
       const result = run('--list', ...option);
       assert.equal(result.status, 2, option.join(' '));
       assert.match(result.err, /--list cannot be combined with preparation options/);
     }
-    for (const option of [['--force'], ['--proxy', 'none'], ['-6'], ['--follow'], ['--list']]) {
+    for (const option of [['--force'], ['--proxy', 'none'], ['-6'], ['--parallel'], ['--list']]) {
       const result = run('--hash', ...option);
       assert.equal(result.status, 2, option.join(' '));
       assert.match(result.err, /--hash cannot be combined with/);
@@ -164,6 +164,17 @@ test('an unknown system, a repeated --system and a missing id are errors, nothin
       result = run(...args);
       assert.equal(result.status, 2, args.join(' '));
       assert.match(result.err, /Expected a system ID, or all, after --system\./);
+    }
+    assert.deepEqual(calls(), []);
+  });
+});
+
+test('--follow was removed: the error says how to follow a build', () => {
+  withRoot(({run, calls}) => {
+    for (const args of [['--follow'], ['--follow=5'], ['--system', 'x', '--follow'], ['--all', '--follow=20', '--parallel']]) {
+      const result = run(...args);
+      assert.equal(result.status, 2, args.join(' '));
+      assert.match(result.err, /--follow was removed: follow the build with tail -f on the log file printed at the start of the build\./);
     }
     assert.deepEqual(calls(), []);
   });
