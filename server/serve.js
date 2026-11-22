@@ -8,9 +8,9 @@ const path = require('path');
 const express = require('express');
 const {Server: SocketIoServer} = require('socket.io');
 const {RunnerRegistry} = require('./runner-registry');
-const {ensureLocalRunnerToken} = require('./local-runner-token');
+const {startLocalRunner} = require('./local-runner-token');
 const {createRemoteGateway} = require('./remote-gateway');
-const {createRunnerStore, LOCAL_ID} = require('./runner-store');
+const {createRunnerStore} = require('./runner-store');
 const {createRegistrationTokens} = require('./runner-registration');
 const {createRegisterRouter} = require('./routes/runner-register');
 const {ServerInstance} = require('./server-instance');
@@ -24,18 +24,6 @@ const {createAuth} = require('./auth');
 const {ADMIN_LOG, USERS_LOG, createAudit, createUserLog} = require('./audit');
 const {createAdminRouter, observationGate, adminPage} = require('./routes/admin');
 const {connectHint} = require('./routes/admin-runners');
-
-// The token file and the record of the local runner (--local-runner). Throws when the token file can neither be read nor created.
-function startLocalRunner({runtime, store, audit}) {
-  const token = ensureLocalRunnerToken(runtime);
-  if (token.created) console.log(`Local runner token file ${token.file} created${token.reason ? ` (${token.reason})` : ''}.`);
-  else if (token.mode & 0o077) console.warn(`Local runner token file ${token.file} can be read by other users: chmod 600 it, or remove it and restart the server.`);
-  const known = store.get(LOCAL_ID);
-  const record = store.ensureLocal();
-  if (!known) audit.record('server', 'register-local-runner', {runnerId: record.id}, 'ok');
-  if (record.revoked) console.log('The local runner is revoked: it stays refused (forget it in /admin, then restart the server, to allow it again).');
-  return token;
-}
 
 function serve({root, settings}) {
   const {runtime, port} = settings;
@@ -60,7 +48,7 @@ function serve({root, settings}) {
   // Every runner has a record in runners.json; the one of the local runner (--local-runner) is created here, with its token file.
   const runnerStore = createRunnerStore(settings.runnersFile);
   let localRunner = null;
-  try { if (settings.localRunner) localRunner = startLocalRunner({runtime, store: runnerStore, audit}); }
+  try { if (settings.localRunner) localRunner = startLocalRunner({runtime, store: runnerStore, audit, log: console}); }
   catch (error) {
     console.error(`server: Cannot read or create the local runner token file: ${error.message}`);
     process.exit(1);

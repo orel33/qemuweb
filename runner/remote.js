@@ -16,6 +16,7 @@
 //     report(state, message)    waiting | token (not available now) | connected | lost | refused
 //     fatal(message)            the server refused the token (401): no retry; only a network or server problem is retried
 //     refusal                   the text of that message
+//     delayFor(attempt)         the delay of a retry in ms (tests shorten it)
 const fs = require('fs');
 const WebSocket = require('ws');
 const {Connection} = require('../common/runner-protocol');
@@ -32,7 +33,7 @@ function retryDelay(attempt) {
 
 const REFUSAL = 'The server refused this runner: its token is unknown or revoked. Register it again with ./scripts/runner.sh register.';
 
-function startRemote({url, runnerId, authToken, ca = null, onConnection, onLost = () => {}, report, fatal, refusal = REFUSAL}) {
+function startRemote({url, runnerId, authToken, ca = null, onConnection, onLost = () => {}, report, fatal, refusal = REFUSAL, delayFor = retryDelay}) {
   const tokenNow = typeof authToken === 'function' ? authToken : () => authToken;
   const options = {handshakeTimeout: HANDSHAKE_MS, maxPayload: 20 * 1024 * 1024, ...(ca ? {ca: fs.readFileSync(ca)} : {})};
   let stopped = false;
@@ -46,7 +47,7 @@ function startRemote({url, runnerId, authToken, ca = null, onConnection, onLost 
     try { token = tokenNow(); }
     catch (error) {
       report('token', `${error.message}; waiting for it, retrying…`);
-      timer = setTimeout(open, retryDelay(attempt++));
+      timer = setTimeout(open, delayFor(attempt++));
       return;
     }
     const ws = new WebSocket(url, {...options, headers: {Authorization: `Bearer ${token}`, 'X-Runner-Id': runnerId}});
@@ -56,7 +57,7 @@ function startRemote({url, runnerId, authToken, ca = null, onConnection, onLost 
     const retry = () => {
       if (settled || stopped) return;
       settled = true;
-      timer = setTimeout(open, retryDelay(attempt++));
+      timer = setTimeout(open, delayFor(attempt++));
     };
     ws.on('error', error => { if (!opened && !settled) report('waiting', `Cannot reach the server (${error.message}); retrying…`); });
     ws.once('unexpected-response', (_request, response) => {

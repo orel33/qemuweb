@@ -1,15 +1,15 @@
 'use strict';
 
 // The launch sequence scripts/start.sh: the server and a runner, two processes under start.sh,
-// each leader of its own process group; the runner reaches the server over
-// runtime/runner-<port>.sock; a session works through it (VDE switch start, terminal output,
+// each leader of its own process group; the runner reaches the server over the WebSocket with the token of
+// <runtime>/local-runner.token (created by the server, never on the runner's command line); a session works through it (VDE switch start, terminal output,
 // stop). A runner killed with SIGKILL takes its group with it (nothing is restarted): start.sh
-// stops the server and exits with an error, browsers get session-deleted, no process or socket is
+// stops the server and exits with an error, browsers get session-deleted, no process is
 // left; the server removes no directory, so the dead runner's session directory (with its switch)
 // stays, and the next runner replaces the stale runner.pid, keeps that non-empty directory and
 // says so in its log (PST01 will decide restore or discard). SIGTERM on start.sh (the harness's stop) stops the runner and the
 // server cleanly: exit code 0, no runner, vde_switch or qemu-system process, no
-// runtime/sessions/<id> and no socket. VDE only: no system image or KVM is needed.
+// runtime/sessions/<id>; the token file stays (it is the server's) and the second launch reuses the same token. VDE only: no system image or KVM is needed.
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const fs = require('node:fs');
@@ -97,15 +97,15 @@ async function run() {
   const port = await freePort();
   runtime = defaultRuntime(port);
   const baseUrl = `http://127.0.0.1:${port}`;
-  const socketPath = path.join(runtime, `runner-${port}.sock`);
+  const tokenFile = path.join(runtime, 'local-runner.token');
   testUsers = await createTestUsers([{login: 'carol'}]);
   child = spawnServer({port, usersFile: testUsers.file});
   for (const stream of [child.stdout, child.stderr]) stream.on('data', data => { serverOutput = (serverOutput + data).slice(-12000); });
   const anonymous = new QemuWebClient(baseUrl);
   await anonymous.waitForServer(30000, child);
 
-  // Two processes under start.sh, each leading its own process group; the runner has its checks'
-  // flag and listens on a 0600 socket.
+  // Two processes under start.sh, each leading its own process group; the runner dials the server with the token
+  // of the file the server created (0600), and the token is on no command line.
   const runner = childOf(child.pid, 'runner/main.js');
   const server = childOf(child.pid, 'server/main.js');
   assert.ok(runner, 'no runner/main.js process under start.sh');
@@ -117,10 +117,14 @@ async function run() {
   assert.match(child.output, /\[server\] /);
   assert.match(child.output, /\[runner\] /);
   assert.match(child.output, /QemuWeb is ready\./);
-  const socketStat = fs.statSync(socketPath);
-  assert.ok(socketStat.isSocket(), `${socketPath} is not a socket`);
-  assert.equal(socketStat.mode & 0o777, 0o600, 'the runner socket is not 0600');
-  console.log(`Runner: process ${runner.pid} and server ${server.pid} started by start.sh on ${path.relative(root, socketPath)}`);
+  assert.equal(fs.statSync(tokenFile).mode & 0o777, 0o600, 'the token file is not 0600');
+  const token = fs.readFileSync(tokenFile, 'utf8').trim();
+  assert.ok(token.length >= 32);
+  assert.match(runner.cmdline, new RegExp(`--port ${port} --token-file ${tokenFile.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`));
+  assert.ok(!processes().some(item => item.cmdline.includes(token)), 'the token is on a command line');
+  assert.ok(!/runner-\d+\.sock/.test(runner.cmdline + server.cmdline), 'a runner socket is still named');
+  assert.match(child.output, /Runner local \(local\) connected from /);
+  console.log(`Runner: process ${runner.pid} and server ${server.pid} started by start.sh; the runner connected with ${path.relative(root, tokenFile)}`);
 
   // A session works through the runner: switch start, terminal output, stop.
   const [user] = testUsers.users;
@@ -153,12 +157,12 @@ async function run() {
   const failure = await Promise.race([exitedAfterKill, delay(20000).then(() => ({code: 'timeout'}))]);
   assert.ok(failure.code !== 0 && failure.code !== 'timeout', `start.sh did not fail after the runner loss (${failure.signal || failure.code})`);
   await waitFor('no process left under the server group', () => !groupMembers(server.pid).length, 5000);
-  assert.equal(fs.existsSync(socketPath), false, 'runner socket left after the runner loss');
+  assert.equal(fs.readFileSync(tokenFile, 'utf8').trim(), token, 'the token file changed');
   assert.ok(fs.existsSync(path.join(runtime, 'runner.pid')), 'the killed runner could not release runner.pid');
   assert.match(child.output, /The runner exited/);
   console.log(`Runner: SIGKILL ended its group and its session (its directory stays: the server removes nothing); start.sh stopped the server and exited (${failure.code}); nothing restarted`);
 
-  // A second launch, then the stop: SIGTERM on start.sh leaves no process, session directory or socket.
+  // A second launch, then the stop: SIGTERM on start.sh leaves no process or session directory.
   child = spawnServer({port, usersFile: testUsers.file});
   await new QemuWebClient(baseUrl).waitForServer(30000, child);
   const again = await new QemuWebClient(baseUrl).signIn(user.login, user.password);
@@ -186,9 +190,9 @@ async function run() {
   await waitFor('runner group gone after the stop', () => !groupMembers(next.pid).length, 5000);
   await waitFor('server group gone after the stop', () => !groupMembers(nextServer.pid).length, 5000);
   assert.equal(fs.existsSync(freshDir), false, 'runtime/sessions/<id> left after the stop');
-  assert.equal(fs.existsSync(socketPath), false, 'runner socket left after the stop');
+  assert.equal(fs.readFileSync(tokenFile, 'utf8').trim(), token, 'the second launch did not reuse the token');
   assert.equal(fs.existsSync(path.join(runtime, 'runner.pid')), false, 'runner.pid left after the stop');
-  console.log('Runner: SIGTERM on start.sh stopped the runner and the server (exit 0), leaving no process, session directory or socket');
+  console.log('Runner: SIGTERM on start.sh stopped the runner and the server (exit 0), leaving no process or session directory');
   // What the SIGKILLed runner left (this test's own debris, on its own random port).
   fs.rmSync(runtime, {recursive: true, force: true});
 }

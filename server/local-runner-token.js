@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 const {tokenFilePath, readTokenFile} = require('../common/local-token');
+const {LOCAL_ID} = require('./runner-store');
 
 const digest = token => crypto.createHash('sha256').update(String(token)).digest();
 
@@ -51,4 +52,17 @@ function ensureLocalRunnerToken(serverDirectory) {
   };
 }
 
-module.exports = {ensureLocalRunnerToken};
+// The token file and the record of the local runner, at the start of a server run with --local-runner. Returns what the
+// gateway needs ({matches}). A revoked record stays revoked: a start never un-revokes it, only the administrator does (forget, restart).
+function startLocalRunner({runtime, store, audit, log = console}) {
+  const token = ensureLocalRunnerToken(runtime);
+  if (token.created) log.log(`Local runner token file ${token.file} created${token.reason ? ` (${token.reason})` : ''}.`);
+  else if (token.mode & 0o077) log.warn(`Local runner token file ${token.file} can be read by other users: chmod 600 it, or remove it and restart the server.`);
+  const known = store.get(LOCAL_ID);
+  const record = store.ensureLocal();
+  if (!known) audit.record('server', 'register-local-runner', {runnerId: record.id}, 'ok');
+  if (record.revoked) log.log('The local runner is revoked: it stays refused (forget it in /admin, then restart the server, to allow it again).');
+  return token;
+}
+
+module.exports = {ensureLocalRunnerToken, startLocalRunner};

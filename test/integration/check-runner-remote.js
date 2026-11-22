@@ -216,7 +216,7 @@ async function run() {
   // 7. Revoke: the runner is disconnected and stops retrying.
   await boss.request(`/api/admin/runners/${identity.runnerId}/revoke`, {method: 'POST'});
   const result = await Promise.race([remote.exited, delay(30000).then(() => ({code: 'timeout'}))]);
-  assert.equal(result.code, 1, `the revoked runner should stop with status 1 (${result.code}): ${output.get('run')}`);
+  assert.equal(result.code, 78, `the revoked runner should stop with status 78 (${result.code}): ${output.get('run')}`);
   assert.match(output.get('run'), /refused this runner/);
   assert.equal(alive(switchPid), false, 'the revoked runner stopped its machines');
   assert.equal((await adminRunners(boss)).runners.find(item => item.id === identity.runnerId).state, 'revoked');
