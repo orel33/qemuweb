@@ -19,8 +19,8 @@ web interface is described in the [user guide](user-guide.md).
 the server stops. `./scripts/start.sh` (`npm start`) runs the server and a runner (`runner/main.js`)
 as two processes and stops both together; if the runner dies, the server closes its sessions and
 `start.sh` ends (nothing is restarted: that is systemd's job in a deployment). A runner started by
-itself (`./scripts/runner.sh`) keeps its machines when the server restarts, and the server adopts
-its sessions again, for the owner of its `bindings.json` (see [docs/deployment.md](deployment.md#the-runner-process)). Use **Save session** to keep a portable copy; archives do not
+itself (`./scripts/runner.sh`) keeps its machines when the server restarts, and the server restores
+its sessions offline and adopts them again when the runner reconnects, for the owner of its `bindings.json` (see [docs/deployment.md](deployment.md#the-runner-process)). Use **Save session** to keep a portable copy; archives do not
 record the owner, so any user can load them.
 
 ## Server and runner command line
@@ -227,9 +227,10 @@ inbound port. Setup, nginx and systemd are in [docs/deployment.md](deployment.md
 
 The server places each new session on the least loaded online runner that is not paused (the earliest registered on a tie); a session stays on its runner. While a runner is offline, its sessions
 are kept for `--runner-grace` seconds and answer 503 "offline" (the page says "Runner offline,
-reconnecting…"); then they are dropped. After a server restart the sessions listed in the server's `bindings.json`
-are adopted by their runner when it reconnects, for the owner of the binding (the owner a `hello` announces is ignored); the others are
-deleted. `/admin` can pause (drain), revoke and remove any runner, the local one included; every action is in `admin.log`. `ws://` and `http://` URLs are accepted
+reconnecting…"); then they are dropped. This holds for every runner, the local one included. After a server restart the sessions listed in the server's `bindings.json`
+are restored offline at once, for the owner of the binding, so that a user never gets a second session on another runner; they are bound again when their runner reconnects and reports them
+(the owner a `hello` announces is ignored), or dropped when the grace period (counted from the start of the server) ends. A session the server does not know is deleted on the runner.
+`/admin` can pause (drain), revoke (sessions dropped at once), drop the sessions of an offline runner at once, and remove any runner, the local one included; every action is in `admin.log`. `ws://` and `http://` URLs are accepted
 only for this machine unless `--insecure` is given (with a warning).
 
 `./scripts/runner.sh run [options]`:

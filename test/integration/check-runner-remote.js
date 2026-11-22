@@ -129,11 +129,11 @@ async function run() {
   const remoteUrl = `ws://127.0.0.1:${proxy.port}`;
 
   // 1. The server alone, no runner: a session cannot be placed.
-  const server = spawnServer({port: serverPort, usersFile: testUsers.file, logDir, runnersFile, standalone: true});
+  let server = spawnServer({port: serverPort, usersFile: testUsers.file, logDir, runnersFile, standalone: true});
   children.push(server);
   await new QemuWebClient(baseUrl).waitForServer(30000, () => server.exitCode === null);
   assert.match(server.output, /runners\.json absent/, 'the startup check says no runner is registered');
-  const boss = await signIn('boss');
+  let boss = await signIn('boss');
   let carol = await signIn('carol');
   assert.equal((await carol.fetch('/api/nodes')).status, 503);
   assert.match((await carol.request('/api/nodes').catch(error => error)).message, /No runner is available/);
@@ -204,6 +204,28 @@ async function run() {
   await waitFor('switch terminal output after the cut', () => page.events.some(item => item.event === 'serial' && /VDE|ports|showinfo/i.test(item.payload.data)));
   console.log('Remote: network restored: runner back, same session and same vde_switch, console works again');
 
+  // 5b. The server restarts (SIGKILL) while the runner lives: the session is restored offline from bindings.json, then adopted
+  // when the runner's hello lists it (the runner retries every 2 s doubling to 30 s): same session, same switch.
+  for (const socket of sockets.splice(0)) socket.close();
+  const stopped = new Promise(resolve => server.once('exit', resolve));
+  server.kill('SIGKILL');
+  await stopped;
+  assert.equal(alive(switchPid), true, 'vde_switch died with the server');
+  server = spawnServer({port: serverPort, usersFile: testUsers.file, logDir, runnersFile, standalone: true});
+  children.push(server);
+  await new QemuWebClient(baseUrl).waitForServer(30000, () => server.exitCode === null);
+  boss = await signIn('boss');
+  carol = await signIn('carol');
+  const restoredReply = await carol.fetch('/api/nodes');
+  if (restoredReply.status === 503) assert.match((await restoredReply.json()).error, /^The runner of your session is offline; it comes back or your session is dropped after \d+ seconds?\.$/, 'the restored session says why it waits');
+  await waitFor('the remote runner back after the server restart', async () => (await adminRunners(boss)).runners.find(item => item.id === identity.runnerId)?.state === 'online', 60000);
+  assert.equal((await carol.request('/api/general-settings')).sessionId, sessionId, 'the user got a different session');
+  const afterRestart = await carol.request('/api/nodes');
+  assert.equal(afterRestart.find(node => node.id === switchId)?.running, true, 'the switch is no longer running');
+  assert.deepEqual(switchesOf(remote.pid), [switchPid], 'a different vde_switch is running');
+  assert.match(fs.readFileSync(path.join(logDir, 'users.log'), 'utf8'), /"event":"session-adopted"/);
+  console.log('Remote: server restarted: the session was restored offline, then adopted by the runner\'s hello, same switch running');
+
   // 6. Pause: no new session is placed; resume.
   await boss.request(`/api/admin/runners/${identity.runnerId}/pause`, {method: 'POST'});
   const dave = await signIn('dave');
@@ -220,6 +242,7 @@ async function run() {
   assert.match(output.get('run'), /refused this runner/);
   assert.equal(alive(switchPid), false, 'the revoked runner stopped its machines');
   assert.equal((await adminRunners(boss)).runners.find(item => item.id === identity.runnerId).state, 'revoked');
+  assert.equal((await adminRunners(boss)).runners.find(item => item.id === identity.runnerId).sessions, 0, 'a revoked runner\'s sessions are dropped at once');
   const audit = fs.readFileSync(path.join(logDir, 'admin.log'), 'utf8');
   for (const action of ['create-runner-token', 'register-runner', 'pause-runner', 'resume-runner', 'revoke-runner']) assert.match(audit, new RegExp(`"action":"${action}"`), `${action} audited`);
   assert.ok(!audit.includes(created.token) && !audit.includes(identity.authToken), 'no token in the audit log');

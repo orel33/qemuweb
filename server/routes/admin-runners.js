@@ -6,11 +6,12 @@
 //   POST   /runners/registration-tokens     {minutes: 15|60|1440} -> {id, token, expiresAt, command}: shown once
 //   DELETE /runners/registration-tokens/:id cancels an unused token
 //   POST   /runners/:id/pause | /resume     drain: no new session is placed, the running ones continue
-//   POST   /runners/:id/revoke              invalidates the runner and disconnects it (a revoked runner is refused)
+//   POST   /runners/:id/revoke              invalidates the runner and disconnects it (a revoked runner is refused); its sessions are dropped at once
+//   POST   /runners/:id/drop-sessions       forced loss: drops at once the sessions of a runner that is offline (or revoked), without waiting for the grace period; 409 while it is online
 //   DELETE /runners/:id                     forgets an offline, revoked runner
 // The rows are the same for every runner, "local" included (its record is created at start by --local-runner): there is no flag that tells them apart. A runner summary: {id, name, state, paused,
 // lastSeen, address, directory, pid, engines, kvm, cpus, memoryBytes, systems, warnings, sessions,
-// maxSessions}; state is online, starting, offline or revoked; directory and pid are what the runner
+// maxSessions, graceLeft}; graceLeft is the number of seconds before the sessions of an offline runner are dropped (null when no grace runs); state is online, starting, offline or revoked; directory and pid are what the runner
 // announced (text for the administrator, never used). Never a token or a token hash.
 // connectHint is the command that starts the local runner, while no runner is online and the server runs with --local-runner; null otherwise.
 const express = require('express');
@@ -19,7 +20,7 @@ const {RUNNER_ID} = require('../runner-store');
 const {tokenFilePath} = require('../../common/local-token');
 const DEFAULT_PORT = 3002;
 
-function summarize({entry, record, sessions}) {
+function summarize({entry, record, sessions, graceLeft = null}) {
   const capabilities = entry?.capabilities || {};
   const live = entry && entry.state !== 'lost';
   const lastSeen = live ? null : (entry?.lostAt ? new Date(entry.lostAt).toISOString() : record.lastSeenAt || null);
@@ -30,14 +31,14 @@ function summarize({entry, record, sessions}) {
     directory: live ? entry.runtimeRoot ?? null : null, pid: live ? entry.pid ?? null : null,
     engines: capabilities.engines || [], kvm: capabilities.kvm === true, cpus: capabilities.cpus ?? null,
     memoryBytes: capabilities.memoryBytes ?? null, systems: Object.keys(capabilities.images || {}).sort(),
-    warnings: capabilities.warnings || [], sessions, maxSessions: capabilities.limits?.maxSessions ?? null
+    warnings: capabilities.warnings || [], sessions, maxSessions: capabilities.limits?.maxSessions ?? null, graceLeft: live ? null : graceLeft
   };
 }
 
 // Every registered runner, in registration order.
 function runnerSummaries({registry, manager, store}) {
   const sessionsOf = id => manager.list().filter(workspace => workspace.session.runnerId === id).length;
-  return store.list().map(record => summarize({entry: registry.get(record.id), record, sessions: sessionsOf(record.id)}));
+  return store.list().map(record => summarize({entry: registry.get(record.id), record, sessions: sessionsOf(record.id), graceLeft: manager.graceLeft(record.id)}));
 }
 
 // The command that starts the local runner, or null when a runner is online or the server has no --local-runner.
@@ -112,7 +113,22 @@ function createRunnersRouter({manager, store, tokens, audited, port, runtime = n
       store.change(id, {revoked: true});
       const entry = registry.get(id);
       if (entry && entry.state !== 'lost') entry.client.close();
+      // Nothing will return from a revoked runner: its sessions are dropped at once, not after the grace period.
+      manager.dropRunnerSessions(id, 'runner lost');
       return summaryOf(id);
+    });
+  });
+
+  // Forced loss: the administrator knows the runner is not coming back. The audit line names the runner and
+  // the number of sessions. A runner that returns anyway is told to delete them (session.delete, never a file removed here).
+  router.post('/:id/drop-sessions', (req, res) => {
+    const {id} = req.params;
+    const count = RUNNER_ID.test(id) ? manager.sessionsOf(id) : 0;
+    audited(req, res, 'drop-runner-sessions', {runnerId: id, sessions: count}, async () => {
+      recordOf(id);
+      const entry = registry.get(id);
+      if (entry && entry.state !== 'lost') throw status(409, 'This runner is online: its sessions are not lost. Revoke it first if it must go.');
+      return {dropped: manager.dropRunnerSessions(id, 'runner lost'), runner: summaryOf(id)};
     });
   });
 

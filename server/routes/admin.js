@@ -15,10 +15,18 @@ const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisable
 // Summary of one session for the supervision table: the control plane's own fields, and the
 // counts the session's runner reports (runner/commands/consoles.js session.summary).
 // browsers: the owner's connected browser tabs (server/sockets.js).
+// A session whose runner is offline (a network cut, a restart) is listed with zero counts and runnerOffline: true,
+// so that one lost runner does not hide the other sessions.
 async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0) {
-  const counts = await runner.request('session.summary');
+  let counts, runnerOffline = false;
+  try { counts = await runner.request('session.summary'); }
+  catch (error) {
+    if (error.status !== 503) throw error;
+    runnerOffline = true;
+    counts = {nodes: 0, hosts: 0, switches: 0, runningHosts: 0, runningSwitches: 0, reservedRamMb: 0, cpuPercent: null, active: false};
+  }
   return {
-    login: owner, own: owner === adminLogin, browsers, sessionId: session.id, createdAt: session.createdAt,
+    login: owner, own: owner === adminLogin, browsers, runnerOffline, sessionId: session.id, createdAt: session.createdAt,
     lastActivity: session.lastActivityAt, nodes: counts.nodes, hosts: counts.hosts, switches: counts.switches,
     runningHosts: counts.runningHosts, runningSwitches: counts.runningSwitches, reservedRamMb: counts.reservedRamMb,
     cpuPercent: counts.cpuPercent, active: counts.active
