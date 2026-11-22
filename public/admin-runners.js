@@ -43,10 +43,6 @@ function renderRunners(data, {body, hint, cell, act}) {
     const row = document.createElement('tr');
     const engines = runner.engines.map(engine => (engine === 'vbox' ? 'VirtualBox' : 'QEMU')).join(', ') || 'none';
     const kvm = runner.engines.includes('qemu') ? (runner.kvm ? ', KVM' : ', no KVM') : '';
-    const name = document.createElement('div');
-    name.textContent = runner.name;
-    // The record of the local runner is named after its id ("local"): show the id only when it adds something.
-    if (runner.id !== runner.name) name.append(Object.assign(document.createElement('small'), {textContent: ` ${runner.id}`}));
     const where = document.createElement('div');
     where.textContent = runner.state === 'online' || runner.state === 'starting' ? (runner.address || 'this machine') : `last seen ${when(runner.lastSeen)}`;
     // What the runner announced (display only): its directory and process ID.
@@ -69,11 +65,11 @@ function renderRunners(data, {body, hint, cell, act}) {
     if (runner.state === 'revoked') {
       actions.append(button('Remove', () => act(() => `/runners/${id}`, 'DELETE'), 'Forget this revoked runner'));
     }
-    row.append(cell(name), cell(stateLabel(runner)), cell(where), cell(`${engines}${kvm}`),
+    row.append(cell(runner.name), cell(runner.id), cell(stateLabel(runner)), cell(where), cell(`${engines}${kvm}`),
       cell(`${runner.cpus ?? '—'} CPU, ${gigabytes(runner.memoryBytes)}`), cell(runner.systems.join(', ') || '—'),
       cell(runner.maxSessions ? `${runner.sessions} / ${runner.maxSessions}` : String(runner.sessions)),
       cell(runner.warnings.length ? warningList(runner.warnings) : '—'), cell(actions));
-    row.cells[7].className = 'runner-warning-cell';
+    row.cells[8].className = 'runner-warning-cell';
     return row;
   }));
   hint.hidden = runners.length > 0;
