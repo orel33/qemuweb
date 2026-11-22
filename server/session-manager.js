@@ -13,10 +13,8 @@
 // connection again (the handle is the same object, so routers and sockets keep working); a
 // session the runner no longer lists is dropped, and one dropped after the grace period is
 // deleted on the runner when it returns (it is then unknown to the control plane).
-// A readable alias runtime/users/<login> -> ../sessions/<id> helps administrators of the local
-// runner when it shares this server's runtime/ (entry.local, set only by the Unix-socket gateway,
-// and the same runtimeRoot in its hello); the server never touches the files of any other runner,
-// whatever its hello says.
+// The server touches no file of any runner: the users/<login> aliases, the session directories and their removal
+// belong to the runner (runner/runtime-tidy.js), which removes a session's directory at session.delete.
 // A trusted runner (the local one) that reconnects after a server restart keeps its sessions:
 // the server adopts them, each for its owner (see resync).
 // Events: 'connectivity' (workspace, online) when the runner of a kept session goes offline or returns,
@@ -24,17 +22,9 @@
 // taken over from a runner's hello instead of opened by the user, 'removed' (workspace, by, reason) after
 // deletion, `by` being the login that asked for it (the owner or an administrator), or null
 // with a reason ('runner lost', 'creation failed') when the session was dropped.
-const fs = require('fs');
-const path = require('path');
 const {EventEmitter} = require('events');
 const {Session, SESSION_ID} = require('./session');
 const {LOGIN_PATTERN} = require('./auth/users-store');
-
-// Same encoding as the hostname aliases of runner/session-runtime.js.
-function userAliasName(login) {
-  const encoded = encodeURIComponent(login);
-  return encoded === '.' || encoded === '..' ? encoded.replaceAll('.', '%2E') : encoded;
-}
 
 // The sessions a hello announces, as a Map of session ID -> {sessionId, owner, createdAt}.
 // Everything is checked here: an entry without a valid ID is ignored; an owner that is not a
@@ -55,10 +45,8 @@ function reportedSessions(hello) {
 class SessionManager extends EventEmitter {
   // registry: server/runner-registry.js. Sessions bound to a lost runner are dropped, and on a
   // runner's hello the sessions are resynchronised (see resync).
-  constructor({runtimeRoot, registry, graceSeconds = 0}) {
+  constructor({registry, graceSeconds = 0}) {
     super();
-    this.runtimeRoot = runtimeRoot;
-    this.usersDir = path.join(runtimeRoot, 'users');
     this.registry = registry;
     this.workspaces = new Map();
     this.deleting = new Set();
@@ -73,10 +61,6 @@ class SessionManager extends EventEmitter {
   }
 
   sessionsOf(runnerId) { return this.list().filter(workspace => workspace.session.runnerId === runnerId).length; }
-
-  // Whether the server may touch this runner's files: the local runner (never a remote one,
-  // whatever its hello announces) whose runtime directory is this server's.
-  sharesRuntime(entry) { return entry?.local === true && entry.runtimeRoot === path.resolve(this.runtimeRoot); }
 
   // Whether the session's runner is connected and ready (else its routes answer 503).
   available(workspace) {
@@ -116,7 +100,7 @@ class SessionManager extends EventEmitter {
     const entry = this.registry.pickRunner(login, id => this.sessionsOf(id));
     const ids = new Set(this.sessionIds());
     let session;
-    do session = new Session({runtimeRoot: this.runtimeRoot, runnerId: entry.id, owner: login});
+    do session = new Session({runnerId: entry.id, owner: login});
     while (ids.has(session.id));
     const runner = entry.client.session(session.id);
     const workspace = {owner: login, session, runner};
@@ -125,17 +109,15 @@ class SessionManager extends EventEmitter {
       console.error(`Cannot create session ${session.id}: ${error.message}`);
       if (this.workspaces.get(login) === workspace) this.drop(workspace, 'creation failed');
     });
-    this.linkUserAlias(workspace, entry);
     this.emit('created', workspace, {adopted: false});
     return workspace;
   }
 
   // Takes over a session a runner already runs, for its owner (same path as open() afterwards).
   adopt(entry, {sessionId, owner, createdAt}) {
-    const session = new Session({runtimeRoot: this.runtimeRoot, runnerId: entry.id, id: sessionId, owner, createdAt});
+    const session = new Session({runnerId: entry.id, id: sessionId, owner, createdAt});
     const workspace = {owner, session, runner: entry.client.session(sessionId)};
     this.workspaces.set(owner, workspace);
-    this.linkUserAlias(workspace, entry);
     this.emit('created', workspace, {adopted: true});
     return workspace;
   }
@@ -168,19 +150,11 @@ class SessionManager extends EventEmitter {
 
   forget(workspace) {
     this.workspaces.delete(workspace.owner);
-    this.unlinkUserAlias(workspace);
     this.registry.get(workspace.session.runnerId)?.client.release(workspace.session.id);
   }
 
   dropRunnerSessions(runnerId, reason) {
-    // The lost local runner shares this runtime/ and cannot remove its sessions' directories any more
-    // (a runner killed by SIGKILL): they are removed here, with the sessions. Only for the local runner.
-    const shared = this.sharesRuntime(this.registry.get(runnerId));
-    for (const workspace of this.list()) {
-      if (workspace.session.runnerId !== runnerId) continue;
-      this.drop(workspace, reason);
-      if (shared) fs.rmSync(workspace.session.runtimeDir, {recursive: true, force: true});
-    }
+    for (const workspace of this.list()) if (workspace.session.runnerId === runnerId) this.drop(workspace, reason);
   }
 
   // On a runner's hello: a session bound to it that it does not report is gone; one it reports
@@ -209,56 +183,6 @@ class SessionManager extends EventEmitter {
       }
     }
   }
-
-  userAliasPath(login) { return path.join(this.usersDir, userAliasName(login)); }
-
-  // Only for the local runner when it shares this runtime/.
-  linkUserAlias({owner, session}, entry) {
-    if (!this.sharesRuntime(entry)) return;
-    const alias = this.userAliasPath(owner);
-    const target = path.relative(this.usersDir, session.runtimeDir);
-    try {
-      fs.mkdirSync(this.usersDir, {recursive: true});
-      const temporary = `${alias}.${process.pid}.tmp`;
-      fs.rmSync(temporary, {force: true});
-      fs.symlinkSync(target, temporary, 'dir');
-      fs.renameSync(temporary, alias);
-    } catch (error) { console.warn(`Cannot create ${path.relative(this.runtimeRoot, alias)}: ${error.message}`); }
-  }
-
-  unlinkUserAlias({owner, session}) {
-    const alias = this.userAliasPath(owner);
-    try {
-      if (fs.readlinkSync(alias) === path.relative(this.usersDir, session.runtimeDir)) fs.unlinkSync(alias);
-    } catch (_) {}
-    try { fs.rmdirSync(this.usersDir); } catch (_) {}
-  }
-
-  // Server exit: the aliases belong to this server (a runner that outlives it keeps its sessions,
-  // and the next server links them again when it adopts them): removes them all, then the directory.
-  removeUserAliases() {
-    let names;
-    try { names = fs.readdirSync(this.usersDir); } catch (_) { return; }
-    for (const name of names) {
-      const alias = path.join(this.usersDir, name);
-      try { if (fs.lstatSync(alias).isSymbolicLink()) fs.unlinkSync(alias); } catch (_) {}
-    }
-    try { fs.rmdirSync(this.usersDir); } catch (_) {}
-  }
-
-  // Startup: removes runtime/users aliases whose session directory no longer exists (a server killed
-  // before its exit).
-  pruneUserAliases() {
-    let names;
-    try { names = fs.readdirSync(this.usersDir); } catch (_) { return; }
-    for (const name of names) {
-      const alias = path.join(this.usersDir, name);
-      try {
-        if (fs.lstatSync(alias).isSymbolicLink() && !fs.existsSync(alias)) fs.unlinkSync(alias);
-      } catch (_) {}
-    }
-    try { fs.rmdirSync(this.usersDir); } catch (_) {}
-  }
 }
 
-module.exports = {SessionManager, userAliasName, reportedSessions};
+module.exports = {SessionManager, reportedSessions};

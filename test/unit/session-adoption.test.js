@@ -10,7 +10,7 @@ const {runnerPair} = require('./runner-pair');
 async function setup(t) {
   const pair = await runnerPair(t, {prefix: 'qw-adopt-'});
   // The server was restarted: this manager knows no session.
-  const manager = new SessionManager({runtimeRoot: pair.runtimeRoot, registry: pair.registry});
+  const manager = new SessionManager({registry: pair.registry});
   const created = [];
   manager.on('created', (workspace, info) => created.push([workspace.owner, workspace.session.id, info.adopted]));
   return {...pair, manager, created};
@@ -36,7 +36,7 @@ test('a trusted runner\'s unknown session with a valid owner is adopted, with it
   assert.equal(workspace.session.lastActivity, null);
   assert.deepEqual(await workspace.runner.request('nodes.ids'), ['s-00000000000000aa'], 'the handle reaches the runner session');
   assert.equal(manager.open('toto'), workspace, 'the user gets the adopted session, not a new one');
-  assert.equal(fs.realpathSync(path.join(runtimeRoot, 'users', 'toto')), fs.realpathSync(workspace.session.runtimeDir));
+  assert.equal(fs.realpathSync(path.join(runtimeRoot, 'users', 'toto')), fs.realpathSync(path.join(runtimeRoot, 'sessions', workspace.session.id)));
   assert.deepEqual(runnerSessions(service), [ID(1)], 'nothing was deleted');
 });
 
@@ -111,13 +111,13 @@ test('a session bound to the runner that it no longer reports is dropped, an ado
   assert.deepEqual(manager.list().map(workspace => workspace.owner), ['toto']);
 });
 
-test('the user alias is created only when the local runner shares the runtime directory', async t => {
+test('the server never opens a path under the runner\'s directory, whatever its hello announces', async t => {
   const {runtimeRoot, manager, service, entry} = await setup(t);
   entry.runtimeRoot = '/somewhere/else/runtime';
   await service.handle('session.create', ID(7), {owner: 'toto'});
   manager.resync(entry, service.hello());
   assert.ok(manager.get('toto'), 'still adopted');
-  assert.equal(fs.existsSync(path.join(runtimeRoot, 'users')), false, 'the server touched nothing');
+  assert.equal(fs.readlinkSync(path.join(runtimeRoot, 'users', 'toto')), path.join('..', 'sessions', ID(7)), 'the alias is the runner\'s');
 });
 
 test('reportedSessions checks every field of the hello', () => {

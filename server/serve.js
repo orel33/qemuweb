@@ -3,7 +3,6 @@
 // The web stack of the server: HTTP server, Socket.IO, sessions, runners and routes. Started by
 // server/main.js once the command line and the startup checks have passed (these modules, and
 // express above all, are only loaded then, so --help and a bad option answer at once).
-const fs = require('fs');
 const http = require('http');
 const path = require('path');
 const express = require('express');
@@ -28,7 +27,7 @@ const RUNNER_HINT = './scripts/runner.sh';
 
 function serve({root, settings}) {
   const {runtime, port} = settings;
-  const instance = new ServerInstance({runtimeRoot: runtime, port, ephemeral: settings.ephemeral});
+  const instance = new ServerInstance({runtimeRoot: runtime, port});
 
   const app = express();
   const server = http.createServer(app);
@@ -42,7 +41,7 @@ function serve({root, settings}) {
   // One session per user, each with its own HTTP router, executed by a runner that dials
   // <runtime>/runner-<port>.sock (server/runner-gateway.js), started by ./scripts/runner.sh.
   const registry = new RunnerRegistry();
-  const manager = new SessionManager({runtimeRoot: runtime, registry, graceSeconds: settings.runnerGrace});
+  const manager = new SessionManager({registry, graceSeconds: settings.runnerGrace});
   const gateway = createRunnerGateway({root, runtimeRoot: runtime, port, registry});
   // Remote runners (registered with a token, runners.json) dial /runner/connect on this HTTP server.
   const runnerStore = createRunnerStore(settings.runnersFile);
@@ -52,9 +51,6 @@ function serve({root, settings}) {
   registry.on('online', (entry, hello) => {
     const engines = Array.isArray(hello.engines) ? hello.engines.join(', ') : '';
     console.log(`${runnerLabel(entry)} connected${entry.address ? ` from ${entry.address}` : ''} (engines: ${engines || 'none'}).`);
-    // The server cleans the empty sessions that earlier servers left in the runtime directory it shares with
-    // the local runner when it shares this directory (the only runner whose files it touches); the sessions the runner reports stay.
-    if (manager.sharesRuntime(entry)) instance.pruneEmptyRuntimeSessions({keep: (hello.sessions || []).map(item => item?.sessionId)});
   });
   registry.on('lost', entry => {
     if (entry.local) console.log(`Runner disconnected. Start one with ${RUNNER_HINT}.`);
@@ -73,7 +69,6 @@ function serve({root, settings}) {
     userLog.record(workspace.owner, 'session-deleted', {sessionId: workspace.session.id, by, ...(reason ? {reason} : {})});
     if (reason) console.log(`Session ${workspace.session.id} of ${workspace.owner} dropped: ${reason}.`);
   });
-  for (const event of ['created', 'removed']) manager.on(event, () => { if (server.listening) instance.updateSessions(manager.sessionIds()); });
   const auth = createAuth({settings, userLog});
   // Express trust proxy (e.g. "loopback" behind nginx), so that req.secure follows X-Forwarded-Proto.
   if (settings.trustProxy !== null) app.set('trust proxy', settings.trustProxy);
@@ -145,20 +140,15 @@ function serve({root, settings}) {
   startup();
 
   function onListening() {
-    manager.pruneUserAliases();
-    instance.writeRecords(manager.sessionIds());
+    instance.writeRecords();
     console.log('QemuWeb is ready.');
     console.log(`  Web interface      http://127.0.0.1:${port}`);
-    console.log(`  Sessions           ${path.join(runtime, 'sessions')} (<runtime>/users/<login> links)`);
     console.log('  Stop               Ctrl+C or ./scripts/stop.sh\n');
     console.log(`No runner connected. Start one with ${RUNNER_HINT}, or run ./scripts/start.sh for the server and a runner.\n`);
   }
 
   process.on('exit', () => {
     instance.removeRecords();
-    manager.removeUserAliases();
-    // Empty only when the runner has removed its sessions (whichever of the two ends last tidies up).
-    try { fs.rmdirSync(path.join(runtime, 'sessions')); } catch (_) {}
     removeEmptyDefaultRuntime(runtime);
   });
 
