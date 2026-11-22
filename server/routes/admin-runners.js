@@ -6,12 +6,14 @@
 //   POST   /runners/registration-tokens     {minutes: 15|60|1440} -> {id, token, expiresAt, command}: shown once
 //   DELETE /runners/registration-tokens/:id cancels an unused token
 //   POST   /runners/:id/pause | /resume     drain: no new session is placed, the running ones continue
-//   POST   /runners/:id/revoke              invalidates the token and disconnects (remote runners)
-//   DELETE /runners/:id                     forgets an offline, revoked remote runner
-// A runner summary: {id, name, local, state, paused, lastSeen, address, engines, kvm, cpus, memoryBytes,
-// systems, warnings, sessions, maxSessions}; state is online, starting, offline or revoked. The
-// local runner is listed while it is connected; registered remote runners always are.
-// connectHint is the command that starts the local runner, while none is online; null otherwise.
+//   POST   /runners/:id/revoke              invalidates the runner and disconnects it (a revoked runner is refused)
+//   DELETE /runners/:id                     forgets an offline, revoked runner
+// The rows are the same for every runner, "local" included (its record is created at its first
+// connection): there is no flag that tells them apart. A runner summary: {id, name, state, paused,
+// lastSeen, address, directory, pid, engines, kvm, cpus, memoryBytes, systems, warnings, sessions,
+// maxSessions}; state is online, starting, offline or revoked; directory and pid are what the runner
+// announced (text for the administrator, never used). Never a token or a token hash.
+// connectHint is the command that starts the local runner, while no runner is online; null otherwise.
 const express = require('express');
 const {LIFETIMES_MINUTES} = require('../runner-registration');
 const {RUNNER_ID} = require('../runner-store');
@@ -20,30 +22,27 @@ const DEFAULT_PORT = 3002;
 function summarize({entry, record, sessions}) {
   const capabilities = entry?.capabilities || {};
   const live = entry && entry.state !== 'lost';
-  const lastSeen = live ? null : (entry?.lostAt ? new Date(entry.lostAt).toISOString() : record?.lastSeenAt || null);
+  const lastSeen = live ? null : (entry?.lostAt ? new Date(entry.lostAt).toISOString() : record.lastSeenAt || null);
   return {
-    id: entry?.id ?? record.id, name: entry?.name ?? record.name, local: entry?.local === true,
-    state: record?.revoked ? 'revoked' : live ? entry.state : 'offline',
-    paused: entry?.paused ?? record?.paused === true, lastSeen, address: live ? entry.address ?? null : null,
+    id: record.id, name: record.name,
+    state: record.revoked ? 'revoked' : live ? entry.state : 'offline',
+    paused: record.paused === true, lastSeen, address: live ? entry.address ?? null : null,
+    directory: live ? entry.runtimeRoot ?? null : null, pid: live ? entry.pid ?? null : null,
     engines: capabilities.engines || [], kvm: capabilities.kvm === true, cpus: capabilities.cpus ?? null,
     memoryBytes: capabilities.memoryBytes ?? null, systems: Object.keys(capabilities.images || {}).sort(),
     warnings: capabilities.warnings || [], sessions, maxSessions: capabilities.limits?.maxSessions ?? null
   };
 }
 
-// The local runner (while connected), then the registered remote runners in registration order.
-function runnerSummaries({registry, manager, store = null}) {
+// Every registered runner, in registration order.
+function runnerSummaries({registry, manager, store}) {
   const sessionsOf = id => manager.list().filter(workspace => workspace.session.runnerId === id).length;
-  const summaries = [];
-  const local = registry.get('local');
-  if (local && local.state !== 'lost') summaries.push(summarize({entry: local, sessions: sessionsOf('local')}));
-  for (const record of store ? store.list() : []) summaries.push(summarize({entry: registry.get(record.id), record, sessions: sessionsOf(record.id)}));
-  return summaries;
+  return store.list().map(record => summarize({entry: registry.get(record.id), record, sessions: sessionsOf(record.id)}));
 }
 
 // `runtime`: the --runtime of the server when it was given, else null (the runner's default is the same).
 function connectHint({runners, port, runtime = null}) {
-  if (runners.some(runner => runner.local && runner.state === 'online')) return null;
+  if (runners.some(runner => runner.state === 'online')) return null;
   const options = [port === DEFAULT_PORT ? '' : `--port ${port}`, runtime ? `--runtime ${runtime}` : ''].filter(Boolean);
   return ['./scripts/runner.sh', ...options].join(' ');
 }
@@ -86,7 +85,7 @@ function createRunnersRouter({manager, store, tokens, audited, port, runtime = n
     });
   });
 
-  // The remote runner of an ID in the URL, from its record (404 for anything else).
+  // The runner of an ID in the URL, from its record (404 for anything else).
   const recordOf = id => {
     const record = RUNNER_ID.test(id) ? store.get(id) : null;
     if (!record) throw status(404, `Unknown runner ${id}.`);
@@ -96,10 +95,9 @@ function createRunnersRouter({manager, store, tokens, audited, port, runtime = n
   function setPaused(req, res, paused) {
     const {id} = req.params;
     audited(req, res, paused ? 'pause-runner' : 'resume-runner', {runnerId: id}, async () => {
-      if (id !== 'local') store.change(recordOf(id).id, {paused});
+      store.change(recordOf(id).id, {paused});
       const entry = registry.get(id);
       if (entry) entry.paused = paused;
-      else if (id === 'local') throw status(404, 'The local runner is not connected.');
       return summaryOf(id);
     });
   }
@@ -109,7 +107,6 @@ function createRunnersRouter({manager, store, tokens, audited, port, runtime = n
   router.post('/:id/revoke', (req, res) => {
     const {id} = req.params;
     audited(req, res, 'revoke-runner', {runnerId: id}, async () => {
-      if (id === 'local') throw status(403, 'The local runner cannot be revoked.');
       recordOf(id);
       store.change(id, {revoked: true});
       const entry = registry.get(id);
@@ -121,7 +118,6 @@ function createRunnersRouter({manager, store, tokens, audited, port, runtime = n
   router.delete('/:id', (req, res) => {
     const {id} = req.params;
     audited(req, res, 'remove-runner', {runnerId: id}, async () => {
-      if (id === 'local') throw status(403, 'The local runner cannot be removed.');
       const record = recordOf(id);
       const entry = registry.get(id);
       if (!record.revoked || (entry && entry.state !== 'lost')) throw status(409, 'Only an offline, revoked runner can be removed: revoke it first.');

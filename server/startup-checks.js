@@ -61,7 +61,7 @@ function checkUsers(settings) {
 
 function checkRunners(settings) {
   if (!fs.existsSync(settings.runnersFile)) {
-    cli.warning(`${path.basename(settings.runnersFile)} absent: no remote runner is registered (create a registration token in /admin/runners).`);
+    cli.warning(`${path.basename(settings.runnersFile)} absent: no runner is registered yet (the local runner is added at its first connection; for a remote one, create a registration token in /admin/runners).`);
     return;
   }
   const count = readRunners(settings.runnersFile).length;
