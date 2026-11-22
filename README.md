@@ -19,7 +19,7 @@ session; teachers observe it, take control to help, and clean up at the end of t
 
 ## How it works
 
-![The browser talks to the server; the runners run the machines](docs/img/architecture.svg)
+![The browser talks to the server; the local and remote runners run the machines of a session (hosts and a VDE switch)](docs/img/architecture.svg)
 
 - The **server** (Node.js, Express, Socket.IO) serves the web interface, authenticates users, keeps one session
   per user and relays the consoles. It starts no machine.

@@ -16,9 +16,9 @@ consoles.
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
 | Switch | A node that is a VDE switch. |
 
-![Architecture: browser, server, local and remote runners, and the machines they run](img/architecture.svg)
+![Architecture: browser, server, local and remote runners, and the hosts and VDE switch of a session](img/architecture.svg)
 
-*Figure 1. The server never starts a virtual machine: a runner does, on this machine (Unix socket) or on another one (WebSocket opened by the runner).*
+*Figure 1. The server never starts a virtual machine: a runner does, on this machine (Unix socket) or on another one (WebSocket opened by the runner). Inside a runner, a session is a small LAN as the Graphic view shows it: one `vde_switch` process per switch, one QEMU or VirtualBox process per host, driven through serial and monitor sockets and the guest agent channel.*
 
 | Part | Files | Role |
 | --- | --- | --- |

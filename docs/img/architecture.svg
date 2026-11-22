@@ -1,63 +1,128 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg viewBox="0 0 820 470" xmlns="http://www.w3.org/2000/svg" font-family="DejaVu Sans, Arial, sans-serif">
+<svg viewBox="0 0 820 668" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" font-family="DejaVu Sans, Arial, sans-serif">
   <defs>
     <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#14284a"/></marker>
+    <marker id="s" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5a6a85"/></marker>
+
+    <!-- One session as the Graphic view draws it: a switch, three hosts, the channels the runner uses. Origin = top-left of a runner box. -->
+    <g id="lan">
+      <rect x="12" y="48" width="366" height="190" rx="8" fill="#fbfcfe" stroke="#9aa9bf" stroke-width="1" stroke-dasharray="3 3"/>
+      <text x="22" y="62" font-size="9" fill="#5a6a85">one session, as the Graphic view shows it</text>
+
+      <!-- links (drawn first, under the cards) -->
+      <g stroke="#b39500" stroke-width="2.5" fill="none">
+        <line x1="165" y1="106" x2="72" y2="164"/>
+        <line x1="195" y1="106" x2="195" y2="164"/>
+        <line x1="225" y1="106" x2="318" y2="164"/>
+      </g>
+      <g font-size="9" font-weight="bold" fill="#7a6600" stroke="#fbfcfe" stroke-width="3" paint-order="stroke">
+        <text x="150" y="122" text-anchor="end">#1</text>
+        <text x="203" y="124">#2</text>
+        <text x="240" y="122">#3</text>
+      </g>
+
+      <!-- switch card -->
+      <rect x="135" y="66" width="120" height="40" rx="8" fill="#ffffff" stroke="#6b7c93" stroke-width="1.4"/>
+      <rect x="135" y="66" width="5" height="40" rx="2" fill="#16a34a"/>
+      <text x="148" y="83" font-size="11" font-weight="bold" fill="#14284a">s1</text>
+      <text x="148" y="98" font-size="8.5" fill="#33415a">switch · vde_switch</text>
+
+      <!-- host cards -->
+      <rect x="16" y="164" width="112" height="40" rx="8" fill="#ffffff" stroke="#6b7c93" stroke-width="1.4"/>
+      <rect x="16" y="164" width="5" height="40" rx="2" fill="#2563eb"/>
+      <text x="29" y="181" font-size="11" font-weight="bold" fill="#14284a">h1</text>
+      <text x="29" y="196" font-size="8.5" fill="#33415a">host · QEMU / VBox</text>
+      <rect x="139" y="164" width="112" height="40" rx="8" fill="#ffffff" stroke="#6b7c93" stroke-width="1.4"/>
+      <rect x="139" y="164" width="5" height="40" rx="2" fill="#2563eb"/>
+      <text x="152" y="181" font-size="11" font-weight="bold" fill="#14284a">h2</text>
+      <text x="152" y="196" font-size="8.5" fill="#33415a">host · QEMU / VBox</text>
+      <rect x="262" y="164" width="112" height="40" rx="8" fill="#ffffff" stroke="#6b7c93" stroke-width="1.4"/>
+      <rect x="262" y="164" width="5" height="40" rx="2" fill="#2563eb"/>
+      <text x="275" y="181" font-size="11" font-weight="bold" fill="#14284a">h3</text>
+      <text x="275" y="196" font-size="8.5" fill="#33415a">host · QEMU / VBox</text>
+
+      <!-- interface and address under each host -->
+      <g font-family="DejaVu Sans Mono, monospace" font-size="8.5" fill="#1f7a4d" text-anchor="middle">
+        <text x="82" y="217">eth0</text><text x="82" y="229">192.168.0.1</text>
+        <text x="205" y="217">eth0</text><text x="205" y="229">192.168.0.2</text>
+        <text x="328" y="217">eth0</text><text x="328" y="229">192.168.0.3</text>
+      </g>
+
+      <!-- runner channels to the hosts -->
+      <g stroke="#5a6a85" stroke-width="1.3" stroke-dasharray="2 2" marker-start="url(#s)" marker-end="url(#s)">
+        <line x1="28" y1="204" x2="28" y2="256"/>
+        <line x1="151" y1="204" x2="151" y2="256"/>
+        <line x1="274" y1="204" x2="274" y2="256"/>
+      </g>
+      <rect x="12" y="256" width="366" height="34" rx="5" fill="#f4f6f9" stroke="#5a6a85" stroke-width="1"/>
+      <text x="195" y="270" text-anchor="middle" font-size="8.5" fill="#14284a">runner ⇄ host: serial sockets (ttyS0, ttyS1) · HMP monitor · guest agent (qga.sock)</text>
+      <text x="195" y="283" text-anchor="middle" font-size="8.5" fill="#33415a">runner ⇄ switch: vde_switch management socket · vdeterm</text>
+    </g>
   </defs>
 
   <!-- Browser -->
-  <rect x="250" y="8" width="320" height="54" rx="6" fill="#ffffff" stroke="#14284a" stroke-width="1.6"/>
-  <text x="410" y="30" text-anchor="middle" font-size="12" font-weight="bold" fill="#14284a">Browser · public/</text>
-  <text x="410" y="48" text-anchor="middle" font-size="10" fill="#33415a">web interface (ES modules) · xterm.js terminals</text>
-  <line x1="410" y1="62" x2="410" y2="100" stroke="#14284a" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
-  <text x="420" y="84" font-size="9.5" fill="#14284a">HTTP / JSON and Socket.IO, signed cookie</text>
+  <rect x="190" y="8" width="440" height="58" rx="6" fill="#ffffff" stroke="#14284a" stroke-width="1.6"/>
+  <text x="410" y="28" text-anchor="middle" font-size="12" font-weight="bold" fill="#14284a">Browser · public/</text>
+  <text x="410" y="44" text-anchor="middle" font-size="10" fill="#33415a">Graphic view · terminals (xterm.js) · Capture dialog · admin page</text>
+  <text x="410" y="58" text-anchor="middle" font-size="9" fill="#33415a">ES modules, no plugin</text>
+  <line x1="410" y1="66" x2="410" y2="100" stroke="#14284a" stroke-width="2" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="420" y="87" font-size="9.5" fill="#14284a">HTTP / JSON and Socket.IO</text>
 
   <!-- Server -->
-  <rect x="14" y="100" width="792" height="152" rx="8" fill="#f4f6f9" stroke="#14284a" stroke-width="1.8"/>
-  <text x="28" y="118" font-size="11.5" font-weight="bold" fill="#14284a">Node.js server · server/main.js</text>
-  <rect x="28" y="130" width="170" height="46" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
-  <text x="113" y="150" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Authentication</text>
-  <text x="113" y="165" text-anchor="middle" font-size="9" fill="#33415a">server/auth/</text>
-  <rect x="226" y="130" width="190" height="46" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
-  <text x="321" y="150" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Session manager</text>
-  <text x="321" y="165" text-anchor="middle" font-size="9" fill="#33415a">one session per user</text>
-  <rect x="444" y="130" width="200" height="46" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
-  <text x="544" y="150" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">HTTP API + Socket.IO</text>
-  <text x="544" y="165" text-anchor="middle" font-size="9" fill="#33415a">server/routes/, server/sockets.js</text>
-  <rect x="672" y="130" width="120" height="46" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
-  <text x="732" y="150" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Admin</text>
-  <text x="732" y="165" text-anchor="middle" font-size="9" fill="#33415a">/admin, audit logs</text>
-  <line x1="198" y1="153" x2="224" y2="153" stroke="#14284a" stroke-width="1.5" marker-end="url(#a)"/>
-  <line x1="416" y1="153" x2="442" y2="153" stroke="#14284a" stroke-width="1.5" marker-end="url(#a)"/>
-  <rect x="226" y="196" width="418" height="44" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
-  <text x="435" y="215" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Runner registry and gateways</text>
-  <text x="435" y="230" text-anchor="middle" font-size="9" fill="#33415a">placement of each new session · Unix socket and WebSocket</text>
-  <line x1="321" y1="176" x2="321" y2="194" stroke="#14284a" stroke-width="1.5" marker-end="url(#a)"/>
-  <line x1="544" y1="176" x2="544" y2="194" stroke="#14284a" stroke-width="1.5" marker-start="url(#a)"/>
+  <rect x="14" y="100" width="792" height="164" rx="8" fill="#f4f6f9" stroke="#14284a" stroke-width="1.8"/>
+  <text x="28" y="118" font-size="11.5" font-weight="bold" fill="#14284a">Node.js server · server/main.js · no machine started here</text>
+  <rect x="28" y="128" width="173" height="52" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
+  <text x="114" y="146" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Authentication</text>
+  <text x="114" y="160" text-anchor="middle" font-size="8.5" fill="#33415a">password (signed cookie) or</text>
+  <text x="114" y="171" text-anchor="middle" font-size="8.5" fill="#33415a">proxy mode (X-Remote-User)</text>
+  <rect x="225" y="128" width="173" height="52" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
+  <text x="311" y="146" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Session manager</text>
+  <text x="311" y="160" text-anchor="middle" font-size="8.5" fill="#33415a">one session per user</text>
+  <text x="311" y="171" text-anchor="middle" font-size="8.5" fill="#33415a">engine: QEMU/KVM or VirtualBox</text>
+  <rect x="422" y="128" width="173" height="52" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
+  <text x="508" y="146" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">HTTP API + Socket.IO</text>
+  <text x="508" y="160" text-anchor="middle" font-size="8.5" fill="#33415a">routes, consoles, captures,</text>
+  <text x="508" y="171" text-anchor="middle" font-size="8.5" fill="#33415a">guest addresses</text>
+  <rect x="619" y="128" width="173" height="52" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
+  <text x="705" y="146" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Admin · /admin</text>
+  <text x="705" y="160" text-anchor="middle" font-size="8.5" fill="#33415a">Sessions · Accounts · Runners</text>
+  <text x="705" y="171" text-anchor="middle" font-size="8.5" fill="#33415a">WebSocket · Logs</text>
+  <line x1="201" y1="154" x2="223" y2="154" stroke="#14284a" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="398" y1="154" x2="420" y2="154" stroke="#14284a" stroke-width="1.5" marker-end="url(#a)"/>
+  <rect x="225" y="204" width="370" height="48" rx="5" fill="#ffffff" stroke="#14284a" stroke-width="1.2"/>
+  <text x="410" y="222" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">Runner registry and gateways</text>
+  <text x="410" y="237" text-anchor="middle" font-size="9" fill="#33415a">placement of each new session · runners.json (tokens)</text>
+  <line x1="311" y1="180" x2="311" y2="202" stroke="#14284a" stroke-width="1.5" marker-end="url(#a)"/>
+  <line x1="508" y1="180" x2="508" y2="202" stroke="#14284a" stroke-width="1.5" marker-start="url(#a)"/>
 
-  <!-- Runners -->
-  <line x1="300" y1="252" x2="225" y2="304" stroke="#14284a" stroke-width="2.2" marker-end="url(#a)" marker-start="url(#a)"/>
-  <text x="206" y="284" text-anchor="end" font-size="9.5" fill="#14284a">runner protocol</text>
-  <text x="206" y="296" text-anchor="end" font-size="9" fill="#33415a">Unix socket</text>
-  <line x1="570" y1="252" x2="635" y2="304" stroke="#14284a" stroke-width="2.2" stroke-dasharray="6 3" marker-end="url(#a)" marker-start="url(#a)"/>
-  <text x="640" y="284" font-size="9.5" fill="#14284a">runner protocol</text>
-  <text x="640" y="296" font-size="9" fill="#33415a">WebSocket, opened by the runner</text>
+  <!-- Runner links -->
+  <line x1="290" y1="264" x2="215" y2="318" stroke="#14284a" stroke-width="2.2" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="200" y="293" text-anchor="end" font-size="9.5" fill="#14284a">runner protocol</text>
+  <text x="200" y="305" text-anchor="end" font-size="9" fill="#33415a">Unix socket</text>
+  <line x1="530" y1="264" x2="615" y2="318" stroke="#14284a" stroke-width="2.2" stroke-dasharray="6 3" marker-end="url(#a)" marker-start="url(#a)"/>
+  <text x="626" y="293" font-size="9.5" fill="#14284a">runner protocol</text>
+  <text x="626" y="305" font-size="9" fill="#33415a">WebSocket opened by the runner</text>
 
-  <rect x="40" y="304" width="360" height="54" rx="6" fill="#ffffff" stroke="#14284a" stroke-width="1.8"/>
-  <text x="220" y="326" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14284a">Local runner · runner/main.js</text>
-  <text x="220" y="344" text-anchor="middle" font-size="9.5" fill="#33415a">this machine, its own process group</text>
-  <rect x="440" y="304" width="360" height="54" rx="6" fill="#ffffff" stroke="#14284a" stroke-width="1.8" stroke-dasharray="6 3"/>
-  <text x="620" y="326" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14284a">Remote runner · runner/main.js</text>
-  <text x="620" y="344" text-anchor="middle" font-size="9.5" fill="#33415a">another machine, registered with a token</text>
+  <!-- Local runner -->
+  <rect x="14" y="318" width="390" height="298" rx="8" fill="#ffffff" stroke="#14284a" stroke-width="1.8"/>
+  <text x="209" y="338" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14284a">Local runner · runner/main.js</text>
+  <text x="209" y="354" text-anchor="middle" font-size="9" fill="#33415a">this machine · one engine at a time: QEMU/KVM or VirtualBox</text>
+  <use href="#lan" xlink:href="#lan" x="14" y="318"/>
 
-  <!-- Processes -->
-  <line x1="220" y1="358" x2="220" y2="386" stroke="#14284a" stroke-width="1.6" marker-end="url(#a)"/>
-  <rect x="40" y="386" width="360" height="46" rx="5" fill="#f4f6f9" stroke="#14284a" stroke-width="1.2"/>
-  <text x="220" y="406" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">QEMU · VirtualBox · vde_switch · vdeterm</text>
-  <text x="220" y="421" text-anchor="middle" font-size="9" fill="#33415a">the machines of the sessions and their virtual network</text>
-  <line x1="620" y1="358" x2="620" y2="386" stroke="#14284a" stroke-width="1.6" stroke-dasharray="6 3" marker-end="url(#a)"/>
-  <rect x="440" y="386" width="360" height="46" rx="5" fill="#f4f6f9" stroke="#14284a" stroke-width="1.2" stroke-dasharray="6 3"/>
-  <text x="620" y="406" text-anchor="middle" font-size="10.5" font-weight="bold" fill="#14284a">the same processes, on that machine</text>
-  <text x="620" y="421" text-anchor="middle" font-size="9" fill="#33415a">the server never starts a virtual machine itself</text>
+  <!-- Remote runner -->
+  <rect x="416" y="318" width="390" height="298" rx="8" fill="#ffffff" stroke="#14284a" stroke-width="1.8" stroke-dasharray="6 3"/>
+  <text x="611" y="338" text-anchor="middle" font-size="11.5" font-weight="bold" fill="#14284a">Remote runner · runner/main.js</text>
+  <text x="611" y="354" text-anchor="middle" font-size="9" fill="#33415a">another machine, token registered · same processes there</text>
+  <use href="#lan" xlink:href="#lan" x="416" y="318"/>
 
-  <text x="410" y="458" text-anchor="middle" font-size="9" fill="#33415a">QEMU and VirtualBox plug into vde_switch (Ethernet frames); the runner drives them through serial and HMP sockets, and vdeterm through a pseudo-terminal.</text>
+  <!-- Legend -->
+  <g font-size="9" fill="#33415a">
+    <rect x="20" y="630" width="5" height="12" rx="2" fill="#2563eb"/><text x="30" y="640">host (virtual machine)</text>
+    <rect x="160" y="630" width="5" height="12" rx="2" fill="#16a34a"/><text x="170" y="640">switch</text>
+    <line x1="222" y1="636" x2="248" y2="636" stroke="#b39500" stroke-width="2.5"/><text x="254" y="640">link · #n = switch port</text>
+    <text x="388" y="640" font-family="DejaVu Sans Mono, monospace" fill="#1f7a4d">eth0 192.168.0.1</text>
+    <text x="486" y="640">= interface and its address</text>
+    <line x1="640" y1="636" x2="668" y2="636" stroke="#5a6a85" stroke-width="1.3" stroke-dasharray="2 2"/><text x="674" y="640">runner channel</text>
+  </g>
+  <text x="410" y="660" text-anchor="middle" font-size="9" fill="#33415a">Hosts plug into vde_switch (Ethernet frames). Captures and guest addresses (guest agent) concern QEMU hosts.</text>
 </svg>
