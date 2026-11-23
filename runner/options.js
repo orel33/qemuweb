@@ -49,8 +49,13 @@ function runnerSpec(root) {
     program: 'runner',
     node: 'node runner/main.js',
     script: './scripts/runner.sh',
+    commands: [
+      {name: '(none)', description: 'the LOCAL runner of this machine, for a server started with --local-runner (scripts/start.sh and demo.sh start it). Its options are listed below.'},
+      {name: 'register', description: 'REMOTE runner, once: enroll this machine with the one-time token created in /admin -> Runners (./scripts/runner.sh register --help).'},
+      {name: 'run', description: 'REMOTE runner: start the registered runner, which dials the server (no inbound port) (./scripts/runner.sh run --help).'}
+    ],
     summary: [
-      'The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessions. It dials the',
+      'The QemuWeb runner: the process that runs the machines (QEMU, VDE) of the sessions. Without a command it is the local runner: it dials the',
       'server of this machine (ws://HOST:PORT, 127.0.0.1 unless --host; the server runs with --local-runner) as the runner "local", with the token',
       'the server wrote in a file, read again at every attempt. It keeps its sessions if the connection drops and reconnects;',
       'it exits with status 78 when the server refuses its token.',

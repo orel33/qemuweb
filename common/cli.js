@@ -136,10 +136,19 @@ function formatHelp(spec) {
   const entries = spec.options.map(option => [option.metavar ? `${option.flag} ${option.metavar}` : option.flag, option.fallback, option.description]);
   const width = Math.max(...entries.map(([name]) => name.length), '-h, --help'.length);
   const indent = ' '.repeat(width);
+  // A program with subcommands (spec.commands: [{name, description}]) lists them right after the usage lines.
+  const commands = spec.commands || [];
+  const commandWidth = Math.max(0, ...commands.map(({name}) => name.length));
   const lines = [
     `Usage: ${spec.node} [options]`,
     `       ${spec.script} [options]`,
+    ...commands.filter(({name}) => name !== '(none)').map(({name}) => `       ${spec.script} ${name} [options]`),
     '',
+    ...(commands.length ? [
+      'Commands (each one has its own options: --help after the command):',
+      ...commands.map(({name, description}) => `  ${name.padEnd(commandWidth)}  ${description}`),
+      ''
+    ] : []),
     spec.summary,
     '',
     'Options (default in brackets):',
