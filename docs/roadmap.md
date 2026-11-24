@@ -481,6 +481,11 @@ personal runner and any guest access exist only for trusted users.
   - Check the five demos (`lan`, `gw0`, `gw1`, `dmz0`, `dmz1`) and the startup scripts still work, and that a rebuilt image
     changes the hash that session archives compare (`prepare.sh --hash`).
   - Apply the same to `debian13-cloud` afterwards if it pays off; Alpine and OpenWrt are already light.
+- [ ] **IMG02** (S) A quiet serial console on the `debian13-*` images. Lower the kernel console log level so that kernel
+  messages no longer scroll over `ttyS0` (and `ttyS1`) while a student works; they stay in `dmesg`. `prepare.sh` writes
+  `/etc/sysctl.d/10-console.conf` with `kernel.printk = 3 4 1 3` into both Debian images (`debian13-legacy` and `debian13-cloud`).
+  Existing images keep the old behaviour until rebuilt, and a saved session with working disks must be discarded after the
+  rebuild (the base image identity changes).
 - [ ] **LOD01** (L) Load test of about 30 simultaneous sessions (a switch and 5 nodes each) on the server, the pool and
   lab workstations: memory and CPU measured, no VM killed, a responsive interface. Balance by free memory instead of a
   session count if the test shows it is needed.
