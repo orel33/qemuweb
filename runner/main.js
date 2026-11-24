@@ -62,15 +62,16 @@ function main(remote) {
 
   // What this machine and config.json allow, printed once at startup (also announced in hello).
   function printConfigurationChecks() {
-    const {warnings, images} = service.capabilities();
+    const {warnings, images, catalogError} = service.capabilities();
     cli.heading('Checking configuration…');
     const ok = (remote ? identity : local).printChecks();
     cli.pass(`runtime directory  ${options.runtime}  (writable)`);
     if (runtimeWarning) cli.warning(runtimeWarning);
-    if (!warnings.length) cli.pass(`${path.basename(options.config)}  ${Object.keys(images).length} systems`);
+    if (catalogError) cli.failure(`${path.basename(options.config)}  ${catalogError}`);
+    else if (!warnings.length) cli.pass(`${path.basename(options.config)}  ${Object.keys(images).length} systems`);
     for (const warning of warnings) cli.warning(warning);
     cli.end();
-    return ok;
+    return ok && !catalogError;
   }
 
   async function stop(code) {

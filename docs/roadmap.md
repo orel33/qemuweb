@@ -893,8 +893,9 @@ commit message.
   again. Resolved: `refollow()` (`public/observe.js`) re-applies the received view after the node list is loaded.
 - [ ] **BUG04** The test harness kills only `start.sh` after 12 s, so the server and the runner, in their own sessions,
   could survive a hung stop (`test/integration/qemuweb-client.js`).
-- [ ] **BUG06** A runner with an unreadable `config.json` still prints `✓ config.json  0 systems` after the
-  `Cannot read the system catalog` error. It should print a ✗ and abort.
+- [x] **BUG06** A runner with an unreadable `config.json` printed `✓ config.json  0 systems` after the
+  `Cannot read the system catalog` error. Resolved: `capabilities()` returns `catalogError`, the configuration check prints
+  `✗ config.json  <cause>` and the runner aborts (`Startup aborted`, status 1); a running runner keeps the last good catalog.
 - [ ] **BUG07** `start.sh` says "The server exited (status 2); stopping the runner." although no runner was started when
   the server refuses its options. Also check by hand that `./scripts/start.sh --session-hours 0` exits 2 at once and
   leaves nothing running.
