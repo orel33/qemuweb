@@ -178,7 +178,7 @@ export function refreshEditTools() {
   const link = id && graphicGraph?.links.find(item => `${item.hostId}:${item.nicIndex}` === id);
   if (mode || !link || observing) { if (popover.dataset.kind === 'link') popover.hidden = true; return; }
   const portText = link.port == null ? '' : ` port ${link.port}`;
-  showPopover('link', (link.x1 + link.x2) / 2, (link.y1 + link.y2) / 2, `${nameOf(link.hostId)} eth${link.nicIndex} ↔ ${nameOf(link.switchId)}${portText}`, [
+  showPopover('link', link.mid.x, link.mid.y, `${nameOf(link.hostId)} eth${link.nicIndex} ↔ ${nameOf(link.switchId)}${portText}`, [
     {label: 'Capture…', capture: true, run: () => openCaptureDialog(link.hostId, {index: link.nicIndex})},
     {label: 'Remove link', run: () => { selectGraphicLink(null); setInterface(link.hostId, link.nicIndex, null); }}
   ]);

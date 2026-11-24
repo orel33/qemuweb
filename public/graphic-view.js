@@ -3,7 +3,7 @@
 // Node positions and the viewport are in world coordinates (independent of the zoom): the
 // viewport is a translation and a scale applied to one SVG group, so there is no frame and no
 // edge to the area where a node can be put.
-import {graphicLayoutKey, machines, store} from './state.js';
+import {graphicLayoutKey, graphicLinksKey, machines, store} from './state.js';
 import {fitTerminals} from './terminal.js';
 import {closeLayoutMenu, selectMachine, viewChanged, workspace} from './workspace.js';
 import {viewDriver} from './observe.js';
@@ -19,8 +19,31 @@ const graphicZoomOut = document.getElementById('graphic-zoom-out');
 const graphicZoomIn = document.getElementById('graphic-zoom-in');
 const graphicZoomLevel = document.getElementById('graphic-zoom-level');
 const graphicFit = document.getElementById('graphic-fit');
+const graphicLinks = document.getElementById('graphic-links');
 const GRAPHIC_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="16" y="16" width="6" height="6" rx="1"/><rect x="2" y="16" width="6" height="6" rx="1"/><rect x="9" y="2" width="6" height="6" rx="1"/><path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/><path d="M12 12V8"/></svg>';
 const TERMINALS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m7 11 2-2-2-2"/><path d="M11 13h4"/><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/></svg>';
+
+// The link style button names what a press does and carries its icon (a Z polyline to go rectilinear, a
+// curve to go back to curves), like the Graphic/Terminals button; aria-pressed tells whether rectilinear is on.
+const LINKS_ICONS = {curved: '<path d="M3 6h7v12h11"/>', rectilinear: '<path d="M3 6c9 0 9 12 18 12"/>'};
+let linkStyle = 'curved';
+
+// The saved style, read again each time the view is shown. A private window may refuse storage.
+function loadLinkStyle() {
+  try { linkStyle = localStorage.getItem(graphicLinksKey) === 'rectilinear' ? 'rectilinear' : 'curved'; } catch (_) {}
+  const rectilinear = linkStyle === 'rectilinear';
+  const label = rectilinear ? 'Curved links' : 'Rectilinear links';
+  graphicLinks.setAttribute('aria-pressed', String(rectilinear));
+  graphicLinks.title = label;
+  graphicLinks.setAttribute('aria-label', label);
+  graphicLinks.querySelector('svg').innerHTML = LINKS_ICONS[linkStyle];
+}
+function toggleLinkStyle() {
+  linkStyle = linkStyle === 'rectilinear' ? 'curved' : 'rectilinear';
+  try { localStorage.setItem(graphicLinksKey, linkStyle); } catch (_) {}
+  loadLinkStyle();
+  renderGraphic();
+}
 
 const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 3;
@@ -126,7 +149,7 @@ export function renderGraphic() {
   for (const id of graphicPositions.keys()) if (!machines.has(id)) graphicPositions.delete(id);
   const focusedId = document.activeElement?.closest?.('.topology-node')?.dataset.nodeId;
   const graph = TopologyGraphic.draw(graphicCanvas, machines.values(), graphicPositions,
-    {view, selectedId: store.activeId, selectedLink, specs: specsOf, recording: recordingIndicator});
+    {view, linkStyle, selectedId: store.activeId, selectedLink, specs: specsOf, recording: recordingIndicator});
   graphicGraph = graph;
   if (selectedLink && !graph.links.some(link => `${link.hostId}:${link.nicIndex}` === selectedLink)) selectedLink = null;
   graphicSummary.textContent = `${graph.hosts} host${graph.hosts === 1 ? '' : 's'} · ${graph.switches} switch${graph.switches === 1 ? '' : 'es'} · ${graph.links.length} link${graph.links.length === 1 ? '' : 's'}`;
@@ -264,7 +287,7 @@ export function setGraphicView(visible) {
   const label = visible ? 'Show Terminals view' : 'Show Graphic view';
   graphicToggle.setAttribute('aria-label', label);
   graphicToggle.title = label;
-  if (visible) renderGraphic();
+  if (visible) { loadLinkStyle(); renderGraphic(); }
   else requestAnimationFrame(fitTerminals);
   viewChanged();
 }
@@ -308,6 +331,8 @@ export function initGraphicView() {
   graphicZoomOut.addEventListener('click', () => zoomCentered(0.8));
   graphicZoomIn.addEventListener('click', () => zoomCentered(1.25));
   graphicFit.addEventListener('click', fitToView);
+  graphicLinks.addEventListener('click', toggleLinkStyle);
+  loadLinkStyle();
   new ResizeObserver(() => { if (store.graphicVisible && fitPending) renderGraphic(); }).observe(graphicCanvas);
   applyViewport();
 }

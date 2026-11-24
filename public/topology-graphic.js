@@ -148,7 +148,7 @@
       group.sort((a, b) => (vertical ? a.other.x - b.other.x : a.other.y - b.other.y) || a.order - b.order);
       const length = vertical ? CARD_WIDTH : CARD_HEIGHT;
       const step = group.length < 2 ? 0 : Math.min(52, (length - 56) / (group.length - 1));
-      group.forEach((item, index) => { item.offset = (index - (group.length - 1) / 2) * step; item.index = index; });
+      group.forEach((item, index) => { item.offset = (index - (group.length - 1) / 2) * step; item.index = index; item.count = group.length; });
     }
   }
 
@@ -157,7 +157,63 @@
     return {x: node.x + half[0], y: node.y + half[1]};
   }
 
-  function routeLinks(links, nodes) {
+  // ---- Rectilinear routing -------------------------------------------------------------------
+  // A link between two opposite sides drawn with horizontal and vertical segments only. Work is done in
+  // a frame where the link leaves `from` towards increasing s (s runs along the leaving axis, v is
+  // across it), so that all four side pairs are one case. Each end first leaves its card by a
+  // perpendicular stub (STUB px, shrinking to MIN_STUB when the cards are close), then:
+  // - aligned ends facing each other: one straight segment;
+  // - otherwise a "Z": along the middle run (across the axis), strictly between the two stub ends,
+  //   so that it is outside both cards;
+  // - cards closer than two minimum stubs, or overlapping along the axis: a detour whose side run
+  //   goes around both cards, four bends (when the cards overlap, the last stub is under a card).
+  // `spread` staggers the middle run of links that share a card edge: see routeLinks.
+  const STUB = 20;
+  const MIN_STUB = 14;
+  const STAGGER = 6;
+
+  // from and to: {x, y, side, card: {x, y}} (the attachment point, its side, the center of its card).
+  // Gives {path, mid}: the SVG path, from `from` to `to`, and the point of its middle run.
+  function rectilinearRoute(from, to, spread = 0) {
+    const vertical = from.side === 'top' || from.side === 'bottom';
+    const dir = (vertical ? NORMALS[from.side][1] : NORMALS[from.side][0]);
+    const frame = point => (vertical ? {s: dir * point.y, v: point.x} : {s: dir * point.x, v: point.y});
+    const A = frame(from);
+    const B = frame(to);
+    const out = (s, v) => (vertical ? {x: v, y: dir * s} : {x: dir * s, y: v});
+    const gap = B.s - A.s;
+    const across = B.v - A.v;
+    let points;
+    let mid;
+    if (gap >= 0 && across === 0) {
+      points = [out(A.s, A.v), out(B.s, B.v)];
+      mid = out((A.s + B.s) / 2, A.v);
+    } else if (gap >= 2 * MIN_STUB) {
+      const stub = Math.min(STUB, gap / 2);
+      const run = Math.max(A.s + Math.min(MIN_STUB, stub), Math.min(B.s - Math.min(MIN_STUB, stub), A.s + gap / 2 - Math.sign(across) * spread));
+      points = [out(A.s, A.v), out(run, A.v), out(run, B.v), out(B.s, B.v)];
+      mid = out(run, (A.v + B.v) / 2);
+    } else {
+      const fromCard = frame(from.card).v;
+      const toCard = frame(to.card).v;
+      const half = (vertical ? CARD_WIDTH : CARD_HEIGHT) / 2 + STUB;
+      const options = [Math.min(fromCard, toCard) - half, Math.max(fromCard, toCard) + half];
+      const around = Math.abs(A.v - options[0]) + Math.abs(B.v - options[0]) <= Math.abs(A.v - options[1]) + Math.abs(B.v - options[1]) ? options[0] : options[1];
+      const outA = A.s + STUB;
+      const outB = B.s - STUB;
+      points = [out(A.s, A.v), out(outA, A.v), out(outA, around), out(outB, around), out(outB, B.v), out(B.s, B.v)];
+      mid = out((outA + outB) / 2, around);
+    }
+    const kept = points.filter((point, index) => index === 0 || point.x !== points[index - 1].x || point.y !== points[index - 1].y);
+    return {path: kept.map((point, index) => `${index ? 'L' : 'M'} ${point.x} ${point.y}`).join(' '), mid};
+  }
+
+  // style: 'curved' (Bézier curves, the default) or 'rectilinear' (rectilinearRoute). In the rectilinear
+  // style the middle runs of the links of one card edge would lie on each other, so each end moves its run
+  // by STAGGER px per position from the middle of its edge's links (the order given by spreadAttachments):
+  // towards the card of its host side for the links that go to the right (or down) of their attachment
+  // and the other way for the others, which keeps the fan of a switch's links free of crossings.
+  function routeLinks(links, nodes, style = 'curved') {
     const attachments = [];
     for (const link of links) {
       const host = nodes.get(link.hostId);
@@ -169,13 +225,23 @@
     }
     spreadAttachments(attachments);
     for (const link of links) {
-      const a = endpoint(nodes.get(link.hostId), link.hostSide, link.hostEnd.offset);
-      const b = endpoint(nodes.get(link.switchId), link.switchSide, link.switchEnd.offset);
+      const host = nodes.get(link.hostId);
+      const sw = nodes.get(link.switchId);
+      const a = endpoint(host, link.hostSide, link.hostEnd.offset);
+      const b = endpoint(sw, link.switchSide, link.switchEnd.offset);
       link.x1 = a.x; link.y1 = a.y; link.x2 = b.x; link.y2 = b.y;
-      const reach = Math.max(36, Math.min(150, Math.hypot(b.x - a.x, b.y - a.y) / 2));
       const n1 = NORMALS[link.hostSide];
       const n2 = NORMALS[link.switchSide];
-      link.path = `M ${a.x} ${a.y} C ${a.x + n1[0] * reach} ${a.y + n1[1] * reach}, ${b.x + n2[0] * reach} ${b.y + n2[1] * reach}, ${b.x} ${b.y}`;
+      if (style === 'rectilinear') {
+        const place = end => (end.index - (end.count - 1) / 2) * STAGGER;
+        const route = rectilinearRoute({...a, side: link.hostSide, card: host}, {...b, side: link.switchSide, card: sw}, place(link.hostEnd) + place(link.switchEnd));
+        link.path = route.path;
+        link.mid = route.mid;
+      } else {
+        const reach = Math.max(36, Math.min(150, Math.hypot(b.x - a.x, b.y - a.y) / 2));
+        link.path = `M ${a.x} ${a.y} C ${a.x + n1[0] * reach} ${a.y + n1[1] * reach}, ${b.x + n2[0] * reach} ${b.y + n2[1] * reach}, ${b.x} ${b.y}`;
+        link.mid = {x: (a.x + b.x) / 2, y: (a.y + b.y) / 2};
+      }
       link.hostLabel = labelAt(a, n1);
       link.portLabel = labelAt(b, n2);
       link.addressLabel = addressLabelAt(a, n1, link.hostEnd.index);
@@ -214,7 +280,8 @@
   }
 
   // ---- Graph ---------------------------------------------------------------------------------
-  // options.specs(machine) gives {memory, cpus} of a host (MB, vCPUs) when known.
+  // options.specs(machine) gives {memory, cpus} of a host (MB, vCPUs) when known; options.linkStyle is
+  // 'curved' (default) or 'rectilinear'.
   function buildGraph(inputNodes, positions = new Map(), options = {}) {
     const machines = [...inputNodes];
     const defaults = autoLayout(machines);
@@ -239,7 +306,7 @@
         links.push({hostId: machine.id, switchId, nicIndex, port: portInfo?.switchId === switchId ? portInfo.port : null});
       });
     }
-    routeLinks(links, nodes);
+    routeLinks(links, nodes, options.linkStyle);
     const hosts = machines.filter(machine => machine.kind !== 'switch').length;
     return {nodes: [...nodes.values()], links, hosts, switches: machines.length - hosts};
   }
@@ -360,7 +427,7 @@
     group.append(element('title', {}, details.join('\n')));
     if (recording?.link(link.hostId, link.nicIndex)) {
       group.classList.add('is-recording');
-      group.append(recordingMark((link.x1 + link.x2) / 2, (link.y1 + link.y2) / 2));
+      group.append(recordingMark(link.mid.x, link.mid.y));
     }
     return group;
   }
@@ -398,5 +465,5 @@
     svg.dataset.zoom = view.k < 0.6 ? 'far' : 'near';
   }
 
-  return {CARD_WIDTH, CARD_HEIGHT, buildGraph, boundsOf, describe, draw, applyView, stateOf, addressesOf, addressText};
+  return {CARD_WIDTH, CARD_HEIGHT, rectilinearRoute, buildGraph, boundsOf, describe, draw, applyView, stateOf, addressesOf, addressText};
 });
