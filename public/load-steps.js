@@ -1,5 +1,5 @@
-// The steps list shared by the Load Session and Load Topology dialogs, and the closing of the previous session they
-// share: one line per stage (a state icon: spinner, green tick, warning, error; an optional detail). The Close step
+// The steps list shared by the Load Session and Save Session dialogs, and the closing of the previous session Load
+// does: one line per stage (a state icon: spinner, green tick, warning, error; an optional detail). The Close step
 // runs only when the user presses Load, after the file was read and checked (see shouldCloseSession).
 import {machines} from './state.js';
 import {removeAllNodes} from './nodes.js';

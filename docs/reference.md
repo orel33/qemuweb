@@ -84,7 +84,7 @@ must stay within 107 bytes). Both programs print one warning, never an error, wh
 is a tmpfs (memory) or has less than 5 GB free, because the working disks of the sessions live there.
 
 **Sessions do not survive a reboot of the machine with the default directory**: `/tmp` is emptied, and the next start
-begins with a clean, empty session. Sessions are disposable: **Save session** (ZIP) is how work is kept.
+begins with a clean, empty session. Sessions are disposable: **Save Session** (ZIP) is how work is kept.
 `--runtime DIR` on a persistent disk (the CREMI services use `/var/lib/qemuweb/server` and `/var/lib/qemuweb/runner`) keeps them. A process that stops
 removes its default directory when nothing is left in it. An old `/tmp/qw-<login>/<port>` that holds runner data (`sessions/`, `users/`, from the time the
 server and the local runner shared one directory), or an old `runtime/` in the project, is no longer used: delete it by hand (`./scripts/cleanall.sh`).
@@ -102,7 +102,7 @@ The server is configured by options only: it reads **no environment variable**.
 | `--users FILE` | `users.json of the repository` | users file (mode 0600) |
 | `--runners FILE` | `runners.json of the repository` | registered runners (mode 0600): a hash of the token of each remote one |
 | `--logs DIR` | `logs/ of the repository` | directory of admin.log and users.log (mode 0700) |
-| `--examples DIR` | `examples/ of the repository` | directory of the example topologies (.topo) and sessions (.zip) offered by the Load dialog (read only; a missing directory means no example) |
+| `--examples DIR` | `examples/ of the repository` | directory of the example topologies (.topo) and sessions (.zip) offered by the Load Session dialog (read only; a missing directory means no example) |
 | `--session-hours N` | `12` | login lifetime in hours (more than 0, at most 2160), renewed while the user is active |
 | `--runner-grace SECONDS` | `300` | how long the sessions of a runner that lost its connection are kept before they are dropped (0 to 86400; 0 drops them at once; start.sh and demo.sh pass 0 unless it is given) |
 | `--trust-proxy VALUE` | `unset` | Express "trust proxy" value behind a reverse proxy ("loopback", "true", a hop count or addresses), so that cookies get Secure over HTTPS |

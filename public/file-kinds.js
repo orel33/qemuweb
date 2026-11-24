@@ -56,7 +56,7 @@ export function archiveDisksPhrase({qemu = 0, vbox = 0} = {}) {
   return `${countPhrase(qemu + vbox, 'working disk')} (${parts})`;
 }
 
-// The orange warning of the Load Session and Load Topology dialogs: the previous session is always closed.
+// The orange warning of the Load Session dialog: the previous session is always closed.
 // Empty for an empty session (its slot keeps its height).
 export function closeWarning(hosts, switches) {
   return hosts + switches === 0 ? '' : `Your current session (${countsText(hosts, switches)}) will be closed and its working disks discarded.`;
@@ -74,22 +74,15 @@ export function shouldCloseSession({reviewed, confirmed, nodeCount}) {
   return reviewed === true && confirmed === true && nodeCount > 0;
 }
 
-// Where a chosen file goes: {kind, dialog: 'session' | 'topology'} (the Load Session or Load Topology dialog), or
-// {error} when the extension is not one of a topology or a session, or the content does not match it.
-// `bytes` is the start of the file for a session, the whole file for a topology.
+// What a chosen file is: {kind: 'session' | 'topology'}, or {error} when the extension is not one of a topology or
+// a session, or the content does not match it. `bytes` is the start of the file for a session, the whole file for a
+// topology. A file of the user and an example of the server go through this same check.
 export function routeFile(name, bytes) {
   const kind = kindOfFileName(name);
   if (!kind) return {error: 'Choose a .topo (topology) or .zip (session) file.'};
   const problem = contentProblem(kind, bytes);
   if (problem) return {error: `${name}: ${problem}`};
-  return {kind, dialog: kind};
-}
-
-// The "From Server (Examples)" menu item: disabled, with its reason, when the server has no example.
-export function serverItemState(examples) {
-  return Array.isArray(examples) && examples.length > 0
-    ? {disabled: false, label: 'From Server (Examples)'}
-    : {disabled: true, label: 'No examples on the server'};
+  return {kind};
 }
 
 export const kindLabel = kind => (kind === 'session' ? 'Session' : 'Topology');
@@ -101,14 +94,9 @@ export function formatSize(bytes) {
   return `${(bytes / 1073741824).toFixed(2)} GB`;
 }
 
-// The label of an example in the dropdown: "name · Topology|Session · size".
+// The label of an example in the list of the file selector: "name · Topology|Session · size".
 export function exampleOptionLabel(example) {
   return `${example.name} · ${kindLabel(example.kind)} · ${formatSize(example.size)}`;
-}
-
-// Whether Load example is enabled: an example of the list is chosen (not the placeholder).
-export function canLoadExample(value, examples) {
-  return typeof value === 'string' && value !== '' && examples.some(example => example.name === value);
 }
 
 // What the Save dialog does for the checkbox "Save only the topology": the dialog keeps its size and its Download
@@ -118,4 +106,70 @@ export function saveChoice(topologyOnly) {
   return topologyOnly
     ? {sessionOptions: false, optionNote: 'Not used for a topology file', fileName: 'network.topo'}
     : {sessionOptions: true, optionNote: '', fileName: 'qemuweb-session.zip'};
+}
+
+// The sources of the file selector: the examples of the server, or a file of the user's computer.
+export const SOURCES = ['server', 'local'];
+
+// The source the Load Session dialog opens on: the remembered one when it can be used, else the examples when the
+// server has some, else the user's files. `examples` is the list of the server (empty when none or unreachable).
+export function openingSource(remembered, examples) {
+  const hasExamples = Array.isArray(examples) && examples.length > 0;
+  if (remembered === 'local' || !hasExamples) return 'local';
+  return 'server';
+}
+
+// The "Server examples" segment of the source switch: disabled, with its hint, when the server has no example.
+export function serverSourceState(examples) {
+  return Array.isArray(examples) && examples.length > 0
+    ? {disabled: false, hint: 'Examples of the server'}
+    : {disabled: true, hint: 'No examples on the server'};
+}
+
+// The file card: the same lines for a file of the server and for a file of the user. `info` is
+// {name, kind, size, description}; the kind line is "Session · 3.4 KB".
+export function fileCardLines(info) {
+  if (!info) return {name: 'No file chosen', meta: '', description: ''};
+  return {name: info.name, meta: info.kind ? `${kindLabel(info.kind)} · ${formatSize(info.size)}` : formatSize(info.size), description: info.description || ''};
+}
+
+// The check boxes of the Load Session dialog. The previous session is always closed (shown checked and disabled);
+// "Start" is always available; "Discard working disks" matters only for a session ZIP that holds working disks.
+// `file` is {kind, hasDisks} or null (nothing chosen); hasDisks is true, false, or null when unknown.
+export function loadOptionStates(file) {
+  const discard = {disabled: true, note: ''};
+  if (file?.kind === 'topology') discard.note = 'A topology has no working disk.';
+  else if (file?.kind === 'session' && file.hasDisks === false) discard.note = 'This archive has no working disk.';
+  else if (file?.kind === 'session') discard.disabled = false;
+  return {
+    closePrevious: {checked: true, disabled: true, note: 'Loading always replaces the current session.'},
+    autoStart: {disabled: false},
+    discard
+  };
+}
+
+// The steps of a load, in order: [name, label]. A session ZIP is sent to the server and restores working disks.
+export function loadStepList(kind) {
+  const head = [['read', 'Read the file'], ['check', 'Check the file'], ['close', 'Close the previous session']];
+  return kind === 'topology'
+    ? [...head, ['create', 'Create switches and hosts'], ['start', 'Start hosts and switches']]
+    : [...head, ['upload', 'Upload the file'], ['create', 'Create switches and hosts'], ['restore', 'Restore working disks'], ['start', 'Start hosts and switches']];
+}
+
+// The steps of a save, in order: [name, label]. Working disks are copied only once the hosts and switches are stopped.
+export function saveStepList({topologyOnly, includeDisks}) {
+  if (topologyOnly) return [['create', 'Create the topology'], ['download', 'Download the file']];
+  return [...(includeDisks ? [['stop', 'Stop hosts and switches']] : []), ['create', 'Create the archive'], ['download', 'Download the file']];
+}
+
+// The refusal of a load whose working disks no longer match a rebuilt base image while "Discard working disks" is off.
+// `messages` are the lines of the base image check; nothing was closed or changed.
+export function staleDisksRefusal(messages) {
+  return `${messages.join('\n')}\nCheck "Discard working disks" and load again. Nothing was changed.`;
+}
+
+// What the Restore step reports.
+export function restoreText({hasDisks, discard}) {
+  if (!hasDisks) return 'No working disk in the file';
+  return discard ? 'Working disks discarded: hosts start from the current base images' : 'Working disks restored';
 }

@@ -48,7 +48,7 @@ function serverSpec(root) {
       {flag: '--logs', metavar: 'DIR', kind: 'path', key: 'logDir', default: path.join(root, 'logs'), fallback: 'logs/ of the repository',
         description: 'directory of admin.log and users.log (mode 0700)'},
       {flag: '--examples', metavar: 'DIR', kind: 'path', key: 'examplesDir', default: path.join(root, 'examples'), fallback: 'examples/ of the repository',
-        description: 'directory of the example topologies (.topo) and sessions (.zip) offered by the Load dialog (read only; a missing directory means no example)'},
+        description: 'directory of the example topologies (.topo) and sessions (.zip) offered by the Load Session dialog (read only; a missing directory means no example)'},
       {flag: '--session-hours', metavar: 'N', kind: 'number', key: 'sessionHours', default: DEFAULT_SESSION_HOURS, fallback: String(DEFAULT_SESSION_HOURS),
         max: MAX_SESSION_HOURS, expected: `a number of hours greater than 0 and at most ${MAX_SESSION_HOURS}`,
         description: 'login lifetime in hours (more than 0, at most 2160), renewed while the user is active'},

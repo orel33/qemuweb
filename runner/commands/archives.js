@@ -24,7 +24,7 @@ const commands = {
     const {hosts, switches, logicalBytes, allocatedBytes, estimatedBytes: bytes, runningHosts} = snapshotOf(context).archiveSources(includeDisks, includeDisks);
     return {bytes, logicalBytes, allocatedBytes, hosts: hosts.length, switches: switches.length, includeDisks, runningHosts,
       hasWorkingDisks: hosts.some(item => item.disks.length), format: ARCHIVE_NAME,
-      // How many hosts carry a disk of each engine (the Save dialog says which engines' disks go in).
+      // How many hosts carry a disk of each engine (the Save Session dialog says which engines' disks go in).
       workingDisks: {qemu: hosts.filter(item => item.disks.includes('raw')).length, vbox: hosts.filter(item => item.disks.includes('vdi')).length}};
   },
 

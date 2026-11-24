@@ -47,7 +47,7 @@ bash scripts/prepare.sh --system debian13-legacy      # downloads and builds the
 Open <http://127.0.0.1:3003> and log in as `toto` (password `toto`; `tutu` and `admin` also exist, with the
 password equal to the login). The demo loads `examples/lan.zip` and starts it: a switch and four hosts on
 `192.168.0.x`. Open their consoles and `ping` between them. `Ctrl+C` stops everything. In the interface, the
-**Load** button also lists the files of `examples/` (LAN, DMZ and gateway topologies and sessions). The server listens on `127.0.0.1`; for a test on a trusted LAN, `./scripts/demo.sh --bind ADDRESS` listens on another address, in clear text ([docs/deployment.md](docs/deployment.md#listening-on-another-address-lan-test-no-proxy)).
+**Load Session** button also lists the files of `examples/` (LAN, DMZ and gateway topologies and sessions). The server listens on `127.0.0.1`; for a test on a trusted LAN, `./scripts/demo.sh --bind ADDRESS` listens on another address, in clear text ([docs/deployment.md](docs/deployment.md#listening-on-another-address-lan-test-no-proxy)).
 
 If `qemu-system-x86_64 -netdev help` does not list `vde`, see
 [QEMU without VDE support](docs/install.md#qemu-without-vde-support). To install QemuWeb for your own use, see
@@ -55,7 +55,7 @@ If `qemu-system-x86_64 -netdev help` does not list `vde`, see
 
 ## Where the sessions live
 
-By default the sessions of a server live in a short private directory of `/tmp` for its local runner (`/tmp/qw-<login>/l-<port>`; the server keeps its own, `/tmp/qw-<login>/<port>`), so that Unix socket paths always fit. They do not survive a reboot of the machine: sessions are disposable, **Save session** (ZIP) keeps work, and `--runtime DIR` on a persistent disk changes that (see [docs/reference.md](docs/reference.md#runtime-directory)).
+By default the sessions of a server live in a short private directory of `/tmp` for its local runner (`/tmp/qw-<login>/l-<port>`; the server keeps its own, `/tmp/qw-<login>/<port>`), so that Unix socket paths always fit. They do not survive a reboot of the machine: sessions are disposable, **Save Session** (ZIP) keeps work, and `--runtime DIR` on a persistent disk changes that (see [docs/reference.md](docs/reference.md#runtime-directory)).
 
 ## Documentation
 

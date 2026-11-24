@@ -41,15 +41,15 @@ test('the stylesheet is served from public/css/app.css', () => {
   assert.ok(fs.statSync(path.join(publicDir, 'css', 'app.css')).size > 0);
 });
 
-test('the Load session dialog is a review with Start and Discard options and OK', () => {
+test('the Load Session dialog has the Start and Discard options and one Load button', () => {
   const html = fs.readFileSync(path.join(publicDir, 'index.html'), 'utf8');
-  for (const id of ['session-archive-load-options', 'load-auto-start', 'load-discard-disks', 'load-discard-note', 'confirm-session-archive-load']) {
+  for (const id of ['load-options', 'load-close-previous', 'load-auto-start', 'load-discard-disks', 'load-discard-note', 'confirm-load']) {
     assert.match(html, new RegExp(`id="${id}"`), id);
   }
   assert.match(html, /Start hosts and switches after loading/);
-  assert.match(html, /<input type="checkbox" id="load-discard-disks"> Discard working disks/);
+  assert.match(html, /<input type="checkbox" id="load-discard-disks" disabled> Discard working disks/);
   assert.doesNotMatch(html, /Load without working disks/);
-  const archive = moduleSource('archive');
-  assert.match(archive, /discardDisks=\$\{discardDisks\}/);
-  assert.doesNotMatch(archive, /discardStaleDisks/);
+  const read = moduleSource('archive-read');
+  assert.match(read, /discardDisks=\$\{discardDisks\}/);
+  assert.doesNotMatch(moduleSource('load-dialog'), /discardStaleDisks/);
 });

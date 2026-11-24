@@ -383,4 +383,4 @@ Warning `runtime directory … is on a tmpfs` or `has only N GB free`: the worki
 give a larger disk with `--runtime DIR` if sessions are big.
 
 With the default directory, **sessions do not survive a reboot of the machine** (`/tmp` is emptied): the next start
-begins with an empty session. Use **Save session** (ZIP) to keep work, or `--runtime DIR` on a persistent disk.
+begins with an empty session. Use **Save Session** (ZIP) to keep work, or `--runtime DIR` on a persistent disk.
