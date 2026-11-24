@@ -165,10 +165,17 @@ test('opening an example: a malformed name is a 400, an unlisted name a 404, a w
   await topo.handle.close();
 });
 
-test('the real examples of the repository are listed with their kinds and descriptions', async () => {
+test('the real examples of the repository are the session archives, listed with their kind', async () => {
   const list = await listExamples(path.join(__dirname, '..', '..', 'examples'));
-  assert.deepEqual(list.map(entry => entry.name), ['dmz.topo', 'dmz0.zip', 'dmz1.zip', 'gw.topo', 'gw0.zip', 'gw1.zip', 'lan.topo', 'lan.zip']);
-  assert.deepEqual(list.filter(entry => entry.kind === 'topology').map(entry => entry.description), ['DMZ', 'GW', 'LAN']);
+  assert.deepEqual(list.map(entry => entry.name), ['dmz0.zip', 'dmz1.zip', 'gw0.zip', 'gw1.zip', 'lan.zip']);
+  assert.ok(list.every(entry => entry.kind === 'session'));
+});
+
+test('the test topologies of topo/ are listed like examples when the server is pointed at that directory', async () => {
+  const list = await listExamples(path.join(__dirname, '..', '..', 'topo'));
+  assert.deepEqual(list.map(entry => entry.name), ['dmz.topo', 'gw.topo', 'lan.topo']);
+  assert.deepEqual(list.map(entry => entry.description), ['DMZ', 'GW', 'LAN']);
+  assert.ok(list.every(entry => entry.kind === 'topology'));
 });
 
 test('server/examples.js never writes: no write, delete or rename call', () => {

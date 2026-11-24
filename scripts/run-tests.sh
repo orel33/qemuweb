@@ -15,7 +15,7 @@ Available tests:
   check-runner-manual            Manual mode: server alone and a runner started by hand, survives a SIGKILL of the server, session adopted (VDE only)
   check-runner-remote            Remote runner: register with a one-time token, run over WebSocket, session placed, network cut and restored, pause, revoke (VDE only)
   admin                          Admin role: /api/admin gate, observation, control, cleanup, accounts, audit (VDE only)
-  check-load                     Load examples/*.topo and examples/lan.zip, export and re-import, refuse corrupted files (no VM)
+  check-load                     Load topo/*.topo and examples/lan.zip, export and re-import, refuse corrupted files (no VM)
   check-load-start               Load examples/lan.zip with automatic start like the Load Session button: switch and 4 hosts running
   check-console                  Debian Legacy host with two serial consoles (ttyS0, ttyS1): separate, simultaneous output; Clear on console 2
   two-hosts-stop-resume          Two Debian Legacy hosts on one VDE switch: serial static IP, ping both ways, Stop/Resume keeping disk, port and MAC, ping again
@@ -50,7 +50,7 @@ case "${1:-}" in
   check-runner-manual) run_test 'Manual runner: server alone, runner survives a server SIGKILL, session adopted' npm run test:check-runner-manual ;;
   check-runner-remote) run_test 'Remote runner: registration, placement, network cut and restore, pause, revoke' npm run test:check-runner-remote ;;
   admin) run_test 'Admin role: supervision, observation, console control, cleanup, accounts and audit' npm run test:admin ;;
-  check-load) run_test 'Load examples/*.topo and examples/lan.zip, export and re-import, refuse corrupted files (no VM)' npm run test:check-load ;;
+  check-load) run_test 'Load topo/*.topo and examples/lan.zip, export and re-import, refuse corrupted files (no VM)' npm run test:check-load ;;
   check-load-start) run_test 'Load examples/lan.zip with automatic start like the Load Session button: switch and 4 hosts running' npm run test:check-load-start ;;
   check-console) run_test 'Debian Legacy host with two serial consoles: separate and simultaneous output, Clear on console 2' npm run test:check-console ;;
   two-hosts-stop-resume) run_test 'Two Debian Legacy hosts on one VDE switch: serial static IP, ping both ways, Stop/Resume keeping disk, port and MAC, ping again' npm run test:two-hosts-stop-resume ;;

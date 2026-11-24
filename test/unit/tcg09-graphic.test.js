@@ -22,8 +22,8 @@ function nodesFromFixture(file) {
 
 test('the LAN and gateway examples produce a node for every host and switch and a distinct curved path for every NIC', () => {
   for (const [file, expectedSwitches, expectedHosts, expectedLinks] of [
-    ['examples/lan.topo', 1, 4, 4],
-    ['examples/gw.topo', 2, 4, 5]
+    ['topo/lan.topo', 1, 4, 4],
+    ['topo/gw.topo', 2, 4, 5]
   ]) {
     const graph = buildGraph(nodesFromFixture(file));
     assert.equal(graph.switches, expectedSwitches);
@@ -72,7 +72,7 @@ test('node positions are not clamped: the world has no edge, whatever the zoom',
 });
 
 test('the default placement keeps every card apart on the example topologies, and manual positions win', () => {
-  for (const file of ['examples/lan.topo', 'examples/gw.topo', 'examples/dmz.topo']) {
+  for (const file of ['topo/lan.topo', 'topo/gw.topo', 'topo/dmz.topo']) {
     const nodes = nodesFromFixture(file);
     const graph = buildGraph(nodes);
     for (const [index, a] of graph.nodes.entries()) {

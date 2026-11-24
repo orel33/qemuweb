@@ -1,6 +1,6 @@
 'use strict';
 
-// Loads the real example files without starting any VM: examples/*.topo through the topology routes,
+// Loads the real example files without starting any VM: topo/*.topo through the topology routes,
 // examples/lan.zip through the session-archive routes, its export re-imported into another session,
 // and corrupted copies of lan.zip refused. Nodes are only created, never started: no system
 // image, KVM or VDE process is needed. Expectations come from the project's own topology
@@ -17,6 +17,7 @@ const {readArchive} = require('../../runner/archive-zip');
 
 const root = path.resolve(__dirname, '../..');
 const example = name => path.join(root, 'examples', name);
+const topology = name => path.join(root, 'topo', name);
 const workDir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-check-load-'));
 let child;
 let testUsers;
@@ -114,7 +115,7 @@ async function checkTopologies(client, systems) {
   const engine = (await client.request('/api/general-settings')).engine;
   let first = true;
   for (const name of ['lan.topo', 'gw.topo', 'dmz.topo']) {
-    const text = fs.readFileSync(example(name), 'utf8');
+    const text = fs.readFileSync(topology(name), 'utf8');
     const expected = parsedView(parseTopology(text, systems));
     const preview = await client.request('/api/topology/preview', {method: 'POST', body: {text, engine}});
     const links = Object.values(expected.hosts).reduce((count, host) => count + host.switches.length, 0);
@@ -212,7 +213,8 @@ async function checkArchives(importer, reimporter, systems) {
 }
 
 async function run() {
-  for (const name of ['lan.topo', 'gw.topo', 'dmz.topo', 'lan.zip']) assert.ok(fs.existsSync(example(name)), `Missing examples/${name}.`);
+  for (const name of ['lan.topo', 'gw.topo', 'dmz.topo']) assert.ok(fs.existsSync(topology(name)), `Missing topo/${name}.`);
+  assert.ok(fs.existsSync(example('lan.zip')), 'Missing examples/lan.zip.');
   const port = await freePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   testUsers = await createTestUsers([{login: 'topo'}, {login: 'importer'}, {login: 'reimporter'}]);

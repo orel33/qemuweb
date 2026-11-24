@@ -319,8 +319,9 @@ naming scheme and the console font).
   machine to another).
 - A `.topo` text file describes only hosts, switches, and their links,
   without disks or startup scripts. Examples:
-  [`examples/lan.topo`](../examples/lan.topo), [`examples/dmz.topo`](../examples/dmz.topo),
-  [`examples/gw.topo`](../examples/gw.topo).
+  [`topo/lan.topo`](../topo/lan.topo), [`topo/dmz.topo`](../topo/dmz.topo),
+  [`topo/gw.topo`](../topo/gw.topo). They are the topologies of the tests: the Load Session dialog does not list
+  them by default (`--examples topo` shows them).
 - The hosts of every example (`.topo` and `.zip`) use the system `debian13-cloud`: starting them needs
   `images/debian13-cloud.raw` (`bash scripts/prepare.sh --system debian13-cloud`).
 

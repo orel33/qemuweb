@@ -32,7 +32,7 @@ do the same in their own writer.
 | `<session>/meta.json` | runner | 0600 | never | `scripts/status.js` (age only) |
 | `<host>/host.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
 | `<switch>/switch.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
-| `*.topo` (text, `examples/`) | user, topology export | umask | no | `common/topology.js` |
+| `*.topo` (text, `topo/`) | user, topology export | umask | no | `common/topology.js` |
 | session ZIP (`qemuweb-session.zip`) | runner (export) | 0600 | — | `runner/archive-zip.js`, `runner/archive-snapshot.js` |
 | `logs/admin.log` (or `--logs DIR`) | server | 0600 | no | `server/audit.js` (tail for `/admin`) |
 | `logs/users.log` | server | 0600 | no | `server/audit.js` |
@@ -385,7 +385,7 @@ At least one switch or host is required; at most 32 interfaces per switch. A
 topology is loaded into new nodes (names must not exist in the session, unless
 "close previous" is requested): random IDs, default settings of the system,
 MAC and ports allocated, default `start.sh`. Export writes the current session
-and fails if a host has a disconnected interface. Real file, `examples/lan.topo`:
+and fails if a host has a disconnected interface. Real file, `topo/lan.topo`:
 
 ```text
 SWITCH s1
