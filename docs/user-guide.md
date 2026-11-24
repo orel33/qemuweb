@@ -186,7 +186,7 @@ browser's cookie (and, behind OpenID, ends the OpenID session); see [docs/deploy
 | `--logout-url URL` | unset | Where **Log out** goes for an identity from the authenticating front end. |
 | `--no-auth` | authentication on | Disables authentication: one shared local session, for single-user local work only. |
 | `--logs DIR` | `logs` | Directory of the server logs (created with mode 0700): `admin.log`, the audit log of administrator actions, and `users.log`, the user events (JSON lines, mode 0600). |
-| `--examples DIR` | `examples` | Directory of the example topologies (`.topo`) and sessions (`.zip`) listed by the **Load** dialog (read only; a missing directory means no example). |
+| `--examples DIR` | `examples` | Directory of the example topologies (`.topo`) and sessions (`.zip`) listed by the **Load Session** dialog (read only; a missing directory means no example). |
 
 With `--no-auth`, the server prints a warning at startup and the
 interface shows **Authentication disabled**. It is never the default.
@@ -198,8 +198,8 @@ interface shows **Authentication disabled**. It is never the default.
 1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
 2. In the Web interface, choose the engine in the **Engine** select of the header (see
    [The session engine](#the-session-engine)), click
-   **Load**, and under **Examples** click `lan.zip` (or choose
-   [`examples/lan.zip`](../examples/lan.zip) with the file picker).
+   **Load Session**, choose `lan.zip` in **Server examples** (or choose
+   [`examples/lan.zip`](../examples/lan.zip) in **My files**) and press **Load**.
 3. Start the hosts and the switch. Their startup scripts assign `192.168.0.x`
    addresses to the four hosts. Open their consoles and `ping` between them.
 
@@ -253,51 +253,62 @@ naming scheme and the console font).
 
 ### Sessions and topologies
 
-- **Sessions are disposable.** With the default setup the session lives in `/tmp` on the server machine and does not survive a reboot of that machine (or an administrator wiping it): the next login finds an empty session. Use **Save** (ZIP, with the working disks if needed) to keep work. A server started with `--runtime` on a persistent disk (the CREMI deployment) keeps sessions across reboots.
-- One **Load** button and one **Save** button (bottom left, with the session
-  icons) handle both a topology and a session.
-- **Save** opens one dialog. One status line gives the size of the session
+- **Sessions are disposable.** With the default setup the session lives in `/tmp` on the server machine and does not survive a reboot of that machine (or an administrator wiping it): the next login finds an empty session. Use **Save Session** (ZIP, with the working disks if needed) to keep work. A server started with `--runtime` on a persistent disk (the CREMI deployment) keeps sessions across reboots.
+- One **Load Session** button and one **Save Session** button (bottom left, with the session
+  icons) handle both a topology and a session. Their two dialogs have the same frame: the
+  button icon and the title, the options in one box, the steps with a green check mark for each finished
+  one, a result line, and **Cancel** / the main button (**Load** or **Save**), then **Close**.
+  Neither dialog changes size between its states, and **Escape** closes it except while it is working.
+  Observing a user as an administrator, both buttons are disabled.
+- **Save Session** opens one dialog. One status line gives the size of the session
   (*Save your current session: 4 hosts and 2 switches.*, or *Your current session is empty.*
-  with **Download** disabled), and the same **Download** button is used whatever the
+  with **Save** disabled), and the same **Save** button is used whatever the
   checkbox **Save only the topology (.topo)** says (unchecked by default, remembered
   in the browser). Unchecked, it exports hosts, switches, settings, and startup
   scripts as the session ZIP `qemuweb-session.zip`, with the **Include working disks**
   option and a dimmed size estimate. With the option on, the ZIP carries the working disks
   that exist, `disk.qcow2` and `disk.vdi` of every host, whatever the current engine, and the
   estimate counts them and says which: *QEMU and VirtualBox disks are both included.* Checked, the disk option is greyed out, there is
-  no estimate, and the topology text file `network.topo` is downloaded. The dialog
-  keeps the same size whatever the choice and the state (nothing jumps).
-- **Load** opens a menu above the button: **From User Files** opens the file picker
-  (a `.topo` or a `.zip`), **From Server (Examples)** opens a dropdown of the
-  server's examples (each option reads *name · Topology or Session · size*, the first
-  comment line of a topology is shown under it, **Load example** goes on); the item
-  is disabled, with *No examples on the server*, when there is none. The kind is the
-  extension, confirmed by the content (a ZIP starts with `PK`, a topology is UTF-8
+  no estimate, and the topology text file `network.topo` is downloaded. After **Save** the steps
+  appear (*Stop hosts and switches* when the disks are included, *Create the archive*, *Download the file*); an error is shown on its
+  step with **Back** to the options, and **Close** ends the dialog.
+- **Load Session** opens one dialog, with no menu and no second dialog. **File**: a
+  switch chooses the source, **Server examples** (a list reading *name · Topology or Session · size*)
+  or **My files** (the file picker of your computer, a `.topo` or a `.zip`); the choice is
+  remembered in the browser. Whatever the source, the chosen file appears in the same card: its name,
+  its kind (Session or Topology) and size, the first comment line of an example topology, and what the
+  browser reads before you press anything: for a session the summary (hosts, switches, hosts with a startup disk, working disks), then the
+  check of the base images (in orange when a base image changed since the session was saved); for a topology its hosts, switches and links.
+  When the server has no example, **Server examples** is disabled (*No examples on the server*) and
+  the dialog works with **My files**. The kind is the extension, confirmed by the content (a ZIP starts with `PK`, a topology is UTF-8
   text without control characters): a `.zip` that is text or a `.topo` that is binary
-  is refused with a message. A ZIP goes to the **Load Session** dialog, a topology to
-  the **Load Topology** dialog; both have the same layout: the file name, the steps
-  (the summary read from the file, then *Close previous session* and the load), the
-  options (**Start hosts and switches after loading**; for a session also **Discard
-  working disks**), an orange warning and **Cancel** / **Load**.
+  is refused in the card with a message, and **Load** stays disabled.
+- **Options** of Load Session: **Close the previous session** is always checked and greyed out, because
+  loading always replaces the current session; **Start hosts and switches after loading** (checked
+  by default, remembered); **Discard working disks** (unchecked by default, never remembered), usable
+  only for a session ZIP that has working disks (greyed, with the reason, for a `.topo` or a ZIP without
+  working disks). It discards the disks of both engines.
+- **One click on Load** runs everything and shows the steps: *Read the file*, *Check the file*,
+  *Close the previous session*, *Upload the file* (a server file is read by the server from its disk),
+  *Create switches and hosts*, *Restore working disks*, *Start hosts and switches* (a topology has no upload
+  and no restore). The result line ends the dialog and **Close** reloads the page on the loaded session.
+  Warnings (a start that failed for some instances, a warning of the server) are orange lines of the steps.
+  An error is shown on its step; before the session is closed the dialog says *Nothing was changed*
+  and **Back** returns to the options. In particular, when a working disk no longer matches a rebuilt base image
+  and **Discard working disks** is off, the load is **refused before anything is closed**: *Check "Discard working disks" and load again.*
 - **Loading always closes the previous session.** When the current session is not
   empty, the orange warning says *Your current session (4 hosts and 2 switches) will
   be closed and its working disks discarded.* Nothing is removed when the dialog
   opens, nor while the file is read and checked (an unreadable or invalid file
   never destroys the session): the hosts and switches are removed, as **Remove all
-  hosts and switches** does, only when you press **Load**, then the file is
+  hosts and switches** does, only when you press **Load**, after the check passed, then the file is
   loaded. If the load then fails, the dialog says so and that the session is empty.
-  **Cancel** anywhere changes nothing. Use **Save** first to keep a copy.
+  **Cancel** anywhere changes nothing. Use **Save Session** first to keep a copy.
 - The **Examples** are the `.topo` and `.zip` files of the server's `examples/`
   directory (the `--examples DIR` option of the server; a missing directory means
   no example). They are read only, listed afresh at each opening of the dialog,
   and loaded by the server from its own disk with the same checks as an upload.
-- Choosing a ZIP (a file or an example) opens a review dialog: it summarizes the archive (hosts,
-  switches, hosts with a startup disk, working disks) and warns when a base image
-  changed since the session was saved and the archive contains working disks
-  (qcow2 or vdi) for it: those disks cannot be reused, so **Discard working disks** is
-  then checked and locked, and it discards the disks of both engines. Two options apply on **OK**: **Start hosts and
-  switches after loading** (default) and **Discard working disks** (greyed when the
-  archive has none); **Cancel** uploads nothing. Each host with a
+- Each host with a
   working disk records, in its `host.json`, the base image each disk depends on (size and
   SHA-256, one record per disk format). A saved VirtualBox disk only loads on a machine
   whose base `.vdi` is byte-identical to the one it was made on (every conversion to VDI

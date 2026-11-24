@@ -82,16 +82,15 @@ function downloadBlob(blob, fileName) {
   setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
-// Asks where to save the ZIP when the browser can (the file is then written as it arrives); null otherwise or when the
-// user gives up.
+// Asks where to save the ZIP when the browser can (the file is then written as it arrives): {writable: null} for a
+// plain download otherwise, null when the user gives up.
 async function zipTarget() {
   if (!window.showSaveFilePicker) return {writable: null};
   try {
     const handle = await window.showSaveFilePicker({suggestedName: saveChoice(false).fileName, types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
     return {writable: await handle.createWritable()};
   } catch (error) {
-    if (error.name === 'AbortError') return null;
-    throw error;
+    return error.name === 'AbortError' ? null : {writable: null};
   }
 }
 

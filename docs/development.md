@@ -15,7 +15,7 @@ Code layout, tests and documentation. The data paths between the browser, the se
 | `common/` | Code shared by the runner and the server: runner protocol framing, IDs, launch settings, `config.json` validation, `.topo` parsing. |
 | `public/` | Web interface: `index.html`, `css/app.css`, ES modules started by `app.js`, xterm.js terminals, network graph. |
 | `scripts/prepare/` | One image preparation script per system. |
-| `examples/` | Example sessions (`.zip`) and topologies (`.topo`): LAN, DMZ and gateway. The server lists them in the Load dialog (`--examples DIR` selects another directory). |
+| `examples/` | Example sessions (`.zip`) and topologies (`.topo`): LAN, DMZ and gateway. The server lists them in the Load Session dialog (`--examples DIR` selects another directory). |
 
 See [docs/architecture.md](architecture.md) for the data paths between the
 browser, the server, and QEMU, VirtualBox, and VDE.

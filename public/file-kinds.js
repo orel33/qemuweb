@@ -56,7 +56,7 @@ export function archiveDisksPhrase({qemu = 0, vbox = 0} = {}) {
   return `${countPhrase(qemu + vbox, 'working disk')} (${parts})`;
 }
 
-// The orange warning of the Load Session and Load Topology dialogs: the previous session is always closed.
+// The orange warning of the Load Session dialog: the previous session is always closed.
 // Empty for an empty session (its slot keeps its height).
 export function closeWarning(hosts, switches) {
   return hosts + switches === 0 ? '' : `Your current session (${countsText(hosts, switches)}) will be closed and its working disks discarded.`;

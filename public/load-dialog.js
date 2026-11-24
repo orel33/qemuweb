@@ -152,7 +152,7 @@ async function load() {
     steps.set('check', found.stale.length ? 'warning' : found.checkState, found.stale.length ? `${found.checkText}\nThe working disks are discarded.` : found.checkText);
     step = 'close';
     closed = await closePreviousSession(steps, {reviewed: true});
-    const end = await create(info, found, options, () => { step = 'create'; });
+    const end = await create(info, found, options, name => { step = name; });
     return finish({state: end.state, text: end.text, changed: true});
   } catch (error) {
     steps.set(step, 'error', closed ? `${error.message}\nThe previous session was closed: the current session is empty.` : error.message);
@@ -167,11 +167,12 @@ async function load() {
 
 // Sends the file to the server (a file of the user is uploaded, an example is read by the server from its disk) and shows
 // the three last steps. Returns the final {state, text}.
-async function create(info, found, {autoStart: start, discardDisks}, onCreate) {
+async function create(info, found, {autoStart: start, discardDisks}, onStep) {
   let startErrors = [];
   if (info.kind === 'session') {
     steps.set('upload', 'running', '0%');
-    const uploaded = () => { steps.set('upload', 'done', info.example ? 'Read by the server from its examples' : ''); steps.set('create', 'running'); onCreate(); };
+    onStep('upload');
+    const uploaded = () => { steps.set('upload', 'done', info.example ? 'Read by the server from its examples' : ''); steps.set('create', 'running'); onStep('create'); };
     const data = info.example ? await importExample(info.example, {autoStart: start, discardDisks}, uploaded)
       : await importArchive(found.file, {autoStart: start, discardDisks}, percent => steps.set('upload', 'running', `${percent}%`), uploaded);
     loaded = true;
@@ -182,7 +183,7 @@ async function create(info, found, {autoStart: start, discardDisks}, onCreate) {
     startErrors = data.startErrors || [];
   } else {
     steps.set('create', 'running');
-    onCreate();
+    onStep('create');
     const options = {engine: generalSettings.engine, autostart: start};
     const data = await requestJson(info.example ? '/api/examples/load' : '/api/topology',
       jsonRequest('POST', info.example ? {name: info.example, ...options} : {text: await found.file.text(), ...options}), 'Cannot load topology.');

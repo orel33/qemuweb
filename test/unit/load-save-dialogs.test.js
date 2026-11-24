@@ -1,7 +1,7 @@
-// The Load menu and the Load Session, Load Topology and Save dialogs of the Web interface: the pure rules
-// (public/file-kinds.js: kind of a file by extension and content, where a file goes, the Save status line, the warning
-// and the timing of the closing of the previous session, the menu item states) and the wiring of the page (one Load
-// and one Save button, the menu, the two Load dialogs with one structure, a fixed size).
+// The Load Session and Save Session dialogs of the Web interface: the pure rules (public/file-kinds.js: kind of a file
+// by extension and content, the file selector state, the option rules, the steps, the Save status line, the warning and
+// the timing of the closing of the previous session) and the wiring of the page (one Load and one Save button, one dialog
+// each in the same frame, one file selector, a fixed size, observers).
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const path = require('node:path');
@@ -44,18 +44,6 @@ test('the browser and the server agree on the content of a kind', async () => {
   for (const kind of ['session', 'topology']) {
     for (const sample of samples) assert.equal(contentProblem(kind, sample) === '', server.contentError(kind, Buffer.from(sample)) === null, `${kind} ${[...sample]}`);
   }
-});
-
-test('a chosen file goes to the Load Session dialog (zip) or the Load Topology dialog (topo); a mismatch or another kind is refused', async () => {
-  const {routeFile} = await load();
-  assert.deepEqual(routeFile('lan.zip', ZIP), {kind: 'session', dialog: 'session'});
-  assert.deepEqual(routeFile('LAN.ZIP', ZIP), {kind: 'session', dialog: 'session'});
-  assert.deepEqual(routeFile('lan.topo', bytes('SWITCH sw\n')), {kind: 'topology', dialog: 'topology'});
-  assert.match(routeFile('fake.zip', bytes('SWITCH sw\n')).error, /^fake\.zip: This file is not a ZIP archive/);
-  assert.match(routeFile('fake.topo', ZIP).error, /^fake\.topo: This file is not a topology/);
-  assert.match(routeFile('fake.topo', bytes('a\0b')).error, /binary/);
-  assert.match(routeFile('notes.txt', bytes('x')).error, /Choose a \.topo \(topology\) or \.zip \(session\) file/);
-  assert.equal(routeFile('fake.zip', bytes('SWITCH sw\n')).dialog, undefined);
 });
 
 test('the counts read "no host", "1 host", "2 hosts"; the nodes are counted by kind', async () => {
@@ -102,168 +90,240 @@ test('the previous session is closed only at Load, after the file was read and c
   assert.equal(shouldCloseSession({reviewed: 'yes', confirmed: true, nodeCount: 6}), false);
 });
 
-test('the timing is wired the same way in both dialogs: nothing closes on open, a failed read or check never closes', () => {
-  const archive = moduleSource('archive');
-  const topology = moduleSource('topology');
-  const steps = moduleSource('load-steps');
-  assert.equal((steps.match(/await removeAllNodes\(\)/g) || []).length, 1, 'one removal, in the shared Close step');
-  for (const [name, source] of [['archive', archive], ['topology', topology]]) {
-    assert.equal((source.match(/closePreviousSession\(/g) || []).length, 1, `${name}.js closes the session in one place`);
-    assert.match(source, /closePreviousSession\([A-Za-z]+, \{reviewed: [A-Za-z]+\}\)/, name);
-    assert.doesNotMatch(source, /removeAllNodes/, `${name}.js never removes nodes itself`);
-    assert.match(source, /The previous session was closed: the current session is empty\./, `${name}.js says the session is empty after a failed load`);
-  }
-  assert.match(archive, /archiveReviewed = false;/, 'a new review starts unreviewed');
-  assert.match(archive, /loadSteps\.set\('read', 'error', 'Cannot read the archive: it is not a QemuWeb session\. Nothing was changed\.'\);\s+return;/);
-  assert.match(archive, /Cannot check base images: [^\n]*Nothing was changed\.`\);\s+return;/);
-  assert.match(topology, /topologyReviewed = true;/);
-  assert.match(topology, /Nothing was changed\./);
-  assert.doesNotMatch(topology, /closePrevious\b[^(]|close-previous/, 'no "Close previous sessions" option any more');
-});
-
-test('the "From Server (Examples)" item is enabled when the server has examples, else disabled with its reason', async () => {
-  const {serverItemState} = await load();
-  assert.deepEqual(serverItemState([{name: 'lan.zip'}]), {disabled: false, label: 'From Server (Examples)'});
-  assert.deepEqual(serverItemState([]), {disabled: true, label: 'No examples on the server'});
-  assert.deepEqual(serverItemState(null), {disabled: true, label: 'No examples on the server'});
-  assert.deepEqual(serverItemState(undefined), {disabled: true, label: 'No examples on the server'});
-});
-
-test('an example is labelled "name · Topology|Session · size" and Load example needs a listed choice', async () => {
-  const {exampleOptionLabel, canLoadExample} = await load();
-  assert.equal(exampleOptionLabel({name: 'lan.zip', kind: 'session', size: 3451, description: ''}), 'lan.zip · Session · 3.4 KB');
-  assert.equal(exampleOptionLabel({name: 'lan.topo', kind: 'topology', size: 372, description: 'LAN'}), 'lan.topo · Topology · 372 B');
-  const list = [{name: 'lan.zip'}, {name: 'lan.topo'}];
-  assert.equal(canLoadExample('', list), false, 'the placeholder');
-  assert.equal(canLoadExample('lan.zip', list), true);
-  assert.equal(canLoadExample('other.zip', list), false);
-  assert.equal(canLoadExample('lan.zip', []), false);
-  assert.equal(canLoadExample(undefined, list), false);
-  assert.equal(canLoadExample(null, list), false);
-});
-
 test('sizes of the examples are shown in B, KB, MB, GB', async () => {
   const {formatSize} = await load();
   assert.deepEqual([0, 372, 1024, 3451, 5 * 1048576, 3 * 1073741824].map(formatSize), ['0 B', '372 B', '1.0 KB', '3.4 KB', '5.0 MB', '3.00 GB']);
 });
 
-test('the toolbar has one Load button (a menu) and one Save button, with the session icons and the tooltips', () => {
-  for (const id of ['load-topology', 'save-topology', 'topology-file', 'session-archive-file']) assert.doesNotMatch(html, new RegExp(`id="${id}"`), id);
-  const buttons = ['load-session-archive', 'save-session-archive'].map(id => new RegExp(`<button id="${id}"[^>]*>`).exec(html)?.[0]);
-  assert.match(buttons[0], /title="Load a topology or a session" aria-label="Load a topology or a session"/);
-  assert.match(buttons[0], /aria-haspopup="menu" aria-expanded="false" aria-controls="load-menu"/);
-  assert.match(buttons[1], /title="Save the topology or the session" aria-label="Save the topology or the session"/);
-  assert.match(buttons[0], /write-action/, 'an observer cannot load');
-  assert.match(buttons[1], /write-action/);
-  assert.equal((html.match(/<svg[^>]*><rect width="20" height="5" x="2" y="3" rx="1"\/>/g) || []).length, 2, 'the two session icons are the only archive icons');
-  for (const source of ['topology', 'archive', 'load-menu', 'app']) {
-    assert.doesNotMatch(moduleSource(source), /['"]load-topology['"]|['"]save-topology['"]|['"]topology-file['"]|['"]session-archive-file['"]/, source);
+test('a chosen file is a session (zip) or a topology (topo); a mismatch or another kind is refused', async () => {
+  const {routeFile} = await load();
+  assert.deepEqual(routeFile('lan.zip', ZIP), {kind: 'session'});
+  assert.deepEqual(routeFile('LAN.ZIP', ZIP), {kind: 'session'});
+  assert.deepEqual(routeFile('lan.topo', bytes('SWITCH sw\n')), {kind: 'topology'});
+  assert.match(routeFile('fake.zip', bytes('SWITCH sw\n')).error, /^fake\.zip: This file is not a ZIP archive/);
+  assert.match(routeFile('fake.topo', ZIP).error, /^fake\.topo: This file is not a topology/);
+  assert.match(routeFile('fake.topo', bytes('a\0b')).error, /binary/);
+  assert.match(routeFile('notes.txt', bytes('x')).error, /Choose a \.topo \(topology\) or \.zip \(session\) file/);
+  assert.equal(routeFile('fake.zip', bytes('SWITCH sw\n')).kind, undefined);
+});
+
+test('the dialog opens on the remembered source when it can be used; without examples it opens on My files and the server segment is disabled with its hint', async () => {
+  const {openingSource, serverSourceState} = await load();
+  const list = [{name: 'lan.zip'}];
+  assert.equal(openingSource(null, list), 'server');
+  assert.equal(openingSource('server', list), 'server');
+  assert.equal(openingSource('local', list), 'local');
+  assert.equal(openingSource('nonsense', list), 'server');
+  for (const none of [[], null, undefined]) {
+    assert.equal(openingSource('server', none), 'local', String(none));
+    assert.equal(openingSource(null, none), 'local');
+    assert.deepEqual(serverSourceState(none), {disabled: true, hint: 'No examples on the server'});
   }
+  assert.deepEqual(serverSourceState(list), {disabled: false, hint: 'Examples of the server'});
 });
 
-test('the Load menu opens upwards with two items; the file picker takes .topo and .zip; the examples have a small dialog', () => {
-  assert.match(html, /<div id="load-menu" class="load-menu" role="menu" aria-label="Load" hidden>\s*<button id="load-from-files" type="button" role="menuitem">From User Files<\/button>\s*<button id="load-from-server" type="button" role="menuitem">From Server \(Examples\)<\/button>/);
-  assert.match(html, /<input id="load-file" type="file" accept="\.topo,\.zip" hidden>/);
-  const examples = /<dialog[^>]*id="examples-dialog"[\s\S]*?<\/dialog>/.exec(html)?.[0];
-  assert.ok(examples, 'examples dialog');
-  assert.match(examples, /aria-labelledby="examples-title"/);
-  assert.match(examples, /<label[^>]*>Examples<select id="load-example-select"><option value="" disabled selected>Choose an example\.\.\.<\/option><\/select><\/label>/);
-  assert.match(examples, /<p id="load-example-description"/);
-  assert.match(examples, /<button id="load-example-button" type="button" disabled>Load example<\/button>/);
-  assert.match(examples, /<p id="load-error" role="alert" hidden>/);
-  assert.doesNotMatch(html, /id="load-dialog"|load-replace|load-picker|load-body|can only be loaded into an empty session|session-archive-load-blocked/);
-  const source = moduleSource('load-menu');
-  assert.match(source, /menu\.style\.bottom = /, 'positioned above the button');
-  assert.match(source, /aria-expanded/);
-  for (const key of ['Escape', 'ArrowDown', 'ArrowUp', 'Home', 'End']) assert.match(source, new RegExp(`'${key}'`), key);
-  assert.match(source, /closeMenu\(\{restoreFocus: true\}\)/, 'Esc returns the focus to the button');
-  assert.match(source, /document\.addEventListener\('click', outsideClick, true\)/, 'a click outside closes it');
-  assert.match(source, /startArchiveLoad\(file, \{example\}\)/);
-  assert.match(source, /startTopologyLoad\(/);
-  assert.match(source, /routeFile\(file\.name, head\)/);
-  assert.doesNotMatch(source, /innerHTML/, 'example names and descriptions are set as text');
-  assert.match(css, /\.load-menu \{ position: fixed;[^}]*max-width: calc\(100vw - 16px\)/, 'fixed and inside the phone screen');
-  assert.match(css, /\.load-menu\[hidden\] \{ display: none; \}/);
+test('the file card shows the same lines for a server file and a file of the user: name, kind and size, the description if any', async () => {
+  const {fileCardLines, exampleOptionLabel} = await load();
+  assert.deepEqual(fileCardLines(null), {name: 'No file chosen', meta: '', description: ''});
+  assert.deepEqual(fileCardLines({name: 'lan.zip', kind: 'session', size: 3451, description: ''}), {name: 'lan.zip', meta: 'Session · 3.4 KB', description: ''});
+  assert.deepEqual(fileCardLines({name: 'lan.topo', kind: 'topology', size: 372, description: 'A LAN'}), {name: 'lan.topo', meta: 'Topology · 372 B', description: 'A LAN'});
+  assert.deepEqual(fileCardLines({name: 'notes.txt', kind: null, size: 12}), {name: 'notes.txt', meta: '12 B', description: ''}, 'an unknown kind shows only its size');
+  assert.equal(exampleOptionLabel({name: 'lan.zip', kind: 'session', size: 3451}), 'lan.zip · Session · 3.4 KB');
+  assert.equal(exampleOptionLabel({name: 'lan.topo', kind: 'topology', size: 372}), 'lan.topo · Topology · 372 B');
 });
 
-test('Load Session and Load Topology share one structure, one stylesheet and one steps module', () => {
-  const dialogs = ['session-archive-load-dialog', 'topology-dialog'].map(id => new RegExp(`<dialog class="confirm-dialog load-review" id="${id}"[\\s\\S]*?</dialog>`).exec(html)?.[0]);
-  assert.match(dialogs[0], /<h2 id="session-archive-load-title">Load Session<\/h2>/);
-  assert.match(dialogs[1], /<h2 id="topology-title">Load Topology<\/h2>/);
-  for (const dialog of dialogs) {
-    assert.match(dialog, /<p class="load-review-file"/);
-    assert.match(dialog, /<ol id="[a-z-]+-steps" class="archive-steps"><\/ol>/);
-    assert.match(dialog, /<div id="[a-z-]+-options" class="archive-options" hidden>/);
-    assert.match(dialog, /Start hosts and switches after loading/);
-    assert.match(dialog, /<div id="[a-z-]+-warning" class="archive-warning load-review-warning" role="note" hidden><\/div>/);
-    assert.match(dialog, /<div class="confirm-actions"><button id="cancel-[a-z-]+" type="button">Cancel<\/button><button id="confirm-[a-z-]+" type="button" disabled>Load<\/button><\/div>/);
+test('the options: the previous session is always closed, Discard working disks only for a ZIP that has working disks', async () => {
+  const {loadOptionStates} = await load();
+  const closing = {checked: true, disabled: true, note: 'Loading always replaces the current session.'};
+  for (const file of [null, {kind: 'session', hasDisks: true}, {kind: 'session', hasDisks: false}, {kind: 'topology', hasDisks: false}, {kind: 'session', hasDisks: null}]) {
+    const states = loadOptionStates(file);
+    assert.deepEqual(states.closePrevious, closing, JSON.stringify(file));
+    assert.deepEqual(states.autoStart, {disabled: false});
   }
-  assert.match(dialogs[0], /id="load-discard-disks"> Discard working disks/);
-  assert.doesNotMatch(dialogs[1], /Discard working disks|close-previous|Close previous sessions/);
-  assert.doesNotMatch(html, /id="topology-form"|id="topology-counts"|id="topology-error"/);
-  for (const name of ['archive', 'topology']) assert.match(moduleSource(name), /createSteps\(/, name);
-  assert.match(moduleSource('topology'), /\['read', 'Read topology'\], \['close', 'Close previous session'\], \['load', 'Load topology'\]/);
-  assert.match(moduleSource('archive'), /\['read', 'Read archive'\], \['check', 'Check base images'\], \['close', 'Close previous session'\], \['upload', 'Upload archive'\], \['restore', 'Restore session'\]/);
-  assert.match(moduleSource('topology'), /countPhrase\(result\.links, 'link'\)/, 'the topology summary: hosts, switches, links');
-  assert.doesNotMatch(moduleSource('topology'), /file\.text\(\)|<textarea|contenteditable/, 'the topology is shown read only');
+  assert.deepEqual(loadOptionStates({kind: 'session', hasDisks: true}).discard, {disabled: false, note: ''});
+  assert.deepEqual(loadOptionStates({kind: 'session', hasDisks: null}).discard, {disabled: false, note: ''}, 'unknown: left to the user');
+  assert.deepEqual(loadOptionStates({kind: 'session', hasDisks: false}).discard, {disabled: true, note: 'This archive has no working disk.'});
+  assert.deepEqual(loadOptionStates({kind: 'topology', hasDisks: false}).discard, {disabled: true, note: 'A topology has no working disk.'});
+  assert.deepEqual(loadOptionStates(null).discard, {disabled: true, note: ''});
 });
 
-test('the Save dialog: one status line, one Download button, the disk option disabled, the checkbox unchecked by default and remembered', () => {
-  assert.match(html, /<p id="session-archive-intro" role="status"><\/p>/);
-  assert.match(html, /<input id="save-topology-only" type="checkbox"> Save only the topology \(\.topo\)/);
-  assert.doesNotMatch(html, /id="save-topology-only"[^>]*checked/);
-  assert.match(html, /<button id="confirm-session-archive" type="button">Download<\/button>/);
-  assert.doesNotMatch(html, /Download ZIP|Download topology|Topology file: no disks/);
-  assert.doesNotMatch(html, /save-session-options/);
-  assert.match(html, /<label><input id="include-working-disks" type="checkbox"> Include working disks<\/label>/);
-  const archive = moduleSource('archive');
-  const apply = /function applySaveChoice\(\) \{[\s\S]*?\n\}\n/.exec(archive)?.[0];
+test('the steps of a load and of a save, and the texts of a refusal and of the restore step', async () => {
+  const {loadStepList, saveStepList, staleDisksRefusal, restoreText} = await load();
+  assert.deepEqual(loadStepList('session').map(([name]) => name), ['read', 'check', 'close', 'upload', 'create', 'restore', 'start']);
+  assert.deepEqual(loadStepList('topology').map(([name]) => name), ['read', 'check', 'close', 'create', 'start']);
+  assert.deepEqual(loadStepList('session').map(([, label]) => label), ['Read the file', 'Check the file', 'Close the previous session', 'Upload the file', 'Create switches and hosts', 'Restore working disks', 'Start hosts and switches']);
+  assert.deepEqual(saveStepList({topologyOnly: true}).map(([name]) => name), ['create', 'download']);
+  assert.deepEqual(saveStepList({topologyOnly: false, includeDisks: false}).map(([name]) => name), ['create', 'download']);
+  assert.deepEqual(saveStepList({topologyOnly: false, includeDisks: true}).map(([name]) => name), ['stop', 'create', 'download']);
+  assert.equal(staleDisksRefusal(['Base image a changed.', 'Base image b changed.']),
+    'Base image a changed.\nBase image b changed.\nCheck "Discard working disks" and load again. Nothing was changed.');
+  assert.equal(restoreText({hasDisks: false, discard: false}), 'No working disk in the file');
+  assert.equal(restoreText({hasDisks: true, discard: false}), 'Working disks restored');
+  assert.match(restoreText({hasDisks: true, discard: true}), /^Working disks discarded/);
+});
+
+test('the check happens before the closing: a refusal for stale working disks stops the load first, the session closes once', () => {
+  const dialog = moduleSource('load-dialog');
+  const steps = moduleSource('load-steps');
+  assert.equal((steps.match(/await removeAllNodes\(\)/g) || []).length, 1, 'one removal, in the shared Close step');
+  assert.equal((dialog.match(/closePreviousSession\(/g) || []).length, 1, 'the dialog closes the session in one place');
+  assert.doesNotMatch(dialog, /removeAllNodes/, 'the dialog never removes nodes itself');
+  const refusal = dialog.indexOf('staleDisksRefusal(found.stale)');
+  const closing = dialog.indexOf('closePreviousSession(');
+  const reading = dialog.indexOf('await inspect(info)');
+  assert.ok(reading > 0 && reading < refusal && refusal < closing, 'read and check, then the refusal, then the closing');
+  assert.match(dialog, /found\.stale\.length && !options\.discardDisks/, 'refused only while Discard working disks is off');
+  assert.match(dialog, /Nothing was changed\.`\);/, 'a failed read or check says nothing was changed');
+  assert.match(dialog, /The previous session was closed: the current session is empty\./);
+  assert.match(dialog, /closePreviousSession\(steps, \{reviewed: true\}\)/);
+  assert.doesNotMatch(dialog, /discardDisks = true|discard\.checked = found|discard\.checked = true/, 'Discard is never ticked for the user');
+});
+
+test('a server file and a file of the user go through the same inspection and the same load pipeline', () => {
+  const dialog = moduleSource('load-dialog');
+  assert.equal((dialog.match(/async function inspect\(/g) || []).length, 1, 'one inspection for both sources');
+  assert.match(dialog, /\/api\/examples\/file/, 'the bytes of an example are read like a file of the user');
+  assert.match(dialog, /importExample\(info\.example, /);
+  assert.match(dialog, /importArchive\(found\.file, /);
+  assert.match(dialog, /\/api\/examples\/load/);
+  assert.match(dialog, /\/api\/topology\/preview/);
+  assert.match(dialog, /routeFile\(info\.name, head\)/);
+  assert.match(moduleSource('archive-read'), /\/api\/session-archive\/import\?autoStart=\$\{autoStart\}&discardDisks=\$\{discardDisks\}/);
+  assert.match(moduleSource('archive-read'), /\/api\/session-archive\/check/);
+  for (const name of ['load-dialog', 'file-selector', 'save-dialog']) assert.doesNotMatch(moduleSource(name), /innerHTML/, `${name}: names and descriptions are set as text`);
+});
+
+test('the toolbar has one Load Session and one Save Session button, with the same icon style, tooltips and write-action class', () => {
+  for (const id of ['load-topology', 'save-topology', 'topology-file', 'session-archive-file', 'load-menu', 'load-from-files', 'load-from-server', 'examples-dialog', 'topology-dialog', 'session-archive-dialog', 'session-archive-load-dialog']) {
+    assert.doesNotMatch(html, new RegExp(`id="${id}"`), id);
+  }
+  const buttons = ['load-session-archive', 'save-session-archive'].map(id => new RegExp(`<button id="${id}"[^>]*>[\\s\\S]*?</button>`).exec(html)?.[0]);
+  assert.match(buttons[0], /title="Load Session" aria-label="Load Session"/);
+  assert.match(buttons[1], /title="Save Session" aria-label="Save Session"/);
+  for (const button of buttons) {
+    assert.match(button, /class="icon-button write-action"/, 'an observer cannot use it');
+    assert.doesNotMatch(button, /aria-haspopup|aria-expanded|aria-controls/, 'no menu any more');
+  }
+  assert.match(buttons[0], /<use href="#load-session-icon"><\/use>/);
+  assert.match(buttons[1], /<use href="#save-session-icon"><\/use>/);
+  const symbols = ['load-session-icon', 'save-session-icon'].map(id => new RegExp(`<symbol id="${id}"[^>]*>([\\s\\S]*?)</symbol>`).exec(html)?.[1]);
+  assert.ok(symbols.every(Boolean));
+  assert.equal(symbols[0].split('<path')[0], symbols[1].split('<path')[0], 'both icons are the same box');
+  assert.match(html, /<h2 id="load-title">Load Session<\/h2>/);
+  assert.match(html, /<h2 id="save-title">Save Session<\/h2>/);
+});
+
+test('Load Session and Save Session share one frame: heading with the toolbar icon, panes, steps, Cancel and the primary button', () => {
+  const dialogs = ['load', 'save'].map(name => new RegExp(`<dialog class="confirm-dialog file-dialog" id="${name}-dialog" aria-labelledby="${name}-title">[\\s\\S]*?</dialog>`).exec(html)?.[0]);
+  assert.ok(dialogs.every(Boolean));
+  for (const [index, name] of ['load', 'save'].entries()) {
+    const dialog = dialogs[index];
+    assert.match(dialog, new RegExp(`<div class="confirm-heading"><svg [^>]*><use href="#${name}-session-icon"></use></svg><h2 id="${name}-title">`));
+    assert.match(dialog, new RegExp(`<div class="file-pane" id="${name}-form">`));
+    assert.match(dialog, new RegExp(`<div class="file-pane" id="${name}-run" hidden>\\s*<ol id="${name}-steps" class="archive-steps" aria-live="polite"></ol>\\s*<p id="${name}-result" class="file-result" role="status"></p>`));
+    assert.match(dialog, /<div class="file-panes">/);
+  }
+  assert.match(dialogs[0], /<div class="confirm-actions"><button id="cancel-load" type="button">Cancel<\/button><button id="confirm-load" type="button" data-action="load" disabled>Load<\/button><\/div>/);
+  assert.match(dialogs[1], /<div class="confirm-actions"><button id="cancel-save" type="button">Cancel<\/button><button id="confirm-save" type="button" data-action="save">Save<\/button><\/div>/);
+  for (const dialog of dialogs) assert.match(dialog, /<div class="archive-options" id="[a-z]+-options">/, 'the same options box');
+  assert.doesNotMatch(html, /Download<\/button>|id="session-archive-progress"|archive-progress/, 'the progress is the steps list');
+});
+
+test('Load Session: one file selector with a source switch, the card, and the three options', () => {
+  const dialog = /<dialog class="confirm-dialog file-dialog" id="load-dialog"[\s\S]*?<\/dialog>/.exec(html)[0];
+  assert.match(dialog, /<div class="source-switch" role="radiogroup" aria-label="File source">[\s\S]*data-source="server">Server examples<\/button>[\s\S]*data-source="local">My files<\/button>/);
+  assert.match(dialog, /<input id="load-file" type="file" accept="\.topo,\.zip" hidden>/);
+  assert.equal((html.match(/id="example-select"/g) || []).length, 1, 'one selector');
+  for (const id of ['file-card-name', 'file-card-meta', 'file-card-description', 'file-card-notes']) assert.match(dialog, new RegExp(`id="${id}"`), id);
+  assert.match(dialog, /<input type="checkbox" id="load-close-previous" checked disabled> Close the previous session/);
+  assert.match(dialog, /<input type="checkbox" id="load-auto-start" checked> Start hosts and switches after loading/);
+  assert.match(dialog, /<input type="checkbox" id="load-discard-disks" disabled> Discard working disks/);
+  assert.doesNotMatch(dialog, /id="load-discard-disks"[^>]*checked/);
+  assert.match(dialog, /<div id="load-warning" class="archive-warning file-warning" role="note" hidden><\/div>/);
+  const selector = moduleSource('file-selector');
+  assert.match(selector, /'ArrowLeft'/);
+  assert.match(selector, /aria-checked/);
+  assert.match(selector, /serverSourceState\(examples\)/);
+});
+
+test('Save Session keeps its options, the status line, the disk warning and the estimate; the checkbox is unchecked by default and remembered', () => {
+  const dialog = /<dialog class="confirm-dialog file-dialog" id="save-dialog"[\s\S]*?<\/dialog>/.exec(html)[0];
+  assert.match(dialog, /<p id="save-intro" class="file-intro" role="status"><\/p>/);
+  assert.match(dialog, /<input id="save-topology-only" type="checkbox"> Save only the topology \(\.topo\)/);
+  assert.doesNotMatch(dialog, /id="save-topology-only"[^>]*checked/);
+  assert.match(dialog, /<label><input id="include-working-disks" type="checkbox"> Include working disks<\/label>/);
+  assert.match(dialog, /<span>All hosts and switches will be stopped before saving\.<\/span>/);
+  assert.match(dialog, /<p id="save-estimate" role="status"><\/p>/);
+  assert.match(dialog, /<p id="save-error" role="alert" hidden><\/p>/);
+  const source = moduleSource('save-dialog');
+  const apply = /function applySaveChoice\(\) \{[\s\S]*?\n\}\n/.exec(source)?.[0];
   assert.ok(apply, 'applySaveChoice');
-  assert.match(apply, /archiveIntro\.textContent = saveStatusLine\(counts\.hosts, counts\.switches\)/);
-  assert.match(apply, /archiveChoice\.disabled = !choice\.sessionOptions/);
-  assert.match(apply, /archiveConfirm\.disabled = machines\.size === 0/, 'Download is disabled for an empty session');
-  assert.doesNotMatch(apply, /archiveConfirm\.textContent|archiveEstimate\.hidden|archiveConfirm\.hidden/, 'the button and the estimate slot never change');
-  assert.match(archive, /try \{ return localStorage\.getItem\(topologyOnlyKey\) === 'true'; \} catch \(_\) \{ return false; \}/);
-  assert.match(archive, /try \{ localStorage\.setItem\(topologyOnlyKey, String\(topologyOnlyChoice\.checked\)\); \} catch/);
-  assert.match(archive, /downloadTopology\(saveChoice\(true\)\.fileName\)/);
-  assert.doesNotMatch(archive, /Save your current session: \$\{data\.hosts\}/, 'the line is not rewritten from the estimate');
+  assert.match(apply, /intro\.textContent = saveStatusLine\(counts\.hosts, counts\.switches\)/);
+  assert.match(apply, /includeDisks\.disabled = !choice\.sessionOptions/);
+  assert.match(apply, /confirm\.disabled = machines\.size === 0/, 'Save is disabled for an empty session');
+  assert.match(source, /try \{ return localStorage\.getItem\(TOPOLOGY_ONLY_KEY\) === 'true'; \} catch \(_\) \{ return false; \}/);
+  assert.match(source, /try \{ localStorage\.setItem\(TOPOLOGY_ONLY_KEY, String\(topologyOnly\.checked\)\); \} catch/);
+  assert.match(source, /downloadTopology\(fileName\)/);
 });
 
-test('the Save and Load dialogs keep a fixed size: reserved slots, visibility instead of display', () => {
-  for (const id of ['archive-working-disk-warning', 'session-archive-progress', 'session-archive-error']) {
-    assert.match(css, new RegExp(`#${id}\\[hidden\\](?:, [.#a-z-]+\\[hidden\\])? \\{ display: (?:flex|block); visibility: hidden; \\}`), `${id} keeps its slot`);
-  }
-  assert.match(css, /#session-archive-error \{ min-height: 3em/);
-  assert.match(css, /#session-archive-estimate \{ min-height: 1\.5em/);
-  assert.match(css, /#archive-working-disk-warning, \.load-review-warning \{ min-height: 2\.8em; \}/, 'the Load warning slot has the height of the Save one');
-  assert.match(css, /\.load-review \.archive-steps \{ height: 12\.5rem; overflow-y: auto; \}/);
-  assert.match(css, /\.load-review \.archive-options\[hidden\] \{ display: grid; visibility: hidden; \}/);
-  assert.match(css, /#session-archive-dialog, \.load-review, #examples-dialog \{ max-height: 94vh; overflow-y: auto; \}/, 'a small screen scrolls inside instead of resizing');
-  assert.match(css, /#load-error\[hidden\] \{ display: block; visibility: hidden; \}/);
-  for (const name of ['load-menu', 'load-steps', 'archive', 'topology']) {
+test('the dialogs remember the source and "Start", never "Discard working disks" nor the file; storage is optional', () => {
+  const dialog = moduleSource('load-dialog');
+  assert.match(dialog, /try \{ localStorage\.setItem\(key, value\); \} catch \(_\)/);
+  assert.match(dialog, /try \{ return localStorage\.getItem\(key\); \} catch \(_\) \{ return null; \}/);
+  assert.doesNotMatch(dialog, /remember\([A-Z_]*(DISCARD|FILE)/i);
+  assert.match(dialog, /discard\.checked = false;/, 'Discard starts unchecked at each opening');
+});
+
+test('Escape cancels only when idle, Enter never starts or restarts a load; the dialogs are labelled and announce their steps', () => {
+  for (const name of ['load-dialog', 'save-dialog']) {
     const source = moduleSource(name);
-    if (name !== 'load-menu') assert.doesNotMatch(source, /offsetHeight|getBoundingClientRect|clientHeight|style\.height/, `${name}.js measures nothing`);
+    assert.match(source, /dialog\.addEventListener\('cancel', event => \{ if \(busy\) event\.preventDefault\(\); \}\);/, `${name}: Escape is blocked while running`);
+    assert.match(source, /event\.key === 'Enter' && busy/, `${name}: Enter is inert while running`);
+    assert.match(source, /setAttribute\('aria-busy', 'true'\)/);
   }
+  for (const id of ['load-dialog', 'save-dialog']) assert.match(html, new RegExp(`<dialog[^>]*id="${id}"[^>]*aria-labelledby=`), id);
+  assert.doesNotMatch(/<dialog[^>]*id="load-dialog"[\s\S]*?<\/dialog>/.exec(html)[0], /<form/, 'no form: Enter cannot submit');
 });
 
-test('the existing Load Session review is unchanged: options, Cancel, the import route', () => {
-  const archive = moduleSource('archive');
-  assert.match(archive, /export async function startArchiveLoad\(file, \{example = null\} = \{\}\)/);
-  assert.match(archive, /\/api\/examples\/load/);
-  assert.match(archive, /\/api\/session-archive\/import\?autoStart=/, 'an upload still goes through the import route');
-  assert.match(moduleSource('topology'), /\/api\/topology\/preview/);
-  assert.match(moduleSource('topology'), /topologyExample \? '\/api\/examples\/load' : '\/api\/topology'/);
-  for (const id of ['load-auto-start', 'load-discard-disks', 'confirm-session-archive-load', 'cancel-session-archive-load', 'topology-autostart']) assert.match(html, new RegExp(`id="${id}"`), id);
+test('an observing administrator cannot open either dialog: write-action buttons, no other way in, the server refuses', () => {
+  const observe = moduleSource('observe');
+  assert.match(observe, /observing && element\.classList\.contains\('write-action'\)/);
+  assert.match(observe, /\['Enter', ' ', 'ArrowUp', 'ArrowDown'\]\.includes\(event\.key\)/, 'keyboard activation is blocked');
+  assert.match(css, /body\.observing \.write-action \{ pointer-events: none; opacity: \.45; \}/);
+  for (const name of ['load-dialog', 'save-dialog']) {
+    const source = moduleSource(name);
+    assert.equal((source.match(/showModal\(\)/g) || []).length, 1, `${name}: one way to open the dialog`);
+    assert.doesNotMatch(source, /addEventListener\('keydown', event => \{[^}]*showModal/, `${name}: no shortcut opens it`);
+  }
+  assert.match(moduleSource('load-dialog'), /getElementById\('load-session-archive'\)\.addEventListener\('click', open\)/);
+  assert.match(moduleSource('save-dialog'), /getElementById\('save-session-archive'\)\.addEventListener\('click'/);
+  const routes = fs.readFileSync(path.join(publicDir, '..', 'server', 'routes', 'examples.js'), 'utf8');
+  assert.match(routes, /refuseObserver\(req, res\)/);
 });
 
-test('the dialogs are native <dialog> elements with labels', () => {
-  for (const id of ['examples-dialog', 'session-archive-dialog', 'topology-dialog', 'session-archive-load-dialog']) assert.match(html, new RegExp(`<dialog[^>]*id="${id}"[^>]*aria-labelledby=`), id);
+test('the dialogs keep a fixed size: stacked panes, reserved slots, visibility instead of display; none of the old styles remain', () => {
+  assert.match(css, /\.file-panes \{ display: grid;/);
+  assert.match(css, /\.file-pane \{ grid-area: 1 \/ 1;/, 'the form and the steps share one cell');
+  assert.match(css, /\.file-pane\[hidden\] \{ display: block; visibility: hidden; \}/);
+  assert.match(css, /\.file-warning \{ min-height: 2\.8em; \}/);
+  assert.match(css, /\.file-warning\[hidden\] \{ display: flex; visibility: hidden; \}/);
+  assert.match(css, /\.file-dialog \{ width: min\(520px, 94vw\); max-height: 94vh; overflow-y: auto; \}/, 'a small screen scrolls inside');
+  assert.match(css, /#save-estimate \{ min-height: 1\.5em;/);
+  assert.match(css, /#save-error\[hidden\] \{ display: block; visibility: hidden; \}/);
+  assert.match(css, /\.archive-steps li\[data-state="done"\] \.archive-step-icon \{ border-color: #3fb96b;/, 'the green check mark');
+  for (const old of ['load-menu', 'load-review', 'examples-dialog', 'load-error', 'save-choice', 'load-file-label', 'session-archive', 'archive-progress', 'archive-working-disk-warning']) {
+    assert.doesNotMatch(css, new RegExp(old), `${old} is gone from the stylesheet`);
+  }
+  for (const name of ['load-steps', 'load-dialog', 'save-dialog', 'file-selector']) assert.doesNotMatch(moduleSource(name), /offsetHeight|getBoundingClientRect|clientHeight|style\.height/, `${name}.js measures nothing`);
+  assert.doesNotMatch(css, /background:\s*#000(?:000)?\s*[;}]/, 'no black background');
 });
 
-test('no import statement of the Load and Save modules spans several lines', () => {
-  for (const name of ['file-kinds', 'load-menu', 'load-steps', 'archive', 'topology']) {
+test('no import statement of the Load and Save modules spans several lines, and the removed modules are gone', () => {
+  for (const name of ['file-kinds', 'load-steps', 'archive-read', 'file-selector', 'load-dialog', 'save-dialog', 'topology']) {
     assert.doesNotMatch(moduleSource(name), /^import \{[^}\n]*$/m, name);
   }
+  for (const gone of ['archive.js', 'load-menu.js']) assert.equal(fs.existsSync(path.join(publicDir, gone)), false, gone);
+  assert.doesNotMatch(moduleSource('topology'), /startTopologyLoad|topology-dialog/);
 });
 
 test('the Save dialog says which engines disks are included; the Load dialog counts the disks of each engine', async () => {
@@ -277,8 +337,8 @@ test('the Save dialog says which engines disks are included; the Load dialog cou
   assert.equal(archiveDisksPhrase({qemu: 1, vbox: 0}), '1 working disk (1 qcow2)');
   assert.equal(archiveDisksPhrase({qemu: 2, vbox: 1}), '3 working disks (2 qcow2, 1 vdi)');
   assert.equal(archiveDisksPhrase({qemu: 0, vbox: 1}), '1 working disk (1 vdi)');
-  const archive = moduleSource('archive');
-  assert.match(archive, /\/\^\(h-\[0-9a-f\]\{16\}\)\\\/disk\\\.\(qcow2\|vdi\)\$\//, 'the Load dialog reads both disk kinds');
-  assert.match(archive, /\$\{workingDisksNote\(data\.workingDisks\)\}/, 'the estimate line carries the note');
-  assert.match(archive, /Object\.entries\(host\.baseImages \|\| \{\}\)/, 'the base image check sends the identity of each disk format');
+  const read = moduleSource('archive-read');
+  assert.match(read, /\/\^\(h-\[0-9a-f\]\{16\}\)\\\/disk\\\.\(qcow2\|vdi\)\$\//, 'the Load dialog reads both disk kinds');
+  assert.match(moduleSource('save-dialog'), /\$\{workingDisksNote\(data\.workingDisks\)\}/, 'the estimate line carries the note');
+  assert.match(read, /Object\.entries\(host\.baseImages \|\| \{\}\)/, 'the base image check sends the identity of each disk format');
 });

@@ -1,6 +1,6 @@
 'use strict';
 
-// Loads examples/lan.zip the way the Web interface's Load session button does (public/archive.js:
+// Loads examples/lan.zip the way the Web interface's Load session button does (public/load-dialog.js:
 // archive summary, base image check only when the archive has working disks, then
 // POST /api/session-archive/import?autoStart=true&discardDisks=false) and checks that the
 // server's own start path brings up the switch and the four hosts. No ping, no guest login.
