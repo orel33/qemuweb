@@ -869,7 +869,7 @@ commit message.
 - [x] **TOD02** Report a `runtime/` path longer than 49 characters at startup (the sockets of a node must fit in 107 bytes),
   in the server and the runner, with the `--runtime` hint; today it only fails when the first node is created. Or shorten
   the node socket paths with a short alias directory. (M)
-- [ ] **EXA01** (S) The example topologies and sessions (`examples/*.topo` and `examples/*.zip`, hence the demo of
+- [x] **EXA01** (S) The example topologies and sessions (`examples/*.topo` and `examples/*.zip`, hence the demo of
   `scripts/demo.sh`) use the system `debian13-cloud` instead of `debian13-legacy`, which should be faster. Every host of the
   three `.topo` files and of the five archives changes system; the documents and tests that name the example system follow,
   and the documents say that the demo needs the `debian13-cloud` image (`prepare.sh --system debian13-cloud`).

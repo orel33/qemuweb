@@ -389,10 +389,10 @@ and fails if a host has a disconnected interface. Real file, `examples/lan.topo`
 
 ```text
 SWITCH s1
-HOST debian13-legacy  immortal s1
-HOST debian13-legacy  opeth    s1
-HOST debian13-legacy  syl      s1
-HOST debian13-legacy  grave    s1
+HOST debian13-cloud   immortal s1
+HOST debian13-cloud   opeth    s1
+HOST debian13-cloud   syl      s1
+HOST debian13-cloud   grave    s1
 ```
 
 ### 2.10 Session archive (ZIP)
