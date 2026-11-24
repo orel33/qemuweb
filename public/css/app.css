@@ -164,10 +164,6 @@ button:disabled { opacity: .45; cursor: default; }
 .confirm-heading svg { flex: none; width: 26px; height: 26px; color: #ffc36b; }
 .confirm-heading h2 { margin: 0; font-size: 18px; }
 .confirm-dialog p { margin: 16px 0 20px; color: #d7e1ee; line-height: 1.5; white-space: pre-line; }
-.archive-progress { display: flex; align-items: center; gap: 10px; margin: 0 0 18px; color: #b8d8ff; font-size: 13px; }
-.archive-progress-spinner { flex: none; width: 17px; height: 17px; border: 2px solid #526781; border-top-color: #9cc8ff; border-radius: 50%; animation: archive-spin .8s linear infinite; }
-.archive-progress-track { height: 6px; margin: -8px 0 18px; overflow: hidden; border-radius: 6px; background: #26374c; }
-.archive-progress-track::after { content: ""; display: block; width: 38%; height: 100%; border-radius: inherit; background: #9cc8ff; animation: archive-sweep 1.4s ease-in-out infinite alternate; }
 .archive-warning { display: flex; align-items: flex-start; gap: 8px; margin: 9px 0 0; color: #ffc36b; font-size: 13px; line-height: 1.4; }
 .archive-warning span { white-space: pre-line; }
 .archive-warning svg { flex: none; width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
@@ -189,9 +185,7 @@ button:disabled { opacity: .45; cursor: default; }
 .archive-steps li[data-state="error"] .archive-step-icon::before { content: "✕"; }
 .archive-steps li[data-state="error"] .archive-step-detail { color: #ff9d9d; }
 @keyframes archive-spin { to { transform: rotate(360deg); } }
-@keyframes archive-sweep { from { transform: translateX(0); } to { transform: translateX(163%); } }
-@media (prefers-reduced-motion: reduce) { .archive-progress-spinner, .archive-progress-track::after, .archive-steps li[data-state="running"] .archive-step-icon { animation: none; } }
-.archive-options { display: grid; gap: 8px; margin: 0 0 16px; padding: 12px; border: 1px solid #35404c; border-radius: 7px; background: #141c26; font-size: 13px; }
+@media (prefers-reduced-motion: reduce) { .archive-options { display: grid; gap: 8px; margin: 0 0 16px; padding: 12px; border: 1px solid #35404c; border-radius: 7px; background: #141c26; font-size: 13px; }
 .archive-options label { display: flex; align-items: flex-start; gap: 8px; color: #d7e4f2; overflow-wrap: anywhere; }
 .archive-options input { flex: none; margin: 2px 0 0; }
 .archive-options label:has(input:disabled) { color: #7f93a8; }
@@ -526,32 +520,42 @@ body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailab
 body[data-view-driven="true"] .view-control { pointer-events: none; opacity: .45; }
 
 
-/* Load menu (opens upwards from the Load button), the examples dialog, and the Save choice. */
-.save-choice { display: flex; align-items: center; gap: 8px; margin: 0 0 14px; }
-.load-file-label { display: grid; gap: 6px; margin: 0 0 16px; font-size: 13px; color: #d7e4f2; }
-.load-file-label select { max-width: 100%; }
-.load-menu { position: fixed; z-index: 30; display: grid; min-width: 220px; max-width: calc(100vw - 16px); padding: 4px; border: 1px solid #45586d; border-radius: 8px; background: #141c26; box-shadow: 0 8px 30px #000a; }
-.load-menu[hidden] { display: none; }
-.load-menu button { padding: 9px 12px; border: 0; border-radius: 5px; background: transparent; color: #e7edf5; text-align: left; font: inherit; cursor: pointer; }
-.load-menu button:hover:not(:disabled), .load-menu button:focus-visible { background: #304256; outline: none; }
-.load-menu button:disabled { color: #7f93a8; cursor: default; }
-#examples-dialog .example-description { margin: 8px 0 12px; font-size: 12px; color: #b8c7d8; overflow-wrap: anywhere; min-height: 2.8em; }
-#load-error { margin: 0 0 14px; min-height: 2.6em; color: #ffb2b4; font-size: 13px; }
-#load-error[hidden] { display: block; visibility: hidden; }
-
-/* Fixed size: the Save, Load Session, Load Topology and examples dialogs never change height between their states. What
-   comes and goes keeps its slot (visibility instead of display). Where the screen is too small the dialog scrolls inside. */
-#session-archive-dialog, .load-review, #examples-dialog { max-height: 94vh; overflow-y: auto; }
-#confirm-session-archive, .load-review .confirm-actions button:last-child { min-width: 9.5em; }
-#session-archive-estimate { min-height: 1.5em; color: #9daec0; font-size: 13px; }
-#session-archive-estimate:empty::before { content: "\00a0"; }
-#archive-working-disk-warning, .load-review-warning { min-height: 2.8em; }
-#archive-working-disk-warning[hidden], .load-review-warning[hidden] { display: flex; visibility: hidden; }
-#session-archive-progress[hidden] { display: block; visibility: hidden; }
-#session-archive-error { min-height: 3em; margin-top: 0; }
-#session-archive-error[hidden] { display: block; visibility: hidden; }
-label:has(#include-working-disks:disabled) { color: #7f93a8; }
-.load-review .load-review-file { margin: 0 0 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #b8c7d8; }
-.load-review .archive-steps { height: 12.5rem; overflow-y: auto; }
-.load-review .archive-options { min-height: 6.5rem; align-content: start; }
-.load-review .archive-options[hidden] { display: grid; visibility: hidden; }
+/* Load Session and Save Session: one frame (heading with the toolbar icon, a form pane, Cancel / primary button). The form pane and
+   the steps pane share one grid cell, so the dialog keeps its size between its states; what comes and goes keeps its slot
+   (visibility instead of display). Where the screen is too small the dialog scrolls inside. */
+.file-dialog { width: min(520px, 94vw); max-height: 94vh; overflow-y: auto; }
+.file-dialog .confirm-heading { margin: 0 0 14px; }
+.file-dialog p { margin: 0; }
+.file-panes { display: grid; margin: 0 0 16px; }
+.file-pane { grid-area: 1 / 1; min-width: 0; }
+.file-pane[hidden] { display: block; visibility: hidden; }
+.file-dialog .confirm-actions button { min-width: 7em; }
+.file-dialog .confirm-actions button[hidden] { display: none; }
+.file-dialog .archive-steps { min-height: 12.5rem; margin: 0 0 12px; align-content: start; }
+.file-result { min-height: 2.8em; font-size: 13px; line-height: 1.4; color: #d7e4f2; }
+.file-result[data-state="done"] { color: #8fe0aa; }
+.file-result[data-state="warning"] { color: #ffc36b; }
+.file-result[data-state="error"] { color: #ff9d9d; }
+.file-intro { margin: 0 0 12px; color: #d7e1ee; line-height: 1.5; }
+.file-selector { display: grid; gap: 10px; margin: 0 0 14px; }
+.source-switch { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid #506176; border-radius: 6px; overflow: hidden; }
+.source-switch button { height: var(--control-small); border: 0; border-radius: 0; font-size: 13px; background: #202c3a; color: #b8c7d8; }
+.source-switch button + button { border-left: 1px solid #506176; }
+.source-switch button[aria-checked="true"] { background: #304256; color: #e7edf5; box-shadow: inset 0 -2px 0 #9cc8ff; }
+.source-switch button:disabled { color: #7f93a8; cursor: not-allowed; }
+.source-switch button:focus-visible, .file-pick :focus-visible { outline: 2px solid #9cc8ff; outline-offset: 1px; }
+.file-pick select, .file-pick button { width: 100%; }
+.file-pick [hidden] { display: none; }
+.file-card { min-height: 8.5rem; padding: 10px 12px; border: 1px solid #35404c; border-radius: 7px; background: #141c26; font-size: 13px; line-height: 1.4; }
+.file-selector[data-empty="true"] .file-card { color: #7f93a8; }
+.file-card-name { font-weight: 600; color: #e7edf5; overflow-wrap: anywhere; }
+.file-card-meta, .file-card-description { color: #b8c7d8; overflow-wrap: anywhere; }
+.file-card-notes { display: grid; gap: 4px; margin: 8px 0 0; padding: 0; list-style: none; color: #9daec0; white-space: pre-line; overflow-wrap: anywhere; }
+.file-card-notes li[data-state="warning"] { color: #ffc36b; }
+.file-card-notes li[data-state="error"] { color: #ff9d9d; }
+.file-warning { min-height: 2.8em; }
+.file-warning[hidden] { display: flex; visibility: hidden; }
+#save-estimate { min-height: 1.5em; margin-top: 10px; color: #9daec0; font-size: 13px; }
+#save-estimate:empty::before { content: "\00a0"; }
+#save-error { min-height: 3em; margin-top: 4px; color: #ffb2b4; font-size: 13px; }
+#save-error[hidden] { display: block; visibility: hidden; }
