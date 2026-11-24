@@ -78,6 +78,7 @@ De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | UXS01 | Conception écrite de l'interface autour de la session, validée par l'utilisateur | 2 |
 | UXS02 | Session créée à la connexion, une seule action « Reset » à la place de deux boutons confus | 2 |
 | UXS03 | Actions regroupées en catégories claires : Session, Nœuds, Affichage | 2 |
+| CAP04 | Capture du trafic d'un **switch entier** par une prise VDE (`vde_plug`), fichier PCAP, **étude d'abord** | 4 |
 | UXS04 | Mode édition et mode exécution, un seul endroit décide des contrôles actifs | 4 |
 | NET01 | Couper et rebrancher un câble d'un hôte en marche (panne de lien pour les TP de routage) | 2 |
 | NET02 | Points de sauvegarde d'un hôte ou d'une session : revenir à l'état d'avant une erreur | 4 |
@@ -98,6 +99,7 @@ De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | --- | --- | --- |
 | SEC03 | Un runner d'étudiant n'est pas de confiance : tout ce qu'il envoie est validé et borné | 4 |
 | PRN03 | Images de base : dossier partagé NFS ou téléchargement vérifié, fiche d'installation d'un poste | 3 |
+| TRM01 | **Frontal texte sans serveur web** : un runner local piloté depuis le terminal (`xterm` ou `tmux` sur les consoles), solution légère pour un TP au CREMI sur une machine individuelle | 4 |
 
 *Critère de sortie* : un étudiant enregistre son poste de TP et sa session s'y place ; un autre étudiant ne peut pas y placer la sienne. Prérequis : décision 3.
 
@@ -109,7 +111,6 @@ De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | --- | --- | --- |
 | GST01 | Nouveaux systèmes en console série : Tiny Core, Alpine avec FRRouting, VyOS, FreeBSD ou OpenBSD (par système) | 2 |
 | SHR01 | Dossier partagé entre l'hôte et la machine (9p), avec téléversement et téléchargement dans l'interface | 4 |
-| CLI01 | Mode autonome sans serveur web : machines locales et terminaux `xterm` ou `tmux` | 4 |
 
 *Critère de sortie* : un TP de routage dynamique (OSPF ou BGP) tourne avec des machines de plusieurs systèmes, et un fichier passe de l'étudiant à sa machine sans passer par le réseau.
 
@@ -119,7 +120,7 @@ De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 
 | Code | Tâche | Difficulté |
 | --- | --- | --- |
-| DSP01 | Affichage graphique dans le navigateur (VNC et noVNC) pour les machines qui ont un écran | 5 |
+| DSP01 | Affichage graphique dans le navigateur (client VNC noVNC dans la page du serveur) pour les machines Windows ou Linux graphiques, **à long terme** | 5 |
 | WIN01 | Machines Windows (XP, 10, 11) avec une image fournie par l'utilisateur ; **dépend des licences** | 5 |
 | ENG01 | Moteur Docker : un conteneur relié au réseau VDE ; **demande des privilèges** | 5 |
 | ENG02 | Images Docker lancées comme machines virtuelles (boot2container), sans les problèmes de privilège | 4 |

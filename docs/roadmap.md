@@ -167,6 +167,24 @@ Two features for the labs, decided as the top of the list. They are independent 
   closing the dialog deletes the host's leftover capture files (stopping and downloading first if one is still recording, so
   nothing is lost). The **live view moves into the dialog**, under the controls (a read-only text area with an optional
   filter), and the fifth "Capture" view of the console panes is removed: it is no longer an extra console.
+- [ ] **CAP04** (L, **study first**) **Capture the traffic of a whole switch with a VDE plug.** CAP01 captures one host
+  interface with QEMU's `filter-dump` (both directions of that NIC). A student also wants to see **everything that crosses
+  a switch**, which a VDE switch does not show on one interface because it only forwards a frame to the ports that need it.
+  Idea decided with the user (24 November 2026): connect a **plug** to the switch (`vde_plug`, from the same `vde2` package
+  as `vde_switch` and `vdeterm`) and write what it receives as a **PCAP file**, the second step announced in CAP01
+  ("capturing a whole switch"). To verify first, on the installed `vde2`:
+  - the **hub mode** of `vde_switch` (a command of its management socket, `hub/setmode` or equivalent), so that every frame
+    reaches the plug; its effect on the network (every frame to every port, traffic multiplied) and the way back to the normal
+    learning mode when the capture stops, even after a crash of the runner;
+  - what the plug gives on its standard output (the framing of `vde_plug` in a pipe: a length prefix before each Ethernet frame)
+    and how to turn it into PCAP records (a small writer in Node: global header, then a record per frame with a timestamp);
+    whether `vde_pcapplug` or `dpipe` is simpler; whether a plug uses a **port** of the switch (the model has 32), and where it
+    appears in the Graphic view;
+  - the live view of CAP03 (`tcpdump -l -n -r -` fed with the growing file) works unchanged with this source;
+  - limits: size of the file, number of captures, a capture refused when the switch is not running; the same rights, audit
+    and download route as CAP01 (remote runners included), and a plug that is removed with the switch.
+  Alternative to compare in the study: one `filter-dump` per host interface of the switch, merged by timestamp (needs no
+  hub mode, but misses frames that do not come from a host of the session).
 - [ ] **HSV01** (L) Host services. A **Services** tab in Host Settings lists the services a host can run (DHCP, DNS,
   web server, FTP, telnet...) as checkboxes; the chosen ones start at the next boot (the interface offers **Apply and
   reboot**).
@@ -408,6 +426,28 @@ runner are on the same computer.
 - [ ] A student creates their token, registers a lab workstation and their session lands on it; another student cannot
   place theirs there.
 - [ ] A lab workstation finds the images through the shared directory or the download.
+
+- [ ] **TRM01** (L, **to schedule**, formerly the backlog item CLI01) **A text frontend, without the web server.** A lightweight
+  alternative for the labs at the CREMI **on an individual machine**: the student runs a **local runner** and drives it from
+  the terminal, with `xterm` windows or `tmux` panes on the consoles of the machines, no server, no browser, no account.
+  What already exists: every node has `serial0.sock`, `serial1.sock` and `mon.sock` in its directory, and the runner is a
+  library (`runner/index.js`, the facade also used by the unit tests), so a front end can call it in the same process.
+  Design to settle (write it first):
+  - **Process model**: a command (for example `scripts/qw.sh`, name to choose) that starts a runner in its own process and
+    keeps it for the session of the lab, or attaches to a runner already started (`runner.sh`); the local computer only in
+    a first version (a remote runner needs a tunnel for the sockets).
+  - **Commands**: load a `.topo` or a session `.zip` (the same formats and checks as the Load dialog, `common/topology.js` and
+    `runner/archive-snapshot.js`), list the nodes, start, stop and reset a node or everything, open the console `ttyS0` or `ttyS1`
+    or the monitor of a node in a new `xterm` or a `tmux` pane, save the session as a ZIP; edit by loading a file, not by
+    clicking (adding a host or a link in text is a later step).
+  - **No identity**: the local user is the only user; one session per runner directory (a path under `/tmp/qw-<login>/`
+    as today). The server is not needed, so nothing of the authentication, the placement or the grace period applies.
+  - **Consoles**: reuse the existing socket relay (`socat` or a small Node bridge in raw mode with the right terminal size, as
+    the Clear button does for `stty`), never a shell with user input.
+  - To decide: **how much of the web interface's features** it must have (capture is a file already: `filter-dump`; the graphic
+    view and Follow have no equivalent), and whether it is the same program as the runner (`runner.sh --terminal`) or a client.
+  - Not a condition of 1.0.0; it costs little once the runner model (RUN03) is stable, and it removes the need for a server
+    and an OpenID account for a lab where each student sits at one machine.
 
 ## Milestone 8: hardening
 
@@ -710,7 +750,9 @@ root on `ttyS0`, the startup service that reads the startup disk, the file layou
   First step, shared: write the image contract back into the documentation, and add one prototype (my suggestion: Tiny Core
   as the lightest, and Alpine with FRRouting as the routing host) to test the process; then each system is a `prepare`
   script, a catalog entry and a check that it joins VDE, shows a serial login and runs a startup script.
-- [ ] **DSP01** (L) **A graphical display for a node**, in the browser, for machines that have a screen. Two uses: Linux
+- [ ] **DSP01** (L) **A graphical display for a node**, in the browser, for machines that have a screen.
+  **Long term** (the user, 24 November 2026): a **VNC client inside the web page** (the JavaScript client noVNC, in the web
+  server's pages) for **Windows or graphical Linux systems**; the display is a view of a pane next to the consoles. Two uses: Linux
   desktops, and the Windows systems below. QEMU already offers VNC (`-vnc`) and SPICE (`-spice`); the web client for VNC is
   **noVNC** (a JavaScript client; check its licence and the build into the project, which has no bundler), and spice-html5 for
   SPICE (less maintained). Design:
@@ -901,11 +943,6 @@ Things noticed with no milestone yet. Move one into a milestone when it is sched
 - Merge `docs/remote-runner-test.md` with the deployment documents once the runner choice is settled (see DOC01).
 - Group to role (left over from AUT01): administrators come from `users.json` only and `X-User-Groups` is unused. Decide whether a
   directory group may grant the admin role, and how to list a student in `/admin` without a prior `--no-password` entry.
-- Standalone local terminals (`CLI01`, size L, independent of the web interface): run machines on the user's own computer
-  without a server and open `xterm` windows or `tmux` panes on their consoles. The runner already exposes `serial0.sock`,
-  `serial1.sock` and `mon.sock` per node, and everything goes through `runner/index.js`. To settle: a mode with no server
-  at all, or terminals attached to the machines of a runner that the server also manages; the local computer only, or
-  a remote runner too (needs a tunnel for the sockets). Not a condition of 1.0.0.
 
 ## Decisions made
 
