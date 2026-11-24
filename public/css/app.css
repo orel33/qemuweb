@@ -35,6 +35,7 @@ button { cursor: pointer; }
 .icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
 .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 #clone-machine { color: #9ee6b4; } #show-general-settings { color: #9fc5ef; }
+.session-file-button { color: #ffc36b; } /* the yellow of the Load Session and Save Session dialog headings */
 #toggle-console-columns { color: #9fc5ef; }
 #exit-all { color: #ff777d; }
 #toggle-switch-consoles { color: #9fc5ef; }

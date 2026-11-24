@@ -201,7 +201,7 @@ test('the toolbar has one Load Session and one Save Session button, with the sam
   assert.match(buttons[0], /title="Load Session" aria-label="Load Session"/);
   assert.match(buttons[1], /title="Save Session" aria-label="Save Session"/);
   for (const button of buttons) {
-    assert.match(button, /class="icon-button write-action"/, 'an observer cannot use it');
+    assert.match(button, /class="icon-button session-file-button write-action"/, 'an observer cannot use it, the yellow of the dialog headings');
     assert.doesNotMatch(button, /aria-haspopup|aria-expanded|aria-controls/, 'no menu any more');
   }
   assert.match(buttons[0], /<use href="#load-session-icon"><\/use>/);
