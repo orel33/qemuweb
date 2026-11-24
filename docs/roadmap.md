@@ -238,6 +238,43 @@ What separates a deployment that works from one you can operate calmly.
   - Alpine and OpenWrt builds do not use the proxy yet.
   - The failure strings and phase markers of `scripts/prepare/lib/common.sh` are still unchecked against a real log.
 
+- [ ] **RNR01** (M, **to decide, context saved on 23-24 November 2026**) Simpler command line of `scripts/runner.sh`
+  (local and remote runners). **Not started: the user is not sure of the choice yet**; this entry keeps the whole reasoning so that it can be resumed.
+  - **Today** (main, after RUN03 and LST01): `runner.sh [options]` without a command = the LOCAL runner (`--port`, `--host`, `--token-file`,
+    `--runtime`, `--exit-on-disconnect`); `runner.sh register --url U --token T [--name N] [--insecure] [--ca F] [--runner-config F]` once,
+    then `runner.sh run --url U [--insecure] [--runner-config F]` for a REMOTE runner. `--help` now starts with a Commands block (commit 17fe234).
+    The two typical scenarios (server and local runner on one machine; server on `prout` and remote runner on `tralala`) are on one page:
+    [run-commands.md](run-commands.md).
+  - **The user's proposal** (verbatim idea): `runner.sh local [options]` = register and run implicit in local (`--bind 127.0.0.1` by default,
+    `--token-file` option); `runner.sh remote [options]` = register and run implicit in remote (`--bind 0.0.0.0` by default, `--token` option).
+  - **Assessment** (orchestrator): coherent for two explicit commands, and `remote` doing register-then-run in one command; BUT `--bind` is the
+    address a **server listens on**, and a runner listens on nothing (it dials out, no inbound port): the equivalent for a runner is the address of
+    the **server to reach**: `local`: `--host ADDRESS` (default 127.0.0.1) and `--port` (default 3002), as today; `remote`: **`--url` required**
+    (no default; `0.0.0.0` is a wildcard, not a destination). Adjustments proposed: (1) `remote` registers only if there is no runner file (then
+    `--url` and a token are required), otherwise it just runs; a token given while the runner file exists is an explicit error (single use);
+    (2) `remote --register-only` (register and exit) so that the CREMI can register once by hand and let a systemd unit run it; (3) the
+    registration token must not stay on the command line (visible in `ps` for its validity): `--token-file` or standard input (decision Q12 of
+    [runner-model.md](runner-model.md)); (4) `register` and `run` disappear (beta rules: no old command kept), so `start.sh`
+    (`runner.sh --port ...` becomes `runner.sh local --port ...`), `deploy/cremi/qemuweb-runner.service` and the remote unit example,
+    `remote-runner-test.md`, `deployment.md`, `reference.md` (tables tested word for word against `--help`), `install.md`, `run-commands.md`,
+    the tests and the `--help` text must follow; (5) `runner.sh` with no command prints the help instead of starting the local runner (a typo must
+    start nothing).
+  - **Open questions for the user**: keep `register` / `run` as they are (and only improve the help, already done), or the two commands `local` /
+    `remote`? Keep `register-only` as a flag or a separate command? What bothers him today: the number of commands, the token on the command line,
+    `--insecure`, or the vocabulary?
+  - **Acceptance if done**: `runner.sh local` and `runner.sh remote --url ... --token ...` start a runner; the second start of `remote` needs
+    no token; a wrong combination gives a clear message (exit 2); the token never appears in `ps` when given by file or stdin; `--help` of each
+    command lists only its options; the CREMI units and the tutorial are updated in the same task.
+- [ ] **LST02** (M, idea, **not started**) HTTPS served directly by the server, the follow-up of LST01 (`--bind`). Design proposed by the LST01 session:
+  `--tls-cert FILE` and `--tls-key FILE` (https and wss on the same port; Socket.IO and `/runner/connect` unchanged; an unreadable certificate or a
+  key that is not mode 0600 is refused at start-up), a helper `scripts/make-cert.sh` (openssl: a local certificate authority and a server
+  certificate whose subject alternative names are the IP addresses and names of the machine, key 0600), `runner.sh --ca FILE` (already exists) so
+  that `--insecure` is no longer needed on a LAN, the session cookie `Secure` directly (`req.secure`), `--no-auth` still refused off loopback,
+  proxy mode unchanged, `/admin` showing https commands with `--ca`, and the warning for a non-loopback bind replaced by one about a self-signed
+  certificate. Docs: deployment (TLS directly or behind nginx) and a variant D of [remote-runner-test.md](remote-runner-test.md); tests for the
+  options, the https banner and the derived URLs (the local runner over https/wss with `--ca`). Remaining risk: certificate lifetime and renewal
+  are the administrator's job; nginx/Apache in front stay the recommended production setup (the CREMI).
+
 **Done when**
 
 - [x] `--auth` has only `password` and `proxy`, and the CREMI server runs in `proxy`.

@@ -53,6 +53,8 @@ De la version 0.9.6 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | PRP01 | **Fait (0.9.4)** : Construction des images derrière le proxy du CREMI sans option particulière | 1 |
 | TOD02 | **Fait (0.9.5).** Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>`, court et privé : fin de l'erreur « Runtime socket path is too long » | 2 |
 | RUN03 | **Fait (a à f, non publié)** : le runner local devient un runner comme les autres (WebSocket et fichier de jeton, un dossier par processus, plus de fichier partagé avec le serveur, sessions restaurées hors ligne au redémarrage du serveur, perte forcée) ; mise à jour du CREMI par une procédure unique | 4 |
+| RNR01 | **À décider** (contexte sauvegardé) : lignes de commande du runner plus simples (`runner.sh local` et `runner.sh remote` à la place de la commande sans mot, `register` et `run`), jeton hors de la ligne de commande | 2 |
+| LST02 | Idée, non commencée : HTTPS servi directement par le serveur (`--tls-cert`, `--tls-key`, script de certificat), fin de `--insecure` sur un réseau local | 3 |
 | GAG02 | Adresse IP en direct des machines VirtualBox (Guest Additions), symétrique de GAG01 qui le fait pour QEMU | 3 |
 | PST01 | **Étude** (suite de RUN03, qui a déjà livré le lien session-runner et la restauration hors ligne) : politiques de persistance après un reboot ou une coupure, pour le serveur et pour le runner ; plusieurs politiques à comparer, **rien n'est décidé** | 3 |
 | SEC01 | Mot de passe minimal, ralentissement des échecs de connexion, contrôle de l'origine, déconnexion révocable | 3 |
