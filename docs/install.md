@@ -271,6 +271,12 @@ table). Every raw image also gets a line such as
 (the agent is there without its QemuWeb allowlist) or `... no`,
 read the same way: see [guest-agent](guest-agent.md).
 
+**Quiet console (Debian).** The Debian images set the kernel console log level to 3 (`/etc/sysctl.d/10-console.conf`,
+`kernel.printk = 3 4 1 3`): kernel messages no longer scroll over `ttyS0` and `ttyS1` while a student works, and stay
+available with `dmesg`. The line `debian13-legacy  quiet console: no (rebuild for a quiet console)` of `prepare.sh --list`
+marks an image built earlier: rebuild it with `bash scripts/prepare.sh --system debian13-legacy --force` (and
+`debian13-cloud`). A saved session with working disks must then be discarded, because the base image identity changes.
+
 **Addresses on the Graphic view (guest agent).** The addresses a running host reports are read from the QEMU
 guest agent (`qemu-guest-agent`, `qemu-ga` on OpenWrt) through a virtio-serial channel QemuWeb adds to
 the QEMU command line for the systems that have `guestAgent:qemu` in `config.json`. The four systems have it, but

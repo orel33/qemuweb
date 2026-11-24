@@ -1,6 +1,7 @@
 'use strict';
 // Best-effort checks, used by `prepare.sh --list`, of what a raw image contains: whether a Debian image enables
-// the login on ttyS1 (serial-getty@ttyS1.service) and whether an image carries the QEMU guest agent with the
+// the login on ttyS1 (serial-getty@ttyS1.service), whether a Debian image has the quiet console file
+// (/etc/sysctl.d/10-console.conf) and whether an image carries the QEMU guest agent with the
 // QemuWeb allowlist (docs/guest-agent.md). The image is read offline and read-only with `debugfs -c -R` on the
 // partition offset taken from its MBR or GPT: no root, no loop device, no mount, no write. Every result is
 // 'unknown' (debugfs missing, unreadable image, unexpected partition table, any error, or the time limit of 10 s)
@@ -15,6 +16,7 @@ const ROOT_MARK = '/etc/os-release'; // present in the root filesystem, absent f
 const AGENT_BINARIES = ['/usr/sbin/qemu-ga', '/usr/bin/qemu-ga'];
 const AGENT_CONF = '/etc/qemu/qemu-ga.conf';
 const ALLOW_LINE = /^[ \t]*allow-rpcs[ \t]*=[ \t]*\S/m;
+const QUIET_CONF = '/etc/sysctl.d/10-console.conf'; // written by the Debian builds: kernel console log level 3
 const SECTOR = 512;
 const MAX_PARTITIONS = 4;
 const TIME_LIMIT_MS = 10000;
@@ -84,6 +86,14 @@ function ttys1Login(image, {timeoutMs = TIME_LIMIT_MS} = {}) {
   });
 }
 
+// Whether a Debian image has the quiet console file: 'yes', 'no' (root filesystem without it) or 'unknown'.
+function quietConsole(image, {timeoutMs = TIME_LIMIT_MS} = {}) {
+  return scanPartitions(image, timeoutMs, ({stat}) => {
+    if (!isFile(stat(ROOT_MARK))) return null;
+    return /Type: regular/.test(stat(QUIET_CONF)) ? 'yes' : 'no';
+  });
+}
+
 // The guest agent of an image: 'restricted' (binary and the QemuWeb configuration with its allow-rpcs line),
 // 'open' (binary, no such configuration: the agent would accept every command), 'none' (root filesystem
 // without the binary) or 'unknown'.
@@ -102,6 +112,13 @@ function describe(result) {
   return 'ttyS1 login: unknown';
 }
 
+// The text of the quiet console line of `prepare.sh --list`.
+function describeQuietConsole(result) {
+  if (result === 'yes') return 'quiet console: yes';
+  if (result === 'no') return 'quiet console: no (rebuild for a quiet console)';
+  return 'quiet console: unknown';
+}
+
 // The text of the guest agent line of `prepare.sh --list`.
 function describeGuestAgent(result) {
   if (result === 'restricted') return 'guest agent: yes (restricted)';
@@ -110,4 +127,4 @@ function describeGuestAgent(result) {
   return 'guest agent: unknown';
 }
 
-module.exports = {partitionOffsets, ttys1Login, guestAgent, describe, describeGuestAgent};
+module.exports = {partitionOffsets, ttys1Login, quietConsole, guestAgent, describe, describeQuietConsole, describeGuestAgent};

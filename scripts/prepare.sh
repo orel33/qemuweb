@@ -169,12 +169,15 @@ const widths = heading.map((_, index) => Math.max(...rows.map(row => row[index].
 for (const row of rows) console.log(row.map((value, index) => value.padEnd(widths[index])).join('  ').trimEnd());
 // Best-effort notes per raw image (read-only, never fail the listing): see scripts/prepare/lib/image-probe.js.
 try {
-  const {ttys1Login, guestAgent, describe, describeGuestAgent} = require(path.join(root, 'scripts', 'prepare', 'lib', 'image-probe'));
+  const {ttys1Login, quietConsole, guestAgent, describe, describeQuietConsole, describeGuestAgent} = require(path.join(root, 'scripts', 'prepare', 'lib', 'image-probe'));
   for (const [id, system] of Object.entries(systems)) {
     if (id === 'default' || !system.qemu?.image) continue;
     const image = path.resolve(root, system.qemu.image);
     if (!fs.existsSync(image)) continue;
-    if (id.startsWith('debian')) console.log(`${id.padEnd(widths[0])}  ${describe(ttys1Login(image))}`);
+    if (id.startsWith('debian')) {
+      console.log(`${id.padEnd(widths[0])}  ${describe(ttys1Login(image))}`);
+      console.log(`${id.padEnd(widths[0])}  ${describeQuietConsole(quietConsole(image))}`);
+    }
     console.log(`${id.padEnd(widths[0])}  ${describeGuestAgent(guestAgent(image))}`);
   }
 } catch { /* the note is optional */ }
