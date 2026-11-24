@@ -1,7 +1,7 @@
 'use strict';
 
 // The examples of the server: the .topo (topology) and .zip (session) files of the --examples
-// directory, offered by the Load dialog. Read only: nothing here modifies the directory. A
+// directory, offered by the Load Session dialog. Read only: nothing here modifies the directory. A
 // request names a file by its bare name, never by a path; the name is checked, looked up in a
 // fresh listing, and the file is opened without following a symbolic link and must be a regular
 // file. Only the name, kind, size and description of a file leave the server.

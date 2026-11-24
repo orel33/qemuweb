@@ -6,7 +6,7 @@
 //     with admin/admin (admin), toto/toto and tutu/tutu (students).
 //   node scripts/demo.js load <base-url>
 //     waits for the server, logs in as toto and tutu and loads examples/lan.zip into their
-//     sessions with automatic start, exactly like the Load session button
+//     sessions with automatic start, exactly like the Load Session button
 //     (POST /api/session-archive/import?autoStart=true; no backdoor).
 //     Start errors are reported but do not fail the setup.
 // Passwords equal to logins are for this local demo mode only; never use them elsewhere.
