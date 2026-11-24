@@ -195,7 +195,7 @@ interface shows **Authentication disabled**. It is never the default.
 
 ### Included LAN demo
 
-1. Prepare the Debian Legacy image: `bash scripts/prepare.sh --system debian13-legacy`.
+1. Prepare the Debian Cloud image used by the examples: `bash scripts/prepare.sh --system debian13-cloud`.
 2. In the Web interface, choose the engine in the **Engine** select of the header (see
    [The session engine](#the-session-engine)), click
    **Load Session**, choose `lan.zip` in **Server examples** (or choose
@@ -321,6 +321,8 @@ naming scheme and the console font).
   without disks or startup scripts. Examples:
   [`examples/lan.topo`](../examples/lan.topo), [`examples/dmz.topo`](../examples/dmz.topo),
   [`examples/gw.topo`](../examples/gw.topo).
+- The hosts of every example (`.topo` and `.zip`) use the system `debian13-cloud`: starting them needs
+  `images/debian13-cloud.raw` (`bash scripts/prepare.sh --system debian13-cloud`).
 
 ### Graphic view
 

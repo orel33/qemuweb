@@ -5,7 +5,7 @@ const {parseTopology} = require('../../common/topology');
 const {CARD_HEIGHT, CARD_WIDTH, buildGraph, stateOf} = require('../../public/topology-graphic');
 
 function nodesFromFixture(file) {
-  const topology = parseTopology(fs.readFileSync(file, 'utf8'), ['debian13-legacy']);
+  const topology = parseTopology(fs.readFileSync(file, 'utf8'), ['debian13-cloud']);
   const switches = topology.switches.map(sw => ({id: sw.name, kind: 'switch', hostname: sw.name, running: true}));
   const portBySwitch = new Map();
   const hosts = topology.hosts.map(host => ({

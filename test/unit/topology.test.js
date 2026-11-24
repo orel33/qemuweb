@@ -5,8 +5,8 @@ const {parseTopology, formatTopology} = require('../../common/topology');
 
 test('example topologies preserve ordered links on roundtrip', () => {
   for (const file of ['examples/lan.topo', 'examples/gw.topo']) {
-    const first = parseTopology(fs.readFileSync(file, 'utf8'), ['debian13-legacy']);
-    assert.deepEqual(parseTopology(formatTopology(first), ['debian13-legacy']), first);
+    const first = parseTopology(fs.readFileSync(file, 'utf8'), ['debian13-cloud']);
+    assert.deepEqual(parseTopology(formatTopology(first), ['debian13-cloud']), first);
   }
 });
 
