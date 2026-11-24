@@ -9,7 +9,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {spawnSync} = require('node:child_process');
-const {ttys1Login, guestAgent, describe, describeGuestAgent, partitionOffsets} = require('../../scripts/prepare/lib/image-probe');
+const {ttys1Login, quietConsole, guestAgent, describe, describeQuietConsole, describeGuestAgent, partitionOffsets} = require('../../scripts/prepare/lib/image-probe');
 
 const ENABLED = '/etc/systemd/system/getty.target.wants/serial-getty@ttyS1.service';
 const MBR_EMPTY_TYPE = 0;
@@ -26,7 +26,7 @@ function mbr(partitions) {
 // garbage (unexpected text), hang (never answers), fail (exit 1 without output). STUB_ROOT_OFFSET,
 // STUB_AGENT (restricted, open, none) says what the root filesystem holds for the guest agent: the binary
 // at STUB_AGENT_PATH (default /usr/sbin/qemu-ga) and, for restricted, a configuration with the allow-rpcs line.
-// STUB_ROOT_OFFSET,
+// STUB_QUIET (yes) says the quiet console file exists. STUB_ROOT_OFFSET,
 // when set, makes any other partition answer "Bad magic number" (it is not an ext filesystem).
 const STUB = `#!/bin/bash
 echo "$*" >> "$STUB_LOG"
@@ -40,6 +40,7 @@ case "$3" in
   "stat ${ENABLED}") if [[ "\${STUB_MODE}" == enabled ]]; then echo "Inode: 42120   Type: symlink    Mode:  0777"; else echo "${ENABLED}: File not found by ext2_lookup" >&2; fi ;;
   "stat /etc/os-release") echo "Inode: 17   Type: regular    Mode:  0644" ;;
   "stat \${STUB_AGENT_PATH:-/usr/sbin/qemu-ga}") if [[ -n "\${STUB_AGENT}" && "\${STUB_AGENT}" != none ]]; then echo "Inode: 99   Type: regular    Mode:  0755"; else echo "File not found by ext2_lookup" >&2; fi ;;
+  "stat /etc/sysctl.d/10-console.conf") if [[ "\${STUB_QUIET}" == yes ]]; then echo "Inode: 55   Type: regular    Mode:  0644"; else echo "File not found by ext2_lookup" >&2; fi ;;
   "cat /etc/qemu/qemu-ga.conf") if [[ "\${STUB_AGENT}" == restricted ]]; then printf '[general]\\n# comment\\nallow-rpcs=guest-ping,guest-info\\n'; elif [[ "\${STUB_AGENT}" == commented ]]; then printf '[general]\\n#allow-rpcs=guest-ping\\nallow-rpcs=\\n'; else echo "cat: File not found by ext2_lookup" >&2; fi ;;
 esac
 `;
@@ -165,9 +166,11 @@ test('--list prints one ttyS1 line per Debian raw image and one guest agent line
     const lines = result.stdout.split('\n').filter(Boolean);
     assert.match(lines[0], /^System +RAW GB +VDI GB +Total GB +Built \(local time\) +SHA-256 raw\/vdi$/);
     assert.equal(lines.filter(line => /ttyS1 login/.test(line)).length, 1); // debian13-cloud has no image
-    const legacy = lines.filter(line => /^debian13-legacy +(ttyS1|guest)/.test(line));
+    const legacy = lines.filter(line => /^debian13-legacy +(ttyS1|quiet|guest)/.test(line));
     assert.match(legacy[0], /^debian13-legacy +ttyS1 login: no$/);
-    assert.match(legacy[1], /^debian13-legacy +guest agent: yes \(restricted\)$/);
+    assert.match(legacy[1], /^debian13-legacy +quiet console: no \(rebuild for a quiet console\)$/);
+    assert.match(legacy[2], /^debian13-legacy +guest agent: yes \(restricted\)$/);
+    assert.equal(lines.filter(line => /quiet console/.test(line)).length, 1); // none for alpine, nor for the missing debian13-cloud image
     assert.equal(lines.at(-1), 'To build: bash scripts/prepare.sh --system <id|all> [--force]');
     assert.match(lines.at(-2), /^alpine +guest agent: yes \(restricted\)$/);
     assert.ok(!lines.some(line => /^alpine +ttyS1/.test(line)));
@@ -176,7 +179,7 @@ test('--list prints one ttyS1 line per Debian raw image and one guest agent line
     fs.rmSync(path.join(bin, 'debugfs'));
     const withoutDebugfs = spawnSync('bash', [path.join(root, 'scripts', 'prepare.sh'), '--list'], {encoding: 'utf8', env: {...process.env, PATH: `${bin}:/usr/bin:/bin`}});
     assert.equal(withoutDebugfs.status, 0);
-    assert.match(withoutDebugfs.stdout, /debian13-legacy +ttyS1 login: unknown\ndebian13-legacy +guest agent: unknown\nalpine +guest agent: unknown\nTo build: bash scripts\/prepare\.sh --system <id\|all> \[--force\]\n$/);
+    assert.match(withoutDebugfs.stdout, /debian13-legacy +ttyS1 login: unknown\ndebian13-legacy +quiet console: unknown\ndebian13-legacy +guest agent: unknown\nalpine +guest agent: unknown\nTo build: bash scripts\/prepare\.sh --system <id\|all> \[--force\]\n$/);
   });
 });
 
@@ -194,6 +197,27 @@ test('the guest agent: restricted, open (no configuration), none, and the Alpine
     assert.equal(describeGuestAgent('open', 'x'), 'guest agent: yes (NOT restricted)');
     assert.equal(describeGuestAgent('none', 'alpine'), 'guest agent: no');
     assert.equal(describeGuestAgent('unknown', 'x'), 'guest agent: unknown');
+  });
+});
+
+test('the quiet console file: yes, no (with the rebuild hint), unknown, on the root filesystem only', () => {
+  withEnvironment(dir => {
+    const {image, bin, log} = setup(dir, [[0x83, 2048]], 'disabled');
+    process.env.STUB_QUIET = 'yes';
+    assert.equal(withPath(bin, () => quietConsole(image)), 'yes');
+    assert.deepEqual(fs.readFileSync(log, 'utf8').trim().split('\n'), [`-c -R stat /etc/os-release ${image}?offset=1048576`, `-c -R stat /etc/sysctl.d/10-console.conf ${image}?offset=1048576`]);
+    process.env.STUB_QUIET = '';
+    assert.equal(withPath(bin, () => quietConsole(image)), 'no');
+    const second = setup(dir, [[0xef, 2048], [0x83, 4096]], 'disabled', {rootOffset: String(4096 * 512)});
+    process.env.STUB_QUIET = 'yes';
+    assert.equal(withPath(second.bin, () => quietConsole(second.image)), 'yes');
+    const broken = setup(dir, [[0x83, 2048]], 'garbage');
+    assert.equal(withPath(broken.bin, () => quietConsole(broken.image)), 'unknown');
+    assert.equal(quietConsole(path.join(dir, 'missing.raw')), 'unknown');
+    assert.equal(describeQuietConsole('yes'), 'quiet console: yes');
+    assert.equal(describeQuietConsole('no'), 'quiet console: no (rebuild for a quiet console)');
+    assert.equal(describeQuietConsole('unknown'), 'quiet console: unknown');
+    process.env.STUB_QUIET = '';
   });
 });
 

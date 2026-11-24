@@ -132,6 +132,12 @@ write_files:
     permissions: '0644'
     content: |
       GRUB_CMDLINE_LINUX="\${GRUB_CMDLINE_LINUX:+\$GRUB_CMDLINE_LINUX }net.ifnames=0"
+  # Console log level 3 (errors and worse), applied by systemd-sysctl: kernel messages stay in dmesg and no
+  # longer scroll over the serial console. Fields: console level, default level, minimum level, boot-time level.
+  - path: /etc/sysctl.d/10-console.conf
+    permissions: '0644'
+    content: |
+      kernel.printk = 3 4 1 3
   - path: /etc/systemd/network/20-qemunet.network
     permissions: '0644'
     content: |
@@ -152,7 +158,7 @@ runcmd:
   - [rm, -f, /usr/sbin/policy-rc.d]
   # Finish the template with no fixed machine ID. This is the last guest-side
   # change before the temporary preparation VM is shut down.
-  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null && dpkg -s qemu-guest-agent >/dev/null && test -s /etc/qemu/qemu-ga.conf; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
+  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null && dpkg -s qemu-guest-agent >/dev/null && test -s /etc/qemu/qemu-ga.conf && grep -qx "kernel.printk = 3 4 1 3" /etc/sysctl.d/10-console.conf; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
 CLOUD_CONFIG
     cat > "$meta_data" <<EOF_META
 instance-id: qemuweb-$id-$(date +%s)
