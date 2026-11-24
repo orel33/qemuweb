@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Demo of the Web interface on port 3003 or --listen PORT: a separate, temporary users file (never the
-# repository's users.json) with admin/admin (admin), toto/toto and tutu/tutu (students), and
+# Demo of the Web interface on port 3003 or --listen PORT: separate, temporary users and runners files (never the
+# repository's users.json and runners.json) with admin/admin (admin), toto/toto and tutu/tutu (students), and
 # examples/lan.zip loaded and started in the sessions of toto and tutu. Passwords equal to logins
 # exist only in this mode. Its sessions live in a temporary directory, so `scripts/status.sh` needs --all to see it.
 #   ./scripts/demo.sh [--listen PORT] [--bind ADDRESS]
@@ -53,11 +53,11 @@ trap 'exit 130' INT TERM
 
 printf '\n== QemuWeb demo on port %s ==\n' "$port"
 node scripts/demo.js prepare "$demo_dir/users.json"
-# The same two commands as scripts/start.sh (server and runner), with the temporary users file and two temporary
+# The same two commands as scripts/start.sh (server and runner), with the temporary users and runners files and two temporary
 # directories, one per process (the server's and the runner's own sessions, deleted when the demo stops; the defaults
 # /tmp/qw-<login>/<port> and l-<port> would be shared with a start.sh on the same port).
 mkdir -p "$demo_dir/server" "$demo_dir/runner"
-./scripts/start.sh --listen "$port" --bind "$bind" --runtime "$demo_dir/server" --runner-runtime "$demo_dir/runner" --users "$demo_dir/users.json" &
+./scripts/start.sh --listen "$port" --bind "$bind" --runtime "$demo_dir/server" --runner-runtime "$demo_dir/runner" --users "$demo_dir/users.json" --runners "$demo_dir/runners.json" &
 demo_server_pid=$!
 node scripts/demo.js load "http://$url_host:$port"
 
