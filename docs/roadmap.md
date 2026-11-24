@@ -652,6 +652,12 @@ personal runner and any guest access exist only for trusted users.
     move a link (this would also remove the need to open Host Settings to delete the interface itself, see GRA03).
   Unit tests for the pure part (which interface, which pairs); the pointer interaction is checked by hand on desktop
   and at phone width.
+- [ ] **GRA05** (S) Rectilinear links in the Graphic view. A button next to the zoom buttons switches the links between the
+  current Bézier curves and **rectilinear polylines** (horizontal and vertical segments only, one or two bends, the
+  usual network-diagram look). A display preference of this browser, kept in `localStorage`, curves by default; it does not
+  go through the view state, so Follow and observation are unaffected (an observer may use it). Only the path changes: the
+  attachment points, the interface and port labels, the addresses, selection, hover, recording colour and the hit area stay.
+  Unit test for the pure routing function.
 - [ ] **GRA03** (M) Remaining points.
   - No IP address on the cards: see the feasibility study GAG01 (QEMU guest agent, or addresses learned from the traffic).
   - Touch: the view pans with one finger and zooms with the buttons only; no pinch zoom.
