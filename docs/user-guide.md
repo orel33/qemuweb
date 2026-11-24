@@ -348,6 +348,12 @@ drawn for a host without an address or whose agent has not started yet (the firs
   zoom level. Positions are saved in this browser; nodes you have not moved are placed
   automatically (a layered layout that limits crossings), and a loaded topology gets a fresh
   layout.
+- **Link style**: the button left of the zoom buttons switches the links between smooth **curves** (the
+  default) and **rectilinear** lines, made of horizontal and vertical segments only, like a classic network
+  diagram. The icon shows the style a press switches to. Only the path of the links changes: the interface and
+  port labels, the addresses, selection, hover and the recording colour are the same. It is a display
+  preference of this browser (kept in `localStorage`, key `qemuweb.graphic-links`, and kept when you load a session):
+  an administrator observing a session can use it, and **Follow** does not change it.
 - **Select**: a click selects a node, like its tab in the Terminals view (the selected node is
   highlighted and is the one the toolbar actions apply to).
 - **Console**: a double click (or Enter on a focused card) opens the node's console as a

@@ -203,15 +203,16 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .graphic-heading { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; flex: none; padding: 10px 16px; border-bottom: 1px solid #35404c; background: #17212c; }
 .graphic-heading h2 { margin: 0; font-size: 17px; }
 .graphic-heading p { margin: 0; color: #adc0d3; font-size: 12px; }
-.graphic-tools, .graphic-zoom { display: flex; align-items: center; gap: 6px; }
+.graphic-tools, .graphic-zoom, .graphic-style { display: flex; align-items: center; gap: 6px; }
 .graphic-zoom { margin-left: auto; }
-.graphic-tools button, .graphic-zoom button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: var(--control-small); height: var(--control-small); padding: 4px 8px; font-size: 13px; }
-.graphic-zoom button { padding: 4px; }
-.graphic-tools button[aria-pressed="true"] { background: #355177; border-color: #70a8ff; }
-.graphic-tools button:focus-visible, .graphic-zoom button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+.graphic-style { margin-left: 6px; }
+.graphic-tools button, .graphic-zoom button, .graphic-style button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; min-width: var(--control-small); height: var(--control-small); padding: 4px 8px; font-size: 13px; }
+.graphic-zoom button, .graphic-style button { padding: 4px; }
+.graphic-tools button[aria-pressed="true"], .graphic-style button[aria-pressed="true"] { background: #355177; border-color: #70a8ff; }
+.graphic-tools button:focus-visible, .graphic-zoom button:focus-visible, .graphic-style button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .graphic-tools svg { width: 18px; height: 18px; flex: none; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .graphic-tools #graphic-connect { color: #c5c343; }
-.graphic-zoom svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.graphic-zoom svg, .graphic-style svg { width: 18px; height: 18px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 #graphic-zoom-level { min-width: 43px; color: #c9d9e8; font-size: 12px; font-variant-numeric: tabular-nums; text-align: center; }
 /* The canvas never scrolls: the drawing is panned and zoomed inside it. No text selection. */
 #graphic-canvas { position: relative; flex: 1; min-height: 0; overflow: hidden; background-color: #111a24; background-image: radial-gradient(#344454 0.8px, transparent 0.8px); background-size: var(--graphic-grid, 22px) var(--graphic-grid, 22px); user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; touch-action: none; outline: none; }
@@ -220,8 +221,8 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 #graphic-canvas[data-mode="connect"] .topology-node { cursor: pointer; }
 .topology-svg { position: absolute; inset: 0; display: block; width: 100%; height: 100%; user-select: none; -webkit-user-select: none; }
 .topology-svg text { user-select: none; -webkit-user-select: none; pointer-events: none; }
-.topology-link .link-line { fill: none; stroke: #c5c343; stroke-width: 3; }
-.topology-link .link-hit { fill: none; stroke: transparent; stroke-width: 16; cursor: pointer; }
+.topology-link .link-line { fill: none; stroke: #c5c343; stroke-width: 3; stroke-linejoin: round; }
+.topology-link .link-hit { fill: none; stroke: transparent; stroke-width: 16; stroke-linejoin: round; cursor: pointer; }
 .topology-link.is-recording .link-line { stroke: #ff6b6b; }
 .rec-dot { fill: #ff4d4d; }
 .rec-text { fill: #ffb4b4; font: 700 10px system-ui, sans-serif; paint-order: stroke; stroke: #111a24; stroke-width: 3px; }
@@ -404,7 +405,7 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .terminal-scroll:disabled { cursor: default; opacity: .55; }
 @media (max-width: 850px) { main[data-layout="columns-2"] { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); } }
 @media (max-width: 850px) { .nic-row { grid-template-columns: 95px minmax(0, 1fr) var(--control-field); gap: 6px; } .nic-row .nic-meta { grid-column: 2; grid-row: 2; } .nic-row button { grid-column: 3; grid-row: 1; } }
-@media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } #graphic-workspace { margin: 10px; } .graphic-heading { gap: 6px 12px; padding: 10px 12px; } .graphic-tools span { display: none; } .graphic-zoom { margin-left: 0; } }
+@media (max-width: 600px) { header, .machines { padding-inline: 10px; gap: 7px; } .setting-row { grid-template-columns: 1fr; gap: 4px; } main { padding: 10px; } #graphic-workspace { margin: 10px; } .graphic-heading { gap: 6px 12px; padding: 10px 12px; } .graphic-tools span { display: none; } .graphic-zoom, .graphic-style { margin-left: 0; } }
 @media (max-width: 600px) { .host-create-actions { flex-wrap: wrap; } .host-action-options { flex-basis: 100%; } }
 /* Login page and account controls. */
 .login-page { overflow: auto; }
