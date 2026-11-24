@@ -21,3 +21,7 @@ deploy/cremi/progsys.conf
 deploy/cremi/qemuweb-oidc.inc
 # Key shared by Apache and QemuWeb (/etc/apache2/qemuweb-proxykey.inc): kept on the server, never committed
 deploy/cremi/qemuweb-proxykey.inc
+
+# Claude Code: the shared commands are versioned, the worktrees and local settings are not
+.claude/worktrees/
+.claude/settings.local.json
