@@ -704,7 +704,6 @@ personal runner and any guest access exist only for trusted users.
   attachment points, the interface and port labels, the addresses, selection, hover, recording colour and the hit area stay.
   Unit test for the pure routing function.
 - [ ] **GRA03** (M) Remaining points.
-  - No IP address on the cards: see the feasibility study GAG01 (QEMU guest agent, or addresses learned from the traffic).
   - Touch: the view pans with one finger and zooms with the buttons only; no pinch zoom.
   - The position and size of the floating console are kept only until the page is reloaded.
   - A link is removed by disconnecting the interface, which stays; removing the interface itself is only in Host
@@ -887,13 +886,13 @@ commit message.
   `-serial`; the console id of ttyS1 resolves). Ask the user for: which system and engine, what he sees (empty pane, no prompt, an error,
   the view missing), whether it also fails on a freshly added host and on an example loaded from the menu, and the "Console" tab of
   Host Settings (it lists `serial0.sock`, `serial1.sock` and the monitor socket).
-- [ ] **BUG02** The "switch consoles" button is not greyed out when the view is driven (Follow checked, or owner under
-  admin control) although it carries the `view-control` class. Not reproduced by reading the code: find the exact case.
-- [ ] **BUG03** A `monitor` view received before the node data says Monitor is supported falls back to the console and is
-  not applied again later.
+- [x] **BUG02** The "switch consoles" button is not greyed out when the view is driven. Closed: the button carries `view-control` and the
+  rule applies; the control that was not greyed out was the pane view menu (Console ttyS0, ttyS1, Monitor, Log), fixed by UIX02.
+  Reopen if it is seen again.
+- [x] **BUG03** A `monitor` view received before the node data says Monitor is supported fell back to the console and was not applied
+  again. Resolved: `refollow()` (`public/observe.js`) re-applies the received view after the node list is loaded.
 - [ ] **BUG04** The test harness kills only `start.sh` after 12 s, so the server and the runner, in their own sessions,
   could survive a hung stop (`test/integration/qemuweb-client.js`).
-- [ ] **BUG05** The lines written to the Log view by Clear have no timestamp.
 - [ ] **BUG06** A runner with an unreadable `config.json` still prints `✓ config.json  0 systems` after the
   `Cannot read the system catalog` error. It should print a ✗ and abort.
 - [ ] **BUG07** `start.sh` says "The server exited (status 2); stopping the runner." although no runner was started when
@@ -911,8 +910,9 @@ commit message.
 
 ### TODO
 
-- [ ] **TOD01** `status.sh`, `killall.sh` and `cleanall.sh` only know the default `runtime/`: add `--runtime DIR` to each, as
-  `start.sh` and `stop.sh` have.
+- [ ] **BUGS01** (S) A batch of three small corrections, one commit each: **BUG06** (a runner with an unreadable `config.json`
+  prints ✗ and stops), **BUG07** (`start.sh` says "stopping the runner" only when a runner was started), **TOD04** (a tooltip on a
+  greyed-out view control says why).
 - [x] **TOD02** Report a `runtime/` path longer than 49 characters at startup (the sockets of a node must fit in 107 bytes),
   in the server and the runner, with the `--runtime` hint; today it only fails when the first node is created. Or shorten
   the node socket paths with a short alias directory. (M)
@@ -920,14 +920,10 @@ commit message.
   `scripts/demo.sh`) use the system `debian13-cloud` instead of `debian13-legacy`, which should be faster. Every host of the
   three `.topo` files and of the five archives changes system; the documents and tests that name the example system follow,
   and the documents say that the demo needs the `debian13-cloud` image (`prepare.sh --system debian13-cloud`).
-- [ ] **TOD03** More `config.json` warnings at startup, beyond the engine, KVM and serial port checks.
 - [ ] **TOD04** A tooltip on a disabled view control saying why (view driven by the owner or by the controlling admin).
-- [ ] **TOD05** A `--version` option for `server/main.js` and `runner/main.js`, so the administrator can compare the versions of
-  the two processes after an update.
-- [ ] **TOD06** At startup the server could compare its version with the runner's hello and say "restart the runner" instead
-  of letting an archive fail with `Invalid session.json in archive.` after a format change.
-- [ ] **TOD07** `register --runtime` is only needed when the runner's directory differs from `runtime/` of the repository:
-  say it in the registration output.
+- [ ] **TOD05** A `--version` option for `server/main.js` and `runner/main.js`, and a version check between the two: the runner's `hello`
+  carries its version, and the server says "restart the runner" (in its log and in `/admin -> Runners`) when it differs from its own, instead of
+  letting an archive fail with `Invalid session.json in archive.` after a format change. Useful with runners on other machines.
 - [ ] **TOD08** `scripts/status.sh` (`scripts/status.js`) shows how many **threads** each process uses. A QEMU machine has several even
   with one virtual processor (the main loop, `CPU n/KVM`, `call_rcu`, an I/O worker), so a tool like `htop` shows more lines than
   there are machines and the count surprises. Read it from `/proc/<pid>/status` (`Threads:`) next to the CPU and memory of each
