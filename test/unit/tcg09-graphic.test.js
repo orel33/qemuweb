@@ -94,14 +94,26 @@ test('empty and changing node states are represented', () => {
   assert.equal(stateOf({running: false, error: 'failed'}), 'error');
 });
 
-test('the floating console follows the view state: captured, applied without focus, its close button a view control', () => {
+test('the floating console follows the view state: open and geometry captured, applied without focus, its controls view controls', () => {
   const workspace = fs.readFileSync('public/workspace.js', 'utf8');
   const floating = fs.readFileSync('public/graphic-console.js', 'utf8');
+  const graphic = fs.readFileSync('public/graphic-view.js', 'utf8');
   const html = fs.readFileSync('public/index.html', 'utf8');
-  assert.match(workspace, /floating: floatingConsoleOpen\(\)/, 'captureView reads whether it is open');
+  const css = fs.readFileSync('public/css/app.css', 'utf8');
+  assert.match(workspace, /floating: floatingConsoleOpen\(\),\s*geometry: floatingGeometry\(\)/, 'captureView reads whether it is open and where');
   assert.match(workspace, /if \(view\.floating\) openFloatingConsole\(\{focus: false\}\); else closeFloatingConsole\(\);/, 'applyView opens or closes it after the mode');
-  assert.ok(workspace.indexOf('if (view.floating)') > workspace.indexOf('setGraphicView(view.mode'), 'applied after the mode, which closes it');
-  assert.equal((floating.match(/viewChanged\(\);/g) || []).length, 2, 'opening and closing publish the view');
+  assert.ok(workspace.indexOf('if (view.floating)') > workspace.indexOf('setGraphicView(view.mode'), 'applied after the mode');
+  assert.ok(workspace.indexOf('setFloatingGeometry(view.geometry)') < workspace.indexOf('setGraphicView(view.mode'), 'the geometry before the mode shows it');
   assert.match(html, /id="floating-console-close" class="view-control"/, 'a follower cannot close it');
-  assert.doesNotMatch(floating, /geometry[^\n]*viewChanged|captureView/, 'the geometry is not part of the view');
+  // CTL02: the Terminals view hides it without closing it, the Graphic view shows it again.
+  assert.match(graphic, /hideFloatingConsole\(\);\s*store\.graphicVisible = visible;/);
+  assert.match(graphic, /if \(visible\) \{ loadLinkStyle\(\); renderGraphic\(\); showFloatingConsole\(\); \}/);
+  assert.doesNotMatch(graphic, /closeFloatingConsole/, 'changing the mode never closes it');
+  // A follower can neither move nor resize it; the driver publishes it throttled, and at the end of a move.
+  assert.match(floating, /event\.target\.closest\('button'\) \|\| viewDriven\(\)\) return;/);
+  assert.match(floating, /if \(!isShown\(\) \|\| !applied \|\| viewDriven\(\)\) return;/);
+  assert.match(css, /body\[data-view-driven="true"\] main\[data-floating="true"\] \{ resize: none; \}/);
+  assert.match(floating, /const PUBLISH_INTERVAL = 250;/);
+  assert.match(floating, /moving = null;\s*frameChanged\(\);\s*publishNow\(\);/);
+  assert.match(floating, /window\.addEventListener\('resize', \(\) => \{ if \(isShown\(\)\) applyFrame\(\); \}\);/, 'a window resize is not published');
 });

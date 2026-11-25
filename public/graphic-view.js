@@ -8,7 +8,7 @@ import {fitTerminals} from './terminal.js';
 import {closeLayoutMenu, selectMachine, viewChanged, workspace} from './workspace.js';
 import {viewDriver} from './observe.js';
 import {onCapturesChanged, recordingOf} from './captures.js';
-import {closeFloatingConsole, openFloatingConsole, refreshFloatingConsole} from './graphic-console.js';
+import {hideFloatingConsole, openFloatingConsole, refreshFloatingConsole, showFloatingConsole} from './graphic-console.js';
 import {cancelEditMode, handleEditClick, refreshEditTools} from './graphic-edit.js';
 
 const graphicWorkspace = document.getElementById('graphic-workspace');
@@ -276,7 +276,9 @@ function showTooltip(node, event) {
 // ---- Views -----------------------------------------------------------------------------------
 export function setGraphicView(visible) {
   closeLayoutMenu();
-  closeFloatingConsole();
+  // The floating console stays open across the Terminals view: hidden now, shown again with the
+  // Graphic view (public/graphic-console.js).
+  hideFloatingConsole();
   store.graphicVisible = visible;
   document.body.dataset.view = visible ? 'graphic' : 'terminals';
   workspace.hidden = visible;
@@ -287,7 +289,7 @@ export function setGraphicView(visible) {
   const label = visible ? 'Show Terminals view' : 'Show Graphic view';
   graphicToggle.setAttribute('aria-label', label);
   graphicToggle.title = label;
-  if (visible) { loadLinkStyle(); renderGraphic(); }
+  if (visible) { loadLinkStyle(); renderGraphic(); showFloatingConsole(); }
   else requestAnimationFrame(fitTerminals);
   viewChanged();
 }

@@ -8,7 +8,7 @@ import {sessionLost} from './api.js';
 import {liveConnectionLost, receiveLiveData, receiveLiveEnd} from './capture-live.js';
 import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
 import {renderGraphic} from './graphic-view.js';
-import {applyControl, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
+import {applyControl, applyObservers, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
 let socket = null;
 
@@ -200,6 +200,8 @@ export function initSockets() {
     renderGraphic();
     requestAnimationFrame(fitTerminals);
   });
+  // The administrators observing this session (on the owner's page): its yellow banner.
+  socket.on('session-observers', applyObservers);
   socket.on('owner-view', view => viewReceived('owner', view));
   socket.on('controller-view', view => viewReceived('controller', view));
   socket.on('connect_error', socketConnectError);

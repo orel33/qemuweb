@@ -11,7 +11,7 @@ import {panes} from './terminal.js';
 import {applyView, closeLayoutMenu, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {emitOnSession, publishView} from './socket.js';
-import {canWrite as writeAllowed, controlReason, followReason, showReason, takeControlReason, viewReason} from './disabled-reason.js';
+import {canWrite as writeAllowed, controlReason, followReason, ownerBanner, showReason, takeControlReason, viewReason} from './disabled-reason.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -32,6 +32,8 @@ if (observing) document.body.classList.add('observing');
 // {admin} while an administrator controls the session, else null. Nothing else is kept, so the
 // banners cannot drift from the server.
 let control = null;
+// The administrators observing this owner's session (session-observers), on the owner's page.
+let observers = [];
 // This page's login (observation tabs): to know whether the controlling admin is us.
 let myLogin = null;
 const heldByMe = () => observing && !!control && control.admin === myLogin;
@@ -92,9 +94,12 @@ function renderControl() {
     renderViewDriver();
     return;
   }
-  controlBanner.textContent = control
-    ? `${control.admin} controls your session. You see the commands and their output; your keyboard and your actions are blocked, and ${control.admin} controls your view.` : '';
-  controlBanner.hidden = !control;
+  // The owner's banner: the control while an admin holds it, else the observation.
+  const shown = ownerBanner({admin: control?.admin || null, observers});
+  controlBanner.textContent = shown?.text || '';
+  controlBanner.title = shown?.title || '';
+  controlBanner.dataset.kind = shown?.kind || '';
+  controlBanner.hidden = !shown;
   renderViewDriver();
 }
 
@@ -162,6 +167,16 @@ export function applyControl({admin, active} = {}) {
   // control ends, Follow resumes.
   if (!wasMine && heldByMe()) publishView({force: true});
   if (wasMine && !heldByMe()) followView('owner', true);
+}
+
+// session-observers {admins}: the administrators observing this owner's session, on every
+// change and at connection (an invalid payload is ignored).
+export function applyObservers(payload) {
+  if (observing) return;
+  const admins = ViewState.normalizeObservers(payload);
+  if (!admins) return;
+  observers = admins;
+  renderControl();
 }
 
 // The admin's page holds control: it publishes its view to the owner (controller-view).
