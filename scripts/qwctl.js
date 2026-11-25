@@ -216,16 +216,16 @@ function resolveSysuser(given, host) {
   return {name, ...account};
 }
 
-// Every installed QemuWeb unit: [{item, text, info}], the server first. The mode of a runner comes from its unit.
+// Every installed QemuWeb unit: [{item, text, info}], the server first, then the runners by unit name. The mode of a runner comes from its unit.
 function installedUnits(host) {
-  return host.list(units.UNIT_DIRECTORY).sort().map(file => {
+  return host.list(units.UNIT_DIRECTORY).map(file => {
     const found = units.serviceOfFile(file);
     if (!found) return null;
     const text = host.read(units.unitPath(found));
     if (text === null) return null;
     const info = units.unitInfo(found, text);
     return {item: units.service(found.target, {name: found.name, remote: info.mode === 'remote'}), text, info};
-  }).filter(Boolean).sort((a, b) => Number(a.item.target !== 'server') - Number(b.item.target !== 'server'));
+  }).filter(Boolean).sort((a, b) => Number(a.item.target !== 'server') - Number(b.item.target !== 'server') || (a.item.unit < b.item.unit ? -1 : 1));
 }
 
 // The checked options of the server of this machine: {settings, sysuser}. The options come from server.args only.

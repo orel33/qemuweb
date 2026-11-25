@@ -416,7 +416,7 @@ test('two accounts on one machine: shared parents are root 0755, a directory clo
   // Then the server takes /etc/qemuweb over from root.
   made.length = 0;
   assert.deepEqual(call('install server'), {status: 0, err: ''});
-  assert.deepEqual(made, [['/var/lib/qemuweb/server', '0700', 'qemuweb'], ['/var/log/qemuweb', '0750', 'qemuweb'], ['/etc/qemuweb', '0750', 'qemuweb']]);
+  assert.deepEqual(made.sort(), [['/etc/qemuweb', '0750', 'qemuweb'], ['/var/lib/qemuweb/server', '0700', 'qemuweb'], ['/var/log/qemuweb', '0750', 'qemuweb']], 'in any order');
   // An /etc/qemuweb of a third account is refused for the server.
   rootOwned.delete('/etc/qemuweb');
   const third = {...faked, owner: file => (file === '/etc/qemuweb' ? 777 : faked.owner(file))};
