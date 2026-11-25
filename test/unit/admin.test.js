@@ -16,9 +16,9 @@ const {ADMIN_LOG, USERS_LOG, createLogDir, createAudit, createUserLog, readLogTa
 const {userEvent} = require('../../server/routes');
 const {Session} = require('../../server/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../server/console-control');
-const {observationGate, sessionSummary} = require('../../server/routes/admin');
-const {inputRefusal, createObservationTracker} = require('../../server/sockets');
-const {paneCount, normalizeView, sameView} = require('../../public/view-state');
+const {observationGate, observationRule, sessionSummary} = require('../../server/routes/admin');
+const {consoleRefusal, createObservationTracker} = require('../../server/sockets');
+const {paneCount, normalizeView, sameView, followsView} = require('../../public/view-state');
 
 const root = path.join(__dirname, '..', '..');
 const settingsFor = (usersFile, extra = {}) => ({...defaultSettings(root), usersFile, ...extra});
@@ -167,7 +167,7 @@ test('session activity is in memory and falls back to the creation date', () => 
 });
 
 test('the observation gate admits admins reading another session only', () => {
-  const workspace = {owner: 'toto'};
+  const workspace = {owner: 'toto', session: {id: 'sess'}};
   const manager = {get: login => (login === 'toto' ? workspace : null), open() { throw new Error('observation must never open a session'); }};
   const gate = observationGate(manager);
   const admin = {login: 'boss', role: 'admin'};
@@ -250,13 +250,81 @@ test('session control is exclusive per session, renewed by input and released on
   assert.equal(control.release('s2', null, 'session deleted'), false, 'released once');
 });
 
-test('the controlling admin types into any console of the session; the owner into none', () => {
+test('the controlling admin types into, resizes and clears any console of the session; the owner none', () => {
   const lock = {admin: 'boss'};
-  assert.equal(inputRefusal({observer: false, lock: null, admin: 'toto'}), null);
-  assert.match(inputRefusal({observer: false, lock, admin: 'toto'}), /boss controls this session/);
-  assert.match(inputRefusal({observer: true, lock: null, admin: 'boss'}), /Read-only observation/);
-  assert.match(inputRefusal({observer: true, lock, admin: 'chef'}), /Read-only observation/);
-  assert.equal(inputRefusal({observer: true, lock, admin: 'boss'}), null);
+  for (const action of ['input', 'resize', 'clear']) {
+    assert.equal(consoleRefusal({observer: false, lock: null, admin: 'toto', action}), null, action);
+    assert.match(consoleRefusal({observer: false, lock, admin: 'toto', action}), /boss controls this session/, action);
+    assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss', action}), /Read-only observation/, action);
+    assert.match(consoleRefusal({observer: true, lock, admin: 'chef', action}), /Read-only observation/, action);
+    assert.equal(consoleRefusal({observer: true, lock, admin: 'boss', action}), null, action);
+  }
+  assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss', action: 'resize'}), /cannot be resized/);
+  assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss', action: 'clear'}), /cannot be cleared/);
+  assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss'}), /take control to type/, 'input by default');
+});
+
+test('the observation rule (CTL01): one driver at a time for the HTTP writes', () => {
+  const base = {method: 'GET', url: '/api/nodes', login: 'boss', role: 'admin', observe: 'toto', found: true, lockAdmin: null, ownLockAdmin: null};
+  const rule = change => observationRule({...base, ...change});
+  const WRITES = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  // An observer without the lock reads only.
+  assert.deepEqual(rule({}), {observed: true, control: false});
+  assert.deepEqual(rule({method: 'HEAD'}), {observed: true, control: false});
+  for (const method of WRITES) assert.deepEqual(rule({method}), {status: 403, error: 'Read-only observation: this action is not allowed.'}, method);
+  for (const method of WRITES) assert.equal(rule({method, lockAdmin: 'chef'}).status, 403, `${method}: another admin holds the lock`);
+  // The admin holding the lock does what the owner can, reads too (marked control).
+  assert.deepEqual(rule({lockAdmin: 'boss'}), {observed: true, control: true});
+  for (const [method, url] of [['POST', '/api/nodes/h-0000000000000001/start'], ['DELETE', '/api/nodes'], ['PUT', '/api/nodes/h-0000000000000001/config'],
+    ['PATCH', '/api/nodes/h-0000000000000001'], ['POST', '/api/session-archive/import'], ['POST', '/api/session-archive/export'],
+    ['POST', '/api/examples/load'], ['PUT', '/api/general-settings'], ['POST', '/api/nodes/h-0000000000000001/captures']]) {
+    assert.deepEqual(rule({method, url, lockAdmin: 'boss'}), {observed: true, control: true}, `${method} ${url}`);
+  }
+  // Even with the lock: never Delete session, never the admin API through an observation.
+  assert.deepEqual(rule({method: 'DELETE', url: '/api/session', lockAdmin: 'boss'}), {status: 403, error: 'Delete the session of toto from the admin page.'});
+  assert.equal(rule({method: 'GET', url: '/api/session', lockAdmin: 'boss'}).control, true);
+  for (const url of ['/api/admin', '/api/admin/sessions/toto/stop']) assert.equal(rule({method: 'POST', url, lockAdmin: 'boss'}).status, 403, url);
+  // A student never observes; an unknown login is 404 for a read, 403 for a write.
+  assert.equal(rule({role: 'student'}).status, 403);
+  assert.equal(rule({role: 'student', lockAdmin: 'boss'}).status, 403);
+  assert.deepEqual(rule({found: false}), {status: 404, error: 'No session for toto.'});
+  assert.equal(rule({found: false, method: 'POST'}).status, 403);
+  // The owner (no header, or their own login): free, except every write while an admin controls their session.
+  const owner = {login: 'toto', role: 'student', observe: null, found: false};
+  assert.deepEqual(rule(owner), {observed: false, control: false});
+  for (const method of WRITES) assert.deepEqual(rule({...owner, method}), {observed: false, control: false}, method);
+  assert.deepEqual(rule({...owner, ownLockAdmin: 'boss'}), {observed: false, control: false}, 'reads stay allowed');
+  for (const method of WRITES) assert.deepEqual(rule({...owner, method, ownLockAdmin: 'boss'}), {status: 403, error: 'boss controls your session.'}, method);
+  assert.equal(rule({...owner, method: 'DELETE', url: '/api/session', ownLockAdmin: 'boss'}).status, 403, 'Delete session too');
+  assert.deepEqual(rule({...owner, observe: 'toto', method: 'POST'}), {observed: false, control: false}, 'observing yourself is your own session');
+  // An admin's own admin API is not a session write.
+  assert.deepEqual(rule({login: 'chef', observe: null, method: 'POST', url: '/api/admin/users', ownLockAdmin: 'boss'}), {observed: false, control: false});
+});
+
+test('the observation gate restarts the idle timer of the lock at each request of the controlling admin, and refuses the owner\'s writes', () => {
+  const toto = {owner: 'toto', session: {id: 'sess-toto'}};
+  const manager = {get: login => (login === 'toto' ? toto : null)};
+  const touched = [];
+  let holder = 'boss';
+  const gate = observationGate(manager, {control: {admin: id => (id === 'sess-toto' ? holder : null), touch: (...args) => touched.push(args)}});
+  const pass = (options, status = null) => {
+    const req = request(options);
+    const res = response();
+    assert.equal(run(gate, req, res), status === null, JSON.stringify(options));
+    if (status !== null) assert.equal(res.statusCode, status);
+    return {req, res};
+  };
+  const boss = {login: 'boss', role: 'admin'};
+  const {req} = pass({user: boss, method: 'POST', path: '/api/nodes/stop-all', headers: {'X-Observe': 'toto'}});
+  assert.equal(req.observed, toto);
+  assert.equal(req.observedControl, true);
+  assert.deepEqual(touched, [['sess-toto', 'boss']]);
+  assert.match(pass({user: {login: 'toto', role: 'student'}, method: 'POST', path: '/api/nodes/stop-all'}, 403).res.body.error, /boss controls your session/);
+  assert.equal(pass({user: {login: 'toto', role: 'student'}}).req.observed, undefined, 'the owner still reads');
+  holder = null;
+  pass({user: boss, method: 'POST', path: '/api/nodes/stop-all', headers: {'X-Observe': 'toto'}}, 403);
+  assert.equal(touched.length, 1, 'checked at each request: no lock, no write');
+  pass({user: {login: 'toto', role: 'student'}, method: 'POST', path: '/api/nodes/stop-all'});
 });
 
 test('an observation is audited once per admin and observed login while sockets stay open', () => {
@@ -349,11 +417,11 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
   const nodes = new Map([[sw, {}], [host, {}]]);
   assert.deepEqual([paneCount('single'), paneCount('columns-2'), paneCount('rows-2'), paneCount('grid-4'), paneCount('grid-9'), paneCount('toString')],
     [1, 2, 2, 4, 0, 0]);
-  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'console'], switches: false, active: sw};
+  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'console'], switches: false, active: sw, floating: true};
   assert.deepEqual(normalizeView({...view, page: 2, expanded: 1, extra: 1}, nodes), view, 'extra keys (page, a former expanded) are dropped');
   assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
-    {...view, panes: [null, sw, null, host], views: ['console', 'console', 'console', 'console'], active: null},
+    {...view, panes: [null, sw, null, host], views: ['console', 'console', 'console', 'console'], active: null, floating: false},
     'unknown nodes become null (their pane shows the console), a node is kept in its first pane');
   assert.deepEqual(normalizeView({...view, panes: ['x', null, null, null]}, null).panes, ['x', null, null, null], 'shape check only');
   for (const [layout, panes] of [['single', [sw]], ['columns-2', [sw, host]], ['rows-2', [null, null]]]) {
@@ -365,23 +433,52 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
     {...view, views: undefined}, {...view, views: ['console']}, {...view, views: ['console', 'console', 'console', 'console', 'console']},
     {...view, views: ['console', 'console', 'console', 'tty']}, {...view, views: ['console', 'console', 'console', null]}, {...view, views: 'console'},
     {...view, layout: 'columns-2'}, {...view, layout: 'single'}, {...view, layout: 'rows-2', panes: [null]},
-    {...view, switches: 1}, {...view, switches: undefined}, {...view, active: 7}, {...view, active: undefined}];
+    {...view, switches: 1}, {...view, switches: undefined}, {...view, active: 7}, {...view, active: undefined},
+    {...view, floating: 1}, {...view, floating: 'true'}, {...view, floating: undefined}];
   for (const raw of invalid) assert.equal(normalizeView(raw, nodes), null, JSON.stringify(raw));
 });
 
 test('the view of an empty pane or of a node dropped by normalisation is console', () => {
   const host = 'h-0123456789abcdef';
-  const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host};
+  const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host, floating: false};
   assert.deepEqual(normalizeView(view, [host]).views, ['log', 'console'], 'null pane');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', null]}, [host]).views, ['console', 'console'], 'unknown node');
   assert.deepEqual(normalizeView({...view, panes: [host, host]}, [host]).views, ['log', 'console'], 'node shown twice');
 });
 
+test('the floating console is part of the view only in the Graphic view, on an active node shown in a pane', () => {
+  const sw = 's-0123456789abcdef', host = 'h-0123456789abcdef';
+  const view = {mode: 'graphic', layout: 'columns-2', panes: [host, sw], views: ['console', 'console'], switches: true, active: sw, floating: true};
+  assert.equal(normalizeView(view, [sw, host]).floating, true, 'open on the active node');
+  assert.equal(normalizeView({...view, floating: false}, [sw, host]).floating, false, 'closed');
+  assert.equal(normalizeView({...view, mode: 'terminals'}, [sw, host]).floating, false, 'never in the Terminals view');
+  assert.equal(normalizeView({...view, active: null}, [sw, host]).floating, false, 'no active node');
+  assert.equal(normalizeView(view, [host]).floating, false, 'the active node is unknown here');
+  assert.equal(normalizeView({...view, panes: [host, null]}, [sw, host]).floating, false, 'the active node is in no pane');
+  assert.equal(normalizeView(view, null).floating, true, 'shape check only');
+  assert.equal(sameView(normalizeView(view, null), normalizeView({...view, floating: false}, null)), false, 'a change of the floating console is a change of the view');
+});
+
+test('one driver at a time: which received view a page follows', () => {
+  const observer = {observing: true, holding: false, taking: false, followChecked: true, controlled: false};
+  assert.equal(followsView('owner', observer), true, 'an observer with Follow follows the owner');
+  assert.equal(followsView('owner', {...observer, followChecked: false}), false, 'Follow unchecked');
+  assert.equal(followsView('owner', {...observer, holding: true, controlled: true}), false, 'holding control: the admin drives');
+  assert.equal(followsView('owner', {...observer, taking: true}), false, 'a take-control request is pending');
+  assert.equal(followsView('owner', {...observer, controlled: true}), true, 'another admin controls: still follows the owner\'s published view');
+  assert.equal(followsView('controller', {...observer, holding: true, controlled: true}), false, 'an observer never follows a controller view');
+  const owner = {observing: false, holding: false, taking: false, followChecked: false, controlled: true};
+  assert.equal(followsView('controller', owner), true, 'the owner\'s page under control follows the admin');
+  assert.equal(followsView('controller', {...owner, controlled: false}), false, 'no control: the owner drives');
+  assert.equal(followsView('owner', owner), false, 'the owner never follows itself');
+  assert.equal(followsView('other', owner), false);
+});
+
 test('two view states are compared field by field', () => {
-  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], views: ['console', 'console'], switches: true, active: 'a'};
+  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], views: ['console', 'console'], switches: true, active: 'a', floating: false};
   assert.equal(sameView(view, {...view, panes: ['a', null], views: ['console', 'console']}), true);
   assert.equal(sameView(view, {...view, views: ['console2', 'console']}), false);
-  for (const change of [{mode: 'graphic'}, {layout: 'rows-2'}, {panes: [null, 'a']}, {switches: false}, {active: null}]) {
+  for (const change of [{mode: 'graphic'}, {layout: 'rows-2'}, {panes: [null, 'a']}, {switches: false}, {active: null}, {floating: true}]) {
     assert.equal(sameView(view, {...view, ...change}), false, JSON.stringify(change));
   }
   assert.equal(sameView(view, null), false);

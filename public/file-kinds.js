@@ -58,8 +58,20 @@ export function archiveDisksPhrase({qemu = 0, vbox = 0} = {}) {
 
 // The orange warning of the Load Session dialog: the previous session is always closed.
 // Empty for an empty session (its slot keeps its height).
-export function closeWarning(hosts, switches) {
+// owner: the login of the session when an administrator holding control loads into another user's session; the
+// warning then names it, even for an empty session.
+export function closeWarning(hosts, switches, owner = null) {
+  if (owner) {
+    return hosts + switches === 0 ? `This loads into the session of ${owner}.`
+      : `This replaces every node of the session of ${owner} (${countsText(hosts, switches)}): its working disks are discarded.`;
+  }
   return hosts + switches === 0 ? '' : `Your current session (${countsText(hosts, switches)}) will be closed and its working disks discarded.`;
+}
+
+// The session an action applies to, in a confirmation: "this session", or "the session of <owner>" for an
+// administrator holding control of another user's session.
+export function sessionPhrase(owner = null) {
+  return owner ? `the session of ${owner}` : 'this session';
 }
 
 // What the Close step of a load reports once the nodes are removed.
@@ -101,11 +113,12 @@ export function exampleOptionLabel(example) {
 
 // What the Save dialog does for the checkbox "Save only the topology": the dialog keeps its size and its Download
 // button, nothing is hidden. With it, the working disk option is disabled (with its reason), the ZIP estimate line
-// is empty, and the .topo text is downloaded; otherwise the session ZIP.
-export function saveChoice(topologyOnly) {
+// is empty, and the .topo text is downloaded; otherwise the session ZIP, named after its owner when an administrator
+// holding control saves another user's session (owner: that login).
+export function saveChoice(topologyOnly, owner = null) {
   return topologyOnly
     ? {sessionOptions: false, optionNote: 'Not used for a topology file', fileName: 'network.topo'}
-    : {sessionOptions: true, optionNote: '', fileName: 'qemuweb-session.zip'};
+    : {sessionOptions: true, optionNote: '', fileName: owner ? `qemuweb-session-${owner}.zip` : 'qemuweb-session.zip'};
 }
 
 // The sources of the file selector: the examples of the server, or a file of the user's computer.

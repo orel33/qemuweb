@@ -4,7 +4,7 @@
 // disabled; with a single engine the select is disabled.
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, requestJson} from './api.js';
-import {observing} from './observe.js';
+import {canWrite, controllingAdmin, observing} from './observe.js';
 
 const ENGINES = [{value: 'qemu', text: 'QEMU - KVM', name: 'QEMU'}, {value: 'vbox', text: 'VirtualBox', name: 'VirtualBox'}];
 export const FROZEN_REASON = 'Stop all hosts to change the engine';
@@ -16,12 +16,14 @@ export function hostsInUse(list) {
 }
 
 // What the select shows: {value, disabled, reason, options: [{value, text, disabled, title}]}.
-export function engineSelectState({engine, availableEngines, inUse, observing: observed}) {
+// observing: an observer without control (read-only); controlledBy: the admin controlling the owner's session, or null.
+export function engineSelectState({engine, availableEngines, inUse, observing: observed, controlledBy = null}) {
   const available = Array.isArray(availableEngines) ? availableEngines : [];
   const options = ENGINES.map(option => ({value: option.value, text: option.text, disabled: !available.includes(option.value),
     title: available.includes(option.value) ? '' : `${option.name} is unavailable on this server`}));
   let reason = '';
   if (observed) reason = 'The engine of the observed session (read-only)';
+  else if (controlledBy) reason = `${controlledBy} controls your session`;
   else if (inUse) reason = FROZEN_REASON;
   else if (available.length < 2) reason = available.length ? 'Only one engine is available on this server' : '';
   return {value: ENGINES.some(option => option.value === engine) ? engine : '', disabled: !!reason || !available.length, reason, options};
@@ -53,7 +55,7 @@ let shown = '';
 export function updateEngineSelect() {
   if (!select) return;
   const state = engineSelectState({engine: generalSettings.engine, availableEngines: store.availableEngines,
-    inUse: hostsInUse(machines.values()), observing});
+    inUse: hostsInUse(machines.values()), observing: observing && !canWrite(), controlledBy: observing || canWrite() ? null : controllingAdmin()});
   const signature = JSON.stringify(state);
   if (signature === shown) return;
   shown = signature;

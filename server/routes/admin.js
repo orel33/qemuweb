@@ -41,32 +41,54 @@ function accountErrorStatus(error) {
 }
 
 // Requests carrying "X-Observe: <login>" read another user's session instead of the caller's:
-// admins only, GET and HEAD only, never creating a session. Observing your own login is
-// just your own session. Sets req.observed to the observed workspace.
+// admins only, never creating a session. Observing your own login is just your own session.
+// One driver at a time (CTL01): while an admin holds the console-control lock of a session
+// (server/console-control.js), that admin may do on it everything the owner can, and the owner's
+// own writes are refused. Without the lock an observer is read-only (GET and HEAD).
 //
-// One exception: the traffic capture routes (list, start, stop, delete, download), only while this
-// admin holds the console-control lock of that session (`controlHeld(sessionId, login)`); the
-// request then also carries req.observedControl = true, and the capture routes refuse every other
-// observation.
-const CAPTURE_NODE_PATH = /^\/api\/nodes\/[^/]+\/captures(?:\/[^/]+(?:\/(?:stop|download))?)?$/;
-const CAPTURE_LIST_PATH = /^\/api\/captures$/;
+// observationRule is the pure decision for one /api request: {status, error} to refuse it,
+// else {observed, control}. method and url (the full path) of the request; login and role of
+// the caller; observe: the X-Observe login (or null); found: the observed login has a session;
+// lockAdmin: the admin holding the lock of that session (or null); ownLockAdmin: the admin
+// holding the lock of the caller's own session (or null). Always refused, even under control:
+// /api/admin (the admin's own API, never through an observation) and Delete session (done from
+// the admin page, whose deletion is audited there).
+const READ_METHODS = ['GET', 'HEAD'];
+const READ_ONLY = 'Read-only observation: this action is not allowed.';
 
-function observationGate(manager, {controlHeld = () => false} = {}) {
+function observationRule({method, url, login, role, observe, found, lockAdmin, ownLockAdmin}) {
+  const write = !READ_METHODS.includes(method);
+  const adminApi = url === '/api/admin' || url.startsWith('/api/admin/');
+  if (!observe || observe === login) {
+    if (write && !adminApi && ownLockAdmin && ownLockAdmin !== login) return {status: 403, error: `${ownLockAdmin} controls your session.`};
+    return {observed: false, control: false};
+  }
+  if (role !== 'admin') return {status: 403, error: 'Administrator role required to observe a session.'};
+  const control = found && lockAdmin === login;
+  if (write && (!control || adminApi)) return {status: 403, error: READ_ONLY};
+  if (write && method === 'DELETE' && url === '/api/session') return {status: 403, error: `Delete the session of ${observe} from the admin page.`};
+  if (!found) return {status: 404, error: `No session for ${observe}.`};
+  return {observed: true, control};
+}
+
+// The gate itself. control: {admin(sessionId), touch(sessionId, admin)} of the lock
+// (server/sockets.js). Sets req.observed to the observed workspace, and req.observedControl when
+// this admin holds its lock (each such request restarts the lock's idle timer).
+function observationGate(manager, {control = {admin: () => null, touch: () => {}}} = {}) {
   return (req, res, next) => {
-    const login = req.get('X-Observe');
-    if (!login || login === req.user.login) return next();
-    if (req.user.role !== 'admin') return res.status(403).json({error: 'Administrator role required to observe a session.'});
-    const workspace = LOGIN_PATTERN.test(login) ? manager.get(login) : null;
-    const url = `${req.baseUrl || ''}${req.path}`;
-    const capture = CAPTURE_NODE_PATH.test(url) || CAPTURE_LIST_PATH.test(url);
-    const controlled = !!(capture && workspace && controlHeld(workspace.session.id, req.user.login));
-    const readOnly = ['GET', 'HEAD'].includes(req.method);
-    if (!readOnly && !(controlled && ['POST', 'DELETE'].includes(req.method) && CAPTURE_NODE_PATH.test(url))) {
-      return res.status(403).json({error: 'Read-only observation: this action is not allowed.'});
-    }
-    if (!workspace) return res.status(404).json({error: `No session for ${login}.`});
+    const login = req.get('X-Observe') || null;
+    const own = login && login !== req.user.login ? null : manager.get(req.user.login);
+    const workspace = login && login !== req.user.login && LOGIN_PATTERN.test(login) ? manager.get(login) : null;
+    const rule = observationRule({method: req.method, url: `${req.baseUrl || ''}${req.path}`, login: req.user.login, role: req.user.role,
+      observe: login, found: !!workspace, lockAdmin: workspace ? control.admin(workspace.session.id) : null,
+      ownLockAdmin: own ? control.admin(own.session.id) : null});
+    if (rule.status) return res.status(rule.status).json({error: rule.error});
+    if (!rule.observed) return next();
     req.observed = workspace;
-    if (controlled) req.observedControl = true;
+    if (rule.control) {
+      req.observedControl = true;
+      control.touch(workspace.session.id, req.user.login);
+    }
     next();
   };
 }
@@ -234,4 +256,4 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, conn
   return router;
 }
 
-module.exports = {createAdminRouter, observationGate, adminPage, sessionSummary};
+module.exports = {createAdminRouter, observationGate, observationRule, adminPage, sessionSummary};

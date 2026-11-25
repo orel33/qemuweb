@@ -78,8 +78,10 @@ test('the pane view menu is a view-control; the pane views are carried by the vi
   const apply = functionSource(workspace, 'applyView');
   assert.ok(apply.indexOf('setPaneSessions(') < apply.indexOf('view.views.forEach'), 'views are applied after the panes\' nodes');
   assert.match(apply, /usablePaneView\(pane, wanted\)/);
-  assert.match(terminal, /MonitorTerminal\.isSupported\(machine\) && !observing \? view : 'console'/, 'an observer is never shown the monitor');
-  assert.match(terminal, /button\.hidden = !monitorSupported;\s*button\.disabled = observing;/, 'the monitor entry is disabled, not hidden, for an observer');
+  assert.match(terminal, /MonitorTerminal\.isSupported\(machine\) && \(!observing \|\| canWrite\(\)\) \? view : 'console'/,
+    'an observer without control is never shown the monitor; the admin in control is');
+  assert.match(terminal, /const blocked = observing && !canWrite\(\);\s*button\.hidden = !monitorSupported;\s*button\.disabled = blocked;/,
+    'the monitor entry is disabled, not hidden, for an observer without control');
   assert.match(apply, /setPaneView\(pane, shown\)/);
   assert.match(functionSource(terminal, 'setPaneView'), /viewChanged\(\)/);
   assert.match(terminal, /if \(view === 'console2'\) return hasSecondConsole\(machine\) \? view : 'console'/);
@@ -88,10 +90,10 @@ test('the pane view menu is a view-control; the pane views are carried by the vi
 
 test('observation disables the write actions instead of hiding them; the view controls follow the driver', () => {
   const css = fs.readFileSync(path.join(publicDir, 'css', 'app.css'), 'utf8');
-  assert.match(css, /body\.observing \.write-action \{ opacity: \.45; \}/);
+  assert.match(css, /body\[data-write-blocked="true"\] \.write-action, body\[data-owner-only-blocked="true"\] \.owner-only \{ opacity: \.45; \}/);
   assert.doesNotMatch(css, /body\.observing[^{]*\{[^}]*display: none/, 'nothing is hidden in an observation tab');
   const observe = moduleSource('observe');
-  assert.match(observe, /\(observing && !!element\.closest\?\.\('\.write-action'\)\)/);
+  assert.match(observe, /write: !!element\.closest\('\.write-action'\), ownerOnly: !!element\.closest\('\.owner-only'\)\}, controlState\(\)\)/);
   assert.match(observe, /for \(const type of \['click', 'dblclick', 'mousedown', 'keydown', 'keyup'\]\) document\.addEventListener\(type, blockDisabledControls, true\)/);
   assert.match(observe, /setAttribute\('aria-disabled', 'true'\)/);
   assert.match(moduleSource('workspace'), /renderGraphic\(\);\s*markDisabledControls\(\);/, 'tabs created later are marked too');

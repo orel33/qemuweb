@@ -32,7 +32,7 @@ function functionSource(source, name) {
 // Named imports and exports of a module, parsed from its top-level statements.
 function moduleLinks(source) {
   const imports = [...source.matchAll(/^import \{([^}]*)\} from '\.\/([\w-]+)\.js';$/gm)]
-    .map(([, names, from]) => ({from, names: names.split(',').map(name => name.trim()).filter(Boolean)}));
+    .map(([, names, from]) => ({from, names: names.split(',').map(name => name.trim().split(/\s+as\s+/)[0]).filter(Boolean)}));
   const exports = [...source.matchAll(/^export (?:async )?(?:function|const|let) (\w+)/gm)].map(match => match[1]);
   return {imports, exports};
 }

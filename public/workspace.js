@@ -7,7 +7,8 @@ import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
 import {renderGraphic, setGraphicView} from './graphic-view.js';
-import {controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
+import {closeFloatingConsole, floatingConsoleOpen, openFloatingConsole} from './graphic-console.js';
+import {canWrite, controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
 import {publishView} from './socket.js';
 import {updateEngineSelect} from './engine-select.js';
 
@@ -250,7 +251,7 @@ export function captureView() {
   return {mode: store.graphicVisible ? 'graphic' : 'terminals', layout: store.layout,
     panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null),
     views: panes.slice(0, store.layoutSize).map(pane => (pane.machineId ? pane.view : 'console')),
-    switches: store.showSwitchConsoles, active: store.activeId || null};
+    switches: store.showSwitchConsoles, active: store.activeId || null, floating: floatingConsoleOpen()};
 }
 
 // Shows a view state (already normalized against this page's nodes; unknown nodes are left
@@ -276,6 +277,9 @@ export function applyView(view) {
     });
     if (view.active && machines.has(view.active)) store.activeId = view.active;
     if ((view.mode === 'graphic') !== store.graphicVisible) setGraphicView(view.mode === 'graphic');
+    // After the mode (setGraphicView closes it): the floating console on the active node, without
+    // taking the focus (a follower does not type; the controlling admin focuses it by clicking).
+    if (view.floating) openFloatingConsole({focus: false}); else closeFloatingConsole();
   } finally { applying = false; }
 }
 
@@ -385,7 +389,7 @@ export function renderTabs() {
     select.title = machine.osHint;
     select.onclick = () => { if (machine.id !== store.activeId) selectMachine(machine.id); };
     select.ondblclick = async () => {
-      if (observing || machine.kind === 'switch' || !machine.hasLaunched) return;
+      if (!canWrite() || machine.kind === 'switch' || !machine.hasLaunched) return;
       const name = window.prompt('Display name for this host:', machine.hostname);
       if (name === null || !name.trim()) return;
       try {

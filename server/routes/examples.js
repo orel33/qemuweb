@@ -23,8 +23,9 @@ function booleans(body, names) {
 
 function register({app, session, runner, examplesDir}) {
   const fail = (res, error) => res.status(error.status || 400).json({error: error.message});
+  // An observer without the control lock reads only (the admin holding it acts as the owner).
   const refuseObserver = (req, res) => {
-    if (!req.observed) return false;
+    if (!req.observed || req.observedControl) return false;
     res.status(403).json({error: READ_ONLY});
     return true;
   };

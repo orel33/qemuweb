@@ -108,9 +108,9 @@ function serve({root, settings}) {
   // Shared with the runner, which cannot require from public/.
   app.get('/console-id.js', (_req, res) => res.sendFile(path.join(root, 'common', 'console-id.js')));
   app.use(express.static(path.join(root, 'public')));
-  // X-Observe (admins, read-only) and the admin API come before anything that could open or
+  // X-Observe (admins: read-only, or everything with the control lock) and the admin API come before anything that could open or
   // change the caller's own session.
-  app.use('/api', observationGate(manager, {controlHeld: sockets.controlHeld}));
+  app.use('/api', observationGate(manager, {control: {admin: sockets.controlAdmin, touch: sockets.controlTouch}}));
   app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, host: runnerHost(bind), runtime: settings.given.has('--runtime') ? runtime : null, localRunner: localRunner !== null,
     runnerStore, runnerTokens, runnerGrace: settings.runnerGrace, trustProxy: settings.trustProxy !== null}));
   // Self-service deletion: stops and removes every node, then the session; the next request

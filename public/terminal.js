@@ -4,7 +4,7 @@ import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {focusPane, renderPaneSessionOptions, showStatusError, updateControls, viewChanged, workspace} from './workspace.js';
 import {rebootActiveMachine, removeActiveMachine, resetActiveMachine, startActiveMachine, stopActiveMachine} from './nodes.js';
 import {openHostSettings} from './host-settings.js';
-import {canType, observing, socketOptions} from './observe.js';
+import {canType, canWrite, observing, socketOptions} from './observe.js';
 import {createCaptureButton} from './capture-button.js';
 
 export const panes = [];
@@ -59,7 +59,8 @@ export function fitTerminal(pane) {
   pane.clearButton.title = clearTitle;
   pane.clearButton.setAttribute('aria-label', clearTitle);
   const machine = pane.machineId && machines?.get(pane.machineId);
-  if (machine?.kind === 'switch' && !observing) pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
+  // Only the driver resizes (the owner, or the admin holding control): see server/sockets.js.
+  if (machine?.kind === 'switch' && canWrite()) pane.socket.emit('terminal-resize', {id: machine.id, cols: pane.terminal.cols, rows: pane.terminal.rows});
 }
 export function fitTerminals() { panes.forEach(fitTerminal); }
 
@@ -171,7 +172,7 @@ export function usablePaneView(pane, view) {
   const machine = pane.machineId && machines.get(pane.machineId);
   if (!machine) return 'console';
   if (view === 'log') return view;
-  if (view === 'monitor') return MonitorTerminal.isSupported(machine) && !observing ? view : 'console';
+  if (view === 'monitor') return MonitorTerminal.isSupported(machine) && (!observing || canWrite()) ? view : 'console';
   if (view === 'console2') return hasSecondConsole(machine) ? view : 'console';
   return 'console';
 }
@@ -217,10 +218,11 @@ export function updatePaneViewControls() {
     if (!supported) pane.viewMenu.open = false;
     pane.viewButtons.forEach(button => {
       if (button.dataset.view === 'monitor') {
-        // Shown to an observer too, but disabled: sending monitor commands is a write action.
+        // Shown to an observer too, but disabled without control: sending monitor commands is a write action.
+        const blocked = observing && !canWrite();
         button.hidden = !monitorSupported;
-        button.disabled = observing;
-        if (observing) button.setAttribute('aria-disabled', 'true'); else button.removeAttribute('aria-disabled');
+        button.disabled = blocked;
+        if (blocked) button.setAttribute('aria-disabled', 'true'); else button.removeAttribute('aria-disabled');
       }
       if (button.dataset.view === 'console2') button.hidden = !hasSecondConsole(machine);
       if (isConsoleView(button.dataset.view)) {
@@ -292,7 +294,7 @@ export function appendLog(machine, line) {
 function logClearNote(machine, note) { appendLog(machine, `Clear: ${note}`); }
 
 function clearPaneConsole(pane) {
-  if (observing || !pane.machineId || !isConsoleView(pane.view) || !machines.has(pane.machineId)) return;
+  if (!canWrite() || !pane.machineId || !isConsoleView(pane.view) || !machines.has(pane.machineId)) return;
   const buffer = pane.terminal.buffer.active;
   const machine = machines.get(pane.machineId);
   // A full-screen program (nano, vi, less) draws on the alternate screen: clearing would only blank

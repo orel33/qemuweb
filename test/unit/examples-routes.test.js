@@ -117,6 +117,16 @@ test('an observer cannot load or read an example: 403 and nothing sent to the ru
   assert.deepEqual(userLog.entries, []);
 });
 
+test('the admin holding control loads an example into the owner\'s session, audited in both logs (CTL01)', async t => {
+  const controller = {...observer, observedControl: true};
+  const {call, runner, userLog} = await serve(t, {who: controller, dir: populated(t)});
+  assert.equal((await call('POST', '/api/examples/file', {name: 'lan.topo'})).status, 200, 'the review reads the file');
+  assert.equal((await call('POST', '/api/examples/load', {name: 'lan.topo'})).status, 200);
+  assert.ok(runner.sent.length > 0);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.deepEqual(userLog.entries.map(entry => [entry[0], entry[1], entry[2].by]), [['toto', 'archive-loaded', 'boss']]);
+});
+
 test('an unlisted name is a 404, a malformed name a 400, and nothing reaches the runner', async t => {
   const {call, runner} = await serve(t, {dir: populated(t)});
   for (const route of ['/api/examples/load', '/api/examples/file']) {

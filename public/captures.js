@@ -5,7 +5,7 @@
 // "Traffic capture"); this module only asks for it.
 import {machines} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
-import {holdingControl, observing} from './observe.js';
+import {canWrite, controllingAdmin, observing} from './observe.js';
 
 // Captures per node, as the server's `captures` event sends them: {id, nodeId, interface, index,
 // file, state, reason, message, startedAt, endedAt, bytes}.
@@ -19,8 +19,12 @@ export const isRecording = capture => capture.state !== 'stopped';
 export const recordingOf = nodeId => capturesOf(nodeId).filter(isRecording);
 export const onCapturesChanged = listener => changeListeners.add(listener);
 
-// An observer may look but not capture; an administrator holding the control lock may.
-export const canCapture = () => !observing || holdingControl();
+// An observer may look but not capture; an administrator holding the control lock may, and the
+// owner may not meanwhile (one driver at a time).
+export const canCapture = () => canWrite();
+function captureRefusal() {
+  return observing ? 'Read-only observation: take control of the session to capture.' : `${controllingAdmin()} controls your session.`;
+}
 
 export function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
@@ -30,7 +34,7 @@ export function formatBytes(bytes) {
 
 // Why a host cannot be captured at all (whatever the interface), or null.
 function hostCaptureBlocker(machine) {
-  if (!canCapture()) return 'Read-only observation: take control of the session to capture.';
+  if (!canCapture()) return captureRefusal();
   if (machine.engine !== 'qemu') return 'Capture is available for QEMU hosts only.';
   return null;
 }
@@ -92,7 +96,7 @@ export function captureControls(machine, captures, index, owner) {
   const elsewhere = !!recording && owner(recording) === 'other';
   const files = here.filter(item => owner(item) !== 'free').sort((a, b) => String(a.startedAt).localeCompare(String(b.startedAt)));
   const file = files.at(-1) || null;
-  const rights = canCapture() ? null : 'Read-only observation: take control of the session to capture.';
+  const rights = canCapture() ? null : captureRefusal();
   let play = null;
   if (recording) play = elsewhere ? 'This capture belongs to another window.' : 'This interface is already being captured.';
   else play = captureBlocker(machine, index);

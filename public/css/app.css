@@ -445,12 +445,14 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .observe-banner > .observe-status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
 .observe-follow { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; }
 .control-banner { flex: none; height: var(--banner-height); padding: 0 16px; overflow: hidden; line-height: var(--banner-height); white-space: nowrap; text-overflow: ellipsis; color: #1d1405; background: #f08a5d; font-weight: 600; }
-/* Observation is read-only: the server refuses every change. Every control that writes, loads
-   or exports something carries the class write-action (index.html, terminal.js, workspace.js)
-   and is shown disabled in an observation tab (same layout as the user's page; observe.js
-   ignores the clicks and the keyboard, sets aria-disabled and shows the reason as the tooltip;
-   the mouse must reach the control for it, hence no pointer-events: none). */
-body.observing .write-action { opacity: .45; }
+/* One driver at a time for the writes too: the server refuses every change of an observer
+   without control, and of the owner while an admin controls the session. Every control that
+   writes, loads or exports something carries the class write-action (index.html, terminal.js,
+   workspace.js) and is shown disabled while this page may not write (same layout as the user's
+   page; observe.js ignores the clicks and the keyboard, sets aria-disabled and shows the reason
+   as the tooltip; the mouse must reach the control for it, hence no pointer-events: none).
+   Delete session (owner-only) stays disabled for the admin holding control. */
+body[data-write-blocked="true"] .write-action, body[data-owner-only-blocked="true"] .owner-only { opacity: .45; }
 [aria-disabled="true"] { cursor: not-allowed !important; }
 /* Admin page (/admin). */
 .admin-page header { gap: 12px; }

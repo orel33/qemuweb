@@ -3,14 +3,15 @@
 // kept in sessionStorage, never in a cookie. Every API request of the tab then carries
 // "X-Observe: <login>" (see installAuthRedirect in api.js) and both Socket.IO connections pass
 // it in their auth option. The server allows observers GET requests only and refuses their
-// console input, clearing and resizing, unless they took control of a node (input only):
-// the hidden controls below are a convenience, the server refusal is the protection.
+// console input, clearing and resizing, unless they took control of the session: that admin then
+// does what the owner can (except Delete session), and the owner's page is read-only meanwhile.
+// The disabled controls below are a convenience, the server refusal is the protection.
 import {machines, store} from './state.js';
 import {panes} from './terminal.js';
 import {applyView, closeLayoutMenu, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {emitOnSession, publishView} from './socket.js';
-import {controlReason, followReason, showReason, takeControlReason, viewReason} from './disabled-reason.js';
+import {canWrite as writeAllowed, controlReason, followReason, showReason, takeControlReason, viewReason} from './disabled-reason.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -43,10 +44,18 @@ export function socketOptions({main = false} = {}) {
   return {transports: ['websocket', 'polling'], auth: {...(main ? {main: true} : {}), ...(observing ? {observe: observedLogin} : {})}};
 }
 
+// Whether this page may write to the session (one driver at a time): the owner while nobody
+// controls it, the admin holding control.
+export function canWrite() { return writeAllowed(controlState()); }
+// Why this page may not write ('' when it may): the reason of a write action (disabled-reason.js).
+export function writeRefusal() { return controlReason({write: true}, controlState()); }
+// The administrator controlling the session, or null.
+export const controllingAdmin = () => control?.admin || null;
+
 // Whether a pane's keyboard input may be sent: the controlling admin types into any node,
 // the owner into none while the session is controlled.
 export function canType(pane) {
-  return !!pane.machineId && (observing ? heldByMe() : !control);
+  return !!pane.machineId && canWrite();
 }
 
 const banner = document.getElementById('observe-banner');
@@ -84,7 +93,7 @@ function renderControl() {
     return;
   }
   controlBanner.textContent = control
-    ? `${control.admin} controls your session. You see the commands and their output; your keyboard is blocked on every console, and ${control.admin} controls your view.` : '';
+    ? `${control.admin} controls your session. You see the commands and their output; your keyboard and your actions are blocked, and ${control.admin} controls your view.` : '';
   controlBanner.hidden = !control;
   renderViewDriver();
 }
@@ -104,14 +113,18 @@ function controlState() {
 function renderViewDriver() {
   const reason = viewDriver();
   document.body.dataset.viewDriven = String(!!reason);
+  // The write actions are greyed out (CSS) while this page may not write, and Delete session
+  // also for the admin holding control.
+  document.body.dataset.writeBlocked = String(!canWrite());
+  document.body.dataset.ownerOnlyBlocked = String(observing);
   if (reason) { closeLayoutMenu(); for (const pane of panes) pane.viewMenu.open = false; }
   markDisabledControls();
 }
 
 // What this page must not use: the view controls while the view is driven by the other side,
-// and in an observation tab every write action (their CSS greys them out).
-const isDisabled = element => (document.body.dataset.viewDriven === 'true' && !!element.closest?.('.view-control'))
-  || (observing && !!element.closest?.('.write-action'));
+// and the write actions while this page may not write (their CSS greys them out).
+const isDisabled = element => !!element.closest && !!controlReason({view: !!element.closest('.view-control'),
+  write: !!element.closest('.write-action'), ownerOnly: !!element.closest('.owner-only')}, controlState());
 
 // aria-disabled and the reason as the tooltip on those controls (on the summary of a menu: it is
 // what the user points at); also called when controls are created (renderTabs).
@@ -119,7 +132,7 @@ export function markDisabledControls() {
   const state = controlState();
   for (const element of document.querySelectorAll('.view-control, .write-action')) {
     const {classList} = element;
-    const reason = controlReason({view: classList.contains('view-control'), write: classList.contains('write-action')}, state);
+    const reason = controlReason({view: classList.contains('view-control'), write: classList.contains('write-action'), ownerOnly: classList.contains('owner-only')}, state);
     const target = element.querySelector(':scope > summary') || element;
     if (reason) target.setAttribute('aria-disabled', 'true'); else target.removeAttribute('aria-disabled');
     showReason(target, reason);
@@ -182,8 +195,10 @@ const received = {owner: null, controller: null};
 // Following also pauses while a take-control request is pending: re-laying out the panes
 // then could move the pane that is taking control to another node.
 let taking = false;
-const following = () => observing && !heldByMe() && !taking && document.getElementById('observe-follow').checked;
-const shouldFollow = kind => (kind === 'owner' ? following() : controlledByAdmin());
+const followState = () => ({observing, holding: heldByMe(), taking, controlled: !!control,
+  followChecked: observing && document.getElementById('observe-follow').checked});
+const following = () => ViewState.followsView('owner', followState());
+const shouldFollow = kind => ViewState.followsView(kind, followState());
 
 // mayRefresh: a view naming a node not known here yet (created meanwhile) first refreshes the
 // node list, which follows the view again (refollow); a node still unknown then is left out.

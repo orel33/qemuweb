@@ -5,8 +5,10 @@
 // nothing is written by the control plane.
 const {pipeline} = require('stream/promises');
 
-// The downloaded file name (the runner's archive.estimate reports the same format name).
+// The downloaded file name (the runner's archive.estimate reports the same format name). The
+// admin holding the control lock of a session saves it under the owner's name.
 const ARCHIVE_NAME = 'qemuweb-session.zip';
+const archiveName = (req, owner) => (req.observedControl ? `qemuweb-session-${owner}.zip` : ARCHIVE_NAME);
 
 function register({app, session, runner, handle}) {
   app.get('/api/session-archive/estimate', handle('archive.estimate', req => ({includeDisks: req.query.includeDisks === 'true'}), 400, {noStore: true}));
@@ -18,7 +20,7 @@ function register({app, session, runner, handle}) {
       const {stream, size} = await runner.request('archive.export', {includeDisks: req.body?.includeDisks});
       const download = runner.incoming(stream);
       res.set('Cache-Control', 'no-store');
-      res.attachment(ARCHIVE_NAME);
+      res.attachment(archiveName(req, session.owner));
       res.set('Content-Length', String(size));
       await pipeline(download, res).catch(error => {
         if (!res.headersSent) res.status(500).json({error: error.message});

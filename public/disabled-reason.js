@@ -9,16 +9,25 @@ export function viewReason({observing, login, following, admin}) {
   return following ? `The view follows ${login}; uncheck Follow to change it` : '';
 }
 
-// Actions that write, load or export (class write-action): never in an observation tab, control
-// gives the keyboard of the consoles only.
-export function writeReason({observing, login, holding}) {
-  if (!observing) return '';
-  return holding ? `You control the consoles of ${login}; this action stays with the user` : `Read-only: you observe the session of ${login}`;
+// Actions that write, load or export (class write-action): one driver at a time, like the view.
+// The admin holding control does what the owner can, except Delete session (class owner-only,
+// done from the admin page); an observer without control reads only; the owner's page is
+// read-only while an admin controls its session.
+export function writeReason({observing, login, holding, admin}, {ownerOnly = false} = {}) {
+  if (!observing) return admin ? `${admin} controls your session` : '';
+  if (!holding) return `Read-only: you observe the session of ${login}`;
+  return ownerOnly ? `Delete the session of ${login} from the admin page` : '';
+}
+
+// Whether this page may write to the session it shows: the owner when nobody controls it, the
+// admin holding control.
+export function canWrite({observing, holding, admin}) {
+  return observing ? !!holding : !admin;
 }
 
 // A control of either class, or of both (the action is refused whoever drives the view).
-export function controlReason({view, write}, state) {
-  return (write && writeReason(state)) || (view && viewReason(state)) || '';
+export function controlReason({view, write, ownerOnly = false}, state) {
+  return (write && writeReason(state, {ownerOnly})) || (view && viewReason(state)) || '';
 }
 
 // The Take control and Release control button: '' when usable. `taking`: the request is pending.

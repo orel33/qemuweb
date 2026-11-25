@@ -68,6 +68,8 @@ test('the Save checkbox changes the rule, not the line or the button: the disk o
   const {saveChoice} = await load();
   assert.deepEqual(saveChoice(true), {sessionOptions: false, optionNote: 'Not used for a topology file', fileName: 'network.topo'});
   assert.deepEqual(saveChoice(false), {sessionOptions: true, optionNote: '', fileName: 'qemuweb-session.zip'});
+  assert.equal(saveChoice(false, 'toto').fileName, 'qemuweb-session-toto.zip', 'the admin in control saves under the owner\'s name');
+  assert.equal(saveChoice(true, 'toto').fileName, 'network.topo');
 });
 
 test('the orange warning names the session that will be closed; an empty session has none', async () => {
@@ -77,6 +79,14 @@ test('the orange warning names the session that will be closed; an empty session
   assert.equal(closeWarning(0, 1), 'Your current session (no host and 1 switch) will be closed and its working disks discarded.');
   assert.equal(closeWarning(0, 0), '');
   assert.equal(closedText(2, 1), 'Closed 2 hosts and 1 switch');
+});
+
+test('the admin in control is told whose session a Load, Stop all or Remove all changes', async () => {
+  const {closeWarning, sessionPhrase} = await load();
+  assert.equal(closeWarning(2, 1, 'toto'), 'This replaces every node of the session of toto (2 hosts and 1 switch): its working disks are discarded.');
+  assert.equal(closeWarning(0, 0, 'toto'), 'This loads into the session of toto.');
+  assert.equal(sessionPhrase('toto'), 'the session of toto');
+  assert.equal(sessionPhrase(null), 'this session');
 });
 
 test('the previous session is closed only at Load, after the file was read and checked, and only once', async () => {
@@ -285,11 +295,13 @@ test('Escape cancels only when idle, Enter never starts or restarts a load; the 
   assert.doesNotMatch(/<dialog[^>]*id="load-dialog"[\s\S]*?<\/dialog>/.exec(html)[0], /<form/, 'no form: Enter cannot submit');
 });
 
-test('an observing administrator cannot open either dialog: write-action buttons, no other way in, the server refuses', () => {
+test('an observing administrator without control cannot open either dialog: write-action buttons, no other way in, the server refuses', () => {
   const observe = moduleSource('observe');
-  assert.match(observe, /observing && !!element\.closest\?\.\('\.write-action'\)/);
+  // A write-action is blocked whenever controlReason gives a reason (an observer without control, the owner under control).
+  assert.match(observe, /write: !!element\.closest\('\.write-action'\), ownerOnly: !!element\.closest\('\.owner-only'\)\}, controlState\(\)\)/);
+  assert.match(observe, /if \(!isDisabled\(event\.target\)\) return;/);
   assert.match(observe, /\['Enter', ' ', 'ArrowUp', 'ArrowDown'\]\.includes\(event\.key\)/, 'keyboard activation is blocked');
-  assert.match(css, /body\.observing \.write-action \{ opacity: \.45; \}/);
+  assert.match(css, /body\[data-write-blocked="true"\] \.write-action/);
   for (const name of ['load-dialog', 'save-dialog']) {
     const source = moduleSource(name);
     assert.equal((source.match(/showModal\(\)/g) || []).length, 1, `${name}: one way to open the dialog`);
