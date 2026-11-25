@@ -371,6 +371,8 @@ action appends one line:
 | `reset-password`, `disable-account`, `enable-account` | `login`. |
 | `set-role` | `login`, `role`. |
 | `remove-account` | `login`, `session` (whether it had a session, deleted with it). |
+| `node-created`, `node-stopped`, `archive-saved`... | `login` and the target of the `users.log` event: an action of the admin who holds control of that user's session. |
+| `controlled-request` | `login`, `method`, `path`: any other write of the admin who holds control (settings, reboot, monitor command...). |
 
 `result` is `ok` or `error: <message>`. Passwords and typed console text are
 never written; reading the session list or the logs is not logged.
@@ -399,7 +401,9 @@ Node and archive events come from the user's own explicit requests, with
 `result` `ok` or `error: HTTP <status>`; nodes started by a topology load or at
 creation are not listed one by one. Never logged: passwords, typed console
 text, file contents, IP addresses, polling and console traffic, and anything an
-admin does while observing (that goes to `admin.log`).
+admin does while observing (that goes to `admin.log`). An admin who holds control
+of the session acts as the user: those node and archive events are written here
+too, with `by` (the admin) in their target, and in `admin.log`.
 
 Both files grow without limit: rotate them with `logrotate` (`copytruncate`)
 if needed.

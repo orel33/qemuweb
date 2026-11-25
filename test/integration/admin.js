@@ -1,7 +1,7 @@
 'use strict';
 
 // Admin role: the /api/admin gate, the session list, read-only observation of a student's
-// switch console, exclusive console control, stop-all, bulk deletion (processes and runtime
+// switch console, exclusive console control (the admin in control does what the owner can, CTL01), stop-all, bulk deletion (processes and runtime
 // directories freed), account management with disabled accounts, and the admin log (logs/admin.log).
 // Uses VDE switches only: no system image or KVM is needed. Everything goes through real
 // logins (test/integration/qemuweb-client.js); the server has no test backdoor.
@@ -290,6 +290,41 @@ async function run() {
   await waitFor('controller-view for a page opened during control', () => aliceLateTab.events.some(item => item.event === 'controller-view'));
   aliceLateTab.socket.close();
   aliceSecondTab.socket.close();
+  // CTL01: the admin holding control does what alice can, audited; alice's writes are refused
+  // meanwhile (one driver at a time); Delete session stays with the admin page.
+  const aliceCtl = newId('switch');
+  await boss.request('/api/switches', {...observeAlice, method: 'POST', body: {id: aliceCtl, name: 'alicectl', autostart: true}});
+  assert.ok((await alice.request('/api/nodes')).some(node => node.id === aliceCtl), 'the admin\'s switch is in alice\'s session');
+  const bossOwnNodes = (await boss.request('/api/nodes')).map(node => node.id);
+  assert.ok(!bossOwnNodes.includes(aliceCtl), 'not in the admin\'s own session');
+  assert.equal((await boss.request('/api/general-settings')).sessionId, bossSettings.sessionId, 'the admin\'s own session was replaced');
+  await boss.request(`/api/nodes/${aliceCtl}/stop`, {...observeAlice, method: 'POST'});
+  const saved = await expectStatus(boss, '/api/session-archive/export', 'POST', 200, {...observeAlice, body: {includeDisks: false}});
+  assert.match(saved.headers.get('content-disposition') || '', /filename="qemuweb-session-alice\.zip"/);
+  await saved.arrayBuffer();
+  const refusedDelete = await expectStatus(boss, '/api/session', 'DELETE', 403, observeAlice);
+  assert.equal((await refusedDelete.json()).error, 'Delete the session of alice from the admin page.');
+  assert.equal((await alice.request('/api/general-settings')).sessionId, aliceSettings.sessionId, 'alice\'s session was deleted');
+  assert.equal((await boss.request('/api/general-settings')).sessionId, bossSettings.sessionId, 'the admin\'s own session was deleted');
+  assert.deepEqual((await boss.request('/api/nodes')).map(node => node.id), bossOwnNodes, 'the admin\'s own nodes changed');
+  const refusedOwner = await expectStatus(alice, `/api/nodes/${aliceCtl}`, 'DELETE', 403);
+  assert.equal((await refusedOwner.json()).error, 'boss controls your session.');
+  assert.ok((await alice.request('/api/nodes')).some(node => node.id === aliceCtl), 'alice\'s refused deletion removed the node');
+  await expectStatus(alice, '/api/switches', 'POST', 403, {body: {id: newId('switch'), name: 'alicewhile'}});
+  await expectStatus(alice, '/api/session', 'DELETE', 403);
+  assert.ok(Array.isArray(await alice.request('/api/nodes')), 'alice still reads');
+  await boss.request(`/api/nodes/${aliceCtl}`, {...observeAlice, method: 'DELETE'});
+  // Clear and resize: the admin's are applied, alice's dropped silently.
+  const resetsUnderControl = aliceConsole.count('serial-reset');
+  const observerEventsBefore = observer.events.length;
+  observer.socket.emit('clear-console', {id: aliceSwitch, line: ''});
+  await waitFor('the admin clears alice\'s console', () => aliceConsole.count('serial-reset') > resetsUnderControl);
+  const resetsAfterAdmin = aliceConsole.count('serial-reset');
+  aliceConsole.socket.emit('clear-console', {id: aliceSwitch, line: ''});
+  await delay(500);
+  assert.equal(aliceConsole.count('serial-reset'), resetsAfterAdmin, 'alice cleared her console while controlled');
+  assert.ok(!observer.events.slice(observerEventsBefore).some(item => item.event === 'node-error' && /cannot be (cleared|resized)/.test(item.payload)),
+    'the admin in control was refused a clear');
   // Closing a pane socket while another remains keeps control; the last one releases it.
   bossNewPane.socket.close();
   await delay(300);
@@ -309,6 +344,10 @@ async function run() {
   formerController.socket.emit('controller-view', controllerView);
   await delay(300);
   assert.equal(aliceSession.events.filter(item => item.event === 'controller-view').length, viewsBefore, 'controller-view relayed without control');
+  // Without control again: the same write of the admin is refused, alice writes (her deletion below).
+  const afterRelease = newId('switch');
+  await expectStatus(boss, '/api/switches', 'POST', 403, {...observeAlice, body: {id: afterRelease, name: 'afterrelease'}});
+  assert.ok(!(await alice.request('/api/nodes')).some(node => node.id === afterRelease), 'a refused write created a node');
   formerController.socket.close();
   aliceOtherConsole.socket.close();
   await alice.request(`/api/nodes/${aliceOther}`, {method: 'DELETE'});
@@ -428,6 +467,11 @@ async function run() {
   assert.equal(count('control-end', target => target.login === 'alice' && target.reason === 'disconnected'), 1);
   assert.equal(count('control-end', target => target.login === 'alice' && target.reason === 'released'), 1);
   assert.equal(count('stop-all', target => target.login === 'alice'), 1);
+  // CTL01: the actions of the admin in control on alice's session.
+  assert.equal(count('node-created', target => target.login === 'alice' && target.nodeId === aliceCtl), 1);
+  assert.equal(count('node-stopped', target => target.login === 'alice' && target.nodeId === aliceCtl), 1);
+  assert.equal(count('node-deleted', target => target.login === 'alice' && target.nodeId === aliceCtl), 1);
+  assert.equal(count('archive-saved', target => target.login === 'alice' && target.kind === 'session'), 1);
   assert.equal(count('bulk-delete'), 2, 'the successful bulk delete and the refused one');
   assert.equal(count('create-account'), 2, 'erin, then the refused duplicate');
   assert.equal(count('reset-password'), 1);
@@ -455,6 +499,11 @@ async function run() {
   assert.ok(has('alice', 'session-deleted', target => target.sessionId === aliceSettings.sessionId && target.by === 'boss'));
   assert.ok(has('erin', 'session-deleted', target => target.sessionId === erinSettings.sessionId && target.by === 'boss'));
   assert.ok(!events.some(line => line.user === 'boss' && /^(node|archive)-/.test(line.event)), 'observation or admin actions reached users.log');
+  for (const event of ['node-created', 'node-stopped', 'node-deleted']) {
+    assert.ok(has('alice', event, target => target.nodeId === aliceCtl && target.by === 'boss'), `alice's users.log lacks ${event} by boss`);
+  }
+  assert.ok(has('alice', 'archive-saved', target => target.by === 'boss'));
+  assert.ok(!events.some(line => line.target?.by === 'boss' && line.target?.nodeId === aliceSwitch && line.event === 'node-stopped'), 'a refused request was logged as done');
   assert.ok(events.every(line => Object.keys(line).every(key => ['time', 'user', 'event', 'target', 'result'].includes(key))));
   for (const secret of [...testUsers.users.map(user => user.password), 'first-password', 'second-password', 'adminmarker', 'alicemarker', 'showinfo']) {
     assert.ok(!usersText.includes(secret), `users.log contains ${secret}`);

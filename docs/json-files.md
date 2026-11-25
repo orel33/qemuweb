@@ -453,6 +453,8 @@ date, `result` is `"ok"` or `"error: <message>"`.
 | `observe` | `{login}` | an admin opens a user's session (first tab only) |
 | `control-start` | `{login}` | an admin takes console control |
 | `control-end` | `{login, reason}` | `reason`: `released`, `idle`, `disconnected`, `session deleted` |
+| a `users.log` node, archive or capture event | `{login, ...}`: the owner and the event's target | a request of the admin holding control of `login`'s session (also in the owner's `users.log`, with `by`) |
+| `controlled-request` | `{login, method, path}` (`path` at most 200 characters) | any other write of the admin holding control (host settings, reboot, rename, monitor command...) |
 
 `users.log`: `{"time", "user", "event", "target"?, "result"?}`.
 
@@ -466,6 +468,9 @@ date, `result` is `"ok"` or `"error: <message>"`.
 | `node-created` | `{nodeId, kind}` (`host` or `switch`; `nodeId` `null` if not a valid ID) | `ok` or `error: HTTP <status>` |
 | `node-started`, `node-stopped`, `node-deleted` | `{nodeId}` or `{all: true}` | same |
 | `archive-loaded`, `archive-saved` | `{kind}`: `session` or `topology`, and `example` (the file name) for a load from the server's examples | same |
+
+A node or archive event done by the administrator holding control of the session
+carries `by` (the admin's login) in its `target`; the same action is in `admin.log`.
 
 ## 3. Translation of `config.json` into commands
 

@@ -11,7 +11,7 @@ consoles.
 | --- | --- |
 | Session | A user's workspace: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `<runtime>/sessions/<id>/`. Each user owns exactly one session, with a random ID, recorded as `owner` in `meta.json` next to `session.json`. A session ZIP archive and `session.json` describe it; `meta.json` (owner, creation date) belongs to the live session only and is never exported. |
 | User | A login from `users.json`, or given by the authenticating front end (`X-Remote-User`, a student unless `users.json` says otherwise), or the implicit `local` user when `--no-auth`, with the role `student` or `admin`. An admin owns a session like anyone else and may also supervise, observe and clean up the others. |
-| Observer | An admin's browser tab or socket reading another user's session (`X-Observe` header, Socket.IO `auth.observe`): read-only, except console input after taking control of a node. |
+| Observer | An admin's browser tab or socket reading another user's session (`X-Observe` header, Socket.IO `auth.observe`): read-only, until it takes control of the session; it then does what the owner can, except Delete session (CTL01). |
 | Node | An element of a session: a host or a switch. API routes and Socket.IO events use `nodeId`. |
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
 | Switch | A node that is a VDE switch. |
@@ -58,7 +58,8 @@ consoles.
   `serial-reset`) to `console:<id>:<consoleId>`; a socket joins them only for a
   node of its own (or observed) session.
 - **Administration:** `server/main.js` mounts, in this order after authentication,
-  the observation gate (`X-Observe`: admins only, `GET`/`HEAD` only, the
+  the observation gate (`X-Observe`: admins only, `GET`/`HEAD` only unless the
+  admin holds the session's control lock, see [Session control](#session-control); the
   observed workspace taken with `manager.get`, never `open`), the
   `/api/admin` router (first middleware: role `admin`, then 403 on any path
   for others), `DELETE /api/session`, and the middleware that opens the
@@ -66,7 +67,7 @@ consoles.
   opens a session for the admin, and an observed session never gets an
   activity mark. An observer socket (`auth.observe`) joins the observed
   session's rooms and `observers:<id>`; `server/sockets.js` refuses its `input`,
-  `clear-console` and `terminal-resize`, relays what the owner's page shows
+  `clear-console` and `terminal-resize` (`consoleRefusal`) unless its admin holds control, relays what the owner's page shows
   (`owner-view`, a [view state](#view-state) validated by `normalizeView`,
   published by that page whenever it changes, never derived from console
   sockets attaching; the last one is also sent to a new observer), sends `observe-unavailable` when the login has no session, and
@@ -74,7 +75,7 @@ consoles.
   from any of that admin's observer sockets, `server/console-control.js`: one lock
   per session, held by the admin's login, released explicitly, after 10
   minutes without input, on session deletion, or when that admin's last
-  observer socket on the session closes; the owner's input is then dropped on
+  observer socket on the session closes; the owner's input, Clear and resize are then dropped on
   every node). `console-control` {admin, active} goes to every socket of the
   session, owner and observers, on each change and at connection, and the
   pages derive their banners from it only. While an admin holds
@@ -90,7 +91,7 @@ consoles.
   tab selection, pane node menus), for the mouse and the
   keyboard (`observe.js`), with the reason as its tooltip (`disabled-reason.js`); the banners say who drives. Nothing is hidden for an
   observer: the page has the user's exact layout, and every write action (class
-  `write-action`) is shown disabled (greyed, `aria-disabled`, reason as tooltip, mouse, keyboard
+  `write-action`) is shown disabled while the page may not write (`canWrite`: an observer without control, the owner's page under control; `body[data-write-blocked]`) (greyed, `aria-disabled`, reason as tooltip, mouse, keyboard
   and programmatic clicks ignored by `observe.js`; the Monitor entry of the view
   menu too, and a followed `monitor` shows the console). Taking control forces
   Follow on and applies the owner's view first, then the admin's page drives;
@@ -194,6 +195,49 @@ its session is controlled. A page follows a received view by `normalizeView` aga
 its own nodes, then `applyView`; a node it does not know yet makes it reload
 its node list first. The saved view is restored the same way once the node
 list is loaded.
+
+## Session control
+
+CTL01. An admin who takes control of a session (`take-control`, `server/console-control.js`)
+becomes its one driver: the admin's page drives the view (`controller-view`), types into the
+consoles, and does everything the owner can on the session. The owner's page follows and is
+read-only until control ends (Release control, the admin's last observer socket closing, 10
+minutes without input, or the session's deletion).
+
+- **HTTP gate.** `observationRule` (`server/routes/admin.js`, pure) decides each `/api` request
+  from the method, the path, the caller, the `X-Observe` login and the holder of each lock:
+  - an observer without the lock: `GET`/`HEAD` only (403 otherwise);
+  - the admin holding the lock of the observed session: every method (`req.observedControl`),
+    except `DELETE /api/session` (403 "Delete the session of <login> from the admin page.", done
+    from `/admin`, audited as `delete-session`) and `/api/admin`;
+  - the owner while an admin holds the lock of their session: every write is 403
+    "<admin> controls your session." (reads stay allowed).
+
+  The lock is looked up at each request (`controlAdmin`, `server/sockets.js`), so a released
+  lock refuses the next request; each request of the holder restarts the idle timer
+  (`controlTouch`).
+- **Sockets.** `consoleRefusal({observer, lock, admin, action})` for `input`, `terminal-resize`
+  and `clear-console`: the holder's are applied, the owner's dropped silently while controlled,
+  an observer without control gets a `node-error`. The terminal size is the driver's.
+- **Audit.** `auditEntries` (`server/routes/index.js`): a request of the holder that is a
+  `users.log` event (nodes, archives, captures) is written to `admin.log` (`{login: owner, ...}`)
+  and to the owner's `users.log` (`{..., by: admin}`); any other write of the holder goes to
+  `admin.log` as `controlled-request {login, method, path}`.
+- **Load and Save.** Load goes into the owner's session (same session ID and runner). The rule
+  "only into an empty session" is kept: the dialog removes every node first. Its warning names
+  the owner ("This replaces every node of the session of toto ..."), and so do Stop all and
+  Remove all. The owner's pages get the node events and keep following the admin's view. Save
+  downloads the owner's archive to the admin's browser as `qemuweb-session-<owner>.zip`, with
+  the same limits and the same archive lock as for the owner. The examples load the same way.
+- **Browser.** `canWrite` and `writeReason` (`public/disabled-reason.js`) are the rules:
+  - the holder's write actions are enabled, except Delete session (class `owner-only`);
+  - the owner's page under control greys them out with "<admin> controls your session";
+  - an observer without control keeps "Read-only: you observe the session of <login>".
+
+  General Settings (naming, console font) are per browser: for the holder they change only
+  the admin's own browser.
+- **Limit.** A dialog the owner had open when control started stays open; submitting it gets the
+  403.
 
 ## Module map
 
@@ -363,8 +407,7 @@ is also the file name, built by the runner, never taken from a user: `eth<N>-<UT
 - **Download of a live capture.** `runner/pcap.js` walks the packet records and cuts the file after
   the last whole packet, so Wireshark never opens a half packet.
 - **Rights.** The owner, and an administrator who holds the console-control lock of the observed
-  session (the observation gate's one exception: only POST and DELETE on the node capture routes
-  and the capture GETs, only while `controlHeld`), may start, stop, list, download, delete and
+  session (`req.observedControl`, see [Session control](#session-control)), may start, stop, list, download, delete and
   watch. Any other observer gets 403 on every capture route, the list and the download included.
   Starts, stops, deletes and downloads go to `users.log` (`capture-started`, `capture-stopped`,
   `capture-deleted`, `capture-downloaded`: node, capture ID, interface) or, for an administrator, to

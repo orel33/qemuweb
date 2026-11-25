@@ -939,12 +939,15 @@ commit message.
 - [x] **TOD04** A tooltip on a disabled view control saying why (view driven by the owner or by the controlling admin). Done: the rules
   are in `public/disabled-reason.js`, for the write actions of an observation tab, Follow and Take control too; the normal tooltip
   returns with the control.
-- [ ] **CTL01** (M) Follow and control, completed. **Part 1 (bug), done:** in Follow mode (an observer with Follow, or the
+- [x] **CTL01** (M) Follow and control, completed. **Part 1 (bug), done:** in Follow mode (an observer with Follow, or the
   owner's page while an admin holds control) the floating console of the Graphic view was not followed. The view state had no
   field for it and `applyView` closed it on a mode change. The view state gets `floating` (open on the active node), which is
   applied without taking the focus. Its close button is a view control, and its geometry stays per browser. **Part 2 (feature):**
-  the admin who holds control may do everything the owner can (node actions, settings, Load and Save Session...), audited in
-  `admin.log` and in the owner's `users.log`. Design in `docs/architecture.md`.
+  the admin who holds control may do everything the owner can (node actions, settings, Load and Save Session, examples,
+  captures, Clear and resize), audited in `admin.log` and in the owner's `users.log` (`by`). Delete session stays with the
+  admin page. The owner's page is read-only meanwhile, and the server refuses its writes ("<admin> controls your session.").
+  Load, Stop all and Remove all name the owner, and Save names the file `qemuweb-session-<owner>.zip`. Design in
+  `docs/architecture.md` (Session control).
 - [ ] **TOD05** A `--version` option for `server/main.js` and `runner/main.js`, and a version check between the two: the runner's `hello`
   carries its version, and the server says "restart the runner" (in its log and in `/admin -> Runners`) when it differs from its own, instead of
   letting an archive fail with `Invalid session.json in archive.` after a format change. Useful with runners on other machines.
