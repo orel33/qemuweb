@@ -1,6 +1,6 @@
 // Socket.IO wiring: per-pane console sockets and the shared notification socket.
 import {generalSettings, machines, store} from './state.js';
-import {appendLog, finishReplay, fitTerminal, panes, refreshLogViews, renderConsoleView, renderLogView, selectPaneConsole, syncConsoleScroll, updateConsoleHint, updatePaneViewControls, viewChannel} from './terminal.js';
+import {appendLog, finishReplay, fitTerminal, fitTerminals, panes, refreshLogViews, renderConsoleView, renderLogView, selectPaneConsole, syncConsoleScroll, updateConsoleHint, updatePaneViewControls, viewChannel} from './terminal.js';
 import {captureView, renderTabs, showPage, showStatusError, updateControls} from './workspace.js';
 import {updateEngineSelect} from './engine-select.js';
 import {followEngineChange, scheduleSessionSync, syncSessionsFromServer} from './nodes.js';
@@ -189,7 +189,17 @@ export function initSockets() {
   // observed session is gone: say so, with a link back to the Admin page.
   socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });
   socket.on('observe-unavailable', () => observationUnavailable());
-  socket.on('console-control', event => { applyControl(event); refreshCaptureAccess(); });
+  // The driver changes: what this page may write changes with it (one driver at a time). The
+  // console size is sent again by the new driver.
+  socket.on('console-control', event => {
+    applyControl(event);
+    refreshCaptureAccess();
+    updatePaneViewControls();
+    updateEngineSelect();
+    updateControls();
+    renderGraphic();
+    requestAnimationFrame(fitTerminals);
+  });
   socket.on('owner-view', view => viewReceived('owner', view));
   socket.on('controller-view', view => viewReceived('controller', view));
   socket.on('connect_error', socketConnectError);

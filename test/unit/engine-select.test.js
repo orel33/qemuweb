@@ -61,6 +61,14 @@ test('an administrator observing sees the observed engine, read-only; before the
   assert.equal(api.engineSelectState({engine: 'kvm', availableEngines: both, inUse: false, observing: false}).value, '', 'an unknown engine selects nothing');
 });
 
+test('the owner\'s engine select is read-only while an administrator controls the session; the admin in control may change it', () => {
+  const controlled = plain(api.engineSelectState({engine: 'qemu', availableEngines: both, inUse: false, observing: false, controlledBy: 'root'}));
+  assert.equal(controlled.disabled, true);
+  assert.equal(controlled.reason, 'root controls your session');
+  const holding = plain(api.engineSelectState({engine: 'qemu', availableEngines: both, inUse: false, observing: false, controlledBy: null}));
+  assert.equal(holding.disabled, false, 'the page holding control is not observing for the select');
+});
+
 test('a host with a machine up or an action in progress freezes the select; stopped hosts and switches do not', () => {
   const hosts = [{kind: 'host', running: false, busy: false}, {kind: 'switch', running: true}];
   assert.equal(api.hostsInUse(hosts), false);

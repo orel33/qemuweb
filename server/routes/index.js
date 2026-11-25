@@ -46,17 +46,30 @@ function userEvent(req) {
   }
 }
 
-// runner: the session's runner handle. userLog (server/audit.js createUserLog) receives the
-// owner's node and archive actions, written once the response is sent, with "ok" or the HTTP
-// error status. audit (admin.log) receives the capture actions of an administrator who holds the
-// control lock of the session: who acted and on whose session ({login: owner}). examplesDir is
-// the --examples directory (none: no example).
+// The log entries of a request, written once the response is sent with "ok" or the HTTP error
+// status: [log ('user' or 'admin'), login, event, target] each. The owner's user events go to
+// users.log. The admin holding the control lock of the session (req.observedControl) acts as
+// the owner: each of its user events goes to admin.log (who, on whose session: {login: owner})
+// and to the owner's users.log ({by: admin}); any other write of the admin goes to admin.log as
+// controlled-request {login, method, path}. Other observers write nothing (they only read).
+function auditEntries(req, owner) {
+  const logged = userEvent(req);
+  if (!req.observed) return logged ? [['user', owner, logged.event, logged.target]] : [];
+  if (!req.observedControl) return [];
+  if (logged) return [['admin', req.user.login, logged.event, {login: owner, ...logged.target}], ['user', owner, logged.event, {...logged.target, by: req.user.login}]];
+  if (['GET', 'HEAD'].includes(req.method)) return [];
+  return [['admin', req.user.login, 'controlled-request', {login: owner, method: req.method, path: String(req.path).slice(0, 200)}]];
+}
+
+// runner: the session's runner handle. userLog (server/audit.js createUserLog) and audit
+// (admin.log) receive the entries of auditEntries. examplesDir is the --examples directory
+// (none: no example).
 function createSessionRouter({session, runner, userLog = {record() {}}, audit = {record() {}}, examplesDir = null}) {
   const router = express.Router();
   router.use((req, res, next) => {
-    const logged = userEvent(req);
-    if (logged && !req.observed) res.once('finish', () => userLog.record(session.owner, logged.event, logged.target, res.statusCode < 400 ? 'ok' : `error: HTTP ${res.statusCode}`));
-    else if (logged && req.observedControl) res.once('finish', () => audit.record(req.user.login, logged.event, {login: session.owner, ...logged.target}, res.statusCode < 400 ? 'ok' : `error: HTTP ${res.statusCode}`));
+    for (const [log, ...entry] of auditEntries(req, session.owner)) {
+      res.once('finish', () => (log === 'admin' ? audit : userLog).record(...entry, res.statusCode < 400 ? 'ok' : `error: HTTP ${res.statusCode}`));
+    }
     next();
   });
   router.use('/api', (req, res, next) => {
@@ -77,4 +90,4 @@ function createSessionRouter({session, runner, userLog = {record() {}}, audit = 
   return router;
 }
 
-module.exports = {createSessionRouter, userEvent};
+module.exports = {createSessionRouter, userEvent, auditEntries};

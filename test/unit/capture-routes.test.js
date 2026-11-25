@@ -1,13 +1,13 @@
 // Traffic capture, server side: the routes of server/routes/captures.js behind the session router
 // (fake runner, real express on a loopback port), the rights of an observer and of an administrator
-// holding the control lock, the audit entries, and the observation gate's capture exception.
+// holding the control lock, the audit entries, and the observation gate under control (CTL01).
 const assert = require('node:assert/strict');
 const http = require('node:http');
 const {Readable} = require('node:stream');
 const test = require('node:test');
 const express = require('express');
 const settle = () => new Promise(resolve => setImmediate(resolve));
-const {createSessionRouter, userEvent} = require('../../server/routes');
+const {createSessionRouter, userEvent, auditEntries} = require('../../server/routes');
 const {observationGate} = require('../../server/routes/admin');
 const {MAX_DOWNLOAD} = require('../../server/routes/captures');
 
@@ -117,7 +117,41 @@ test('an administrator holding the control lock may use the capture routes; the 
   assert.deepEqual(audit.entries, [
     ['boss', 'capture-started', {login: 'toto', nodeId: HOST, interface: 'eth1'}, 'ok'],
     ['boss', 'capture-deleted', {login: 'toto', nodeId: HOST, captureId: CAP}, 'ok']]);
-  assert.deepEqual(userLog.entries, [], "the owner's users.log is not written for the admin's actions");
+  assert.deepEqual(userLog.entries, [
+    ['toto', 'capture-started', {nodeId: HOST, interface: 'eth1', by: 'boss'}, 'ok'],
+    ['toto', 'capture-deleted', {nodeId: HOST, captureId: CAP, by: 'boss'}, 'ok']], "the owner's users.log says the admin did it");
+});
+
+test('CTL01: every write of the admin holding control is audited, the user events in both logs; the saved archive bears the owner\'s name', async t => {
+  const runner = {request: async command => (command === 'archive.export' ? {stream: 7, size: 2} : {ok: true}), incoming: () => Readable.from([Buffer.from('PK')])};
+  const {call, audit, userLog} = await serve(t, {runner, who: controller});
+  assert.equal((await call('POST', '/api/nodes/stop-all')).status, 200);
+  assert.equal((await call('POST', `/api/nodes/${HOST}/reboot`)).status, 200);
+  assert.equal((await call('GET', '/api/nodes')).status, 200);
+  const exported = await call('POST', '/api/session-archive/export', {includeDisks: false});
+  assert.equal(exported.status, 200);
+  assert.match(exported.headers.get('content-disposition'), /filename="qemuweb-session-toto\.zip"/);
+  await exported.arrayBuffer();
+  await settle();
+  assert.deepEqual(audit.entries, [
+    ['boss', 'node-stopped', {login: 'toto', all: true}, 'ok'],
+    ['boss', 'controlled-request', {login: 'toto', method: 'POST', path: `/api/nodes/${HOST}/reboot`}, 'ok'],
+    ['boss', 'archive-saved', {login: 'toto', kind: 'session'}, 'ok']], 'reads are not audited');
+  assert.deepEqual(userLog.entries, [
+    ['toto', 'node-stopped', {all: true, by: 'boss'}, 'ok'],
+    ['toto', 'archive-saved', {kind: 'session', by: 'boss'}, 'ok']]);
+  const own = await serve(t, {runner, who: owner});
+  assert.match((await own.call('POST', '/api/session-archive/export', {})).headers.get('content-disposition'), /filename="qemuweb-session\.zip"/);
+});
+
+test('auditEntries: the owner, a plain observer and the admin in control', () => {
+  const entries = (who, method, path, body) => auditEntries({method, path, body, ...who}, 'toto');
+  assert.deepEqual(entries(owner, 'POST', '/api/nodes/stop-all'), [['user', 'toto', 'node-stopped', {all: true}]]);
+  assert.deepEqual(entries(owner, 'POST', `/api/nodes/${HOST}/reboot`), [], 'not a user event');
+  assert.deepEqual(entries(observer, 'POST', '/api/nodes/stop-all'), []);
+  assert.deepEqual(entries(controller, 'GET', '/api/nodes'), []);
+  assert.deepEqual(entries(controller, 'PUT', `/api/nodes/${HOST}/config`), [['admin', 'boss', 'controlled-request', {login: 'toto', method: 'PUT', path: `/api/nodes/${HOST}/config`}]]);
+  assert.equal(entries(controller, 'POST', `/api/${'x'.repeat(300)}`)[0][3].path.length, 200, 'the path is cut');
 });
 
 test('userEvent names the capture events and drops anything that is not an ID', () => {
@@ -129,11 +163,11 @@ test('userEvent names the capture events and drops anything that is not an ID', 
   assert.equal(key('GET', '/api/captures'), null);
 });
 
-test('the observation gate admits capture requests of the admin holding the control lock, and nothing else', () => {
+test('the observation gate admits every request of the admin holding the control lock, marked as control; reads only without it', () => {
   const workspace = {owner: 'toto', session: {id: 'sess'}};
   const manager = {get: login => (login === 'toto' ? workspace : null)};
   const held = new Set();
-  const gate = observationGate(manager, {controlHeld: (sessionId, admin) => held.has(`${sessionId}:${admin}`)});
+  const gate = observationGate(manager, {control: {admin: sessionId => ([...held].find(key => key.startsWith(`${sessionId}:`)) || '').split(':')[1] || null, touch: () => {}}});
   const run = options => {
     const lower = {'x-observe': 'toto'};
     const req = {method: 'GET', path: '/api/nodes', headers: lower, user: {login: 'boss', role: 'admin'}, get: name => lower[name.toLowerCase()], ...options};
@@ -142,35 +176,29 @@ test('the observation gate admits capture requests of the admin holding the cont
     gate(req, res, () => { passed = true; });
     return {passed, status: res.statusCode, req};
   };
-  const captureRequests = [['POST', `/api/nodes/${HOST}/captures`], ['POST', `/api/nodes/${HOST}/captures/${CAP}/stop`],
-    ['DELETE', `/api/nodes/${HOST}/captures/${CAP}`], ['GET', `/api/nodes/${HOST}/captures/${CAP}/download`], ['GET', '/api/captures']];
-  // Without the lock: writes refused, reads pass without the control mark (the routes then refuse them).
-  for (const [method, path] of captureRequests) {
+  const requests = [['POST', `/api/nodes/${HOST}/captures`], ['POST', `/api/nodes/${HOST}/captures/${CAP}/stop`],
+    ['DELETE', `/api/nodes/${HOST}/captures/${CAP}`], ['GET', `/api/nodes/${HOST}/captures/${CAP}/download`], ['GET', '/api/captures'],
+    ['POST', `/api/nodes/${HOST}/start`], ['DELETE', `/api/nodes/${HOST}`], ['POST', '/api/nodes/stop-all'], ['PUT', `/api/nodes/${HOST}/config`]];
+  // Without the lock: writes refused, reads pass without the control mark (the capture routes then refuse them).
+  for (const [method, path] of requests) {
     const result = run({method, path});
     assert.equal(result.passed, method === 'GET', `${method} ${path} without lock`);
     if (method !== 'GET') assert.equal(result.status, 403);
     else assert.equal(result.req.observedControl, undefined);
   }
   held.add('sess:boss');
-  for (const [method, path] of captureRequests) {
+  for (const [method, path] of requests) {
     const result = run({method, path});
     assert.equal(result.passed, true, `${method} ${path} with lock`);
     assert.equal(result.req.observedControl, true);
     assert.equal(result.req.observed, workspace);
   }
-  // Everything else a write stays refused, even with the lock; so do near misses of the capture paths.
-  for (const [method, path] of [['POST', `/api/nodes/${HOST}/start`], ['DELETE', `/api/nodes/${HOST}`], ['POST', '/api/nodes/stop-all'],
-    ['DELETE', '/api/captures'], ['POST', '/api/captures'], ['POST', `/api/nodes/${HOST}/captures-x`], ['POST', `/api/nodes/${HOST}/captures/${CAP}/stop/x`],
-    ['PUT', `/api/nodes/${HOST}/captures`], ['PATCH', `/api/nodes/${HOST}/captures/${CAP}`]]) {
-    const result = run({method, path});
-    assert.equal(result.passed, false, `${method} ${path}`);
-    assert.equal(result.status, 403);
-  }
   // Another admin, or the lock of another session, gives nothing.
   assert.equal(run({method: 'POST', path: `/api/nodes/${HOST}/captures`, user: {login: 'other', role: 'admin'}}).status, 403);
   assert.equal(run({method: 'GET', path: `/api/nodes/${HOST}/captures`, user: {login: 'other', role: 'admin'}}).req.observedControl, undefined);
-  // The mounted gate sees paths relative to /api.
+  // The mounted gate sees paths relative to /api; Delete session stays refused.
   assert.equal(run({method: 'POST', baseUrl: '/api', path: `/nodes/${HOST}/captures`}).passed, true);
+  assert.equal(run({method: 'DELETE', baseUrl: '/api', path: '/session'}).status, 403);
   // The observation of an unknown user is still 404 for a read and 403 for a write.
   assert.equal(run({headers: {'x-observe': 'nobody'}, get: () => 'nobody'}).status, 404);
 });

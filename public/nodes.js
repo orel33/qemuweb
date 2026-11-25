@@ -7,7 +7,8 @@ import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
 import {loadGraphicPositions, renderGraphic} from './graphic-view.js';
-import {refollow} from './observe.js';
+import {observedLogin, refollow} from './observe.js';
+import {sessionPhrase} from './file-kinds.js';
 import {parseStartErrors, showStartFailure} from './start-failure.js';
 import {engineName, bindEngineSelect, unavailableHostsWarning, updateEngineSelect} from './engine-select.js';
 import {refreshSystems} from './systems.js';
@@ -353,7 +354,7 @@ export function initNodes() {
   // Stops every host and switch of the session and keeps them; the state events refresh the UI.
   stopAllButton.onclick = async () => {
     if (stopAllButton.disabled) return;
-    if (!await confirmAction('Stop all hosts and switches', 'Stop every running host and switch of this session?\n\nThe hosts are shut down; their disks and the nodes are kept.', 'Stop all')) return;
+    if (!await confirmAction('Stop all hosts and switches', `Stop every running host and switch of ${sessionPhrase(observedLogin)}?\n\nThe hosts are shut down; their disks and the nodes are kept.`, 'Stop all')) return;
     store.exitAllBusy = true; updateControls();
     try { await requestJson('/api/nodes/stop-all', {method: 'POST'}, 'Failed to stop all hosts and switches'); }
     catch (error) { showStatusError(`Cannot stop all hosts and switches: ${error.message}`); }
@@ -361,7 +362,7 @@ export function initNodes() {
   };
   exitAllButton.onclick = async () => {
     if (exitAllButton.disabled) return;
-    if (!await confirmAction('Remove all hosts and switches', 'Remove all hosts and switches from this session?\n\nAll working disks will be deleted and their changes lost.', 'Remove all')) return;
+    if (!await confirmAction('Remove all hosts and switches', `This removes every node of ${sessionPhrase(observedLogin)}: remove all hosts and switches?\n\nAll working disks will be deleted and their changes lost.`, 'Remove all')) return;
     try { await removeAllNodes(); }
     catch (error) { showStatusError(`Cannot remove all hosts and switches: ${error.message}`); }
   };

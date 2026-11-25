@@ -5,6 +5,7 @@ import {jsonRequest} from './api.js';
 import {downloadTopology} from './topology.js';
 import {nodeCounts, saveChoice, saveStatusLine, saveStepList, workingDisksNote} from './file-kinds.js';
 import {createSteps} from './load-steps.js';
+import {observedLogin} from './observe.js';
 
 const dialog = document.getElementById('save-dialog');
 const form = document.getElementById('save-form');
@@ -44,7 +45,7 @@ function resetButtons() {
 // Shows the dialog for the checkbox. Nothing comes and goes: one status line with the counts of the session, the
 // same Save button, the disk option disabled for a topology, the ZIP estimate (dimmed, in its slot) only for a ZIP.
 function applySaveChoice() {
-  const choice = saveChoice(topologyOnly.checked);
+  const choice = saveChoice(topologyOnly.checked, observedLogin);
   const counts = nodeCounts(machines.values());
   intro.textContent = saveStatusLine(counts.hosts, counts.switches);
   includeDisks.disabled = !choice.sessionOptions;
@@ -87,7 +88,7 @@ function downloadBlob(blob, fileName) {
 async function zipTarget() {
   if (!window.showSaveFilePicker) return {writable: null};
   try {
-    const handle = await window.showSaveFilePicker({suggestedName: saveChoice(false).fileName, types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
+    const handle = await window.showSaveFilePicker({suggestedName: saveChoice(false, observedLogin).fileName, types: [{description: 'QemuWeb session ZIP', accept: {'application/zip': ['.zip']}}]});
     return {writable: await handle.createWritable()};
   } catch (error) {
     return error.name === 'AbortError' ? null : {writable: null};
@@ -108,7 +109,7 @@ async function saveZip(steps, withDisks) {
     steps.set('create', 'done');
     step = 'download';
     steps.set('download', 'running');
-    if (writable) { await response.body.pipeTo(writable); writable = null; } else downloadBlob(await response.blob(), saveChoice(false).fileName);
+    if (writable) { await response.body.pipeTo(writable); writable = null; } else downloadBlob(await response.blob(), saveChoice(false, observedLogin).fileName);
     steps.set('download', 'done');
   } catch (error) {
     if (writable) await writable.abort().catch(() => {});

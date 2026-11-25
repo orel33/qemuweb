@@ -16,8 +16,8 @@ const {ADMIN_LOG, USERS_LOG, createLogDir, createAudit, createUserLog, readLogTa
 const {userEvent} = require('../../server/routes');
 const {Session} = require('../../server/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../server/console-control');
-const {observationGate, sessionSummary} = require('../../server/routes/admin');
-const {inputRefusal, createObservationTracker} = require('../../server/sockets');
+const {observationGate, observationRule, sessionSummary} = require('../../server/routes/admin');
+const {consoleRefusal, createObservationTracker} = require('../../server/sockets');
 const {paneCount, normalizeView, sameView, followsView} = require('../../public/view-state');
 
 const root = path.join(__dirname, '..', '..');
@@ -167,7 +167,7 @@ test('session activity is in memory and falls back to the creation date', () => 
 });
 
 test('the observation gate admits admins reading another session only', () => {
-  const workspace = {owner: 'toto'};
+  const workspace = {owner: 'toto', session: {id: 'sess'}};
   const manager = {get: login => (login === 'toto' ? workspace : null), open() { throw new Error('observation must never open a session'); }};
   const gate = observationGate(manager);
   const admin = {login: 'boss', role: 'admin'};
@@ -250,13 +250,81 @@ test('session control is exclusive per session, renewed by input and released on
   assert.equal(control.release('s2', null, 'session deleted'), false, 'released once');
 });
 
-test('the controlling admin types into any console of the session; the owner into none', () => {
+test('the controlling admin types into, resizes and clears any console of the session; the owner none', () => {
   const lock = {admin: 'boss'};
-  assert.equal(inputRefusal({observer: false, lock: null, admin: 'toto'}), null);
-  assert.match(inputRefusal({observer: false, lock, admin: 'toto'}), /boss controls this session/);
-  assert.match(inputRefusal({observer: true, lock: null, admin: 'boss'}), /Read-only observation/);
-  assert.match(inputRefusal({observer: true, lock, admin: 'chef'}), /Read-only observation/);
-  assert.equal(inputRefusal({observer: true, lock, admin: 'boss'}), null);
+  for (const action of ['input', 'resize', 'clear']) {
+    assert.equal(consoleRefusal({observer: false, lock: null, admin: 'toto', action}), null, action);
+    assert.match(consoleRefusal({observer: false, lock, admin: 'toto', action}), /boss controls this session/, action);
+    assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss', action}), /Read-only observation/, action);
+    assert.match(consoleRefusal({observer: true, lock, admin: 'chef', action}), /Read-only observation/, action);
+    assert.equal(consoleRefusal({observer: true, lock, admin: 'boss', action}), null, action);
+  }
+  assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss', action: 'resize'}), /cannot be resized/);
+  assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss', action: 'clear'}), /cannot be cleared/);
+  assert.match(consoleRefusal({observer: true, lock: null, admin: 'boss'}), /take control to type/, 'input by default');
+});
+
+test('the observation rule (CTL01): one driver at a time for the HTTP writes', () => {
+  const base = {method: 'GET', url: '/api/nodes', login: 'boss', role: 'admin', observe: 'toto', found: true, lockAdmin: null, ownLockAdmin: null};
+  const rule = change => observationRule({...base, ...change});
+  const WRITES = ['POST', 'PUT', 'PATCH', 'DELETE'];
+  // An observer without the lock reads only.
+  assert.deepEqual(rule({}), {observed: true, control: false});
+  assert.deepEqual(rule({method: 'HEAD'}), {observed: true, control: false});
+  for (const method of WRITES) assert.deepEqual(rule({method}), {status: 403, error: 'Read-only observation: this action is not allowed.'}, method);
+  for (const method of WRITES) assert.equal(rule({method, lockAdmin: 'chef'}).status, 403, `${method}: another admin holds the lock`);
+  // The admin holding the lock does what the owner can, reads too (marked control).
+  assert.deepEqual(rule({lockAdmin: 'boss'}), {observed: true, control: true});
+  for (const [method, url] of [['POST', '/api/nodes/h-0000000000000001/start'], ['DELETE', '/api/nodes'], ['PUT', '/api/nodes/h-0000000000000001/config'],
+    ['PATCH', '/api/nodes/h-0000000000000001'], ['POST', '/api/session-archive/import'], ['POST', '/api/session-archive/export'],
+    ['POST', '/api/examples/load'], ['PUT', '/api/general-settings'], ['POST', '/api/nodes/h-0000000000000001/captures']]) {
+    assert.deepEqual(rule({method, url, lockAdmin: 'boss'}), {observed: true, control: true}, `${method} ${url}`);
+  }
+  // Even with the lock: never Delete session, never the admin API through an observation.
+  assert.deepEqual(rule({method: 'DELETE', url: '/api/session', lockAdmin: 'boss'}), {status: 403, error: 'Delete the session of toto from the admin page.'});
+  assert.equal(rule({method: 'GET', url: '/api/session', lockAdmin: 'boss'}).control, true);
+  for (const url of ['/api/admin', '/api/admin/sessions/toto/stop']) assert.equal(rule({method: 'POST', url, lockAdmin: 'boss'}).status, 403, url);
+  // A student never observes; an unknown login is 404 for a read, 403 for a write.
+  assert.equal(rule({role: 'student'}).status, 403);
+  assert.equal(rule({role: 'student', lockAdmin: 'boss'}).status, 403);
+  assert.deepEqual(rule({found: false}), {status: 404, error: 'No session for toto.'});
+  assert.equal(rule({found: false, method: 'POST'}).status, 403);
+  // The owner (no header, or their own login): free, except every write while an admin controls their session.
+  const owner = {login: 'toto', role: 'student', observe: null, found: false};
+  assert.deepEqual(rule(owner), {observed: false, control: false});
+  for (const method of WRITES) assert.deepEqual(rule({...owner, method}), {observed: false, control: false}, method);
+  assert.deepEqual(rule({...owner, ownLockAdmin: 'boss'}), {observed: false, control: false}, 'reads stay allowed');
+  for (const method of WRITES) assert.deepEqual(rule({...owner, method, ownLockAdmin: 'boss'}), {status: 403, error: 'boss controls your session.'}, method);
+  assert.equal(rule({...owner, method: 'DELETE', url: '/api/session', ownLockAdmin: 'boss'}).status, 403, 'Delete session too');
+  assert.deepEqual(rule({...owner, observe: 'toto', method: 'POST'}), {observed: false, control: false}, 'observing yourself is your own session');
+  // An admin's own admin API is not a session write.
+  assert.deepEqual(rule({login: 'chef', observe: null, method: 'POST', url: '/api/admin/users', ownLockAdmin: 'boss'}), {observed: false, control: false});
+});
+
+test('the observation gate restarts the idle timer of the lock at each request of the controlling admin, and refuses the owner\'s writes', () => {
+  const toto = {owner: 'toto', session: {id: 'sess-toto'}};
+  const manager = {get: login => (login === 'toto' ? toto : null)};
+  const touched = [];
+  let holder = 'boss';
+  const gate = observationGate(manager, {control: {admin: id => (id === 'sess-toto' ? holder : null), touch: (...args) => touched.push(args)}});
+  const pass = (options, status = null) => {
+    const req = request(options);
+    const res = response();
+    assert.equal(run(gate, req, res), status === null, JSON.stringify(options));
+    if (status !== null) assert.equal(res.statusCode, status);
+    return {req, res};
+  };
+  const boss = {login: 'boss', role: 'admin'};
+  const {req} = pass({user: boss, method: 'POST', path: '/api/nodes/stop-all', headers: {'X-Observe': 'toto'}});
+  assert.equal(req.observed, toto);
+  assert.equal(req.observedControl, true);
+  assert.deepEqual(touched, [['sess-toto', 'boss']]);
+  assert.match(pass({user: {login: 'toto', role: 'student'}, method: 'POST', path: '/api/nodes/stop-all'}, 403).res.body.error, /boss controls your session/);
+  assert.equal(pass({user: {login: 'toto', role: 'student'}}).req.observed, undefined, 'the owner still reads');
+  holder = null;
+  pass({user: boss, method: 'POST', path: '/api/nodes/stop-all', headers: {'X-Observe': 'toto'}}, 403);
+  assert.equal(touched.length, 1, 'checked at each request: no lock, no write');
+  pass({user: {login: 'toto', role: 'student'}, method: 'POST', path: '/api/nodes/stop-all'});
 });
 
 test('an observation is audited once per admin and observed login while sockets stay open', () => {

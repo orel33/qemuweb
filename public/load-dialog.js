@@ -7,6 +7,7 @@ import {archiveSummaryText, checkArchiveBaseImages, importArchive, importExample
 import {closeWarning, countPhrase, loadOptionStates, loadStepList, nodeCounts, openingSource, restoreText, routeFile, staleDisksRefusal} from './file-kinds.js';
 import {closePreviousSession, createSteps, warningSlot} from './load-steps.js';
 import {createFileSelector} from './file-selector.js';
+import {observedLogin} from './observe.js';
 
 const MAX_TOPOLOGY_BYTES = 262144;
 const SOURCE_KEY = 'qemuweb.load-source';
@@ -219,7 +220,7 @@ async function open() {
   autoStart.checked = remembered(AUTO_START_KEY) !== 'false';
   discard.checked = false;
   const counts = nodeCounts(machines.values());
-  setWarning(closeWarning(counts.hosts, counts.switches));
+  setWarning(closeWarning(counts.hosts, counts.switches, observedLogin));
   const examples = await listExamples();
   selector.open(examples, openingSource(remembered(SOURCE_KEY), examples));
   dialog.showModal();

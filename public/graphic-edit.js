@@ -4,7 +4,7 @@
 // interfaces are part of its configuration; the server assigns the switch port).
 import {machines} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
-import {observing} from './observe.js';
+import {canWrite} from './observe.js';
 import {openCaptureDialog} from './capture-dialog.js';
 import {chooseRestartTiming, scheduleSessionSync} from './nodes.js';
 import {renderTabs, showStatusError} from './workspace.js';
@@ -176,7 +176,7 @@ export function refreshEditTools() {
   hint.hidden = !mode;
   const id = selectedGraphicLink();
   const link = id && graphicGraph?.links.find(item => `${item.hostId}:${item.nicIndex}` === id);
-  if (mode || !link || observing) { if (popover.dataset.kind === 'link') popover.hidden = true; return; }
+  if (mode || !link || !canWrite()) { if (popover.dataset.kind === 'link') popover.hidden = true; return; }
   const portText = link.port == null ? '' : ` port ${link.port}`;
   showPopover('link', link.mid.x, link.mid.y, `${nameOf(link.hostId)} eth${link.nicIndex} ↔ ${nameOf(link.switchId)}${portText}`, [
     {label: 'Capture…', capture: true, run: () => openCaptureDialog(link.hostId, {index: link.nicIndex})},

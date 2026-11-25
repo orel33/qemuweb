@@ -68,6 +68,8 @@ test('the Save checkbox changes the rule, not the line or the button: the disk o
   const {saveChoice} = await load();
   assert.deepEqual(saveChoice(true), {sessionOptions: false, optionNote: 'Not used for a topology file', fileName: 'network.topo'});
   assert.deepEqual(saveChoice(false), {sessionOptions: true, optionNote: '', fileName: 'qemuweb-session.zip'});
+  assert.equal(saveChoice(false, 'toto').fileName, 'qemuweb-session-toto.zip', 'the admin in control saves under the owner\'s name');
+  assert.equal(saveChoice(true, 'toto').fileName, 'network.topo');
 });
 
 test('the orange warning names the session that will be closed; an empty session has none', async () => {
@@ -77,6 +79,14 @@ test('the orange warning names the session that will be closed; an empty session
   assert.equal(closeWarning(0, 1), 'Your current session (no host and 1 switch) will be closed and its working disks discarded.');
   assert.equal(closeWarning(0, 0), '');
   assert.equal(closedText(2, 1), 'Closed 2 hosts and 1 switch');
+});
+
+test('the admin in control is told whose session a Load, Stop all or Remove all changes', async () => {
+  const {closeWarning, sessionPhrase} = await load();
+  assert.equal(closeWarning(2, 1, 'toto'), 'This replaces every node of the session of toto (2 hosts and 1 switch): its working disks are discarded.');
+  assert.equal(closeWarning(0, 0, 'toto'), 'This loads into the session of toto.');
+  assert.equal(sessionPhrase('toto'), 'the session of toto');
+  assert.equal(sessionPhrase(null), 'this session');
 });
 
 test('the previous session is closed only at Load, after the file was read and checked, and only once', async () => {

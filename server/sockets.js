@@ -18,8 +18,8 @@
 // The handshake must already have set socket.data.user (see server/auth/). An admin observes
 // another user's session with the handshake option auth: {observe: <login>}: the socket then
 // reads that session (snapshots, console output, logs) but its input, clear-console and
-// terminal-resize are refused, unless that admin took control of the session (input only, on
-// every node), see server/console-control.js. console-control {admin, active} tells every socket
+// terminal-resize are refused, unless that admin took control of the session (on every node,
+// like the owner), see server/console-control.js; the owner's are then dropped. console-control {admin, active} tells every socket
 // of the session (owner and observers) the control state, also at connection. While an admin
 // controls a session, the view goes the other way: the admin's page publishes controller-view,
 // relayed to the session room and shown by the owner's pages.
@@ -35,10 +35,16 @@ function observerRoom(session) { return `observers:${session.id}`; }
 function nodeRoom(session, nodeId) { return `node:${session.id}:${nodeId}`; }
 function consoleRoom(session, consoleId) { return `console:${session.id}:${consoleId}`; }
 
-// Why a socket may not type into a console, or null when it may.
-// lock is the session's control lock (or null), admin the socket's login.
-function inputRefusal({observer, lock, admin}) {
-  if (observer) return lock?.admin === admin ? null : 'Read-only observation: take control to type into this session.';
+// Why a socket may not type into, resize or clear a console (action 'input', 'resize' or
+// 'clear'), or null when it may. lock is the session's control lock (or null), admin the
+// socket's login. One driver at a time: the admin holding the lock, else the owner.
+const OBSERVER_REFUSALS = {
+  input: 'Read-only observation: take control to type into this session.',
+  resize: 'Read-only observation: the console cannot be resized.',
+  clear: 'Read-only observation: the console cannot be cleared.'
+};
+function consoleRefusal({observer, lock, admin, action = 'input'}) {
+  if (observer) return lock?.admin === admin ? null : OBSERVER_REFUSALS[action];
   return lock ? `${lock.admin} controls this session.` : null;
 }
 
@@ -242,16 +248,23 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
     socket.on('input', guard(data => {
       const nodeId = socket.data.nodeId;
       if (!nodeId || typeof data !== 'string' || data.length > 4096) return;
-      const refusal = inputRefusal({observer, lock: control.get(session.id), admin: user.login});
+      const refusal = consoleRefusal({observer, lock: control.get(session.id), admin: user.login, action: 'input'});
       // The owner's UI shows the control banner: their refused keys are dropped silently.
       if (refusal) { if (observer) refuse(refusal); return; }
       if (observer) control.touch(session.id, user.login);
       else session.touch();
       runner.input(nodeId, data);
     }));
-    // Resizing and clearing change what every viewer of the node sees: never for observers.
+    // Resizing and clearing change what every viewer of the node sees: the driver's only (the
+    // owner, or the admin holding control). The owner's are dropped silently while controlled.
+    const consoleAllowed = action => {
+      const refusal = consoleRefusal({observer, lock: control.get(session.id), admin: user.login, action});
+      if (refusal) { if (observer) refuse(refusal); return false; }
+      if (observer) control.touch(session.id, user.login);
+      return true;
+    };
     socket.on('terminal-resize', guard(request => {
-      if (observer) return refuse('Read-only observation: the console cannot be resized.');
+      if (!consoleAllowed('resize')) return;
       if (!request || !request.id || request.id !== socket.data.nodeId) return;
       const cols = Number(request.cols);
       const rows = Number(request.rows);
@@ -265,7 +278,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
     attachCaptureLease(socket, {runner, guard, leases: leasesOf(session.id), allowed: () => !observer || control.heldBy(session.id, user.login),
       record: ({nodeId, captureId}) => { if (observer) audit.record(user.login, 'capture-discarded', {login: workspace.owner, nodeId, captureId}); }});
     socket.on('clear-console', guard(request => {
-      if (observer) return refuse('Read-only observation: the console cannot be cleared.');
+      if (!consoleAllowed('clear')) return;
       if (!request || !request.id || request.id !== socket.data.nodeId) return;
       const line = typeof request.line === 'string' ? request.line.replace(/[\x00-\x1f\x7f]/g, '').slice(0, 1024) : '';
       const column = Number.isInteger(request.column) ? Math.max(0, Math.min(request.column, 1024)) : line.length;
@@ -293,8 +306,10 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
   return {
     browsers: login => browsers.get(login) || 0,
     connections: () => transports.summary(),
-    // Whether `admin` holds the console-control lock of a session (the capture routes of an observing admin).
-    controlHeld: (sessionId, admin) => control.heldBy(sessionId, admin),
+    // The control lock for the HTTP gate (server/routes/admin.js observationGate): who holds
+    // it on a session (or null), and the idle timer restarted by each request of that admin.
+    controlAdmin: sessionId => control.get(sessionId)?.admin || null,
+    controlTouch: (sessionId, admin) => control.touch(sessionId, admin),
     // Closes every socket of a user at once (account disabled or role changed from /admin),
     // so that passive sockets stop receiving console output too.
     disconnectUser(login) {
@@ -303,4 +318,4 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
   };
 }
 
-module.exports = {attachSockets, sessionRoom, nodeRoom, consoleRoom, inputRefusal, createObservationTracker};
+module.exports = {attachSockets, sessionRoom, nodeRoom, consoleRoom, consoleRefusal, createObservationTracker};

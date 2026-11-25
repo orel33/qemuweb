@@ -8,7 +8,7 @@ import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
 import {renderGraphic, setGraphicView} from './graphic-view.js';
 import {closeFloatingConsole, floatingConsoleOpen, openFloatingConsole} from './graphic-console.js';
-import {controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
+import {canWrite, controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
 import {publishView} from './socket.js';
 import {updateEngineSelect} from './engine-select.js';
 
@@ -389,7 +389,7 @@ export function renderTabs() {
     select.title = machine.osHint;
     select.onclick = () => { if (machine.id !== store.activeId) selectMachine(machine.id); };
     select.ondblclick = async () => {
-      if (observing || machine.kind === 'switch' || !machine.hasLaunched) return;
+      if (!canWrite() || machine.kind === 'switch' || !machine.hasLaunched) return;
       const name = window.prompt('Display name for this host:', machine.hostname);
       if (name === null || !name.trim()) return;
       try {
