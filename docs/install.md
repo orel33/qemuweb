@@ -352,7 +352,7 @@ ls -l /dev/kvm; id; lsmod | grep -E "^kvm"; grep -c -E "vmx|svm" /proc/cpuinfo; 
 | No `/dev/kvm`, no `kvm_intel` or `kvm_amd` in `lsmod` | The module is not loaded | `sudo modprobe kvm_intel` (or `kvm_amd`); if it fails, the next row |
 | `grep -c` answers `0` | Virtualization is off in the firmware (BIOS/UEFI), or the machine is itself a virtual machine without **nested virtualization** (`systemd-detect-virt` says `kvm`, `vmware`...) | Enable VT-x/AMD-V in the firmware, or enable nested virtualization on the hypervisor |
 
-A runner started by `systemd` gets the group from its unit: `SupplementaryGroups=kvm` (the CREMI unit has it). A runner
+A runner started by `systemd` gets the group from its unit: `SupplementaryGroups=kvm` (the units of `scripts/qwctl.sh` have it). A runner
 inside a container needs `/dev/kvm` passed to it and the host's `kvm` group ID. Check with `test -r /dev/kvm -a -w /dev/kvm && echo kvm-ok`
 as the account of the runner.
 

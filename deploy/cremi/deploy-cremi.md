@@ -10,9 +10,8 @@ Debian 13 (trixie), Apache2 and OpenID, on `v0-qemuweb`. The files to copy are i
 | `qemuweb-oidc.inc.example` | model of the OpenID secrets file (kept on the server only) |
 | `qemuweb-proxykey.inc.example` | model of the file with the key shared by Apache and QemuWeb (kept on the server only) |
 | `maintenance.html`, `whoami.html`, `goodbye.html` | static pages: maintenance and error page, OpenID attributes of the user, logout |
-| `qemuweb-server.service`, `qemuweb-runner.service` | systemd units: server, local runner |
 | `cremi-architecture.md` | the network at the CREMI: inbound relay, Apache, outbound proxy, the WebSocket settings of every stage, checks and symptoms |
-| `qwctl.sh` | one command to start, stop, restart and inspect the two services (`status`, `restart`, `logs`) |
+| `scripts/qwctl.sh` (not in this directory) | one command to install, start, stop, restart and inspect the two services; see `docs/deployment.md`, "The two services" |
 
 **Network.** `qemuweb.emi.u-bordeaux.fr` is an alias of the CREMI https relay (`httpsproxy`, 10.252.0.222), which forwards
 to this machine, `v0-qemuweb.emi.u-bordeaux.fr` (10.252.0.117). Apache answers to `v0-qemuweb.emi.u-bordeaux.fr` (aliases
@@ -182,9 +181,13 @@ $U list
 
 # 12. service (QemuWeb on 127.0.0.1:3002; port 3002 is never opened in the firewall). --local-runner makes the server create
 #     /var/lib/qemuweb/server/local-runner.token (0600) at its first start: the token of the local runner (runner A)
-sudo install -m 0644 deploy/cremi/qemuweb-server.service /etc/systemd/system/qemuweb-server.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now qemuweb-server
+#     The options are written once to /etc/qemuweb/server.args (then edited there), with the defaults: port 3002, --local-runner,
+#     /var/lib/qemuweb/server, /etc/qemuweb/users.json and runners.json, /var/log/qemuweb. Run as qemuweb: the account of the service
+H=https://qemuweb.emi.u-bordeaux.fr
+L="$H/.openid?logout=$H/goodbye"                    # short lines: a long URL is cut when it is pasted
+./scripts/qwctl.sh install server --now --session-hours 12 --runner-grace 300 --trust-proxy loopback \
+  --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
+  --logout-url "$L"
 sudo journalctl -u qemuweb-server --since "2 min ago" --no-pager | tail -n 25    # "QemuWeb is ready." "No runner connected."
 
 # 13. the proxy modules and the site of stage 3 (the maintenance page is already in place)
@@ -205,7 +208,7 @@ Notes:
 - Apache proxies to `127.0.0.1:3002` with WebSocket (`upgrade=websocket`) and a one-hour timeout, sends
   `X-Forwarded-Proto: https` (so the login cookie is `Secure`, with `--trust-proxy loopback`), accepts bodies up to 1 GiB
   (session ZIP archives) and shows `maintenance.html` on 502 and 503.
-- `qemuweb-server.service` runs `--auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
+- `/etc/qemuweb/server.args` has `--auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url ...`: the logout button
   goes to the OpenID logout, which ends at `/goodbye`. After a change of an account, no restart is needed.
 - To disable a student, add the login with `$U add "$LOGIN" --no-password` then `$U disable "$LOGIN"`: a disabled login is
   refused through OpenID too.
@@ -229,7 +232,7 @@ Run on the server as `qemuweb`; the restarts of the server keep the machines of 
 # 1. add the new key as a second line, and restart the server: it accepts both
 NEW=$(openssl rand -hex 32)
 echo "$NEW" | sudo tee -a /etc/qemuweb/proxy-key > /dev/null
-sudo systemctl restart qemuweb-server        # or ./deploy/cremi/qwctl.sh restart server
+./scripts/qwctl.sh restart server
 # 2. give the new key to Apache, and reload it (no request is cut)
 sudo sed -i "s/X-Proxy-Key \".*\"/X-Proxy-Key \"$NEW\"/" /etc/apache2/qemuweb-proxykey.inc
 unset NEW
@@ -247,7 +250,8 @@ first key, a file of one line.
 
 For a server already running with the password login (service without `--auth`): create the key (step 10,
 if `/etc/qemuweb/proxy-key` does not exist), declare the administrators (step 11), install the site and the service,
-restart. Run on the server as `qemuweb`.
+restart. Run on the server as `qemuweb`. It assumes that the service was installed by `scripts/qwctl.sh` (else "Switch to the units of qwctl.sh"
+below, whose command already has `--auth proxy`).
 
 ```sh
 cd /srv/qemuweb && git pull
@@ -257,8 +261,10 @@ $U add "$LOGIN" --role admin --no-password
 $U list
 sudo install -m 0644 deploy/cremi/qemuweb-site-app.conf /etc/apache2/sites-available/qemuweb.conf
 sudo apache2ctl configtest && sudo systemctl reload apache2
-sudo install -m 0644 deploy/cremi/qemuweb-server.service /etc/systemd/system/qemuweb-server.service
-sudo systemctl daemon-reload && sudo systemctl restart qemuweb-server
+# in the ARGS line: remove "--auth password" if it is there, and add
+#   --auth proxy --proxy-key-file /etc/qemuweb/proxy-key --logout-url https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye
+sudoedit /etc/qemuweb/server.args
+./scripts/qwctl.sh restart server
 sleep 3 && sudo journalctl -u qemuweb-server --since "1 min ago" --no-pager | tail -n 8
 curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:3002/auth/me        # 401: no identity without the key
 curl -s -o /dev/null -w '%{http_code}\n' -H 'X-Remote-User: admin' -H 'X-Proxy-Key: wrong' http://127.0.0.1:3002/auth/me   # 403
@@ -274,16 +280,14 @@ the Supervision link (no QemuWeb login page). The restart keeps the machines of 
 login, the accounts of `users.json` with a password) for the time of the incident:
 
 ```sh
-# on the server, as qemuweb: a drop-in replaces the authentication options (nothing is edited in the repository)
-sudo systemctl edit qemuweb-server      # in the editor, write the three lines below, save, quit
-#   [Service]
-#   ExecStart=
-#   ExecStart=/usr/bin/node server/main.js --listen 3002 --local-runner --runtime /var/lib/qemuweb/server --users /etc/qemuweb/users.json --runners /etc/qemuweb/runners.json --logs /var/log/qemuweb --session-hours 12 --runner-grace 300 --trust-proxy loopback --auth password
+# on the server, as qemuweb: the options of the server are in /etc/qemuweb/server.args (keep a copy of them, outside /etc/qemuweb/*.args)
+sudo cp -p /etc/qemuweb/server.args /etc/qemuweb/server.args.proxy
+sudoedit /etc/qemuweb/server.args       # in the ARGS line, remove --auth proxy, --proxy-key-file and --logout-url with their values (password is the default)
 cd /srv/qemuweb && ./scripts/user.sh --users /etc/qemuweb/users.json add admin --role admin    # asks a password
-sudo systemctl restart qemuweb-server
+./scripts/qwctl.sh restart server
 # (on the workstation)  ssh -N -L 3012:127.0.0.1:3002 qemuweb-app   then http://127.0.0.1:3012 (the login page), log in as admin with that password
-# back to normal: remove the drop-in and restart
-sudo rm -r /etc/systemd/system/qemuweb-server.service.d && sudo systemctl daemon-reload && sudo systemctl restart qemuweb-server
+# back to normal
+sudo mv /etc/qemuweb/server.args.proxy /etc/qemuweb/server.args && ./scripts/qwctl.sh restart server
 ```
 
 Delete the `admin` account afterwards (`./scripts/user.sh --users /etc/qemuweb/users.json remove admin`).
@@ -326,52 +330,92 @@ sudo apache2ctl configtest && sudo systemctl reload apache2
 - Remote runners get `503` too. Their sessions stay offline for `--runner-grace` (300 s), then are dropped, as for the local runner.
 - It works without OpenID or secrets. Enable one site at a time (`a2dissite` first).
 
-### Upgrading from 0.9.6 or earlier to this release (one-time breaking change)
+### Switch to the units of `qwctl.sh` (an installed server, once)
+
+The units of an older installation were copied by hand from `deploy/cremi/`. The new ones read their options in `/etc/qemuweb/*.args` and keep every
+path (`/var/lib/qemuweb/server`, `/var/lib/qemuweb/runner`, `/etc/qemuweb`, port 3002): **nothing is deleted or moved**, and the sessions stay. Do not mix it with "Upgrading
+from 0.9.6" below, which deletes them. The old units are not marked as generated: `--force` replaces them (the options that identify
+the users are in the same command, so that the server never starts in password mode). Run on the server as `qemuweb`:
+
+```sh
+cd /srv/qemuweb && git pull --tags && npm ci
+systemctl cat qemuweb-server qemuweb-runner                # keep this output: a local change of a unit must go in the command below
+ls -d /etc/systemd/system/qemuweb-*.service.d 2>/dev/null  # a drop-in of the emergency mode (ExecStart) must be removed first
+H=https://qemuweb.emi.u-bordeaux.fr
+L="$H/.openid?logout=$H/goodbye"                    # short lines: a long URL is cut when it is pasted
+# 1. what would change (--dry-run): check ARGS and the difference with the old unit
+./scripts/qwctl.sh install server --force --dry-run --session-hours 12 --runner-grace 300 --trust-proxy loopback \
+  --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
+  --logout-url "$L"
+# 2. the server (the old one keeps running until step 4)
+./scripts/qwctl.sh install server --force --session-hours 12 --runner-grace 300 --trust-proxy loopback \
+  --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
+  --logout-url "$L"
+cat /etc/qemuweb/server.args                               # --auth proxy ... is there, and the same --runtime, --users, --runners, --logs as before
+# 3. the local runner (its port and token file come from server.args)
+./scripts/qwctl.sh install runner --force --dry-run
+./scripts/qwctl.sh install runner --force
+# 4. apply: the server first (the machines stay), check the login in a private window; then the runner, which STOPS every machine:
+#    users save their session ZIP before
+./scripts/qwctl.sh restart server
+./scripts/qwctl.sh restart runner
+./scripts/qwctl.sh status                                  # no Warning line
+```
+
+If `install` says that `/etc/qemuweb/server.args` exists and differs, an earlier run wrote it: the message lists the differences. Edit the file
+(`sudoedit`), then run `./scripts/qwctl.sh install server --force` without the options of the server. If the server does not start after step 4, `./scripts/qwctl.sh logs server 40` gives the reason; the options are corrected in `/etc/qemuweb/server.args`.
+To go back, restore the two old unit files from the output kept above (`sudoedit`), then `sudo systemctl daemon-reload`.
+
+### Upgrading from 0.9.6 or earlier to 0.9.7 (one-time breaking change)
 
 The local runner no longer uses a Unix socket and no longer shares a directory with the server: the server and the runner each
 have their own directory, the runner dials the server with a token file, and `runners.json` is schema 2 (schema 1 is refused). The
-old content of `/var/lib/qemuweb` is not used any more and is **deleted**: **every session is lost** (machines and disks). Tell the
+old content of `/var/lib/qemuweb` is not used any more and is **deleted**: **every session is lost** (machines and disks). Do this only when the installed
+version still shares a directory (its unit has no `--local-runner`). Tell the
 users to **save their session ZIP first**, and put the maintenance site first ("Maintenance mode"). Update the code and the two
 units together. Run on the server as `qemuweb`:
 
 ```sh
 # 1. stop both services (this stops every machine)
-./deploy/cremi/qwctl.sh stop -y
-# 2. delete the old runtime (sessions, users/, runner-3002.sock, bindings) and the old runners.json (schema 1)
+sudo systemctl stop qemuweb-runner qemuweb-server
+# 2. delete the old runtime (sessions, users/, runner-3002.sock, bindings); the registered runners: see the note below
 sudo rm -rf /var/lib/qemuweb/*
 sudo rm -f /etc/qemuweb/runners.json
-# 3. the two new directories
-sudo install -d -o qemuweb -g qemuweb -m 0700 /var/lib/qemuweb/server /var/lib/qemuweb/runner
-# 4. the new code
+# 3. the new code
 cd /srv/qemuweb && git pull --tags && npm ci
-# 5. the two new unit files
-sudo install -m 0644 deploy/cremi/qemuweb-server.service /etc/systemd/system/qemuweb-server.service
-sudo install -m 0644 deploy/cremi/qemuweb-runner.service /etc/systemd/system/qemuweb-runner.service
-sudo systemctl daemon-reload
-# 6. start both (the server writes the token file, then the runner connects with it)
-./deploy/cremi/qwctl.sh restart -y
-# 7. check
-./deploy/cremi/qwctl.sh status
-./deploy/cremi/qwctl.sh logs all 15                       # "Connected to the server."
+H=https://qemuweb.emi.u-bordeaux.fr
+L="$H/.openid?logout=$H/goodbye"                    # short lines: a long URL is cut when it is pasted
+# 4. the units and the two new directories
+./scripts/qwctl.sh install server --force --session-hours 12 --runner-grace 300 --trust-proxy loopback \
+  --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
+  --logout-url "$L"
+./scripts/qwctl.sh install runner --force
+# 5. start both (the server writes the token file, then the runner connects with it)
+./scripts/qwctl.sh start
+# 6. check
+./scripts/qwctl.sh status
+./scripts/qwctl.sh logs 15                                # "Connected to the server."
 ls -l /var/lib/qemuweb/server/local-runner.token          # -rw------- qemuweb qemuweb
 ```
 
 Then open `/admin` -> Runners: the row `local` must be online. The old `runners.json` is at the path of the server's `--runners`
-option (`/etc/qemuweb/runners.json` in `qemuweb-server.service`); the remote runners it listed must be registered again
-(`/admin` token, `runner.sh register`, see "Runner B"). If you keep a drop-in of `qemuweb-server.service` (the emergency
-mode above), copy the two changed options there too. The images are not affected, but the addresses shown by the Graphic view come
+option (`/etc/qemuweb/runners.json`); the remote runners it listed must be registered again
+(`/admin` token, `runner.sh register --force`, see "Runner B"). **To keep the registered remote runners instead**: the records of remote runners are identical in schema 1 and
+schema 2, so, instead of removing the file in step 2, change the number (`"schemaVersion": 1` to `2`) in it. This was **not tested**: keep a copy, and if the
+server refuses the file, remove it and register the runners again. The images are not affected, but the addresses shown by the Graphic view come
 from the guest agent: rebuild the Debian images (`bash scripts/prepare.sh --system debian13-legacy`, and the Cloud one) if they
 predate it, see `docs/install.md`.
 
 ### Update later
 
-`deploy/cremi/qwctl.sh` starts, stops, restarts and shows the two services (`qemuweb-server` and `qemuweb-runner`) in one command:
-`./deploy/cremi/qwctl.sh status`, `restart server` (keeps the machines: the runner holds them), `restart runner` or `restart` (both: stops every
-machine, it asks first; `-y` skips the question), `logs [server|runner] [LINES]`. The plain commands are below.
+`scripts/qwctl.sh` installs, starts, stops, restarts and shows the two services (`qemuweb-server` and `qemuweb-runner`) in one command:
+`./scripts/qwctl.sh status`, `restart server` (keeps the machines: the runner holds them), `restart runner` or `restart` (both: stops every
+machine, it asks first; `-y` skips the question), `logs [server|runner] [LINES]`. When `status` says that a unit differs from the repository,
+`./scripts/qwctl.sh install server` (or `runner`), without options, replaces it. The plain commands are below.
 
 After a release that **changes a file format** (the release notes and `docs/json-files.md` say so), the sessions of the
 old format are no longer readable: save what matters first, then `git pull --tags && npm ci` and
-`./deploy/cremi/qwctl.sh restart` (both services: the runner must run the new code too, since it reads the archives; an
+`./scripts/qwctl.sh restart` (both services: the runner must run the new code too, since it reads the archives; an
 archive rejected with `Invalid session.json in archive.` right after a pull means the runner is still the old one).
 Restarting only the server never applies a change of the runner code.
 
@@ -379,12 +423,12 @@ Restarting only the server never applies a change of the runner code.
 # 15. a restart of the server alone keeps the machines of every runner: the sessions are restored offline from bindings.json
 #     and bound again when their runner reconnects (up to --runner-grace, 300 s)
 #     (for a long update, put the maintenance site first: see "Maintenance mode")
-cd /srv/qemuweb && git pull && npm ci && sudo systemctl restart qemuweb-server
+cd /srv/qemuweb && git pull && npm ci && ./scripts/qwctl.sh restart server
 # after a change of a site file or of the secrets file
 sudo apache2ctl configtest && sudo systemctl reload apache2
 ```
 
-**Before copying a site file or the service file after a `git pull`**, read what changed in `deploy/cremi/`:
+**Before copying a site file after a `git pull`**, read what changed in `deploy/cremi/`:
 `git log --stat -5 -- deploy/cremi docs`. A new version of a site file may need a file that exists only on the server
 (for example `qemuweb-proxykey.inc`, step 10, or `qemuweb-oidc.inc`): create it first, otherwise `apache2ctl configtest`
 fails with `Could not open configuration file` (Apache keeps running with the old configuration, as long as you
@@ -428,9 +472,7 @@ cd /srv/qemuweb && bash scripts/prepare.sh --list         # debian13-legacy is l
 
 ```sh
 # 18. the runner service
-sudo install -m 0644 deploy/cremi/qemuweb-runner.service /etc/systemd/system/qemuweb-runner.service
-sudo systemctl daemon-reload
-sudo systemctl enable --now qemuweb-runner
+./scripts/qwctl.sh install runner --now                     # local: the port and the token file come from server.args
 sudo journalctl -u qemuweb-runner -n 30 --no-pager -o cat   # "Connected to the server."
 ls -l /var/lib/qemuweb/server/local-runner.token            # -rw------- qemuweb qemuweb, created by the server
 sudo journalctl -u qemuweb-server -n 10 --no-pager -o cat          # the server sees its runner
@@ -456,9 +498,9 @@ What `--runner-grace 300` means here, for the local runner as for a remote one:
 - **Revoking** a runner drops its sessions at once; for a lost runner that will not return, `/admin` -> Runners -> **Drop
   sessions** does not wait for the 300 s.
 - If `local-runner.token` is **lost**, the runner waits ("token file missing"): restart the server
-  (`./deploy/cremi/qwctl.sh restart server`), which writes a new one, and the runner reconnects by itself.
+  (`./scripts/qwctl.sh restart server`), which writes a new one, and the runner reconnects by itself.
 - The runner **exits with status 78** and systemd does not restart it when the server refuses its token (the record `local`
-  was revoked in `/admin` -> Runners, or forgotten): forget or un-revoke the record, then `./deploy/cremi/qwctl.sh restart runner`.
+  was revoked in `/admin` -> Runners, or forgotten): forget or un-revoke the record, then `./scripts/qwctl.sh restart runner`.
 
 ## Runner B: remote, on another machine
 

@@ -26,12 +26,15 @@ Create the accounts before opening the service (see the [user guide](user-guide.
 ./scripts/user.sh list
 ```
 
+For a service ([The two services](#the-two-services)), the file is `/etc/qemuweb/users.json`: run these commands under the account of the service, after
+`install server`, with `--users /etc/qemuweb/users.json` first (`./scripts/user.sh --users /etc/qemuweb/users.json list`).
+
 Keep `users.json` readable only by the account that runs QemuWeb (the script
 writes it with mode 0600). Do not use `--no-auth` on an exposed server.
 
 ## 2. Options of the QemuWeb service
 
-The server reads no environment variable: its options are on the command line of the systemd unit
+The server reads no environment variable: its options are on its command line, kept in `/etc/qemuweb/server.args` for the service
 (see [The two services](#the-two-services)).
 
 | Option | Value behind nginx | Why |
@@ -39,9 +42,9 @@ The server reads no environment variable: its options are on the command line of
 | `--listen` | `3002` (default, or another local port) | Port nginx forwards to. |
 | `--trust-proxy` | `loopback` | Trust `X-Forwarded-Proto` and `X-Forwarded-For` from nginx on the same machine, so that the login cookie gets the `Secure` attribute over HTTPS. |
 | `--session-hours` | `12` (default) | Login lifetime, renewed while the user is active. |
-| `--users` | optional | Users file outside the repository, e.g. `/etc/qemuweb/users.json`. |
-| `--logs` | optional | Log directory outside the repository, e.g. `/var/log/qemuweb` (see [Server logs](#server-logs)). |
-| `--runtime` | recommended | State directory of the server (pid record, `bindings.json`, `local-runner.token`) on a persistent disk, e.g. `/var/lib/qemuweb/server`; the runner has its own (`/var/lib/qemuweb/runner`), never the same one. No length limit. Without it the default is the private `/tmp/qw-<login>/<port>`, emptied by a reboot (see [the reference](reference.md#runtime-directory)). |
+| `--users` | `/etc/qemuweb/users.json` (written by `qwctl.sh install`) | Users file outside the repository: then use `./scripts/user.sh --users /etc/qemuweb/users.json ...`. |
+| `--logs` | `/var/log/qemuweb` (written by `qwctl.sh install`) | Log directory outside the repository (see [Server logs](#server-logs)). |
+| `--runtime` | `/var/lib/qemuweb/server` (written by `qwctl.sh install`) | State directory of the server (pid record, `bindings.json`, `local-runner.token`) on a persistent disk; the runner has its own (`/var/lib/qemuweb/runner`), never the same one. No length limit. Without it the default is the private `/tmp/qw-<login>/<port>`, emptied by a reboot (see [the reference](reference.md#runtime-directory)). |
 
 ## The runner process
 
@@ -164,50 +167,53 @@ server, connected, refused, lost). A refused option ends either program with sta
 
 ### The two services
 
-Both are systemd services of the same machine, so that restarting the server
-(an upgrade) leaves the machines running. The runner is a user service (never
-root), here for an account `qemuweb` that also runs the server, assuming the
-repository in `/srv/qemuweb` and `qemuweb` in the `kvm` group:
+The server and its local runner are two systemd **system** services, so that restarting the server (an upgrade) leaves the machines running.
+`scripts/qwctl.sh` installs and controls them ([its options](reference.md#systemd-services-scriptsqwctlsh)); the unit templates are in `deploy/systemd/`.
+Run it as a normal account: it calls `sudo` itself. Here the repository is in `/srv/qemuweb` (with `npm ci` done) and the services run under an
+account `qemuweb`, in the `kvm` group; Node.js must be in `/usr/bin` or `/usr/local/bin`, where a service looks for it.
 
-```ini
-# /etc/systemd/system/qemuweb-server.service
-[Unit]
-Description=QemuWeb
-After=network.target
-
-[Service]
-User=qemuweb
-WorkingDirectory=/srv/qemuweb
-ExecStart=/usr/bin/node server/main.js --listen 3002 --local-runner --runtime /var/lib/qemuweb/server --users /etc/qemuweb/users.json --logs /var/log/qemuweb --trust-proxy loopback
-KillSignal=SIGTERM
-TimeoutStopSec=30
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-
-# ~qemuweb/.config/systemd/user/qemuweb-runner.service (systemd --user, loginctl enable-linger qemuweb)
-[Unit]
-After=qemuweb-server.service
-
-[Service]
-WorkingDirectory=/srv/qemuweb
-ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --token-file /var/lib/qemuweb/server/local-runner.token --runtime /var/lib/qemuweb/runner
-KillMode=mixed
-Restart=on-failure
-RestartPreventExitStatus=78
+```sh
+cd /srv/qemuweb
+./scripts/qwctl.sh install server --sysuser qemuweb --dry-run --trust-proxy loopback   # shows everything, changes nothing
+./scripts/qwctl.sh install server --sysuser qemuweb --now --trust-proxy loopback
+./scripts/qwctl.sh install runner --sysuser qemuweb --now                              # the local runner
+./scripts/qwctl.sh status
+./scripts/qwctl.sh logs runner                                                          # "Connected to the server."
 ```
 
-The server is started with `--local-runner`; it creates the token file `local-runner.token` in its `--runtime` (here `/var/lib/qemuweb/server`,
-state kept apart from the code, no length limit; the default is `/tmp/qw-<login>/3002`, lost at a reboot) and the runner gets its path with `--token-file`,
-with its own `--runtime` directory. Both directories must exist and belong to the `qemuweb` account. `RestartPreventExitStatus=78`
-keeps systemd from restarting a runner that the server refused (revoked). Restarts
-are systemd's job (`Restart=`): QemuWeb never restarts a process itself.
-`KillMode=mixed` sends SIGTERM to the runner only, which stops its machines in
-order; SIGKILL goes to every remaining process of the unit (QEMU, `vde_switch`)
-only after the stop timeout. Stopping the runner service stops its machines;
-tell users to save a session ZIP first. Stopping the server service leaves them
-running, and the sessions are adopted again when the server is back.
+`--sysuser` is the Linux account of the service (default: the account that runs the command); it is not the `--users` file of the server. The other
+options are those of `server.sh` and `runner.sh`; they are checked before anything is written. `install` then:
+
+- writes the options, once, to `/etc/qemuweb/server.args` or `runner.args` (one line `ARGS=...`, read by systemd and given to the program on its command line).
+  **This file is then yours**: edit it and restart the service; no command overwrites it, and options given to `install` while it exists must be the same as in the file, otherwise they are
+  refused and the differences listed. A value holds no space, quote, backslash or `$`; a path is absolute. Only `ARGS` is read: the programs take their options from the command line.
+- adds these defaults: for the server `--listen 3002 --local-runner --runtime /var/lib/qemuweb/server --users /etc/qemuweb/users.json --runners
+  /etc/qemuweb/runners.json --logs /var/log/qemuweb`; for the runner `--runtime /var/lib/qemuweb/runner`.
+- creates the missing directories, owned by the account (0700 for a runtime directory, 0750 for the others); `/var/lib/qemuweb` above them is root's (0755), so that services of
+  several accounts can share it. `/etc/qemuweb` belongs to the account of the server (0750); created by the installation of a runner it is root's, and `install server` takes it
+  over. An existing directory that the account cannot enter is refused, with the command that opens it;
+- writes and enables the unit (`qemuweb-server`, `qemuweb-runner`), started only with `--now`.
+
+**A server without a local runner** (machines only on remote runners): remove the word `--local-runner` from `/etc/qemuweb/server.args` and restart the server.
+
+**The local runner follows the server**: its `--port`, `--token-file` (and `--host`, when the server has a `--bind`) are not options of its own but come from
+`server.args`, and are written in its unit. After changing `--listen`, `--bind` or `--runtime` there, `status` says that the runner's unit differs:
+run `./scripts/qwctl.sh install runner` again and restart both. It runs under the account of the server (the token file is 0600). A drop-in of `qemuweb-server` that
+overrides `ExecStart` is not read: `status` warns.
+
+**Update.** After a `git pull`, install again (without options): the difference with the installed unit is shown, and the unit is replaced. A unit that QemuWeb did not
+generate is replaced only with `--force`. `status` shows the mode of each runner, and flags a unit that differs from what the repository would generate and a
+drop-in that overrides `ExecStart`. Then `./scripts/qwctl.sh restart server` (the machines stay), or `restart`, which also restarts the runners (it asks
+first: their machines are stopped; `-y` answers yes). `start` and `restart` first reset a unit that systemd gave up on (`reset-failed`). Tell users to save a session ZIP before.
+
+**Removal.** `./scripts/qwctl.sh uninstall runner` (or `server`) stops, disables and removes the unit only: the options file, the drop-ins, the runner file and
+all the data stay.
+
+How the units behave: restarts are systemd's job (`Restart=on-failure`), QemuWeb never restarts a process itself; `RestartPreventExitStatus=78` keeps systemd from
+restarting a runner that the server refused (revoked). `KillMode=mixed` sends SIGTERM to the runner only, which stops its machines in order; SIGKILL goes to every
+remaining process of the unit (QEMU, `vde_switch`) only after the stop timeout. Stopping the runner stops its machines. Stopping the server leaves them
+running, and the sessions are adopted again when the server is back. The runtime directories are on a persistent disk, apart from the code; a runner's path is at
+most 49 characters.
 
 ## Remote runners
 
@@ -297,27 +303,35 @@ registration token is single use and expires (15 minutes, 1 hour or 24 hours, ch
 - **Revocation:** after **Revoke** in `/admin` the server refuses the token (401): the runner stops its machines and exits
   with status 78 instead of retrying. Register it again to bring it back.
 
-A `systemd --user` unit (run `loginctl enable-linger` for the account so that it starts at boot):
+#### As a service
 
-```ini
-# ~/.config/systemd/user/qemuweb-runner.service
-[Unit]
-Description=QemuWeb remote runner
-After=network-online.target
-Wants=network-online.target
+`runner.sh` above runs in a terminal, which suits a lab workstation. On a machine that always serves as a runner, install a system service
+(see [The two services](#the-two-services)). The complete sequence, for a runner account `qemuweb`:
 
-[Service]
-WorkingDirectory=%h/qemuweb
-ExecStart=%h/qemuweb/scripts/runner.sh run
-KillMode=mixed
-Restart=on-failure
-# A revoked runner exits with status 78 and must not loop: remove the unit, or register it again.
-RestartPreventExitStatus=78
-# Private certificate authority: Environment=NODE_EXTRA_CA_CERTS=%h/ca.pem
-
-[Install]
-WantedBy=default.target
+```sh
+# 1. an administrator of the server creates a registration token in /admin -> Runners
+# 2. register, as the account of the service (the token is single use)
+sudo -u qemuweb /srv/qemuweb/scripts/runner.sh register --url https://qemuweb.example.org --token TOKEN --name salle-12 \
+  --runner-config ~qemuweb/.config/qemuweb-runner/runner.json
+# 3. install and start the service
+cd /srv/qemuweb
+./scripts/qwctl.sh install runner --remote --sysuser qemuweb --now
+./scripts/qwctl.sh status
+./scripts/qwctl.sh logs runner                                     # "Connected to the server."
 ```
+
+`--remote` is explicit: without it the runner is the local one. Step 3 without step 2 stops and prints the exact `register` command. The options file is `/etc/qemuweb/runner.args`
+(`--runner-config`, `--runtime /var/lib/qemuweb/runner`, and `--insecure` or `--config` if you give them). The URL, the certificate authority and the limits stay in `runner.json`:
+`--url` and `--ca` are refused. A `runtime` in `runner.json` (from `register --runtime`) is used as it is: no `--runtime` is then written. For a private authority register
+with `--ca FILE`. Keep the limits (`maxSessions`...) in `runner.json` and restart the service.
+
+`register` refuses to replace an existing runner file, whose token would be lost; `--force` replaces it. After a revocation (status 78), register again with `--force`, then
+`./scripts/qwctl.sh restart runner`.
+
+**Several runners on one machine**: `--name NAME` (lower case letters, digits, `-`, at most 16 characters) gives the unit `qemuweb-runner-NAME`, the options file
+`/etc/qemuweb/runner-NAME.args`, the runner file `~qemuweb/.config/qemuweb-runner/NAME.json` and the runtime directory `/var/lib/qemuweb/runner-NAME`. Local and remote runners can live together; a runner file or a
+runtime directory already used by another unit is refused, and so is a second local runner. Each runner announces the whole machine: set `maxSessions` in
+the runner files. `qwctl.sh start|stop|restart|status|logs` without a target acts on every installed unit; `runner --name NAME` selects one.
 
 ### Administration
 
@@ -392,8 +406,8 @@ if needed.
 
 ## Listening on another address (LAN test, no proxy)
 
-**Production keeps the default: `--bind 127.0.0.1` (loopback), behind nginx or Apache.** At the CREMI nothing changes: the units in
-`deploy/cremi/` never pass `--bind`, the server answers only to the proxy of its own machine, and TLS is terminated by the proxy.
+**Production keeps the default: `--bind 127.0.0.1` (loopback), behind nginx or Apache.** At the CREMI nothing changes: its `server.args`
+never has `--bind`, the server answers only to the proxy of its own machine, and TLS is terminated by the proxy.
 
 `--bind ADDRESS` lets the server listen on another address of the machine, for a test on a trusted network where a remote runner (or a
 browser) must reach the server without an SSH tunnel and without a proxy. `ADDRESS` is an IPv4 or IPv6 literal of this machine (never a host
