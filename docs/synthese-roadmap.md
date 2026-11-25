@@ -90,6 +90,7 @@ De la version 0.9.7 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | GRA04 | Relier deux nœuds en glissant d'une prise à l'autre dans la vue graphique | 3 |
 | BUGS01 (BUG06, BUG07, TOD04) | **Fait.** Trois petites corrections : catalogue illisible, message de `start.sh`, infobulle d'un contrôle désactivé | 1 |
 | CTL01 | **Fait.** Suivi et contrôle complétés : la console flottante suit la vue (corrigé), l'admin qui a le contrôle peut tout faire comme l'utilisateur | 2 |
+| CTL02 | Suite de CTL01 : la position et la taille de la console flottante sont suivies, elle reste ouverte au retour dans la vue graphique, l'utilisateur voit qu'un admin l'observe, bannière de contrôle courte | 2 |
 | BUG04, TOD05, TOD08 | Petites tâches indépendantes de l'annexe, à prendre au fil des creux | 1 |
 
 *Critère de sortie* : un étudiant sans aide sait créer, lancer, arrêter et remettre à zéro sa session, et reconnaît les actions de session de celles d'un nœud.

@@ -78,7 +78,13 @@ consoles.
   observer socket on the session closes; the owner's input, Clear and resize are then dropped on
   every node). `console-control` {admin, active} goes to every socket of the
   session, owner and observers, on each change and at connection, and the
-  pages derive their banners from it only. While an admin holds
+  pages derive their banners from it only. `session-observers` {admins} (CTL02) goes to the
+  owner's main session sockets only (room `owner:<id>`): the sorted logins of the admins with
+  an observer socket open on the session (`createObservationTracker().admins`), nothing else,
+  when an observation starts or ends and at connection; an admin on their own session is not an
+  observer. The owner's page validates it (`normalizeObservers`) and shows a yellow banner,
+  replaced by the control banner while an admin holds control (`ownerBanner`,
+  `public/disabled-reason.js`). While an admin holds
   control, the view goes the other way: the admin's page publishes
   `controller-view` (same fields and validation, accepted only from that admin
   while they hold a lock on the session, kept for a page opening meanwhile) and
@@ -149,7 +155,7 @@ host's console views `Console (ttyS0)` and `Console (ttyS1)`; a switch keeps
 What a page of the workspace shows is one plain JSON object, the view state,
 defined, validated and compared in one module, `public/view-state.js` (a
 classic script shared by the server and the browser: `paneCount`,
-`normalizeView(raw, nodeIds)`, `sameView`):
+`normalizeView(raw, nodeIds)`, `sameView`, the geometry helpers, `normalizeObservers`):
 
 ```text
 { mode:     'terminals' | 'graphic',
@@ -161,17 +167,28 @@ classic script shared by the server and the browser: `paneCount`,
                                  (Console ttyS0, Console ttyS1, Monitor, Log)
   switches: boolean,             switch consoles shown
   active:   nodeId | null,       the selected node (tab or graphic selection)
-  floating: boolean }            the floating console of the Graphic view is open,
-                                 on the active node
+  floating: boolean,             the floating console of the Graphic view is open on
+                                 the active node, shown whenever the Graphic view shows
+  geometry: {left, top, width, height} | null }
+                                 the floating console's window as fractions of the
+                                 Graphic view (#graphic-workspace); null = default
 ```
 
 `normalizeView` returns a valid view state or null: known keys only (others
 dropped), known layouts and modes, `panes` and `views` of the right length (a view state without `views` is
 invalid), `views` entries among the five views, `panes` with strings or
 null; node IDs not in the given list become null, and a node shown in two panes is kept in the first one; the view of a pane left
-empty becomes `console`; `floating` must be a boolean and becomes false outside the
-Graphic view or when the active node is unknown or in no pane. The floating console's
-position and size are per browser, not part of the view. The console page is not part
+empty becomes `console`; `floating` must be a boolean and becomes false when the active node is unknown or in no
+pane; it stays true in the Terminals view, which hides the window without closing it, so that
+coming back to Graphic shows it again (CTL02). `geometry` is null or an object with exactly
+`left`, `top`, `width` and `height`, finite numbers clamped to [0, 1] (width and height at
+least 0.05) and rounded to 1e-4; anything else makes the view invalid (a view saved by an
+earlier version is dropped once, no migration). Fractions rather than pixels because the
+browsers differ in size: `geometryFraction` turns the driver's window into fractions of its
+Graphic view, `geometryPixels` turns them back on each page, at least 300 × 200 pixels and kept
+inside the viewport. A page whose view is driven cannot move or resize the window (no drag, CSS
+`resize: none`); the driver publishes while it drags or resizes at most every 250 ms, and once
+more at the end of a move. A window resize re-applies the geometry without publishing. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
 the resulting `panes` is what is published.
 
