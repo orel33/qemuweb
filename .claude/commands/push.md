@@ -7,4 +7,4 @@ The user typed `/push`: this is his explicit order, for THIS run only, to push t
 
 1. In the main checkout, show `git status -sb` and `git log --oneline origin/main..main`. If the working tree has changes to tracked files, or HEAD is not on `main`, stop and say so.
 2. Push with `git push gitubx main` then `git push origin main` (never `--force`, never `--tags`, never another branch). If a push is rejected (the remote has commits that are not in `main`), stop and report it: do not rebase or force on your own.
-3. Report, in French, factual and short: the range pushed on each remote (`old..new`), the new HEAD, and that no tag was created. If the server of the CREMI needs the update, remind the one command: `cd /srv/qemuweb && git pull --tags && ./deploy/cremi/qwctl.sh restart` (it stops the machines).
+3. Report, in French, factual and short: the range pushed on each remote (`old..new`), the new HEAD, and that no tag was created. If the server of the CREMI needs the update, remind the one command: `cd /srv/qemuweb && git pull --tags && ./scripts/qwctl.sh restart` (it stops the machines).

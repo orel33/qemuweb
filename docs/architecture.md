@@ -731,8 +731,9 @@ student's lab machine (roadmap, "Personal runners").
   default `/tmp/qw-<login>/l-<port>` for the local runner and `/tmp/qw-<login>/r-<6 hex digits of its id>` for a remote one: one directory per runner,
   within the 49-byte budget of the node sockets (common/runtime-dir.js)), `--config <file>` (system catalog,
   default the project's `config.json`).
-  The 5c configuration (`~/.config/qemuweb-runner/runner.json`, systemd
-  `--user` unit) is out of scope here.
+  The runner itself knows nothing of systemd: `scripts/qwctl.sh` installs the
+  system units (templates in `deploy/systemd/`), and only there are `/etc` and
+  `/var` used.
 - The local runner's credential is the token file the server creates (mode 0600) in its own
   directory; the runner reads it at every connection attempt and it is never on a command line.
 - QEMU and VDE run unprivileged; only `/dev/kvm` needs the `kvm` group. The

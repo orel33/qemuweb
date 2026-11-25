@@ -17,6 +17,7 @@ const units = require('./lib/service-units');
 const COMMANDS = ['install', 'uninstall', 'start', 'stop', 'restart', 'status', 'logs'];
 const TARGETS = ['server', 'runner'];
 const DEFAULT_LOG_LINES = 20;
+const ROOT = {name: 'root', uid: 0, gid: 0};
 
 // The options of qwctl itself (docs/reference.md repeats them); every other option of install is an option of the program.
 const OPTIONS = [
@@ -146,6 +147,14 @@ function createHost({prefix = '', uid = process.getuid(), username = os.userInfo
   function owner(file) {
     try { return fs.statSync(at(file)).uid; } catch (_) { return null; }
   }
+  // Whether an account can go through a directory.
+  function canEnter(directory, account) {
+    if (account.uid !== uid) {
+      const command = ['test', '-x', at(directory)];
+      return (uid === 0 ? spawn('runuser', ['-u', account.name, '--', ...command]) : spawn('sudo', ['-u', account.name, ...command])).status === 0;
+    }
+    try { fs.accessSync(at(directory), fs.constants.X_OK); return true; } catch (_) { return false; }
+  }
   function list(directory) {
     try { return fs.readdirSync(at(directory)); } catch (_) { return []; }
   }
@@ -189,7 +198,7 @@ function createHost({prefix = '', uid = process.getuid(), username = os.userInfo
   const hasNode = () => nodeDirectories.some(directory => fs.existsSync(path.join(directory, 'node')));
   const hasGroup = name => query('getent', ['group', name]).status === 0;
 
-  return {uid, username, sudoUser, spawn, query, change, exists, read, owner, list, write, diff, account, makeDirectory, remove, isActive, property, overridingDropIns, hasNode, hasGroup, at};
+  return {uid, username, sudoUser, spawn, query, change, exists, read, owner, canEnter, list, write, diff, account, makeDirectory, remove, isActive, property, overridingDropIns, hasNode, hasGroup, at};
 }
 
 // The account of the service (User=).
@@ -272,18 +281,44 @@ function runnerUsage(host, {item, info}) {
   return usage;
 }
 
-// The directories to create for the settings of a service: [{directory, mode}], parents first.
-function missingDirectories(host, wanted) {
-  const result = new Map();
-  for (const {directory, mode} of wanted) {
-    const missing = [];
-    for (let current = path.resolve(directory); !host.exists(current); current = path.dirname(current)) missing.unshift(current);
-    missing.forEach((item, index) => {
-      const own = index === missing.length - 1 ? mode : '0750';
-      if (!result.has(item) || own === '0700') result.set(item, own);
-    });
+// The directories of `file`, from the root to itself.
+function ancestors(file) {
+  const result = [];
+  for (let current = path.resolve(file); ; current = path.dirname(current)) {
+    result.unshift(current);
+    if (current === path.dirname(current)) return result;
   }
-  return [...result].map(([directory, mode]) => ({directory, mode}));
+}
+
+// The directories to create for a service: [{directory, mode, owner: {name, uid, gid}}], parents first. The wanted ones belong
+// to its account. A missing parent may be shared with the service of another account (/var/lib/qemuweb): root, 0755, unless
+// it is in a directory of the account itself.
+function missingDirectories(host, wanted, sysuser) {
+  const result = new Map();
+  for (const {directory, mode, owner} of wanted) {
+    const all = ancestors(directory);
+    const missing = all.filter(item => !host.exists(item));
+    const parent = all.filter(item => !missing.includes(item)).at(-1);
+    const parents = host.owner(parent) === sysuser.uid ? {mode: '0750', owner: sysuser} : {mode: '0755', owner: ROOT};
+    for (const item of missing) {
+      if (item === all.at(-1)) result.set(item, {directory: item, mode, owner});
+      else if (!result.has(item)) result.set(item, {directory: item, ...parents});
+    }
+  }
+  return [...result.values()].sort((a, b) => a.directory.split('/').length - b.directory.split('/').length);
+}
+
+// /etc/qemuweb holds the options files (read by systemd, as root) and the users.json and runners.json of the server, which writes
+// there: it belongs to the account of the server. A runner that creates it leaves it to root (0755), and the server takes it
+// over from root; another owner is refused. Returns the entry to apply, or null.
+function configDirectory(host, item, sysuser, usedByServer) {
+  const directory = units.CONFIG_DIRECTORY;
+  if (!host.exists(directory)) return item.mode === 'server' ? {directory, mode: '0750', owner: sysuser} : {directory, mode: '0755', owner: ROOT};
+  if (item.mode !== 'server' || !usedByServer) return null;
+  const owner = host.owner(directory);
+  if (owner === 0) return {directory, mode: '0750', owner: sysuser, taken: true};
+  if (owner !== null && owner !== sysuser.uid) fail(`${directory} belongs to another account, and the server writes its files there: sudo chown ${sysuser.name} ${directory} (or choose other --users and --runners files).`);
+  return null;
 }
 
 function registerCommand({root, file, sysuser, item, host, insecure}) {
@@ -360,13 +395,18 @@ function install({item, options, words, host, root, say}) {
     for (const flag of ['--users', '--runners']) if (value(flag)) wanted.push({directory: path.dirname(value(flag)), mode: '0750'});
     if (value('--logs')) wanted.push({directory: value('--logs'), mode: '0750'});
   }
-  wanted.push({directory: units.CONFIG_DIRECTORY, mode: '0750'});
-  const directories = missingDirectories(host, wanted);
+  for (const directory of new Set(wanted.flatMap(entry => ancestors(entry.directory)))) {
+    if (host.exists(directory) && !(directory === units.CONFIG_DIRECTORY && host.owner(directory) === 0) && !host.canEnter(directory, sysuser)) fail(`${sysuser.name} cannot enter ${directory}, which is above its files: sudo chmod o+x ${directory} (or give it access with its group).`);
+  }
+  const inConfig = wanted.some(entry => entry.directory === units.CONFIG_DIRECTORY);
+  const config = configDirectory(host, item, sysuser, inConfig);
+  const directories = missingDirectories(host, wanted.filter(entry => entry.directory !== units.CONFIG_DIRECTORY).map(entry => ({...entry, owner: sysuser})), sysuser);
+  if (config) directories.push(config);
 
   // What is going to be done.
   const dry = Boolean(options['--dry-run']);
   say(`${item.unit} (${item.mode === 'server' ? 'server' : `${item.mode} runner`}), account ${sysuser.name}`);
-  for (const {directory, mode} of directories) say(`  directory ${directory} (${mode}, ${sysuser.name})`);
+  for (const {directory, mode, owner, taken} of directories) say(`  directory ${directory} (${mode}, ${owner.name}${taken ? ', was root' : ''})`);
   say(existing === null ? `  options   ${argsFile} (new)\n${argsText.trimEnd().split('\n').map(line => `    ${line}`).join('\n')}` : `  options   ${argsFile} (kept)`);
   if (before === null) say(`  unit      ${unitFile} (new)\n${after.trimEnd().split('\n').map(line => `    ${line}`).join('\n')}`);
   else if (before === after) say(`  unit      ${unitFile} (unchanged)`);
@@ -382,7 +422,7 @@ function install({item, options, words, host, root, say}) {
   }
   if (dry) { say('Dry run: nothing was changed.'); return; }
 
-  for (const {directory, mode} of directories) host.makeDirectory(directory, mode, sysuser);
+  for (const {directory, mode, owner} of directories) host.makeDirectory(directory, mode, owner);
   if (existing === null) host.write(argsFile, argsText);
   if (before !== after) host.write(unitFile, after);
   host.change('systemctl', ['daemon-reload']);
@@ -390,7 +430,7 @@ function install({item, options, words, host, root, say}) {
   const active = host.isActive(item.unit);
   const control = verb => `./scripts/qwctl.sh ${verb} ${item.target}${item.name ? ` --name ${item.name}` : ''}`;
   if (active) say(`${item.unit} is running, with what it was started with: ${control('restart')} applies the unit and its options.`);
-  else if (options['--now']) host.change('systemctl', ['start', item.unit]);
+  else if (options['--now']) { resetFailed(host, [item.unit]); host.change('systemctl', ['start', item.unit]); }
   else say(`Installed. Start it with ${control('start')}`);
 }
 
@@ -405,6 +445,12 @@ function selectUnits(host, item) {
   const installed = installedUnits(host);
   if (!item) return installed.length ? installed : fail('No QemuWeb unit is installed on this machine (./scripts/qwctl.sh install server).');
   return [installed.find(other => other.item.unit === item.unit) || fail(`${item.unit} is not installed.`)];
+}
+
+// A unit that failed too often is refused by systemd ("Start request repeated too quickly") until its counter is reset.
+function resetFailed(host, names) {
+  const failed = names.filter(unit => host.query('systemctl', ['is-active', unit]).stdout.trim() === 'failed');
+  if (failed.length) host.change('systemctl', ['reset-failed', ...failed]);
 }
 
 const namesOf = selected => selected.map(({item}) => item.unit);
@@ -479,6 +525,7 @@ function run(argv, {root = path.join(__dirname, '..'), host = createHost(), out 
     }
     if (command !== 'status') {
       if (command !== 'start') confirmRunners(selected, context);
+      if (command !== 'stop') resetFailed(host, namesOf(selected));
       host.change('systemctl', [command, ...namesOf(selected)]);
     }
     status(selected, context);

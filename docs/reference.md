@@ -259,10 +259,48 @@ only for this machine unless `--insecure` is given (with a warning).
 | `--insecure` | `off` | accepts a plain http:// or ws:// server URL that is not on this machine (the token and the traffic are then readable on the network) |
 | `--runtime DIR` | `/tmp/qw-<login>/r-<runner ID>` | sessions directory the runner will use, kept in the runner file; default: not kept, the runner then uses /tmp/qw-<login>/r-<6 hex digits of the runner ID> |
 | `--runner-config FILE` | `~/.config/qemuweb-runner/runner.json` | where to write the runner file (directory 0700, file 0600) |
+| `--force` | `off` | replaces an existing runner file: the previous token is lost and the server keeps the previous registration until an administrator removes it (default: refused) |
 | `-h`, `--help` | | this text |
 
 The environment variables are those of the local runner above. The tokens are never printed: the
 `Options` block shows `********` for `--token`, and the runner file is only reported by its path.
+
+## systemd services: `scripts/qwctl.sh`
+
+Installs the system units of a QemuWeb server and its runners, and controls them ([deployment.md](deployment.md#the-two-services)). Run it as a normal account: it calls
+`sudo` where it is needed. It never touches the data, nor an options file or a runner file that exists.
+
+```
+./scripts/qwctl.sh install server [qwctl options] [options of server.sh]
+./scripts/qwctl.sh install runner [--name NAME] [--remote] [qwctl options] [options of runner.sh, or of runner.sh run]
+./scripts/qwctl.sh uninstall server|runner [--name NAME]
+./scripts/qwctl.sh start|stop|restart|status [server|runner [--name NAME]]
+./scripts/qwctl.sh logs [server|runner [--name NAME]] [LINES]
+```
+
+Without a target, `start`, `stop`, `restart`, `status` and `logs` act on every installed QemuWeb unit (`logs`: the last 20 lines of each).
+
+| Option | Commands | Effect |
+| --- | --- | --- |
+| `--sysuser ACCOUNT` | install | Linux account that runs the service (User= of the unit; not the --users FILE of the server); default: the account that runs qwctl.sh, $SUDO_USER under sudo; never root |
+| `--name NAME` | every command | runner only: the unit qemuweb-runner-NAME instead of qemuweb-runner (lower case letters, digits and -, at most 16 characters, not starting with -) |
+| `--remote` | install | runner only: a remote runner (runner.sh run, with the runner file written by runner.sh register); default: the local runner of the server of this machine |
+| `--now` | install | also starts the service (a running one is not restarted) |
+| `--dry-run` | install, uninstall | shows what would be done and changes nothing |
+| `--force` | install, uninstall | replaces or removes a unit that QemuWeb did not generate, or changes the account of an installed unit |
+| `-y` | uninstall, stop, restart | answers yes to the confirmation asked before stopping a runner (its machines are stopped) |
+| `-h`, `--help` | | this text |
+
+Every other option of `install` is an option of the program, checked by its own table before anything is written. Refused: `--no-auth` and `--ephemeral` (server);
+`--exit-on-disconnect`, and `--port`, `--host`, `--token-file`, which come from `server.args` (local runner); `--url` and `--ca`, which stay in the runner file (remote runner).
+
+| Service | Unit | Options file | Defaults written in it |
+| --- | --- | --- | --- |
+| server | `qemuweb-server` | `/etc/qemuweb/server.args` | `--listen 3002 --local-runner --runtime /var/lib/qemuweb/server --users /etc/qemuweb/users.json --runners /etc/qemuweb/runners.json --logs /var/log/qemuweb` |
+| local runner | `qemuweb-runner`, `qemuweb-runner-NAME` | `/etc/qemuweb/runner.args`, `runner-NAME.args` | `--runtime /var/lib/qemuweb/runner` (`runner-NAME`) |
+| remote runner | the same | the same | `--runner-config ~ACCOUNT/.config/qemuweb-runner/runner.json` (`NAME.json`), and `--runtime` as above unless the runner file has a `runtime` |
+
+Exit status: 0, 1 for a refusal or a failure, 2 for a command line that is not accepted.
 
 ## Maintenance scripts
 
@@ -272,6 +310,7 @@ The environment variables are those of the local runner above. The tokens are ne
 | `scripts/start.sh` | Start the server and a runner as two processes (`[server options] [--runner-runtime DIR]`, see above; `--runtime` is the server's directory, `--runner-runtime` the runner's; lines prefixed `[server]` and `[runner]`). The only launch sequence, also used by `npm start`, `scripts/demo.sh` and the integration tests. Ctrl+C stops the runner (and its machines), then the server; if one of them dies, the other is stopped. |
 | `scripts/server.sh` | Start the server alone (`[options]`, `--help` lists them), the counterpart of `runner.sh`: a front end to `node server/main.js` (see [Server and runner command line](#server-and-runner-command-line)). Ctrl+C stops it. |
 | `scripts/runner.sh [options]` | Start a runner (`--port PORT` for the server to reach, default 3002; `--runtime DIR`, default `/tmp/qw-<login>/l-<port>`; `--exit-on-disconnect`), the counterpart of `server.sh`. `runner.sh register` and `runner.sh run` are the form for a runner on another machine (see Remote runner). It prints its own checks, keeps its machines if the server restarts and reconnects. Ctrl+C stops it and its machines. |
+| `scripts/qwctl.sh <command>` | Install, control and inspect the systemd services of a server and its runners (see [systemd services](#systemd-services-scriptsqwctlsh)). |
 | `scripts/stop.sh [--listen PORT] [--runtime DIR]` | Stop the server started on that port (default 3002; `--runtime` is the server directory); a runner keeps running unless started by `start.sh`. |
 | `scripts/killall.sh [--dry-run]` | Stop this project's servers and runner processes, then the QEMU processes, VDE switches and terminals, and VirtualBox VMs of the default runtime directories of this account (`/tmp/qw-<login>/`, every checkout of the account), including orphans (only the VMs named `qemuweb-…` whose settings file is under it; they are powered off and unregistered, never deleted with `--delete`). |
 | `scripts/status.sh [--all] [--pid PID] [--details] [--watch [SECONDS]]` | Show (by default the servers started from this checkout) the process tree of the QemuWeb servers, their runner, and the hosts and switches below, with memory and CPU use. QEMU hosts show as `host (qemu)` and VirtualBox hosts as `host (vbox)`: a VirtualBox VM is not a child of the runner, so it is found by its VM name (`qemuweb-<runner pid>-<session>-<node>`, the `VBoxHeadless --comment <name>` process) and its configured memory is read with `VBoxManage showvminfo`; VMs of any other name are never shown. `--watch` refreshes it. |

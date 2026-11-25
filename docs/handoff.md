@@ -39,7 +39,8 @@ the project content (code, docs, commits, GUI text) stays in English.
 | Code layout, tests, how documents and PDFs are built | `docs/development.md`, `test/tests.md`, `./scripts/run-tests.sh --list`, `make docs` |
 | Install, options, running a server and a runner | `docs/install.md`, `docs/reference.md`, `docs/run-commands.md`, `docs/deployment.md` |
 | Runner model, JSON files, data paths | `docs/runner-model.md`, `docs/json-files.md`, `docs/architecture.md` |
-| The CREMI deployment (Apache, OpenID, systemd units, upgrade procedure) | `deploy/cremi/deploy-cremi.md`, `deploy/cremi/cremi-architecture.md`, `deploy/cremi/qwctl.sh` |
+| The CREMI deployment (Apache, OpenID, upgrade procedure) | `deploy/cremi/deploy-cremi.md`, `deploy/cremi/cremi-architecture.md` |
+| The systemd services (install, control, templates) | `scripts/qwctl.sh`, `deploy/systemd/`, `docs/deployment.md` |
 | Step-by-step test of a remote runner | `docs/remote-runner-test.md` |
 
 ## What is not in Git
