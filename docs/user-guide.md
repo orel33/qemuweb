@@ -117,7 +117,8 @@ can:
   offline. With **Follow** on (the default), the view follows what the student
   shows: the selected node, Terminals or Graphic, and the console layout (1
   terminal, 2 side by side or stacked, or 4; which node each pane shows, switch
-  consoles, the view of each pane: Console ttyS0/ttyS1, Monitor or Log (an observer sees a followed Monitor as the console)), and the admin's own view controls are
+  consoles, the view of each pane: Console ttyS0/ttyS1, Monitor or Log (an observer sees a followed Monitor as the console), and the
+  floating console of the Graphic view, open or closed on the same node; its position and size stay the admin's own), and the admin's own view controls are
   disabled, with the reason as their tooltip (one driver at a time); off, the admin navigates freely from the
   view shown. An observation tab never saves its layout in the admin's
   view settings. The target belongs to the tab: another tab can stay on the admin's
@@ -362,7 +363,10 @@ drawn for a host without an address or whose agent has not started yet (the firs
 - **Console**: a double click (or Enter on a focused card) opens the node's console as a
   floating window over the graph. It is the normal console pane (views, actions, font size);
   an administrator observing a session sees it read-only, and **Take control** applies to it
-  as in the Terminals view. Drag its title bar to move it, its bottom right corner to resize
+  as in the Terminals view. Whether it is open is part of the view: **Follow** opens and
+  closes it on the observer's page, and the student's page does the same with the
+  controlling admin's (the close button is then disabled; the window's position and size
+  stay per browser). Drag its title bar to move it, its bottom right corner to resize
   it, and use the close button to dismiss it. Opening a console selects the node, which can
   change the page shown in the Terminals view.
 - **Edit** (greyed out when observing): **Host** and **Switch** add a node where you click next

@@ -159,30 +159,38 @@ classic script shared by the server and the browser: `paneCount`,
                                  parallel to panes: the view of each pane
                                  (Console ttyS0, Console ttyS1, Monitor, Log)
   switches: boolean,             switch consoles shown
-  active:   nodeId | null }      the selected node (tab or graphic selection)
+  active:   nodeId | null,       the selected node (tab or graphic selection)
+  floating: boolean }            the floating console of the Graphic view is open,
+                                 on the active node
 ```
 
 `normalizeView` returns a valid view state or null: known keys only (others
 dropped), known layouts and modes, `panes` and `views` of the right length (a view state without `views` is
 invalid), `views` entries among the five views, `panes` with strings or
 null; node IDs not in the given list become null, and a node shown in two panes is kept in the first one; the view of a pane left
-empty becomes `console`. The console page is not part
+empty becomes `console`; `floating` must be a boolean and becomes false outside the
+Graphic view or when the active node is unknown or in no pane. The floating console's
+position and size are per browser, not part of the view. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
 the resulting `panes` is what is published.
 
 In the browser, `captureView()` reads the view and `applyView(view)` shows one
 (layout, switch consoles, the panes' nodes through the same
-assignment as the pane node menu, active node, mode), without saving it and
+assignment as the pane node menu, active node, mode, then the floating console
+opened or closed without taking the focus), without saving it and
 attaching only the consoles of panes whose node changes; then each pane's view
 (`setPaneView`), only if its node allows it (Monitor needs a QEMU host, ttyS1 a
 second console, else `console`; an observer is never shown the Monitor, a
 followed `monitor` shows the console). `viewChanged()`, at
 the end of `setPaneSessions` (so `showPage`), `focusPane` and
-`setGraphicView`, publishes the view (deduplicated with `sameView`) and saves
+`setGraphicView`, and when the floating console opens or closes, publishes the view (deduplicated with `sameView`) and saves
 it as `{view}` in the browser; applying a received view does
 neither. The owner's page publishes `owner-view`, except while an admin
 controls its session; the controlling admin's page publishes
-`controller-view`. A page follows a received view by `normalizeView` against
+`controller-view`. `followsView(kind, state)` is that rule seen from the
+receiving side: an observer follows `owner-view` with Follow checked, unless it
+holds or is taking control; the owner's page follows `controller-view` while
+its session is controlled. A page follows a received view by `normalizeView` against
 its own nodes, then `applyView`; a node it does not know yet makes it reload
 its node list first. The saved view is restored the same way once the node
 list is loaded.
@@ -301,7 +309,7 @@ order. State that several modules reassign lives on the `store` object of
 | `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
 | `save-dialog.js` | The Save Session dialog (one status line, the options, the estimate, the steps; session ZIP, or only the topology with a checkbox), in the same frame as Load Session. |
 | `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
-| `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`). |
+| `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`) and the follow rule (`followsView`). |
 
 ## Traffic capture
 
