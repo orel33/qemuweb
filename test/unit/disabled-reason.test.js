@@ -118,3 +118,29 @@ test('CTL01: the write actions are greyed while the page may not write, Delete s
   assert.match(observe, /document\.body\.dataset\.writeBlocked = String\(!canWrite\(\)\)/);
   assert.match(observe, /ownerOnly: classList\.contains\('owner-only'\)/);
 });
+
+test('CTL02: the owner\'s banner, short: the control first, else who observes (one, two, or how many)', async () => {
+  const {ownerBanner} = await load();
+  assert.equal(ownerBanner({admin: null, observers: []}), null, 'nobody: no banner');
+  assert.equal(ownerBanner({admin: null}), null);
+  const control = ownerBanner({admin: 'root', observers: ['boss', 'root']});
+  assert.equal(control.kind, 'control', 'the control banner replaces the observation');
+  assert.equal(control.text, 'root controls your session: keyboard, actions and view');
+  assert.match(control.title, /your keyboard and your actions are blocked, and root controls your view/, 'the explanation is the tooltip');
+  assert.deepEqual(ownerBanner({admin: null, observers: ['root']}),
+    {kind: 'observed', text: 'root is observing your session', title: 'Read-only observation by root: they see your consoles and your view, and cannot type or act.'});
+  assert.equal(ownerBanner({admin: null, observers: ['boss', 'root']}).text, 'boss and root are observing your session');
+  const three = ownerBanner({admin: null, observers: ['a', 'b', 'c']});
+  assert.equal(three.text, '3 administrators are observing your session');
+  assert.match(three.title, /by a, b, c:/, 'the tooltip names them');
+});
+
+test('CTL02: the owner\'s page shows the banner from the control state and session-observers', () => {
+  const observe = moduleSource('observe');
+  assert.match(observe, /const shown = ownerBanner\(\{admin: control\?\.admin \|\| null, observers\}\);/);
+  assert.match(observe, /controlBanner\.dataset\.kind = shown\?\.kind \|\| '';/);
+  assert.match(observe, /const admins = ViewState\.normalizeObservers\(payload\);\s*if \(!admins\) return;/);
+  assert.match(moduleSource('socket'), /socket\.on\('session-observers', applyObservers\);/);
+  assert.match(read('index.html'), /class="control-banner" id="control-banner" role="status"/);
+  assert.match(read('css/app.css'), /\.control-banner\[data-kind="observed"\] \{ background: #f2b84b; \}/);
+});

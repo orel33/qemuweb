@@ -948,6 +948,14 @@ commit message.
   admin page. The owner's page is read-only meanwhile, and the server refuses its writes ("<admin> controls your session.").
   Load, Stop all and Remove all name the owner, and Save names the file `qemuweb-session-<owner>.zip`. Design in
   `docs/architecture.md` (Session control).
+- [ ] **CTL02** (M) Follow-up of CTL01, after the user tried it. (1) The floating console's position and size are part of the
+  view state (`geometry`, fractions of the Graphic view, normalized and clamped in `public/view-state.js` and the server): a
+  follower shows the window where the driver put it, kept inside its own window, and cannot move or resize it; the driver
+  publishes while dragging at most every 250 ms and at the end. (2) `floating` means "open whenever the Graphic view shows":
+  Graphic -> Terminals -> Graphic shows it again, on the active node, at the same place, for the driver and its followers.
+  (3) The owner's page shows a yellow banner while administrators observe the session (`session-observers` {admins} to the
+  owner's main sockets on each change and at connection). (4) The owner's control banner is short ("admin controls your
+  session: keyboard, actions and view"), the explanation in its tooltip. A view saved by an earlier version is dropped once.
 - [ ] **TOD05** A `--version` option for `server/main.js` and `runner/main.js`, and a version check between the two: the runner's `hello`
   carries its version, and the server says "restart the runner" (in its log and in `/admin -> Runners`) when it differs from its own, instead of
   letting an archive fail with `Invalid session.json in archive.` after a format change. Useful with runners on other machines.

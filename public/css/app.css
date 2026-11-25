@@ -295,6 +295,9 @@ main[data-layout="grid-4"] { grid-template-rows: minmax(0, 1fr) minmax(0, 1fr); 
 .floating-console-bar button { display: grid; place-items: center; flex: none; width: var(--control-small); height: var(--control-small); padding: 0; cursor: pointer; }
 .floating-console-bar svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 main[data-floating="true"] { position: fixed; z-index: 30; display: flex; flex-direction: column; gap: 0; min-width: 300px; min-height: 200px; max-width: 100vw; max-height: 100vh; padding: 0; overflow: hidden; resize: both; border: 1px solid #70a8ff; border-radius: 9px; background: #10151c; box-shadow: 0 12px 40px #000a; }
+/* A follower shows the window where the driver put it: no resize handle, no move cursor. */
+body[data-view-driven="true"] main[data-floating="true"] { resize: none; }
+body[data-view-driven="true"] .floating-console-bar { cursor: default; }
 main[data-floating="true"] .console-pane { flex: 1; border: 0; border-radius: 0; }
 main[data-floating="true"] .console-pane:not([data-active="true"]) { display: none; }
 .graphic-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 100%; padding: 30px; color: #bdcddd; text-align: center; }
@@ -445,6 +448,8 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .observe-banner > .observe-status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
 .observe-follow { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; }
 .control-banner { flex: none; height: var(--banner-height); padding: 0 16px; overflow: hidden; line-height: var(--banner-height); white-space: nowrap; text-overflow: ellipsis; color: #1d1405; background: #f08a5d; font-weight: 600; }
+/* On the owner's page, while administrators observe without control: yellow like the observer's banner. */
+.control-banner[data-kind="observed"] { background: #f2b84b; }
 /* One driver at a time for the writes too: the server refuses every change of an observer
    without control, and of the owner while an admin controls the session. Every control that
    writes, loads or exports something carries the class write-action (index.html, terminal.js,

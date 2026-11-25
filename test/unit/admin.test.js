@@ -18,7 +18,7 @@ const {Session} = require('../../server/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../server/console-control');
 const {observationGate, observationRule, sessionSummary} = require('../../server/routes/admin');
 const {consoleRefusal, createObservationTracker} = require('../../server/sockets');
-const {paneCount, normalizeView, sameView, followsView} = require('../../public/view-state');
+const {paneCount, normalizeView, normalizeGeometry, geometryPixels, geometryFraction, sameView, followsView, normalizeObservers} = require('../../public/view-state');
 
 const root = path.join(__dirname, '..', '..');
 const settingsFor = (usersFile, extra = {}) => ({...defaultSettings(root), usersFile, ...extra});
@@ -417,7 +417,7 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
   const nodes = new Map([[sw, {}], [host, {}]]);
   assert.deepEqual([paneCount('single'), paneCount('columns-2'), paneCount('rows-2'), paneCount('grid-4'), paneCount('grid-9'), paneCount('toString')],
     [1, 2, 2, 4, 0, 0]);
-  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'console'], switches: false, active: sw, floating: true};
+  const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'console'], switches: false, active: sw, floating: true, geometry: {left: 0.5, top: 0.25, width: 0.4, height: 0.5}};
   assert.deepEqual(normalizeView({...view, page: 2, expanded: 1, extra: 1}, nodes), view, 'extra keys (page, a former expanded) are dropped');
   assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
@@ -434,29 +434,86 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
     {...view, views: ['console', 'console', 'console', 'tty']}, {...view, views: ['console', 'console', 'console', null]}, {...view, views: 'console'},
     {...view, layout: 'columns-2'}, {...view, layout: 'single'}, {...view, layout: 'rows-2', panes: [null]},
     {...view, switches: 1}, {...view, switches: undefined}, {...view, active: 7}, {...view, active: undefined},
-    {...view, floating: 1}, {...view, floating: 'true'}, {...view, floating: undefined}];
+    {...view, floating: 1}, {...view, floating: 'true'}, {...view, floating: undefined},
+    {...view, geometry: undefined}, {...view, geometry: 'x'}, {...view, geometry: []}, {...view, geometry: {left: 0, top: 0, width: 1}},
+    {...view, geometry: {left: 0, top: 0, width: 1, height: 1, extra: 1}}, {...view, geometry: {left: '0', top: 0, width: 1, height: 1}},
+    {...view, geometry: {left: NaN, top: 0, width: 1, height: 1}}, {...view, geometry: {left: 0, top: Infinity, width: 1, height: 1}}];
   for (const raw of invalid) assert.equal(normalizeView(raw, nodes), null, JSON.stringify(raw));
 });
 
 test('the view of an empty pane or of a node dropped by normalisation is console', () => {
   const host = 'h-0123456789abcdef';
-  const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host, floating: false};
+  const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host, floating: false, geometry: null};
   assert.deepEqual(normalizeView(view, [host]).views, ['log', 'console'], 'null pane');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', null]}, [host]).views, ['console', 'console'], 'unknown node');
   assert.deepEqual(normalizeView({...view, panes: [host, host]}, [host]).views, ['log', 'console'], 'node shown twice');
 });
 
-test('the floating console is part of the view only in the Graphic view, on an active node shown in a pane', () => {
+test('the floating console is part of the view in both modes (open when the Graphic view shows), on an active node shown in a pane', () => {
   const sw = 's-0123456789abcdef', host = 'h-0123456789abcdef';
-  const view = {mode: 'graphic', layout: 'columns-2', panes: [host, sw], views: ['console', 'console'], switches: true, active: sw, floating: true};
+  const view = {mode: 'graphic', layout: 'columns-2', panes: [host, sw], views: ['console', 'console'], switches: true, active: sw, floating: true, geometry: null};
   assert.equal(normalizeView(view, [sw, host]).floating, true, 'open on the active node');
   assert.equal(normalizeView({...view, floating: false}, [sw, host]).floating, false, 'closed');
-  assert.equal(normalizeView({...view, mode: 'terminals'}, [sw, host]).floating, false, 'never in the Terminals view');
+  assert.equal(normalizeView({...view, mode: 'terminals'}, [sw, host]).floating, true, 'kept in the Terminals view: shown again with the Graphic view');
   assert.equal(normalizeView({...view, active: null}, [sw, host]).floating, false, 'no active node');
   assert.equal(normalizeView(view, [host]).floating, false, 'the active node is unknown here');
   assert.equal(normalizeView({...view, panes: [host, null]}, [sw, host]).floating, false, 'the active node is in no pane');
   assert.equal(normalizeView(view, null).floating, true, 'shape check only');
   assert.equal(sameView(normalizeView(view, null), normalizeView({...view, floating: false}, null)), false, 'a change of the floating console is a change of the view');
+});
+
+test('the floating console geometry: fractions of the Graphic view, clamped and rounded, no other field', () => {
+  assert.equal(normalizeGeometry(null), null, 'not placed yet: the default geometry');
+  assert.deepEqual(normalizeGeometry({left: 0.123456, top: 0.5, width: 0.3, height: 0.25}), {left: 0.1235, top: 0.5, width: 0.3, height: 0.25});
+  assert.deepEqual(normalizeGeometry({height: 7, width: -1, top: -3, left: 2}), {left: 1, top: 0, width: 0.05, height: 1}, 'clamped to the ranges');
+  for (const raw of [undefined, 0, 'x', [], {}, {left: 0, top: 0, width: 1}, {left: 0, top: 0, width: 1, height: 1, z: 0},
+    {left: null, top: 0, width: 1, height: 1}, {left: 0, top: 0, width: 1, height: NaN}, {left: 0, top: 0, width: -Infinity, height: 1}]) {
+    assert.equal(normalizeGeometry(raw), undefined, JSON.stringify(raw));
+  }
+  const view = {mode: 'graphic', layout: 'single', panes: ['a'], views: ['console'], switches: true, active: 'a', floating: true, geometry: {left: 0.1, top: 0.2, width: 0.5, height: 0.5}};
+  assert.equal(sameView(view, {...view, geometry: {...view.geometry}}), true);
+  assert.equal(sameView(view, {...view, geometry: {...view.geometry, left: 0.2}}), false, 'a move is a change of the view');
+  assert.equal(sameView(view, {...view, geometry: null}), false);
+  assert.equal(sameView({...view, geometry: null}, {...view, geometry: null}), true);
+});
+
+test('the geometry in pixels follows the Graphic view of each browser and stays inside its viewport', () => {
+  const geometry = {left: 0.5, top: 0.25, width: 0.4, height: 0.5};
+  const big = {left: 0, top: 100, width: 2000, height: 1000};
+  assert.deepEqual(geometryPixels(geometry, big, {width: 2000, height: 1100}), {left: 1000, top: 350, width: 800, height: 500});
+  const small = {left: 0, top: 140, width: 1000, height: 600};
+  assert.deepEqual(geometryPixels(geometry, small, {width: 1000, height: 740}), {left: 500, top: 290, width: 400, height: 300}, 'the same place, relatively');
+  assert.deepEqual(geometryPixels({left: 1, top: 1, width: 0.05, height: 0.05}, small, {width: 1000, height: 740}), {left: 700, top: 540, width: 300, height: 200},
+    'at least the minimum size, and pushed back inside the viewport');
+  assert.deepEqual(geometryPixels({left: 0, top: 0, width: 1, height: 1}, {left: 0, top: 0, width: 500, height: 400}, {width: 320, height: 240}),
+    {left: 0, top: 0, width: 312, height: 232}, 'never larger than the viewport (a phone)');
+  assert.deepEqual(geometryFraction({left: 1000, top: 350, width: 800, height: 500}, big), geometry, 'back to fractions');
+  assert.deepEqual(geometryFraction({left: -50, top: 0, width: 4000, height: 500}, big), {left: 0, top: 0, width: 1, height: 0.5}, 'clamped');
+  assert.equal(geometryFraction({left: 0, top: 0, width: 10, height: 10}, {left: 0, top: 0, width: 0, height: 0}), null, 'a hidden Graphic view has no size');
+});
+
+test('session-observers: the observing administrators\' logins, sorted, once each; anything else is invalid', () => {
+  assert.deepEqual(normalizeObservers({admins: []}), []);
+  assert.deepEqual(normalizeObservers({admins: ['root', 'boss', 'root']}), ['boss', 'root']);
+  for (const raw of [null, undefined, 'boss', [], {}, {admins: 'boss'}, {admins: [1]}, {admins: ['']}, {admins: ['x'.repeat(65)]},
+    {admins: Array.from({length: 33}, (_, index) => `a${index}`)}, {admins: ['boss'], extra: 1}]) {
+    assert.equal(normalizeObservers(raw), null, JSON.stringify(raw));
+  }
+});
+
+test('the observation tracker lists who observes a login, and says when an observation starts', () => {
+  const tracker = createObservationTracker({record: () => {}});
+  assert.equal(tracker.opened('root', 'toto'), true, 'first socket: the observation starts');
+  assert.equal(tracker.opened('root', 'toto'), false);
+  assert.equal(tracker.opened('boss', 'toto'), true);
+  tracker.opened('boss', 'titi');
+  assert.deepEqual(tracker.admins('toto'), ['boss', 'root']);
+  assert.deepEqual(tracker.admins('titi'), ['boss']);
+  assert.deepEqual(tracker.admins('nobody'), []);
+  tracker.closed('root', 'toto');
+  assert.deepEqual(tracker.admins('toto'), ['boss', 'root'], 'one socket of root left');
+  tracker.closed('root', 'toto');
+  assert.deepEqual(tracker.admins('toto'), ['boss']);
 });
 
 test('one driver at a time: which received view a page follows', () => {
@@ -475,10 +532,10 @@ test('one driver at a time: which received view a page follows', () => {
 });
 
 test('two view states are compared field by field', () => {
-  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], views: ['console', 'console'], switches: true, active: 'a', floating: false};
+  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], views: ['console', 'console'], switches: true, active: 'a', floating: false, geometry: null};
   assert.equal(sameView(view, {...view, panes: ['a', null], views: ['console', 'console']}), true);
   assert.equal(sameView(view, {...view, views: ['console2', 'console']}), false);
-  for (const change of [{mode: 'graphic'}, {layout: 'rows-2'}, {panes: [null, 'a']}, {switches: false}, {active: null}, {floating: true}]) {
+  for (const change of [{mode: 'graphic'}, {layout: 'rows-2'}, {panes: [null, 'a']}, {switches: false}, {active: null}, {floating: true}, {geometry: {left: 0, top: 0, width: 1, height: 1}}]) {
     assert.equal(sameView(view, {...view, ...change}), false, JSON.stringify(change));
   }
   assert.equal(sameView(view, null), false);

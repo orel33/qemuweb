@@ -159,6 +159,13 @@ async function run() {
   const aliceConsole = recorder(alice, 'alice console');
   const observer = recorder(boss, 'boss observer', {auth: {main: true, observe: 'alice'}});
   await Promise.all([aliceSession.connected, aliceConsole.connected, observer.connected]);
+  // CTL02: alice's main socket is told who observes her session (the admins' logins only), on
+  // connection and when an observation starts; her console sockets and the observers are not.
+  const observersAt = recorded => recorded.events.filter(item => item.event === 'session-observers').map(item => item.payload);
+  await waitFor('session-observers at alice', () => observersAt(aliceSession).some(payload => payload.admins.join() === 'boss'));
+  assert.deepEqual(observersAt(aliceSession).at(-1), {admins: ['boss']});
+  assert.deepEqual(observersAt(aliceConsole), [], 'a console socket is not told');
+  assert.deepEqual(observersAt(observer), [], 'an observer is not told');
   // Connected browser tabs: alice's main socket only (console sockets and observers do not count).
   assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'alice').browsers, 1);
   // The list carries a boolean "has a password" (an account created without one has none), never the hash.
@@ -176,7 +183,7 @@ async function run() {
   // owner's page (here alice's switch in the last pane, as the pane node menu can do).
   const paneCount = {single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4};
   const ownerView = view => {
-    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, floating: false, ...view};
+    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, floating: false, geometry: null, ...view};
     const count = paneCount[full.layout] || 0;
     return {panes: Array.from({length: count}, (_, index) => (index === count - 1 ? aliceSwitch : null)), views: Array(count).fill('console'), ...full};
   };
@@ -186,7 +193,8 @@ async function run() {
   observer.socket.emit('owner-view', ownerView({active: null})); // An observer's view is never relayed.
   for (const invalid of [{mode: 'invalid'}, {layout: 2}, {layout: 'columns-3'}, {switches: 'yes'}, {active: 3}, {layout: 'single', panes: [aliceSwitch, null]},
     {panes: [aliceSwitch]}, {panes: [aliceSwitch, null, null]}, {panes: [1, null]}, {panes: 'x'}, {views: ['console']}, {views: ['console', 'tty']}, {views: undefined},
-    {floating: 'yes'}, {floating: undefined}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
+    {floating: 'yes'}, {floating: undefined}, {geometry: undefined}, {geometry: {left: 0, top: 0, width: 1}},
+    {geometry: {left: 0, top: 0, width: 1, height: 1, z: 1}}, {geometry: {left: '0', top: 0, width: 1, height: 1}}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
   // Unknown nodes become null, in the active node and in the panes; a node shown twice is kept once.
   aliceSession.socket.emit('owner-view', ownerView({active: 'h-0000000000000000', panes: ['h-0000000000000000', aliceSwitch]}));
   await waitFor('unknown node relayed as null', () => observer.events.some(item => item.event === 'owner-view' && item.payload.active === null));
@@ -206,14 +214,18 @@ async function run() {
   await waitFor('pane view relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.views.join() === 'console,log'));
   assert.ok(!observer.events.some(item => ['owner-selected-node', 'owner-view-mode'].includes(item.event)));
   // The floating console of the Graphic view (CTL01): relayed open on the active node, and
-  // normalized to closed outside the Graphic view.
+  // (CTL02) kept open in the Terminals view, where it means "shown when the Graphic view comes back".
   aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', floating: true}));
   await waitFor('floating console relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.floating === true));
   assert.deepEqual(observer.events.find(item => item.event === 'owner-view' && item.payload.floating).payload, ownerView({mode: 'graphic', floating: true}));
   aliceSession.socket.emit('owner-view', ownerView({floating: true, views: ['console', 'monitor']}));
   await waitFor('floating normalized', () => observer.events.some(item => item.event === 'owner-view' && item.payload.views.join() === 'console,monitor'));
-  assert.equal(observer.events.find(item => item.event === 'owner-view' && item.payload.views.join() === 'console,monitor').payload.floating, false,
-    'no floating console in the Terminals view');
+  assert.equal(observer.events.find(item => item.event === 'owner-view' && item.payload.views.join() === 'console,monitor').payload.floating, true,
+    'kept open in the Terminals view');
+  // Its geometry (CTL02): fractions of the Graphic view, clamped and rounded by the server.
+  aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', floating: true, geometry: {left: 0.123456, top: -1, width: 2, height: 0.5}}));
+  await waitFor('geometry relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.geometry));
+  assert.deepEqual(observer.events.find(item => item.event === 'owner-view' && item.payload.geometry).payload.geometry, {left: 0.1235, top: 0, width: 1, height: 0.5});
   aliceConsole.socket.emit('input', 'showinfo\r');
   await waitFor('alice\'s output at the observer', () => /showinfo/.test(observer.output()));
   const resetsBefore = aliceConsole.count('serial-reset');
@@ -280,7 +292,8 @@ async function run() {
   // While the admin holds control, the view goes the other way: controller-view from the
   // admin's page reaches alice's pages; never from alice, nor once control has ended.
   // The admin's floating console of the Graphic view is open: alice's pages open it too (CTL01).
-  const controllerView = {mode: 'graphic', layout: 'rows-2', panes: [null, aliceSwitch], views: ['console', 'log'], switches: true, active: aliceSwitch, floating: true};
+  const controllerView = {mode: 'graphic', layout: 'rows-2', panes: [null, aliceSwitch], views: ['console', 'log'], switches: true, active: aliceSwitch, floating: true,
+    geometry: {left: 0.25, top: 0.1, width: 0.5, height: 0.6}};
   aliceSession.socket.emit('controller-view', controllerView);
   observer.socket.emit('controller-view', {...controllerView, layout: 'grid-3'}); // Invalid: dropped.
   observer.socket.emit('controller-view', controllerView);
@@ -331,6 +344,8 @@ async function run() {
   assert.ok(!released(aliceSession), 'control released while an admin socket remained');
   observer.socket.close();
   await waitFor('control released at alice', () => released(aliceSession));
+  // boss's last socket on the session closed: alice is told nobody observes any more (CTL02).
+  await waitFor('no observer at alice', () => observersAt(aliceSession).at(-1)?.admins.length === 0);
   aliceConsole.socket.emit('input', 'alicefree\r');
   aliceOtherConsole.socket.emit('input', 'alicefree2\r');
   await waitFor('alice types again', () => /alicefree/.test(aliceConsole.output()) && /alicefree2/.test(aliceOtherConsole.output()));
@@ -348,7 +363,9 @@ async function run() {
   const afterRelease = newId('switch');
   await expectStatus(boss, '/api/switches', 'POST', 403, {...observeAlice, body: {id: afterRelease, name: 'afterrelease'}});
   assert.ok(!(await alice.request('/api/nodes')).some(node => node.id === afterRelease), 'a refused write created a node');
+  await waitFor('a new observation is told again', () => observersAt(aliceSession).at(-1)?.admins.join() === 'boss');
   formerController.socket.close();
+  await waitFor('observation closed at alice', () => observersAt(aliceSession).at(-1)?.admins.length === 0);
   aliceOtherConsole.socket.close();
   await alice.request(`/api/nodes/${aliceOther}`, {method: 'DELETE'});
   console.log('Admin: session control blocks the student on every node, survives layout changes and ends with the admin\'s last socket or a release');

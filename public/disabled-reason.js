@@ -41,6 +41,20 @@ export function followReason({holding}) {
   return holding ? 'You hold control: the user follows your view' : '';
 }
 
+// The banner of the owner's page (one line, its explanation in the tooltip), or null when none
+// shows: while an administrator controls the session, that control; else while administrators
+// observe it (the logins, from session-observers), the observation.
+export function ownerBanner({admin, observers = []}) {
+  if (admin) {
+    return {kind: 'control', text: `${admin} controls your session: keyboard, actions and view`,
+      title: `You see the commands and their output; your keyboard and your actions are blocked, and ${admin} controls your view.`};
+  }
+  if (!observers.length) return null;
+  const who = observers.length === 1 ? `${observers[0]} is` : observers.length === 2 ? `${observers[0]} and ${observers[1]} are` : `${observers.length} administrators are`;
+  return {kind: 'observed', text: `${who} observing your session`,
+    title: `Read-only observation by ${observers.join(', ')}: they see your consoles and your view, and cannot type or act.`};
+}
+
 // Shows a reason as the tooltip of an element, or puts its normal tooltip back (reason ''). Like the
 // other disabled controls, the reason is the title; a control with an aria-label or a text exposes
 // it as its accessible description. The modules that own the control may change its title meanwhile:

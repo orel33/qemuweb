@@ -8,6 +8,7 @@
 //   session:<sessionId>           every browser of the session's owner, and of the admins
 //                                 observing it (per-session events)
 //   observers:<sessionId>         the admins observing the session (owner-view)
+//   owner:<sessionId>             the owner's main session sockets (session-observers)
 //   node:<sessionId>:<nodeId>     browsers that selected that node (state, log, logs-reset); a
 //                                 socket joins it only for a node of its own or observed session
 //   console:<sessionId>:<consoleId>  browsers that selected that console (serial, serial-reset);
@@ -22,16 +23,19 @@
 // like the owner), see server/console-control.js; the owner's are then dropped. console-control {admin, active} tells every socket
 // of the session (owner and observers) the control state, also at connection. While an admin
 // controls a session, the view goes the other way: the admin's page publishes controller-view,
-// relayed to the session room and shown by the owner's pages.
+// relayed to the session room and shown by the owner's pages. session-observers {admins} tells
+// the owner's main sockets which administrators observe the session (their logins only), when
+// an observation opens or closes and at connection; an admin's own session is never observed.
 const {ConsoleControl} = require('./console-control');
 const {attachCaptureLive} = require('./capture-live');
 const {attachCaptureLease} = require('./capture-lease');
-const {normalizeView} = require('../public/view-state');
+const {normalizeView, normalizeObservers} = require('../public/view-state');
 const {baseNodeId} = require('../common/console-id');
 const {createTransportRegistry} = require('./ws-transports');
 
 function sessionRoom(session) { return `session:${session.id}`; }
 function observerRoom(session) { return `observers:${session.id}`; }
+function ownerRoom(session) { return `owner:${session.id}`; }
 function nodeRoom(session, nodeId) { return `node:${session.id}:${nodeId}`; }
 function consoleRoom(session, consoleId) { return `console:${session.id}:${consoleId}`; }
 
@@ -50,7 +54,8 @@ function consoleRefusal({observer, lock, admin, action = 'input'}) {
 
 // Counts the open observer sockets per (admin, observed login) and audits each observation
 // period: the 'observe' line is written when the first socket of that pair opens (a page load
-// opens several). closed() returns how many remain.
+// opens several). opened() returns whether that observation starts, closed() how many sockets
+// remain; admins(login) lists the administrators observing that login, sorted.
 function createObservationTracker(audit) {
   const open = new Map();
   const key = (admin, login) => JSON.stringify([admin, login]);
@@ -59,12 +64,16 @@ function createObservationTracker(audit) {
       const count = open.get(key(admin, login)) || 0;
       open.set(key(admin, login), count + 1);
       if (!count) audit.record(admin, 'observe', {login});
+      return !count;
     },
     closed(admin, login) {
       const count = (open.get(key(admin, login)) || 0) - 1;
       if (count > 0) open.set(key(admin, login), count);
       else open.delete(key(admin, login));
       return Math.max(0, count);
+    },
+    admins(login) {
+      return [...open.keys()].map(item => JSON.parse(item)).filter(([, observed]) => observed === login).map(([admin]) => admin).sort();
     }
   };
 }
@@ -104,6 +113,8 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
     audit.record(lock.admin, 'control-end', {login: lock.login, reason});
   }});
   const observations = createObservationTracker(audit);
+  // session-observers {admins}: the logins of the administrators observing `login`, nothing else.
+  const observersPayload = login => ({admins: normalizeObservers({admins: observations.admins(login).slice(0, 32)}) || []});
   // Connected browser tabs per login: each tab opens one session socket (auth.main) besides
   // its console sockets. Observers are not counted.
   const browsers = new Map();
@@ -145,10 +156,14 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
     // Console access is where an observation really starts: audited here, once per admin and
     // observed login while their sockets stay open.
     // Control ends when the controlling admin's last observer socket on the session closes.
+    // The owner's pages are told who observes (session-observers), when an observation starts or ends.
+    const tellObservers = () => io.to(ownerRoom(workspace.session)).emit('session-observers', observersPayload(workspace.owner));
     if (observer) {
-      observations.opened(user.login, workspace.owner);
+      if (observations.opened(user.login, workspace.owner)) tellObservers();
       socket.on('disconnect', () => {
-        if (!observations.closed(user.login, workspace.owner)) control.release(workspace.session.id, user.login, 'disconnected');
+        if (observations.closed(user.login, workspace.owner)) return;
+        control.release(workspace.session.id, user.login, 'disconnected');
+        tellObservers();
       });
     }
     if (!observer && socket.handshake.auth?.main === true) {
@@ -162,6 +177,10 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
     socket.data.observer = observer;
     socket.join(sessionRoom(session));
     if (observer) socket.join(observerRoom(session));
+    if (!observer && socket.handshake.auth?.main === true) {
+      socket.join(ownerRoom(session));
+      socket.emit('session-observers', observersPayload(workspace.owner));
+    }
     // Only nodes of this socket's session are ever looked up: the handle names the session.
     const validId = id => typeof id === 'string' && id.length <= 64;
     // The control state of the session, for this socket's page (also after a reconnection).
