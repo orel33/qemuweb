@@ -93,3 +93,15 @@ test('empty and changing node states are represented', () => {
   assert.equal(stateOf({running: true, busy: true, operation: 'stopping'}), 'stopping');
   assert.equal(stateOf({running: false, error: 'failed'}), 'error');
 });
+
+test('the floating console follows the view state: captured, applied without focus, its close button a view control', () => {
+  const workspace = fs.readFileSync('public/workspace.js', 'utf8');
+  const floating = fs.readFileSync('public/graphic-console.js', 'utf8');
+  const html = fs.readFileSync('public/index.html', 'utf8');
+  assert.match(workspace, /floating: floatingConsoleOpen\(\)/, 'captureView reads whether it is open');
+  assert.match(workspace, /if \(view\.floating\) openFloatingConsole\(\{focus: false\}\); else closeFloatingConsole\(\);/, 'applyView opens or closes it after the mode');
+  assert.ok(workspace.indexOf('if (view.floating)') > workspace.indexOf('setGraphicView(view.mode'), 'applied after the mode, which closes it');
+  assert.equal((floating.match(/viewChanged\(\);/g) || []).length, 2, 'opening and closing publish the view');
+  assert.match(html, /id="floating-console-close" class="view-control"/, 'a follower cannot close it');
+  assert.doesNotMatch(floating, /geometry[^\n]*viewChanged|captureView/, 'the geometry is not part of the view');
+});

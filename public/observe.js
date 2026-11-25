@@ -182,8 +182,10 @@ const received = {owner: null, controller: null};
 // Following also pauses while a take-control request is pending: re-laying out the panes
 // then could move the pane that is taking control to another node.
 let taking = false;
-const following = () => observing && !heldByMe() && !taking && document.getElementById('observe-follow').checked;
-const shouldFollow = kind => (kind === 'owner' ? following() : controlledByAdmin());
+const followState = () => ({observing, holding: heldByMe(), taking, controlled: !!control,
+  followChecked: observing && document.getElementById('observe-follow').checked});
+const following = () => ViewState.followsView('owner', followState());
+const shouldFollow = kind => ViewState.followsView(kind, followState());
 
 // mayRefresh: a view naming a node not known here yet (created meanwhile) first refreshes the
 // node list, which follows the view again (refollow); a node still unknown then is left out.

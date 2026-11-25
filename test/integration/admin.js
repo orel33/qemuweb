@@ -176,7 +176,7 @@ async function run() {
   // owner's page (here alice's switch in the last pane, as the pane node menu can do).
   const paneCount = {single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4};
   const ownerView = view => {
-    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, ...view};
+    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, floating: false, ...view};
     const count = paneCount[full.layout] || 0;
     return {panes: Array.from({length: count}, (_, index) => (index === count - 1 ? aliceSwitch : null)), views: Array(count).fill('console'), ...full};
   };
@@ -185,7 +185,8 @@ async function run() {
   assert.deepEqual(observer.events.find(item => item.event === 'owner-view').payload, ownerView({mode: 'graphic', layout: 'grid-4'}), 'unknown fields (page too) are dropped');
   observer.socket.emit('owner-view', ownerView({active: null})); // An observer's view is never relayed.
   for (const invalid of [{mode: 'invalid'}, {layout: 2}, {layout: 'columns-3'}, {switches: 'yes'}, {active: 3}, {layout: 'single', panes: [aliceSwitch, null]},
-    {panes: [aliceSwitch]}, {panes: [aliceSwitch, null, null]}, {panes: [1, null]}, {panes: 'x'}, {views: ['console']}, {views: ['console', 'tty']}, {views: undefined}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
+    {panes: [aliceSwitch]}, {panes: [aliceSwitch, null, null]}, {panes: [1, null]}, {panes: 'x'}, {views: ['console']}, {views: ['console', 'tty']}, {views: undefined},
+    {floating: 'yes'}, {floating: undefined}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
   // Unknown nodes become null, in the active node and in the panes; a node shown twice is kept once.
   aliceSession.socket.emit('owner-view', ownerView({active: 'h-0000000000000000', panes: ['h-0000000000000000', aliceSwitch]}));
   await waitFor('unknown node relayed as null', () => observer.events.some(item => item.event === 'owner-view' && item.payload.active === null));
@@ -204,6 +205,15 @@ async function run() {
   aliceSession.socket.emit('owner-view', ownerView({layout: 'columns-2', views: ['console', 'log']}));
   await waitFor('pane view relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.views.join() === 'console,log'));
   assert.ok(!observer.events.some(item => ['owner-selected-node', 'owner-view-mode'].includes(item.event)));
+  // The floating console of the Graphic view (CTL01): relayed open on the active node, and
+  // normalized to closed outside the Graphic view.
+  aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', floating: true}));
+  await waitFor('floating console relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.floating === true));
+  assert.deepEqual(observer.events.find(item => item.event === 'owner-view' && item.payload.floating).payload, ownerView({mode: 'graphic', floating: true}));
+  aliceSession.socket.emit('owner-view', ownerView({floating: true, views: ['console', 'monitor']}));
+  await waitFor('floating normalized', () => observer.events.some(item => item.event === 'owner-view' && item.payload.views.join() === 'console,monitor'));
+  assert.equal(observer.events.find(item => item.event === 'owner-view' && item.payload.views.join() === 'console,monitor').payload.floating, false,
+    'no floating console in the Terminals view');
   aliceConsole.socket.emit('input', 'showinfo\r');
   await waitFor('alice\'s output at the observer', () => /showinfo/.test(observer.output()));
   const resetsBefore = aliceConsole.count('serial-reset');
@@ -269,7 +279,8 @@ async function run() {
   assert.ok(![aliceSession, observer, bossNewPane].some(released), 'control released by a layout change');
   // While the admin holds control, the view goes the other way: controller-view from the
   // admin's page reaches alice's pages; never from alice, nor once control has ended.
-  const controllerView = {mode: 'terminals', layout: 'rows-2', panes: [null, aliceSwitch], views: ['console', 'log'], switches: true, active: aliceSwitch};
+  // The admin's floating console of the Graphic view is open: alice's pages open it too (CTL01).
+  const controllerView = {mode: 'graphic', layout: 'rows-2', panes: [null, aliceSwitch], views: ['console', 'log'], switches: true, active: aliceSwitch, floating: true};
   aliceSession.socket.emit('controller-view', controllerView);
   observer.socket.emit('controller-view', {...controllerView, layout: 'grid-3'}); // Invalid: dropped.
   observer.socket.emit('controller-view', controllerView);
