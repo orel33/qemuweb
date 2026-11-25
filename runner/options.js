@@ -132,7 +132,9 @@ function registerSpec(root) {
       caOption('PEM file of the certificate authority that signed the server certificate (self-signed); kept in the runner file'),
       insecureOption,
       runtimeOption('sessions directory the runner will use, kept in the runner file; default: not kept, the runner then uses /tmp/qw-<login>/r-<6 hex digits of the runner ID>', '/tmp/qw-<login>/r-<runner ID>'),
-      runnerConfigOption('where to write the runner file (directory 0700, file 0600)')
+      runnerConfigOption('where to write the runner file (directory 0700, file 0600)'),
+      {flag: '--force', metavar: null, key: 'force', default: false, value: true, fallback: 'off',
+        description: 'replaces an existing runner file: the previous token is lost and the server keeps the previous registration until an administrator removes it (default: refused)'}
     ]
   };
 }

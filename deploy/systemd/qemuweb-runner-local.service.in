@@ -1,0 +1,22 @@
+@MARKER@
+[Unit]
+Description=QemuWeb runner (local, runs the machines of the server of this machine)
+After=qemuweb-server.service
+Wants=qemuweb-server.service
+
+[Service]
+User=@SYSUSER@
+SupplementaryGroups=kvm
+WorkingDirectory=@ROOT@
+EnvironmentFile=@ARGS_FILE@
+ExecStart=@ROOT@/scripts/runner.sh @SERVER_LINK@ $ARGS
+# SIGTERM goes to the runner only, which stops its machines in order; SIGKILL goes to what is left
+# (QEMU, vde_switch) after the stop timeout.
+KillMode=mixed
+TimeoutStopSec=60
+# Exit status 78: the server refused the token (the runner was revoked); do not restart in a loop.
+Restart=on-failure
+RestartPreventExitStatus=78
+
+[Install]
+WantedBy=multi-user.target

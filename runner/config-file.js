@@ -57,4 +57,4 @@ function writeRunnerConfig(file, config) {
   fs.chmodSync(file, 0o600);
 }
 
-module.exports = {readRunnerConfig, writeRunnerConfig};
+module.exports = {validateRunnerConfig: validate, readRunnerConfig, writeRunnerConfig};

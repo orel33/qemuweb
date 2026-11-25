@@ -239,8 +239,12 @@ What separates a deployment that works from one you can operate calmly.
   - The proxy identity has no throttling of its own (see SEC01).
   - Rotating the shared key without interruption, described in the tutorial.
 - [ ] **SVC01** (M) Services and operation.
-  - systemd units for the server, the local runner and a remote runner; `logrotate`; recovery after a reboot.
-  - CREMI wildcard certificate: `/etc/apache2/certs/star_emi_u-bordeaux_fr.crt` and `.key` are links the CREMI
+  - [x] **First part: a generic `scripts/qwctl.sh`** (it replaces the one of `deploy/cremi/`): `install`, `uninstall`, `start`, `stop`, `restart`,
+    `status`, `logs` of the system units of the server, the local runner and remote runners (several per machine with `--name`); options kept in
+    `/etc/qemuweb/*.args`, unit templates in `deploy/systemd/`; enabled units come back after a reboot of the machine. `runner.sh register` refuses to
+    replace a runner file without `--force`. Never loaded by a real systemd yet: to check by hand, then on the CREMI (`deploy-cremi.md`, "Switch to the units of qwctl.sh").
+  - [ ] `logrotate`.
+  - [ ] CREMI wildcard certificate: `/etc/apache2/certs/star_emi_u-bordeaux_fr.crt` and `.key` are links the CREMI
     repoints every year (the current one ends on 2 December 2026); Apache must be reloaded afterwards: say it in the
     tutorial or add a hook.
   - The OpenID provider must be reachable from Apache without the proxy (to check on the CREMI machine).
@@ -273,7 +277,7 @@ What separates a deployment that works from one you can operate calmly.
     (2) `remote --register-only` (register and exit) so that the CREMI can register once by hand and let a systemd unit run it; (3) the
     registration token must not stay on the command line (visible in `ps` for its validity): `--token-file` or standard input (decision Q12 of
     [runner-model.md](runner-model.md)); (4) `register` and `run` disappear (beta rules: no old command kept), so `start.sh`
-    (`runner.sh --port ...` becomes `runner.sh local --port ...`), `deploy/cremi/qemuweb-runner.service` and the remote unit example,
+    (`runner.sh --port ...` becomes `runner.sh local --port ...`), the templates of `deploy/systemd/`, `scripts/lib/service-units.js`,
     `remote-runner-test.md`, `deployment.md`, `reference.md` (tables tested word for word against `--help`), `install.md`, `run-commands.md`,
     the tests and the `--help` text must follow; (5) `runner.sh` with no command prints the help instead of starting the local runner (a typo must
     start nothing).
@@ -929,7 +933,7 @@ commit message.
   there are machines and the count surprises. Read it from `/proc/<pid>/status` (`Threads:`) next to the CPU and memory of each
   QEMU, `vde_switch`, runner and server line; add the total of a session and of a server; with `--details` also list the thread
   names of each QEMU (`/proc/<pid>/task/*/comm`, grouped: `CPU 0/KVM`, `call_rcu`, `worker`...). Same idea in a short form for the
-  `machines:` line of `deploy/cremi/qwctl.sh status` (`4 qemu, 16 threads`). Read-only, no new dependency; update the `--help`
+  `machines:` line of `scripts/qwctl.sh status` (`4 qemu, 16 threads`). Read-only, no new dependency; update the `--help`
   text, `docs/reference.md` and the unit test of the status output if there is one.
 
 ## Backlog
