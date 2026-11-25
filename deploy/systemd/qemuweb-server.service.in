@@ -1,0 +1,16 @@
+@MARKER@
+[Unit]
+Description=QemuWeb server
+After=network.target
+
+[Service]
+User=@SYSUSER@
+WorkingDirectory=@ROOT@
+EnvironmentFile=@ARGS_FILE@
+ExecStart=@ROOT@/scripts/server.sh $ARGS
+KillSignal=SIGTERM
+TimeoutStopSec=30
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

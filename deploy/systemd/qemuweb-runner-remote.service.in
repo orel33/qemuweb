@@ -1,13 +1,15 @@
+@MARKER@
 [Unit]
-Description=QemuWeb runner (local, runs the machines of this server)
-After=qemuweb-server.service
-Wants=qemuweb-server.service
+Description=QemuWeb runner (remote, dials a server on another machine)
+After=network-online.target
+Wants=network-online.target
 
 [Service]
-User=qemuweb
+User=@SYSUSER@
 SupplementaryGroups=kvm
-WorkingDirectory=/srv/qemuweb
-ExecStart=/srv/qemuweb/scripts/runner.sh --port 3002 --token-file /var/lib/qemuweb/server/local-runner.token --runtime /var/lib/qemuweb/runner
+WorkingDirectory=@ROOT@
+EnvironmentFile=@ARGS_FILE@
+ExecStart=@ROOT@/scripts/runner.sh run $ARGS
 # SIGTERM goes to the runner only, which stops its machines in order; SIGKILL goes to what is left
 # (QEMU, vde_switch) after the stop timeout.
 KillMode=mixed
