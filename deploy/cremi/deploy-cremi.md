@@ -183,9 +183,11 @@ $U list
 #     /var/lib/qemuweb/server/local-runner.token (0600) at its first start: the token of the local runner (runner A)
 #     The options are written once to /etc/qemuweb/server.args (then edited there), with the defaults: port 3002, --local-runner,
 #     /var/lib/qemuweb/server, /etc/qemuweb/users.json and runners.json, /var/log/qemuweb. Run as qemuweb: the account of the service
+H=https://qemuweb.emi.u-bordeaux.fr
+L="$H/.openid?logout=$H/goodbye"                    # short lines: a long URL is cut when it is pasted
 ./scripts/qwctl.sh install server --now --session-hours 12 --runner-grace 300 --trust-proxy loopback \
   --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
-  --logout-url 'https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye'
+  --logout-url "$L"
 sudo journalctl -u qemuweb-server --since "2 min ago" --no-pager | tail -n 25    # "QemuWeb is ready." "No runner connected."
 
 # 13. the proxy modules and the site of stage 3 (the maintenance page is already in place)
@@ -339,14 +341,16 @@ the users are in the same command, so that the server never starts in password m
 cd /srv/qemuweb && git pull --tags && npm ci
 systemctl cat qemuweb-server qemuweb-runner                # keep this output: a local change of a unit must go in the command below
 ls -d /etc/systemd/system/qemuweb-*.service.d 2>/dev/null  # a drop-in of the emergency mode (ExecStart) must be removed first
+H=https://qemuweb.emi.u-bordeaux.fr
+L="$H/.openid?logout=$H/goodbye"                    # short lines: a long URL is cut when it is pasted
 # 1. what would change (--dry-run): check ARGS and the difference with the old unit
 ./scripts/qwctl.sh install server --force --dry-run --session-hours 12 --runner-grace 300 --trust-proxy loopback \
   --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
-  --logout-url 'https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye'
+  --logout-url "$L"
 # 2. the server (the old one keeps running until step 4)
 ./scripts/qwctl.sh install server --force --session-hours 12 --runner-grace 300 --trust-proxy loopback \
   --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
-  --logout-url 'https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye'
+  --logout-url "$L"
 cat /etc/qemuweb/server.args                               # --auth proxy ... is there, and the same --runtime, --users, --runners, --logs as before
 # 3. the local runner (its port and token file come from server.args)
 ./scripts/qwctl.sh install runner --force --dry-run
@@ -358,7 +362,8 @@ cat /etc/qemuweb/server.args                               # --auth proxy ... is
 ./scripts/qwctl.sh status                                  # no Warning line
 ```
 
-If the server does not start after step 4, `./scripts/qwctl.sh logs server 40` gives the reason; the options are corrected in `/etc/qemuweb/server.args`.
+If `install` says that `/etc/qemuweb/server.args` exists and differs, an earlier run wrote it: the message lists the differences. Edit the file
+(`sudoedit`), then run `./scripts/qwctl.sh install server --force` without the options of the server. If the server does not start after step 4, `./scripts/qwctl.sh logs server 40` gives the reason; the options are corrected in `/etc/qemuweb/server.args`.
 To go back, restore the two old unit files from the output kept above (`sudoedit`), then `sudo systemctl daemon-reload`.
 
 ### Upgrading from 0.9.6 or earlier to this release (one-time breaking change)
@@ -378,10 +383,12 @@ sudo rm -rf /var/lib/qemuweb/*
 sudo rm -f /etc/qemuweb/runners.json
 # 3. the new code
 cd /srv/qemuweb && git pull --tags && npm ci
+H=https://qemuweb.emi.u-bordeaux.fr
+L="$H/.openid?logout=$H/goodbye"                    # short lines: a long URL is cut when it is pasted
 # 4. the units and the two new directories
 ./scripts/qwctl.sh install server --force --session-hours 12 --runner-grace 300 --trust-proxy loopback \
   --auth proxy --proxy-key-file /etc/qemuweb/proxy-key \
-  --logout-url 'https://qemuweb.emi.u-bordeaux.fr/.openid?logout=https://qemuweb.emi.u-bordeaux.fr/goodbye'
+  --logout-url "$L"
 ./scripts/qwctl.sh install runner --force
 # 5. start both (the server writes the token file, then the runner connects with it)
 ./scripts/qwctl.sh start

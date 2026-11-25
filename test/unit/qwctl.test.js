@@ -141,15 +141,20 @@ test('options are validated with the table of the program before anything is wri
 
 test('a value that systemd would split, unquote or expand is refused; % is kept as it is', t => {
   const m = machine(t);
-  for (const value of ['/a b', '/a"b', "/a'b", '/a$b', '/a\\b', '/a`b', '/a\nb', '/a\tb']) m.refused('install server', /systemd would split or change it/, {status: 2, extra: ['--logs', value]});
+  for (const value of ['/a b', '/a"b', "/a'b", '/a$b', '/a\\b', '/a`b', '/a\tb']) m.refused('install server', /systemd would split or change it/, {status: 2, extra: ['--logs', value]});
   assert.throws(() => units.renderUnit(units.service('server'), {root: '/srv/my qemuweb', sysuser: 'qemuweb'}), /The directory of QemuWeb/);
   assert.match(units.renderUnit(units.service('server'), {root: '/srv/100%', sysuser: 'qemuweb'}), /^ExecStart=\/srv\/100%%\/scripts\/server\.sh \$ARGS$/m);
 });
 
-test('the options file is never overwritten: options are refused while it exists, an edited one is checked and kept', t => {
+test('the options file is never overwritten: other options are refused with the differences, the same ones accepted, an edited file is checked and kept', t => {
   const m = machine(t);
   m.ok('install server');
-  m.refused('install server --listen 4000', /\/etc\/qemuweb\/server\.args exists and is never overwritten: edit it/, {status: 1});
+  m.refused('install server --listen 4000 --auth proxy --trust-proxy loopback --proxy-key-file /k',
+    /server\.args exists and is never overwritten[^]*--listen 4000 +\(in the file: --listen 3002\)[^]*--auth proxy +\(in the file: absent\)[^]*Edit it/, {status: 1});
+  const written = m.read('/etc/qemuweb/server.args');
+  m.ok('install server --listen 3002 --local-runner --logs /var/log/qemuweb');
+  assert.equal(m.read('/etc/qemuweb/server.args'), written);
+  m.refused('install server', /contains a line break/, {status: 2, extra: ['--logout-url', 'https://a.example/x-\ny']});
   const edited = '; mine\n# a comment\nARGS=--listen 4001 --runtime /var/lib/qemuweb/server\n';
   m.write('/etc/qemuweb/server.args', edited);
   m.ok('install server');

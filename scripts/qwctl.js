@@ -350,8 +350,13 @@ function install({item, options, words, host, root, say}) {
 
   // The options, checked before anything is written.
   const existing = host.read(argsFile);
-  if (existing !== null && words.length) fail(`${argsFile} exists and is never overwritten: edit it, then run ${command} without the options (${words[0]}...).`);
-  let checked = existing === null ? units.checkWords(item.mode, root, words) : units.readArgs(item.mode, root, existing, argsFile);
+  const given = units.checkWords(item.mode, root, words);
+  let checked = existing === null ? given : units.readArgs(item.mode, root, existing, argsFile);
+  if (existing !== null) {
+    // The same options again (a command run twice) are accepted; another value is never written.
+    const differences = units.differentOptions(given.words, checked.words);
+    if (differences.length) fail(`${argsFile} exists and is never overwritten. It differs from the given options:\n${differences.map(line => `  ${line}`).join('\n')}\nEdit it (sudoedit ${argsFile}), then run ${command} without options.`);
+  }
   let runnerFile = null;
   let fileRuntime = null;
   if (item.mode === 'remote') {
@@ -363,8 +368,8 @@ function install({item, options, words, host, root, say}) {
         `${registerCommand({root, file: runnerFile, sysuser, item, host, insecure: checked.settings.insecure})}`);
     }
     fileRuntime = config.runtime || null;
-    const given = checked.words.get('--runtime');
-    if (fileRuntime && given && path.resolve(fileRuntime) !== given) fail(`--runtime ${given} contradicts the runtime of ${runnerFile} (${fileRuntime}): use that one, or edit the file.`);
+    const ownRuntime = checked.words.get('--runtime');
+    if (fileRuntime && ownRuntime && path.resolve(fileRuntime) !== ownRuntime) fail(`--runtime ${ownRuntime} contradicts the runtime of ${runnerFile} (${fileRuntime}): use that one, or edit the file.`);
   }
   const argsText = existing ?? units.formatArgs(item, units.withDefaults(item, checked.words, {home: sysuser.home, fileRuntime}));
   if (existing === null) checked = units.readArgs(item.mode, root, argsText, argsFile);

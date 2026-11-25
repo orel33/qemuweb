@@ -185,8 +185,8 @@ cd /srv/qemuweb
 options are those of `server.sh` and `runner.sh`; they are checked before anything is written. `install` then:
 
 - writes the options, once, to `/etc/qemuweb/server.args` or `runner.args` (one line `ARGS=...`, read by systemd and given to the program on its command line).
-  **This file is then yours**: edit it and restart the service; no command overwrites it, and options given to `install` while it exists are
-  refused. A value holds no space, quote, backslash or `$`; a path is absolute. Only `ARGS` is read: the programs take their options from the command line.
+  **This file is then yours**: edit it and restart the service; no command overwrites it, and options given to `install` while it exists must be the same as in the file, otherwise they are
+  refused and the differences listed. A value holds no space, quote, backslash or `$`; a path is absolute. Only `ARGS` is read: the programs take their options from the command line.
 - adds these defaults: for the server `--listen 3002 --local-runner --runtime /var/lib/qemuweb/server --users /etc/qemuweb/users.json --runners
   /etc/qemuweb/runners.json --logs /var/log/qemuweb`; for the runner `--runtime /var/lib/qemuweb/runner`.
 - creates the missing directories, owned by the account (0700 for a runtime directory, 0750 for the others); `/var/lib/qemuweb` above them is root's (0755), so that services of

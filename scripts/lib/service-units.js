@@ -58,6 +58,8 @@ function checkWords(mode, root, words, {fromFile = false} = {}) {
   for (const word of words) {
     if (word.startsWith('--') && Object.hasOwn(FORBIDDEN[mode], word)) throw new UsageError(`${word} is not accepted here: ${FORBIDDEN[mode][word]}`);
   }
+  const cut = words.find(word => /[\r\n]/.test(word));
+  if (cut !== undefined) throw new UsageError(`${JSON.stringify(cut)} contains a line break (a pasted command cut by the terminal?)`);
   const spec = programSpec(mode, root);
   // parseArguments takes these two as a request for help and checks nothing else.
   for (const word of words) if (word === '-h' || word === '--help') throw new UsageError(`Unknown option: ${word}`);
@@ -73,6 +75,13 @@ function checkWords(mode, root, words, {fromFile = false} = {}) {
     map.set(option.flag, value);
   }
   return {settings, words: map};
+}
+
+// The given options whose value is not the one of the options file: one line each.
+function differentOptions(given, inFile) {
+  const text = (flag, value) => (value === true ? flag : `${flag} ${value}`);
+  return [...given].filter(([flag, value]) => inFile.get(flag) !== value)
+    .map(([flag, value]) => `${text(flag, value)}   (in the file: ${inFile.has(flag) ? text(flag, inFile.get(flag)) : 'absent'})`);
 }
 
 const wordsOf = map => [...map].flatMap(([flag, value]) => (value === true ? [flag] : [flag, value]));
@@ -163,4 +172,4 @@ function rawOption(words, flag) {
 }
 
 module.exports = {UNIT_DIRECTORY, CONFIG_DIRECTORY, STATE_DIRECTORY, LOG_DIRECTORY, MARKER, NAME, ACCOUNT, service, unitPath, argsPath, serviceOfFile, programSpec,
-  checkWords, formatArgs, parseArgs, readArgs, withDefaults, defaultRunnerFile, serverLink, renderUnit, unitInfo, rawOption};
+  checkWords, differentOptions, formatArgs, parseArgs, readArgs, withDefaults, defaultRunnerFile, serverLink, renderUnit, unitInfo, rawOption};
