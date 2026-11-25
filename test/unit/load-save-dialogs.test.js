@@ -295,11 +295,13 @@ test('Escape cancels only when idle, Enter never starts or restarts a load; the 
   assert.doesNotMatch(/<dialog[^>]*id="load-dialog"[\s\S]*?<\/dialog>/.exec(html)[0], /<form/, 'no form: Enter cannot submit');
 });
 
-test('an observing administrator cannot open either dialog: write-action buttons, no other way in, the server refuses', () => {
+test('an observing administrator without control cannot open either dialog: write-action buttons, no other way in, the server refuses', () => {
   const observe = moduleSource('observe');
-  assert.match(observe, /observing && !!element\.closest\?\.\('\.write-action'\)/);
+  // A write-action is blocked whenever controlReason gives a reason (an observer without control, the owner under control).
+  assert.match(observe, /write: !!element\.closest\('\.write-action'\), ownerOnly: !!element\.closest\('\.owner-only'\)\}, controlState\(\)\)/);
+  assert.match(observe, /if \(!isDisabled\(event\.target\)\) return;/);
   assert.match(observe, /\['Enter', ' ', 'ArrowUp', 'ArrowDown'\]\.includes\(event\.key\)/, 'keyboard activation is blocked');
-  assert.match(css, /body\.observing \.write-action \{ opacity: \.45; \}/);
+  assert.match(css, /body\[data-write-blocked="true"\] \.write-action/);
   for (const name of ['load-dialog', 'save-dialog']) {
     const source = moduleSource(name);
     assert.equal((source.match(/showModal\(\)/g) || []).length, 1, `${name}: one way to open the dialog`);

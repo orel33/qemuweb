@@ -8,11 +8,12 @@ const test = require('node:test');
 const vm = require('node:vm');
 const {moduleSource, functionSource, publicDir} = require('./web-ui-source');
 
-function load({canCapture = true, captures = [], limits = {maxPerNode: 4}} = {}) {
+function load({canCapture = true, captures = [], limits = {maxPerNode: 4}, observing = true, admin = null} = {}) {
   const source = moduleSource('captures');
-  const context = {canCapture: () => canCapture, capturesOf: () => captures, isRecording: capture => capture.state !== 'stopped', limits};
+  const context = {canCapture: () => canCapture, capturesOf: () => captures, isRecording: capture => capture.state !== 'stopped', limits,
+    observing, controllingAdmin: () => admin};
   vm.createContext(context);
-  vm.runInContext(['hostCaptureBlocker', 'captureBlocker', 'formatBytes', 'interfaceLabel', 'preselectInterface', 'captureButtonState', 'shouldAutoDownload', 'captureOwnership', 'staleCaptures', 'closePlan', 'captureControls'].map(name => functionSource(source, name)).join('\n'), context);
+  vm.runInContext(['captureRefusal', 'hostCaptureBlocker', 'captureBlocker', 'formatBytes', 'interfaceLabel', 'preselectInterface', 'captureButtonState', 'shouldAutoDownload', 'captureOwnership', 'staleCaptures', 'closePlan', 'captureControls'].map(name => functionSource(source, name)).join('\n'), context);
   return context;
 }
 const host = (extra = {}) => ({id: 'h-1', kind: 'host', engine: 'qemu', running: true, busy: false, pendingRestart: false, interfaces: ['s-1', null], ...extra});
@@ -27,6 +28,8 @@ test('a capture cannot start on a stopped, busy, VirtualBox, unconnected or obse
   assert.match(captureBlocker(host(), 1), /not connected/);
   assert.match(captureBlocker(host(), 3), /not connected/);
   assert.match(load({canCapture: false}).captureBlocker(host(), 0), /Read-only observation/);
+  assert.equal(load({canCapture: false, observing: false, admin: 'root'}).captureBlocker(host(), 0), 'root controls your session.',
+    'the owner while an administrator controls the session');
 });
 
 test('the four-capture limit blocks a new capture, not the stop of a running one', () => {

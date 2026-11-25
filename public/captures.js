@@ -22,7 +22,9 @@ export const onCapturesChanged = listener => changeListeners.add(listener);
 // An observer may look but not capture; an administrator holding the control lock may, and the
 // owner may not meanwhile (one driver at a time).
 export const canCapture = () => canWrite();
-const captureRefusal = () => (observing ? 'Read-only observation: take control of the session to capture.' : `${controllingAdmin()} controls your session.`);
+function captureRefusal() {
+  return observing ? 'Read-only observation: take control of the session to capture.' : `${controllingAdmin()} controls your session.`;
+}
 
 export function formatBytes(bytes) {
   if (bytes < 1024) return `${bytes} B`;
