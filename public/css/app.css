@@ -32,7 +32,7 @@ button, select { height: var(--control); padding: 0 11px; color: inherit; backgr
 button { cursor: pointer; }
 .icon-button { display: inline-grid; place-items: center; flex: none; width: var(--control); height: var(--control); padding: 7px; border-color: #405166; background: #202c3a; transition: background .15s, border-color .15s, transform .15s; }
 .icon-button svg { width: 22px; height: 22px; display: block; }
-.icon-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
+.icon-button:not(:disabled, [aria-disabled="true"]):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
 .icon-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 #clone-machine { color: #9ee6b4; } #show-general-settings { color: #9fc5ef; }
 .session-file-button { color: #ffc36b; } /* the yellow of the Load Session and Save Session dialog headings */
@@ -45,7 +45,7 @@ button { cursor: pointer; }
 .header-nav { display: flex; flex: none; align-items: center; gap: 8px; margin-left: auto; }
 .nav-button { display: inline-flex; flex: none; align-items: center; gap: 7px; height: var(--control); padding: 0 12px; border: 1px solid #405166; border-radius: 6px; background: #202c3a; font: 700 14px system-ui, sans-serif; white-space: nowrap; text-decoration: none; transition: background .15s, border-color .15s, transform .15s; }
 .nav-button svg { width: 20px; height: 20px; flex: none; }
-.nav-button:not(:disabled):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
+.nav-button:not(:disabled, [aria-disabled="true"]):hover { background: #304256; border-color: currentColor; transform: translateY(-1px); }
 .nav-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 /* Fixed widths, so that a button does not change size when its label alternates: the longer
    label (bold 14px system-ui: "Admin" ~45px, "Terminals" ~70px) + 20px icon + 7px gap +
@@ -311,7 +311,7 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .pane-action-menu[open] { z-index: 5; }
 .pane-action-menu summary { display: grid; place-items: center; width: var(--control-small); height: var(--control-small); border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #d7e1ee; cursor: pointer; list-style: none; }
 .pane-action-menu summary::-webkit-details-marker { display: none; }
-.pane-action-menu summary:hover, .pane-action-menu[open] summary { border-color: #70a8ff; background: #304256; }
+.pane-action-menu summary:not([aria-disabled="true"]):hover, .pane-action-menu[open] summary { border-color: #70a8ff; background: #304256; }
 .pane-action-menu summary:focus-visible, .pane-action-list button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .pane-action-menu summary svg { width: 19px; height: 19px; }
 .pane-action-list { position: absolute; top: calc(100% + 5px); left: 0; display: grid; gap: 2px; width: 160px; padding: 4px; border: 1px solid #506176; border-radius: 6px; background: #1a2633; box-shadow: 0 10px 28px #0009; }
@@ -324,11 +324,11 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .pane-action-list [data-action="reset"] { color: #ffc36b; }
 .pane-action-list [data-action="remove"] { color: #ff777d; }
 .pane-settings-button { display: grid; place-items: center; flex: none; width: var(--control-small); height: var(--control-small); padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #f2ce79; }
-.pane-settings-button:not(:disabled):hover { border-color: #f2ce79; background: #304256; }
+.pane-settings-button:not(:disabled, [aria-disabled="true"]):hover { border-color: #f2ce79; background: #304256; }
 .pane-settings-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .pane-settings-button svg { width: 18px; height: 18px; }
 .pane-clear-button { display: grid; place-items: center; flex: none; width: var(--control-small); height: var(--control-small); padding: 0; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #c49aff; }
-.pane-clear-button:not(:disabled):hover { border-color: #c49aff; background: #304256; }
+.pane-clear-button:not(:disabled, [aria-disabled="true"]):hover { border-color: #c49aff; background: #304256; }
 .pane-clear-button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .pane-clear-button svg { width: 18px; height: 18px; }
 /* Capture button of the pane bar: the REC red of the Graphic view marks while a capture of the host records. */
@@ -348,7 +348,7 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .pane-session-menu[open] { z-index: 6; }
 .pane-session-menu summary { display: flex; align-items: center; gap: 7px; width: 100%; cursor: pointer; list-style: none; }
 .pane-session-menu summary::-webkit-details-marker { display: none; }
-.pane-session-menu summary:hover, .pane-session-menu[open] summary { border-color: #70a8ff; background: #304256; }
+.pane-session-menu summary:not([aria-disabled="true"]):hover, .pane-session-menu[open] summary { border-color: #70a8ff; background: #304256; }
 .pane-session-menu summary:focus-visible, .pane-session-list button:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
 .pane-session-label { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .pane-session-menu summary svg { flex: none; width: 14px; height: 14px; }
@@ -362,7 +362,7 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .pane-view-menu[open] { z-index: 5; }
 .pane-view-menu summary { display: grid; place-items: center; width: var(--control-small); height: var(--control-small); border: 1px solid #405166; border-radius: 4px; background: #1a2633; color: #aebdcd; cursor: pointer; list-style: none; }
 .pane-view-menu summary::-webkit-details-marker { display: none; }
-.pane-view-menu summary:hover, .pane-view-menu[open] summary { border-color: #70a8ff; background: #304256; }
+.pane-view-menu summary:not([aria-disabled="true"]):hover, .pane-view-menu[open] summary { border-color: #70a8ff; background: #304256; }
 .pane-view-menu summary:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 1px; }
 .pane-view-menu .console-view-toggle { position: absolute; top: calc(100% + 5px); right: 0; display: grid; gap: 2px; width: 150px; padding: 4px; border: 1px solid #506176; border-radius: 6px; background: #1a2633; box-shadow: 0 10px 28px #0009; }
 .pane-view-menu:not([open]) .console-view-toggle { display: none; }
@@ -448,8 +448,10 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 /* Observation is read-only: the server refuses every change. Every control that writes, loads
    or exports something carries the class write-action (index.html, terminal.js, workspace.js)
    and is shown disabled in an observation tab (same layout as the user's page; observe.js
-   also blocks the keyboard and sets aria-disabled). */
-body.observing .write-action { pointer-events: none; opacity: .45; }
+   ignores the clicks and the keyboard, sets aria-disabled and shows the reason as the tooltip;
+   the mouse must reach the control for it, hence no pointer-events: none). */
+body.observing .write-action { opacity: .45; }
+[aria-disabled="true"] { cursor: not-allowed !important; }
 /* Admin page (/admin). */
 .admin-page header { gap: 12px; }
 .admin-tabs { display: flex; flex: none; gap: 2px; padding: 0 16px; overflow-x: auto; scrollbar-width: thin; border-bottom: 1px solid #35404c; }
@@ -519,8 +521,8 @@ body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailab
 .admin-log-view { height: 260px; margin: 0; padding: 8px 10px; overflow: auto; color: #cfd9e4; background: #0b0f14; border: 1px solid #2c3743; border-radius: 6px; font: 12px/1.45 var(--console-font-family); white-space: pre; }
 /* One driver at a time: while this page's view is driven by the other side (the owner's page
    under control, or an observer following with Follow checked), every control that changes the
-   view state (class view-control) is disabled; observe.js also blocks it for the keyboard. */
-body[data-view-driven="true"] .view-control { pointer-events: none; opacity: .45; }
+   view state (class view-control) is disabled in the same way. */
+body[data-view-driven="true"] .view-control { opacity: .45; }
 
 
 /* Load Session and Save Session: one frame (heading with the toolbar icon, a form pane, Cancel / primary button). The form pane and

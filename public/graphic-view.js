@@ -263,7 +263,7 @@ function showTooltip(node, event) {
     tooltip.replaceChildren(head, line(info.kind), line(info.resources));
     if (machine.message && machine.message !== node.state) tooltip.append(line(machine.message, 'tooltip-note'));
     for (const text of info.interfaces) tooltip.append(line(text, 'tooltip-nic'));
-    tooltip.append(line(viewDriver() ? 'Selection is driven by the other side' : 'Click to select · double-click to open the console', 'tooltip-hint'));
+    tooltip.append(line(viewDriver() || 'Click to select · double-click to open the console', 'tooltip-hint'));
   }
   tooltip.hidden = false;
   const rect = canvasSize();
