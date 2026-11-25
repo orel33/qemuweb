@@ -162,7 +162,8 @@ while kill -0 "$server_pid" 2>/dev/null && [[ -n "$runner_pid" ]] && kill -0 "$r
 status=0
 if ! kill -0 "$server_pid" 2>/dev/null; then
   wait "$server_pid" 2>/dev/null || status=$?
-  echo "The server exited (status $status); stopping the runner." >&2
+  # No runner exists when the server ended before listening (it refused its options, the port is busy).
+  echo "The server exited (status $status)${runner_pid:+; stopping the runner}." >&2
 else
   wait "$runner_pid" 2>/dev/null || status=$?
   note=''

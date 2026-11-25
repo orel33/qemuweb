@@ -135,12 +135,16 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     for (const {runner} of sessions.values()) runner.captureLive.stopNode();
   }
 
+  let lastCatalog = {images: {}, warnings: []};
+  let loggedCatalogError = null;
+
   // What this runner can do, announced in hello: no image is hashed here (only known digests).
   function capabilities() {
     let kvm = true;
     try { fs.accessSync('/dev/kvm', fs.constants.R_OK | fs.constants.W_OK); } catch (_) { kvm = false; }
-    const images = {};
+    let images = {};
     let warnings = [];
+    let catalogError = null;
     try {
       const catalog = readCatalog(configPath);
       warnings = configWarnings({catalog, root, engines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem()});
@@ -154,12 +158,20 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
         }
         images[system] = entry;
       }
-    } catch (error) { console.error(`Cannot read the system catalog: ${error.message}`); }
-    return {engines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem(), images, warnings};
+      lastCatalog = {images, warnings};
+      loggedCatalogError = null;
+    } catch (error) {
+      // The caller sees the error (startup refuses it); a running runner keeps the last good catalog and logs each new error once.
+      catalogError = error.message;
+      ({images, warnings} = lastCatalog);
+      if (loggedCatalogError !== catalogError) console.error(`Cannot read the system catalog: ${catalogError}`);
+      loggedCatalogError = catalogError;
+    }
+    return {engines, kvm, cpus: os.cpus().length, memoryBytes: os.totalmem(), images, warnings, catalogError};
   }
 
   function hello() {
-    const announced = capabilities();
+    const {catalogError, ...announced} = capabilities();
     if (limits?.cpus) announced.cpus = Math.min(announced.cpus, limits.cpus);
     if (limits?.memoryBytes) announced.memoryBytes = Math.min(announced.memoryBytes, limits.memoryBytes);
     return {type: 'hello', protocol: PROTOCOL_VERSION, pid: process.pid, runtimeRoot, ...announced, ...(limits?.maxSessions ? {limits: {maxSessions: limits.maxSessions}} : {}),

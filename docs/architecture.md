@@ -87,11 +87,11 @@ consoles.
   control, or an observer with Follow checked and no control held),
   `body[data-view-driven]` disables every control that changes the view state
   (class `view-control`: pane view menu, layout menu, switch consoles, paging,
-  tab selection, pane node menus), for the mouse (CSS) and the
-  keyboard (`observe.js`); the banners say who drives. Nothing is hidden for an
+  tab selection, pane node menus), for the mouse and the
+  keyboard (`observe.js`), with the reason as its tooltip (`disabled-reason.js`); the banners say who drives. Nothing is hidden for an
   observer: the page has the user's exact layout, and every write action (class
-  `write-action`) is shown disabled (greyed, no mouse, `aria-disabled`, keyboard
-  and programmatic clicks blocked by `observe.js`; the Monitor entry of the view
+  `write-action`) is shown disabled (greyed, `aria-disabled`, reason as tooltip, mouse, keyboard
+  and programmatic clicks ignored by `observe.js`; the Monitor entry of the view
   menu too, and a followed `monitor` shows the console). Taking control forces
   Follow on and applies the owner's view first, then the admin's page drives;
   while control is held the Follow box is checked and disabled. Every privileged socket

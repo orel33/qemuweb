@@ -10,6 +10,7 @@ import {panes} from './terminal.js';
 import {applyView, closeLayoutMenu, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {emitOnSession, publishView} from './socket.js';
+import {controlReason, followReason, showReason, takeControlReason, viewReason} from './disabled-reason.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -67,13 +68,15 @@ function renderControl() {
       button.dataset.held = String(mine);
       button.innerHTML = `${mine ? RELEASE_ICON : TAKE_ICON}${mine ? 'Release control' : 'Take control'}`;
       button.className = `observe-button ${mine ? 'act-green' : 'act-amber'}`;
-      button.title = mine ? 'Give the keyboard back to the user' : 'Take exclusive control of every console of this session';
     }
-    button.disabled = taking || (!mine && !!control);
+    const blocked = takeControlReason(controlState());
+    button.disabled = !!blocked;
+    button.title = blocked || (mine ? 'Give the keyboard back to the user' : 'Take exclusive control of every console of this session');
     // Holding control: the view is the admin's own and Follow is meaningless, so it shows checked.
     const follow = document.getElementById('observe-follow');
     if (mine) follow.checked = true;
     follow.disabled = mine;
+    for (const element of [follow, follow.parentElement]) showReason(element, followReason(controlState()));
     status.textContent = mine ? `You control the session of ${observedLogin}`
       : control ? `${control.admin} controls this session` : `read-only${following() ? `; the view follows ${observedLogin} (uncheck Follow to change it)` : ''}`;
     banner.dataset.control = String(mine);
@@ -90,9 +93,12 @@ function renderControl() {
 // controls (class view-control) are disabled, when it is the owner's page under control, or an
 // observer following the owner (Follow checked, no control held). With Follow unchecked the
 // observer's controls are usable and the view stays as it is.
-export function viewDriver() {
-  if (!observing) return control ? `${control.admin} controls your view` : null;
-  return following() ? `The view follows ${observedLogin}; uncheck Follow to change it` : null;
+// Returns the reason, or '' when this page drives its own view.
+export function viewDriver() { return viewReason(controlState()); }
+
+// The state the reasons of the disabled controls depend on (disabled-reason.js).
+function controlState() {
+  return {observing, login: observedLogin, following: following(), holding: heldByMe(), admin: control?.admin || null, taking};
 }
 
 function renderViewDriver() {
@@ -103,23 +109,29 @@ function renderViewDriver() {
 }
 
 // What this page must not use: the view controls while the view is driven by the other side,
-// and in an observation tab every write action (their CSS greys them out and ignores the mouse).
+// and in an observation tab every write action (their CSS greys them out).
 const isDisabled = element => (document.body.dataset.viewDriven === 'true' && !!element.closest?.('.view-control'))
   || (observing && !!element.closest?.('.write-action'));
 
-// aria-disabled on those controls; also called when controls are created (renderTabs).
+// aria-disabled and the reason as the tooltip on those controls (on the summary of a menu: it is
+// what the user points at); also called when controls are created (renderTabs).
 export function markDisabledControls() {
-  const driven = document.body.dataset.viewDriven === 'true';
+  const state = controlState();
   for (const element of document.querySelectorAll('.view-control, .write-action')) {
-    const disabled = element.classList.contains('view-control') && driven || observing && element.classList.contains('write-action');
-    if (disabled) element.setAttribute('aria-disabled', 'true'); else element.removeAttribute('aria-disabled');
+    const {classList} = element;
+    const reason = controlReason({view: classList.contains('view-control'), write: classList.contains('write-action')}, state);
+    const target = element.querySelector(':scope > summary') || element;
+    if (reason) target.setAttribute('aria-disabled', 'true'); else target.removeAttribute('aria-disabled');
+    showReason(target, reason);
   }
 }
 
-// Keyboard and programmatic clicks on a disabled control are ignored too.
+// The mouse reaches a disabled control, so that its tooltip shows: clicks, keyboard and
+// programmatic ones too, are ignored here, and a press does not take the focus.
 function blockDisabledControls(event) {
   if (!isDisabled(event.target)) return;
-  if (event.type !== 'click' && !['Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
+  if (event.type === 'mousedown') { event.preventDefault(); return; }
+  if (event.type.startsWith('key') && !['Enter', ' ', 'ArrowUp', 'ArrowDown'].includes(event.key)) return;
   event.preventDefault();
   event.stopImmediatePropagation();
 }
@@ -154,7 +166,9 @@ export function observationUnavailable(reason = 'no session') {
   document.getElementById('observe-notice-text').textContent = text;
   document.getElementById('observe-notice').hidden = false;
   document.getElementById('observe-status').textContent = 'no session';
-  document.getElementById('observe-control').disabled = true;
+  const button = document.getElementById('observe-control');
+  button.disabled = true;
+  button.title = 'No session to control';
   document.body.dataset.observeUnavailable = 'true';
 }
 
@@ -248,7 +262,7 @@ async function renderSessionNavigation() {
 
 // Builds the banner. The server audits the observation when the console sockets connect.
 export function initObserve() {
-  for (const type of ['click', 'keydown', 'keyup']) document.addEventListener(type, blockDisabledControls, true);
+  for (const type of ['click', 'dblclick', 'mousedown', 'keydown', 'keyup']) document.addEventListener(type, blockDisabledControls, true);
   if (!observing) return;
   document.title = `QemuWeb · observing ${observedLogin}`;
   banner.hidden = false;

@@ -908,10 +908,11 @@ commit message.
   again. Resolved: `refollow()` (`public/observe.js`) re-applies the received view after the node list is loaded.
 - [ ] **BUG04** The test harness kills only `start.sh` after 12 s, so the server and the runner, in their own sessions,
   could survive a hung stop (`test/integration/qemuweb-client.js`).
-- [ ] **BUG06** A runner with an unreadable `config.json` still prints `✓ config.json  0 systems` after the
-  `Cannot read the system catalog` error. It should print a ✗ and abort.
-- [ ] **BUG07** `start.sh` says "The server exited (status 2); stopping the runner." although no runner was started when
-  the server refuses its options. Also check by hand that `./scripts/start.sh --session-hours 0` exits 2 at once and
+- [x] **BUG06** A runner with an unreadable `config.json` printed `✓ config.json  0 systems` after the
+  `Cannot read the system catalog` error. Resolved: `capabilities()` returns `catalogError`, the configuration check prints
+  `✗ config.json  <cause>` and the runner aborts (`Startup aborted`, status 1); a running runner keeps the last good catalog.
+- [x] **BUG07** `start.sh` said "The server exited (status 2); stopping the runner." although no runner was started when
+  the server refuses its options. Resolved: the sentence names the runner only when one was launched. Also check by hand that `./scripts/start.sh --session-hours 0` exits 2 at once and
   leaves nothing running.
 - [x] **BUG08** `docs/user-guide.md` still says the CREMI runs `--auth both`; it is `--auth proxy`. (Disappears with AUT01.)
 
@@ -925,7 +926,7 @@ commit message.
 
 ### TODO
 
-- [ ] **BUGS01** (S) A batch of three small corrections, one commit each: **BUG06** (a runner with an unreadable `config.json`
+- [x] **BUGS01** (S) A batch of three small corrections, one commit each: **BUG06** (a runner with an unreadable `config.json`
   prints ✗ and stops), **BUG07** (`start.sh` says "stopping the runner" only when a runner was started), **TOD04** (a tooltip on a
   greyed-out view control says why).
 - [x] **TOD02** Report a `runtime/` path longer than 49 characters at startup (the sockets of a node must fit in 107 bytes),
@@ -935,7 +936,9 @@ commit message.
   `scripts/demo.sh`) use the system `debian13-cloud` instead of `debian13-legacy`, which should be faster. Every host of the
   three `.topo` files and of the five archives changes system; the documents and tests that name the example system follow,
   and the documents say that the demo needs the `debian13-cloud` image (`prepare.sh --system debian13-cloud`).
-- [ ] **TOD04** A tooltip on a disabled view control saying why (view driven by the owner or by the controlling admin).
+- [x] **TOD04** A tooltip on a disabled view control saying why (view driven by the owner or by the controlling admin). Done: the rules
+  are in `public/disabled-reason.js`, for the write actions of an observation tab, Follow and Take control too; the normal tooltip
+  returns with the control.
 - [ ] **TOD05** A `--version` option for `server/main.js` and `runner/main.js`, and a version check between the two: the runner's `hello`
   carries its version, and the server says "restart the runner" (in its log and in `/admin -> Runners`) when it differs from its own, instead of
   letting an archive fail with `Invalid session.json in archive.` after a format change. Useful with runners on other machines.

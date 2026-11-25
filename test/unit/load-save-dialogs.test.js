@@ -287,9 +287,9 @@ test('Escape cancels only when idle, Enter never starts or restarts a load; the 
 
 test('an observing administrator cannot open either dialog: write-action buttons, no other way in, the server refuses', () => {
   const observe = moduleSource('observe');
-  assert.match(observe, /observing && element\.classList\.contains\('write-action'\)/);
+  assert.match(observe, /observing && !!element\.closest\?\.\('\.write-action'\)/);
   assert.match(observe, /\['Enter', ' ', 'ArrowUp', 'ArrowDown'\]\.includes\(event\.key\)/, 'keyboard activation is blocked');
-  assert.match(css, /body\.observing \.write-action \{ pointer-events: none; opacity: \.45; \}/);
+  assert.match(css, /body\.observing \.write-action \{ opacity: \.45; \}/);
   for (const name of ['load-dialog', 'save-dialog']) {
     const source = moduleSource(name);
     assert.equal((source.match(/showModal\(\)/g) || []).length, 1, `${name}: one way to open the dialog`);
