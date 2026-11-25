@@ -366,7 +366,7 @@ If `install` says that `/etc/qemuweb/server.args` exists and differs, an earlier
 (`sudoedit`), then run `./scripts/qwctl.sh install server --force` without the options of the server. If the server does not start after step 4, `./scripts/qwctl.sh logs server 40` gives the reason; the options are corrected in `/etc/qemuweb/server.args`.
 To go back, restore the two old unit files from the output kept above (`sudoedit`), then `sudo systemctl daemon-reload`.
 
-### Upgrading from 0.9.6 or earlier to this release (one-time breaking change)
+### Upgrading from 0.9.6 or earlier to 0.9.7 (one-time breaking change)
 
 The local runner no longer uses a Unix socket and no longer shares a directory with the server: the server and the runner each
 have their own directory, the runner dials the server with a token file, and `runners.json` is schema 2 (schema 1 is refused). The

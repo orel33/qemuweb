@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (main after 0.9.6)
+## Where we are (main after 0.9.7)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
@@ -28,7 +28,9 @@ monitor command on their own hosts, and there are no quotas and no jail.
 | Admin tabs, VirtualBox, engine per session | The Admin page in tabs (Sessions, Accounts, Runners, WebSocket, Logs; the tab in the URL; only the visible tab refreshes; badges); the VirtualBox engine repaired (clear start errors, a runner-wide KVM/VirtualBox exclusion that names no other session, a dialog for start failures, cleanup without `--delete`, `status.sh` showing `vbox` hosts); **Engine:** selector in the header, changeable while the session is idle; `host.json` format 2 with settings per engine (`keyword:qemu`, `keyword:vbox`); working disks per engine (`disk.qcow2`, `disk.vdi`) in the session ZIP | **0.9.3** |
 | Prepare and ttyS1, runtime directory | Alpine and OpenWrt images built behind the HTTP proxy (PRP01), ttyS1 empty-console hint and `prepare.sh --list` notes (BUG10, BUG01), default runtime directory `/tmp/qw-<login>/<port>` (TOD02) | 0.9.4, 0.9.5 |
 | Guest agent, prepare.sh command line | Live address with prefix of each interface in the Graphic view through the QEMU guest agent, `scripts/guest-agent.sh`, `guestAgent` profile keyword, `config.json` schema 2 (GAG01); `prepare.sh` lists by default, `--system <id\|all>` or `--all`, `--parallel[=N]`, the log path printed (PRP02, PRP03) | **0.9.6** |
-| Runner model (RUN03a to f) | The local runner is a runner like the others: it connects over the WebSocket with a token file (`--local-runner`), the Unix socket is gone; one identity model (`runners.json` schema 2, no trusted flag); one directory per process (server `<port>`, runner `l-<port>`, `r-<id>`); the server touches no file of a runner; `bindings.json`, sessions restored offline at start, one grace rule, forced loss; CREMI units and upgrade procedure | main, not yet released |
+| Runner model (RUN03a to f) | The local runner is a runner like the others: it connects over the WebSocket with a token file (`--local-runner`), the Unix socket is gone; one identity model (`runners.json` schema 2, no trusted flag); one directory per process (server `<port>`, runner `l-<port>`, `r-<id>`); the server touches no file of a runner; `bindings.json`, sessions restored offline at start, one grace rule, forced loss; CREMI units and upgrade procedure | **0.9.7** |
+| Services and network | `scripts/qwctl.sh` installs and controls the systemd services of the server and the runners (SVC01, first part); `--bind` and runner `--host` (LST01); `runner.sh register` refuses to replace a runner file without `--force` | **0.9.7** |
+| Interface, images, examples | Load Session and Save Session dialogs (FIL02), rectilinear links in the Graphic view (GRA05), quiet serial console on the Debian images (IMG02), examples on `debian13-cloud` (EXA01) | **0.9.7** |
 
 Formats: from 0.9.0, every change of a format increments its number and comes with an explicit decision on
 compatibility.
@@ -345,6 +347,15 @@ What separates a deployment that works from one you can operate calmly.
     design step: a written decision in `docs/architecture.md` validated by the user (what the server may still read,
     how the aliases are served, the trust model, the migration of the tests), then implementation tasks. No code
     before the decision.
+- [ ] **RUN04** (M, after 0.9.7) **Several runners: status, placement, test.** To do before PRN01, which changes the placement.
+  - `scripts/status.sh`: the name, ID and kind (local, remote) of each runner, read from the runner file (the token is never printed), and the
+    URL of a remote one. Today a remote runner, which has no `--port`, is always shown as "waiting for a server", and its sessions may miss
+    their owner and age when its directory is not on its command line. `status.sh` cannot tell whether a remote runner is connected: it claims nothing (`/admin` -> Runners does).
+  - Placement (`pickRunner`, `server/runner-registry.js`): the load mixes a ratio (sessions / `maxSessions`) with a plain count, so a runner
+    without a limit and 1 session looks busier than a runner at 9 of 10; the local runner cannot have a `maxSessions`; the engines and
+    systems of a runner are not compared with what the session needs.
+  - An integration test with several real runners (VDE only): one local and two remote, the distribution over several users, a pause, a
+    reached limit, the cut of one runner without effect on the others, the return on the right runner.
 - [ ] **PST01** (L, study first, **includes the former RUN02**) Persistence of the sessions of the server and of the runners:
   what survives a hard reboot, a power cut, a network cut, a crash of the server or of a runner. **Nothing is decided
   yet**: the study proposes several policies (below) and the user chooses. It follows RUN03, which fixes who owns which

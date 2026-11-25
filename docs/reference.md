@@ -122,7 +122,7 @@ The two directories are printed at start (`Server directory: …`, `Runner direc
 sessions in its own directory, add `--runner-runtime DIR` to move them. `scripts/user.sh [--users FILE] <command>` manages the accounts of another users file.
 
 ```text
-QemuWeb 0.9.6 server
+QemuWeb 0.9.7 server
 
 Options
   --listen          3002                                       (default)
@@ -182,7 +182,7 @@ against the range of `package.json`. After the checks the runner prints the stat
 connection (`Cannot reach the server…` or `…token file … does not exist…` (retried), `Connected to the server.`, `Connection to the server lost, reconnecting…`).
 
 ```text
-QemuWeb 0.9.6 runner
+QemuWeb 0.9.7 runner
 
 Options
   --port                3002                                       (default)
