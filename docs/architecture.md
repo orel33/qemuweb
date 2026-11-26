@@ -84,7 +84,11 @@ consoles.
   when an observation starts or ends and at connection; an admin on their own session is not an
   observer. The owner's page validates it (`normalizeObservers`) and shows a yellow banner,
   replaced by the control banner while an admin holds control (`ownerBanner`,
-  `public/disabled-reason.js`). While an admin holds
+  `public/disabled-reason.js`). Both sides use one sentence form (CTL03): "<login> is observing |
+  is controlling your session" on the owner's page, "You are observing | You are controlling the
+  session of <login>" or "<admin> is controlling the session of <login>" on the observer's page
+  (`observerBanner`); only the logins are bold (`renderBannerParts`), the explanation is the
+  tooltip. While an admin holds
   control, the view goes the other way: the admin's page publishes
   `controller-view` (same fields and validation, accepted only from that admin
   while they hold a lock on the session, kept for a page opening meanwhile) and
@@ -169,9 +173,11 @@ classic script shared by the server and the browser: `paneCount`,
   active:   nodeId | null,       the selected node (tab or graphic selection)
   floating: boolean,             the floating console of the Graphic view is open on
                                  the active node, shown whenever the Graphic view shows
-  geometry: {left, top, width, height} | null }
+  geometry: {left, top, width, height} | null,
                                  the floating console's window as fractions of the
                                  Graphic view (#graphic-workspace); null = default
+  viewport: {cx, cy, k} | null } the pan and zoom of the Graphic view: the world point at
+                                 the canvas center and the zoom; null = not shown yet
 ```
 
 `normalizeView` returns a valid view state or null: known keys only (others
@@ -188,7 +194,16 @@ browsers differ in size: `geometryFraction` turns the driver's window into fract
 Graphic view, `geometryPixels` turns them back on each page, at least 300 × 200 pixels and kept
 inside the viewport. A page whose view is driven cannot move or resize the window (no drag, CSS
 `resize: none`); the driver publishes while it drags or resizes at most every 250 ms, and once
-more at the end of a move. A window resize re-applies the geometry without publishing. The console page is not part
+more at the end of a move. A window resize re-applies the geometry without publishing. `viewport` (CTL03) is null or an object with exactly `cx`, `cy` and `k`: `cx` and
+`cy` finite world coordinates within ±100000 rounded to 0.1, `k` a positive number clamped to
+[0.2, 3] and rounded to 1e-4; anything else makes the view invalid (a view saved before CTL03,
+without `viewport`, is dropped once, no migration). World coordinates rather than fractions,
+because node positions are world coordinates: a page of another size centers the same point at
+the same zoom (and its own size decides how much is visible around it). `null` makes each page
+fit the drawing itself. The driver publishes its viewport while it pans or zooms at most every
+100 ms (the trailing change always goes out); a driven page has no pan, wheel zoom, `+`/`-`/`0`
+keys or Fit, its zoom buttons are `view-control`, and a resize keeps the driver's center and
+zoom. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
 the resulting `panes` is what is published.
 
@@ -212,6 +227,34 @@ its session is controlled. A page follows a received view by `normalizeView` aga
 its own nodes, then `applyView`; a node it does not know yet makes it reload
 its node list first. The saved view is restored the same way once the node
 list is loaded.
+
+### Node positions of the Graphic view
+
+Node positions are session data, not view state (CTL03): the runner keeps them in
+`<session>/layout.json` (see [JSON files](json-files.md)), so every browser of the owner and
+every observer shows the same layout, and the session ZIP carries it. They are world
+coordinates (`common/graphic-layout.js`: finite, within ±100000, rounded to 0.1).
+
+- **Read**: `GET /api/graphic-layout` (runner command `layout.get`, allowed to observers like
+  every `GET`), at each connection of the page's session socket and when its runner is back.
+- **Write**: the socket event `node-position {nodeId, x, y, final}`, from the session's driver
+  only (the owner while nobody controls the session, the admin holding control:
+  `consoleRefusal` with the action `layout`). An observer without control gets
+  `node-error` "Read-only observation: take control to move nodes."; the owner's events are
+  dropped silently while the session is controlled. The server checks the shape
+  (`normalizeNodePosition`) and the node (`nodes.ids`), relays `{nodeId, x, y}` to the other
+  sockets of `session:<id>` (`socket.to`, not back to the sender), and gives final positions to
+  the runner (`layout.set`, validated again there). Bounds (`server/layout-writes.js`): at most
+  20 events per second per socket (the excess is dropped), and the final positions of a session
+  coalesced (the latest per node, `layout.set` at most every 250 ms, the last one always sent).
+- **Browser** (`public/graphic-view.js`): a node drag is published at most every 100 ms and its
+  end as `final: true`; a node placed by the Edit tools is sent as final. A page that may not
+  write (`canWrite`) cannot drag a node (a press stays a click, CSS cursor `pointer`).
+- **Lifecycle**: a removed node loses its position (`destroyNode` → `prunePositions`), the file
+  is removed when no position is left and with the session directory. Loading a session ZIP
+  replaces the layout with the archive's `layout.json` (none: automatic layout) and the runner
+  emits `graphic-layout {positions}`, relayed to `session:<id>`, which replaces the pages'
+  positions and fits the drawing again. Loading a topology adds automatically placed nodes.
 
 ## Session control
 
@@ -364,13 +407,13 @@ order. State that several modules reassign lives on the `store` object of
 | `engine-select.js` | The **Engine** select of the header: the pure rules (value, disabled, reason), live freeze while a host is up or busy, change request, notes of Host Settings. |
 | `topology.js` | The `.topo` download of the Save Session dialog, and the start of the saved view. |
 | `load-dialog.js`, `file-selector.js`, `archive-read.js`, `load-steps.js`, `file-kinds.js` | The Load Session dialog: `load-dialog.js` (options, one-click load, steps, refusal before the closing), `file-selector.js` (one selector for the server's examples and the user's files, with the file card), `archive-read.js` (reads a session ZIP in the browser, checks its base images, sends it); `load-steps.js` is the steps list and the Close step (removes the previous session with `removeAllNodes` of `nodes.js`, once, after the check) shared with Save Session; `file-kinds.js` holds the pure rules (kind and content check, source and option states, steps, Save status line, warning, timing of the closing). |
-| `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge), node dragging, selection, hover details, Terminals/Graphic switch. |
+| `graphic-view.js` | Graphic view: drawing, pan and zoom (a world-to-screen viewport, so node positions do not depend on the zoom and have no edge; published in the view state), node dragging (positions read from and sent to the server), selection, hover details, Terminals/Graphic switch. |
 | `captures.js`, `capture-dialog.js`, `capture-button.js`, `capture-live.js` | Traffic capture: the captures of each node (from the `captures` event and the list routes), the reasons, the interface labels, the preselection, the pane button state and the rules of ownership, saving and cleanup. `capture-dialog.js` is the Capture dialog (interface, live filter, Start/Stop, automatic save, live area), `capture-button.js` the pane bar button, and the link popover opens the dialog. `capture-live.js` is the live text area of the dialog (the last 2000 lines); there is no Capture view of a pane. |
 | `graphic-console.js` | Floating console of the Graphic view: the console workspace shown as a movable, resizable window over the graph, with the selected node's pane only. |
 | `graphic-edit.js` | Editing in the Graphic view: add a node where clicked, connect a host interface to a switch, remove a link (`PUT /api/nodes/:nodeId/config`). |
 | `save-dialog.js` | The Save Session dialog (one status line, the options, the estimate, the steps; session ZIP, or only the topology with a checkbox), in the same frame as Load Session. |
 | `observe.js` | Observation tab (`/?observe=<login>`): target, socket options, banner and navigation, console control on both sides, following received view states. |
-| `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `sameView`) and the follow rule (`followsView`). |
+| `view-state.js` | Classic script, also required by `server/sockets.js`: the view state (`paneCount`, `normalizeView`, `normalizeViewport`, `sameView`) and the follow rule (`followsView`). |
 
 ## Traffic capture
 
