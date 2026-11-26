@@ -9,7 +9,7 @@
 const {LAYOUT_SCHEMA_VERSION} = require('./schema-versions');
 
 const MAX_COORDINATE = 100000;
-const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
+const NODE_ID = /^[hs]-[0-9a-f]{8}$/;
 
 // {x, y} rounded, or null when x or y is not a finite number within the bounds.
 function normalizePosition(raw) {

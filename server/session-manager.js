@@ -173,7 +173,15 @@ class SessionManager extends EventEmitter {
         await runner.request('session.create', {owner, createdAt: session.createdAt, ...(session.engine ? {engine: session.engine} : {})});
       } catch (error) {
         console.error(`Cannot create session ${session.id} on runner ${entry.id}: ${error.message}`);
-        if (this.workspaces.get(owner) === workspace && session.runnerId === entry.id) this.unplace(workspace);
+        if (this.workspaces.get(owner) === workspace && session.runnerId === entry.id) {
+          // 409: the runner already has a directory with this ID (a stale one, the server knows every
+          // placed session). The empty session is dropped: its pages reload into a new one, with a new ID.
+          if (error.status === 409) {
+            this.drop(workspace, 'session ID already used on the runner');
+            throw statusError('Your session had to be renewed. Please retry.', 409);
+          }
+          this.unplace(workspace);
+        }
         throw error;
       }
       session.engine = null;
@@ -318,7 +326,9 @@ class SessionManager extends EventEmitter {
     const existing = this.workspaces.get(login);
     if (existing) return existing;
     if (this.deleting.has(login)) throw new Error('This session is being deleted; try again in a moment.');
-    const ids = new Set(this.sessionIds());
+    // 32 random bits: a new ID is never one the server knows (a workspace or a binding of bindings.json,
+    // which cover every placed session on every runner).
+    const ids = new Set([...this.sessionIds(), ...this.bindings.list().map(binding => binding.id)]);
     let session;
     do session = new Session({owner: login});
     while (ids.has(session.id));

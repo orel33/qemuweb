@@ -482,6 +482,7 @@ body[data-write-blocked="true"] .write-action { opacity: .45; }
 .admin-table th { color: #9fb3c9; font-weight: 600; }
 .admin-table tr[data-disabled="true"] td { color: #8a96a3; }
 .admin-own { color: #9ee6b4; }
+.admin-session-id { font-family: ui-monospace, monospace; font-size: 0.9em; }
 .admin-actions { display: flex; gap: 6px; align-items: center; }
 .admin-actions select, .admin-table select { padding: 0 9px; }
 /* Open and Observe are links (a middle click opens a new observation tab) shaped like the buttons. */

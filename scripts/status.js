@@ -19,7 +19,7 @@ const {execFileSync} = require('child_process');
 const {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, runnerSessionsDir, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('./status-vbox');
 
 const ROOT = path.resolve(__dirname, '..');
-const SESSION_PATH = /(\/[^\s,]*?\/sessions)\/([0-9a-f]{16})(?:\/([hs]-[0-9a-f]{16}))?/;
+const SESSION_PATH = /(\/[^\s,]*?\/sessions)\/([0-9a-f]{8})(?:\/([hs]-[0-9a-f]{8}))?/;
 
 function parseArguments(argv) {
   const options = {all: false, details: false, pid: null, watch: 0, color: process.stdout.isTTY && !process.env.NO_COLOR};
@@ -209,7 +209,7 @@ function owners(sessionsDir) {
   try {
     for (const login of fs.readdirSync(users)) {
       const id = path.basename(readLink(path.join(users, login)));
-      if (/^[0-9a-f]{16}$/.test(id)) map.set(id, login);
+      if (/^[0-9a-f]{8}$/.test(id)) map.set(id, login);
     }
   } catch (_) { /* No users directory. */ }
   return map;

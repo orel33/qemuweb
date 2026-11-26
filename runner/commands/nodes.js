@@ -51,7 +51,8 @@ const commands = {
     try {
       if (typeof name !== 'string' || !/^[a-zA-Z][a-zA-Z0-9_-]{0,31}$/.test(name)) throw new Error('Switch name must be 1–32 letters, digits, underscores or hyphens.');
       entityKind(id, 'switch');
-      if (session.nodes.has(id) || [...session.nodes.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch ID or name already exists.');
+      if (session.nodes.has(id)) throw statusError('Switch ID already exists; retry with another ID.', 409);
+      if ([...session.nodes.values()].some(s => s.kind === 'switch' && s.hostname === name)) throw new Error('Switch name already exists.');
       node = getNode(id, true, 'switch');
       setNodeHostname(node, name);
       node.lastMessage = 'VDE switch ready to start';
@@ -65,7 +66,7 @@ const commands = {
         try { await destroyNode(node); }
         catch (cleanupError) { console.error('Cannot clean up failed switch:', cleanupError); }
       }
-      throw statusError(error.message, node ? 500 : 400);
+      throw statusError(error.message, error.status || (node ? 500 : 400));
     }
   },
 

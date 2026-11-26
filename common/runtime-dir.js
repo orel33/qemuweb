@@ -29,7 +29,7 @@ const TMP_ROOT = '/tmp';
 const MAX_LOGIN = 32;
 const TMPFS_MAGIC = 0x01021994;
 const LOW_SPACE_BYTES = 5 * 1024 ** 3;
-const HEX16 = '0123456789abcdef';
+const HEX8 = '01234567';
 // The socket files of a node directory (runner/session-runtime.js builds its paths from them; qga.sock is the
 // QEMU guest agent channel of a host, runner/guest-agent.js); a switch
 // also has mgmt.sock and the VDE directory, where vde_switch creates its control socket.
@@ -80,12 +80,12 @@ function ensurePrivateDirectory(directory, uid) {
 }
 
 // Every Unix socket path the runner builds (the node sockets), relative to the runtime directory, for the longest
-// identifiers (a 16 hex session ID, h-/s- and 16 hex node IDs).
+// identifiers (an 8 hex session ID, h-/s- and 8 hex node IDs).
 function socketPathsBelowRuntime() {
-  const session = path.join('sessions', HEX16);
+  const session = path.join('sessions', HEX8);
   const files = [];
   for (const prefix of ['h', 's']) {
-    const node = path.join(session, `${prefix}-${HEX16}`);
+    const node = path.join(session, `${prefix}-${HEX8}`);
     files.push(...[NODE_FILES.serial0, NODE_FILES.serial1, NODE_FILES.monitor, NODE_FILES.qga].map(name => path.join(node, name)));
     if (prefix === 's') files.push(path.join(node, NODE_FILES.mgmt), path.join(node, NODE_FILES.vde, VDE_CONTROL));
   }

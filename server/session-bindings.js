@@ -4,7 +4,7 @@
 // runner (<server runtime>/bindings.json, mode 0600, schema 1). It is the only source of the owner
 // of a session the server takes over after a restart (SessionManager.restore turns each binding into an offline workspace at start): the owner a runner announces in its hello is
 // never used (a hello is untrusted input). Layout:
-//   {"schemaVersion": 1, "sessions": [{"id": "<16 hex>", "owner": "<login>", "runnerId": "local", "createdAt": "<ISO>"}]}
+//   {"schemaVersion": 1, "sessions": [{"id": "<8 hex>", "owner": "<login>", "runnerId": "local", "createdAt": "<ISO>"}]}
 // The manager writes a binding BEFORE it sends session.create (a crash in between leaves a binding
 // without a session, dropped at the runner's next hello, never a session without a binding) and
 // removes it when the session is deleted or dropped. The file is untrusted input at load time: a

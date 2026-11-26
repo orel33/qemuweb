@@ -14,7 +14,7 @@ const {isCaptureId, interfaceIndex} = require('../../common/capture');
 const {kindOfName, isExampleName} = require('../examples');
 
 const ROUTE_MODULES = ['session', 'settings', 'nodes', 'hosts', 'topology', 'archives', 'examples', 'metrics', 'captures'];
-const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
+const NODE_ID = /^[hs]-[0-9a-f]{8}$/;
 
 // The users.log event of a request of the owner, or null. Only explicit actions on nodes and
 // archives: never polling, console traffic or file contents. A node ID from a request body

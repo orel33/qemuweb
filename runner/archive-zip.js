@@ -8,6 +8,8 @@ const zlib = require('zlib');
 const {Readable, Transform, Writable} = require('stream');
 const {pipeline} = require('stream/promises');
 const CHUNK = 1024 * 1024;
+// The refusal of an archive saved by an earlier version, whose IDs have another format.
+const EARLIER_ARCHIVE = 'This session archive comes from an earlier version of QemuWeb (16-character host and switch IDs): it cannot be loaded.';
 const MAX32 = 0xffffffff;
 const MAX_LOGICAL_DISK = 64 * 1024 * 1024 * 1024;
 const MAX_LOGICAL_TOTAL = 256 * 1024 * 1024 * 1024;
@@ -236,8 +238,10 @@ async function readArchive(filename, stage) {
     const session = entries.get('session.json');
     if (session.size > 4 * 1024 * 1024 || session.method !== 0) throw new Error('Invalid session metadata entry.');
     const names = [...entries.keys()];
+    // Host and switch IDs have 8 hex characters; earlier versions used 16 (IDS01).
+    if (names.some(name => /^[hs]-[0-9a-f]{16}\//.test(name))) throw new Error(EARLIER_ARCHIVE);
     for (const name of names) {
-      if (name !== 'session.json' && name !== 'layout.json' && !/^[hs]-[0-9a-f]{16}\/(?:host\.json|switch\.json|disk\.qcow2|disk\.vdi|startup\/.+)$/.test(name)) {
+      if (name !== 'session.json' && name !== 'layout.json' && !/^[hs]-[0-9a-f]{8}\/(?:host\.json|switch\.json|disk\.qcow2|disk\.vdi|startup\/.+)$/.test(name)) {
         throw new Error(`Unexpected session archive file: ${name}`);
       }
     }
@@ -254,4 +258,4 @@ async function readArchive(filename, stage) {
     return names;
   } finally { fs.closeSync(fd); }
 }
-module.exports = {writeArchive, readArchive, safeName};
+module.exports = {writeArchive, readArchive, safeName, EARLIER_ARCHIVE};

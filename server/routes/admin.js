@@ -18,7 +18,8 @@ const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisable
 // A session whose runner is offline (a network cut, a restart) is listed with zero counts and runnerOffline: true,
 // so that one lost runner does not hide the other sessions. runnerId is the runner the session is placed on,
 // null (placed: false) for a session without any node, which no runner holds (its counts are zero).
-async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0) {
+// runnerName: the name of the session's runner (its record, "local" for the local runner), null when it is not placed.
+async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0, runnerName = null) {
   let counts, runnerOffline = false;
   try { counts = await runner.request('session.summary'); }
   catch (error) {
@@ -28,6 +29,7 @@ async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0
   }
   return {
     login: owner, own: owner === adminLogin, browsers, runnerOffline, sessionId: session.id, runnerId: session.runnerId,
+    runnerName: session.runnerId === null ? null : runnerName || session.runnerId,
     placed: session.runnerId !== null, createdAt: session.createdAt,
     lastActivity: session.lastActivityAt, nodes: counts.nodes, hosts: counts.hosts, switches: counts.switches,
     runningHosts: counts.runningHosts, runningSwitches: counts.runningSwitches, reservedRamMb: counts.reservedRamMb,
@@ -150,9 +152,11 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, conn
     return {deleted, failed};
   }
 
+  // The name of a runner for the Sessions tab: its record (runners.json), else its live entry, else its ID.
+  const runnerNameOf = id => (id === null ? null : runnerStore?.get(id)?.name || manager.registry?.get(id)?.name || id);
   router.get('/sessions', async (req, res) => {
     try {
-      const summaries = await Promise.all(manager.list().map(workspace => sessionSummary(workspace, req.user.login, browsers(workspace.owner))));
+      const summaries = await Promise.all(manager.list().map(workspace => sessionSummary(workspace, req.user.login, browsers(workspace.owner), runnerNameOf(workspace.session.runnerId))));
       res.json(summaries.sort((a, b) => a.login.localeCompare(b.login)));
     } catch (error) { res.status(error.status || 500).json({error: error.message}); }
   });

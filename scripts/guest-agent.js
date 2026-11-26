@@ -66,9 +66,9 @@ const list = directory => { try { return fs.readdirSync(directory).sort(); } cat
 function discover(runtime) {
   const found = [];
   for (const session of list(path.join(runtime, 'sessions'))) {
-    if (!/^[0-9a-f]{16}$/.test(session)) continue;
+    if (!/^[0-9a-f]{8}$/.test(session)) continue;
     for (const id of list(path.join(runtime, 'sessions', session))) {
-      if (!/^h-[0-9a-f]{16}$/.test(id)) continue;
+      if (!/^h-[0-9a-f]{8}$/.test(id)) continue;
       const directory = path.join(runtime, 'sessions', session, id);
       let socket = path.join(directory, NODE_FILES.qga);
       try { if (!fs.lstatSync(socket).isSocket()) socket = null; } catch (_) { socket = null; }

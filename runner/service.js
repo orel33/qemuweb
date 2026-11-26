@@ -31,7 +31,7 @@ const {statusError} = require('./commands/errors');
 const {LOGIN_PATTERN} = require('../common/login');
 const {linkUserAlias, unlinkUserAlias} = require('./runtime-tidy');
 
-const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
+const NODE_ID = /^[hs]-[0-9a-f]{8}$/;
 const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures', 'capture-live', 'guest-info'];
 const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology', 'archives', 'consoles', 'captures', 'layout']
   .map(name => require(`./commands/${name}`).commands));
@@ -72,6 +72,8 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     if (owner !== null && (typeof owner !== 'string' || !LOGIN_PATTERN.test(owner))) throw new Error('Invalid session owner.');
     const session = new Session({runtimeRoot, id: sessionId, engine: engineOf(engine), owner,
       ...(typeof createdAt === 'string' ? {createdAt} : {})});
+    // 32-bit IDs: a directory left with this ID (not loaded) is refused too; the control plane then drops its session.
+    if (fs.existsSync(session.runtimeDir)) throw statusError('Session already exists.', 409);
     fs.mkdirSync(path.dirname(session.runtimeDir), {recursive: true});
     fs.mkdirSync(session.runtimeDir);
     session.saveMetadata();

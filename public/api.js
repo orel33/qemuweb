@@ -16,7 +16,7 @@ export function jsonRequest(method, data) {
 export async function requestJson(url, options, fallbackError) {
   const response = await fetch(url, options);
   const body = await response.json();
-  if (!response.ok) throw new Error(body.error || fallbackError);
+  if (!response.ok) throw Object.assign(new Error(body.error || fallbackError), {status: response.status});
   return body;
 }
 

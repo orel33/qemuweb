@@ -5,6 +5,7 @@
 // JSON body of the matching HTTP route.
 const fs = require('fs');
 const {entityKind} = require('../../common/node-id');
+const {statusError} = require('./errors');
 const {validateLaunchSettings} = require('../../common/launch-settings');
 const {writeJsonAtomic} = require('../../common/json-file');
 
@@ -26,7 +27,7 @@ const commands = {
     }
     const {id, name, imageId, engine = session.engine, interfaces, settings, guestMedia, startupDiskEnabled} = body;
     entityKind(id, 'host');
-    if (session.nodes.has(id)) throw new Error('Host ID already exists.');
+    if (session.nodes.has(id)) throw statusError('Host ID already exists; retry with another ID.', 409);
     const image = imageById(imageId || Object.keys(readConfig().systems).find(system => system !== 'default'));
     if (!image) throw new Error('Unknown system in config.json.');
     runner.requireInstalledImage(image);
