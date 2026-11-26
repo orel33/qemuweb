@@ -500,6 +500,12 @@ body[data-write-blocked="true"] .write-action { opacity: .45; }
 .runner-warnings { margin: 0; padding: 0; list-style: none; }
 .runner-warnings li { display: flex; gap: 6px; align-items: flex-start; color: #f2c46d; }
 .runner-warnings svg { flex: none; width: 16px; height: 16px; margin-top: 2px; }
+.runner-status { margin-top: 22px; min-height: 220px; }
+.runner-status h3 { margin: 0 0 10px; font-size: 15px; }
+.runner-status select { max-width: 100%; min-width: 16em; }
+.runner-status-empty { color: #9fb3c9; font-style: italic; }
+.admin-table tr.runner-status-session th { padding-top: 12px; color: #f2c46d; white-space: normal; }
+@media (max-width: 640px) { .runner-status select { min-width: 0; flex: 1 1 100%; } }
 /* Toolbar buttons with an icon and a text, in the same style as the icon buttons. */
 .admin-tool { display: inline-flex; align-items: center; gap: 7px; height: var(--control); padding: 0 12px; border-color: #405166; background: #202c3a; transition: background .15s, border-color .15s, transform .15s; }
 .admin-tool svg { width: 20px; height: 20px; flex: none; }

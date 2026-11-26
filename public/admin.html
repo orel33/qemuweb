@@ -69,6 +69,22 @@
           <tbody id="runners-body"></tbody>
         </table>
       </div>
+      <div class="runner-status" role="region" aria-labelledby="runner-status-title">
+        <div class="admin-section-head"><h3 id="runner-status-title">Runner status</h3></div>
+        <div class="admin-toolbar">
+          <label for="runner-status-select">Runner</label>
+          <select id="runner-status-select"></select>
+        </div>
+        <p class="admin-runners-hint" id="runner-status-process" role="status"></p>
+        <p class="admin-runners-hint runner-status-empty" id="runner-status-empty" hidden></p>
+        <div class="admin-table-wrap">
+          <table class="admin-table runner-status-table">
+            <thead><tr><th>Node</th><th>Kind</th><th>System</th><th>Engine</th><th>PID</th><th>Memory (used / configured)</th><th>CPU</th></tr></thead>
+            <tbody id="runner-status-body"></tbody>
+          </table>
+        </div>
+        <p class="admin-runners-hint" id="runner-status-totals"></p>
+      </div>
     </section>
     <section id="panel-websocket" aria-labelledby="connections-title">
       <div class="admin-section-head">

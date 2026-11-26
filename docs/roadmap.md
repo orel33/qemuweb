@@ -640,6 +640,19 @@ personal runner and any guest access exist only for trusted users.
   remembered in the browser (`localStorage` key `qemuweb.admin-log-height`). At phone width it keeps a fixed 260 pixels,
   without grip. (2) The **Download** link gets the Lucide `download` icon (inline SVG, `currentColor`, `aria-hidden`), its
   text, title and accessible name unchanged. Source-assertion unit test; the layout is checked by hand.
+- [ ] **ADM04** (M) Admin page, Runners tab: **Runner status**. Below the runners table, a section with a select listing
+  the runners (name and ID, only the online ones selectable) shows for the selected runner what `scripts/status.sh` shows
+  for a runner of this machine: the runner process (pid, uptime, memory, CPU), each session (ID, owner login, age) with
+  its nodes (name, kind, system, engine, pid, memory used over configured, CPU %), and the totals (hosts, switches,
+  memory, CPU). It works for a remote runner too: the data comes from the runner itself, through a new read-only runner
+  command `runner.status` (`runner/runner-status.js`) that measures only the runner's own process and the children it
+  holds (QEMU, `vde_switch`, `vdeterm`; a VirtualBox VM from the runner's own `VBoxManage metrics` samples, without pid),
+  never another process of the machine, a command line, a path or the environment, bounded in size (256 sessions,
+  1024 nodes, 64 character texts). `GET /api/admin/runners/:id/status` (admins only; 404 unknown runner, 503 offline or
+  not ready, 504 without answer within 5 s) checks the runner's answer (`server/runner-status.js`). The section refreshes
+  with the Runners tab only (ADM01 rule), for the selected runner only; empty states "Runner offline" and "No session";
+  phone width. Unit tests (the command with fake `/proc` data and its bounds, the check of an answer, the route, the
+  pure rendering parts); the admin integration test calls the route for the local runner.
 - [ ] **NET01** (S) **Cut and restore a cable** on a running host. QEMU's monitor has `set_link <name> off|on`, so a link goes
   down and up under the guest (the kernel logs "link down" then "link up"), without a reboot and without losing anything.
   A **Disconnect cable** / **Reconnect cable** pair on the link popover and in Host Settings > Network, distinct from

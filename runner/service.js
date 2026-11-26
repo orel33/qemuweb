@@ -8,6 +8,8 @@
 //   hello()                               capabilities, runtimeRoot, limits and the sessions (ID, owner,
 //                                         creation date, nodes)
 //   capabilities()                        engines, kvm, cpus, memory, images and config warnings
+// Commands outside any session: runner.shutdown (stops every session) and runner.status (read-only
+// process view of the runner and its sessions for /admin, runner/runner-status.js).
 //   setConsoleFlow(paused)                pauses console sources while the connection is congested
 //   stopCaptureLives()                    ends every live capture view (the control connection closed)
 //   events                                'event' (sessionId, event, payload)
@@ -30,6 +32,7 @@ const {availableEngines} = require('./preflight');
 const {statusError} = require('./commands/errors');
 const {LOGIN_PATTERN} = require('../common/login');
 const {linkUserAlias, unlinkUserAlias} = require('./runtime-tidy');
+const {createRunnerStatus} = require('./runner-status');
 
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
 const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures', 'capture-live', 'guest-info'];
@@ -50,6 +53,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
   const flow = {paused: false};
   const hostNodes = () => [...sessions.values()].flatMap(entry => [...entry.session.nodes.values()]);
   const engines = availableEngines(commands);
+  const runnerStatus = createRunnerStatus();
 
   function entryOf(sessionId) {
     const entry = typeof sessionId === 'string' && sessions.get(sessionId);
@@ -131,6 +135,7 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     if (command === 'session.create') return createSession({...args, sessionId});
     if (command === 'session.delete') return deleteSession(sessionId, args);
     if (command === 'runner.shutdown') return shutdown();
+    if (command === 'runner.status') return runnerStatus.status([...sessions.values()].map(entry => entry.session));
     const handler = Object.hasOwn(COMMANDS, command) && COMMANDS[command];
     if (!handler) throw new Error(`Unknown runner command: ${String(command).slice(0, 64)}.`);
     if ((sessionId === null || sessionId === undefined) && DRAFT_COMMANDS.has(command)) {

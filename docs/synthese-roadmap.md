@@ -86,6 +86,7 @@ De la version 0.9.7 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | NET03 | Ajouter ou retirer une interface d'un hôte sans le redémarrer | 4 |
 | ADM01 | **Fait (0.9.3).** Page d'administration en onglets (sessions, comptes, runners, WebSocket, journaux) | 2 |
 | ADM02 | Onglet Logs de la page d'administration : vue du journal redimensionnable en hauteur (mémorisée dans le navigateur), icône sur le lien Download | 1 |
+| ADM04 | Onglet Runners de la page d'administration : état d'un runner choisi (processus du runner, sessions et nœuds avec pid, mémoire et CPU, totaux), mesuré par le runner lui-même, donc aussi pour un runner distant | 3 |
 | GRA02 | Plusieurs consoles flottantes dans la vue graphique | 3 |
 | GRA03 | Points restants de la vue graphique : zoom au pincement, invite du shell, tooltips | 2 |
 | GRA04 | Relier deux nœuds en glissant d'une prise à l'autre dans la vue graphique | 3 |

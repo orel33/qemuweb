@@ -353,7 +353,7 @@ The server is split into layers with one-way dependencies:
 | `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `paused` flag, the display-only `runtimeRoot` and `pid` and client (no `local` or `trusted` flag); `pickRunner(login, sessionsOf)`, the single placement point. |
 | `server/remote-gateway.js` | `/runner/connect`: the WebSocket upgrade of every runner (bearer token and runner ID checked against `runners.json`, 401 / 409; the id `local` only with `--local-runner` and the token of the file, checked against its in-memory hash in constant time), the `ws` duplex stream under a protocol `Connection`, ping/pong (`common/ws-heartbeat.js`). The address proves nothing (a reverse proxy reaches the server from 127.0.0.1 too): the token is the only proof. |
 | `server/runner-store.js`, `server/runner-registration.js` | `runners.json` (token hashes, 0600, revoked, paused) and the in-memory one-time registration tokens (15 min, 1 h, 24 h). |
-| `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited). |
+| `server/routes/runner-register.js`, `server/routes/admin-runners.js` | `POST /api/runner/register` (unauthenticated, token in constant time, rate limited) and the admin API of the Runners panel (tokens, pause, resume, revoke, remove; audited), and `GET /api/admin/runners/:id/status` (ADM04, not audited): `runner.status` asked to that runner, its answer checked by `server/runner-status.js` (known fields, valid IDs and logins, bounded texts and lists, totals recomputed); 404 unknown runner, 503 offline or not ready, 504 without answer within 5 s. |
 | `server/listen.js`, `common/bind.js` | The HTTP surface (web interface, Socket.IO, `/runner/connect`) listens on `127.0.0.1` unless `--bind ADDRESS` names another address, in clear text: `server/listen.js` writes the `listen address` line, the warning of a non-loopback address and the banner URLs; `common/bind.js` is the ONE place of the rules (an IPv4 or IPv6 literal, loopback, wildcard, and the address the local runner dials: `--host`, derived from `--bind` by `start.sh` and `demo.sh`). Production keeps loopback behind nginx or Apache. |
 | `server/local-runner-token.js`, `common/local-token.js` | With `--local-runner`: creates `<runtime>/local-runner.token` when missing or unusable (0600, directory 0700, 32 random bytes in base64url, atomic write; a readable file is never rewritten), keeps its sha256 in memory as the secret of the record `local` (which has no hash in `runners.json`), creates that record once (audit `register-local-runner`) and never un-revokes it. `common/local-token.js` is the one place that knows the file name and format. |
 | `server/server-instance.js` | `<server runtime>/server-<port>.pid` (read by `scripts/stop.sh`), written in the server's own directory (beside `bindings.json` and `local-runner.token`). |
@@ -384,7 +384,7 @@ The server is split into layers with one-way dependencies:
 | `runner/console/` | Guest serial consoles (one per channel) and startup hook marker filtering. |
 | `common/console-id.js` | Console IDs (node ID, `:1` for the second serial port); also served to the browser at `/console-id.js`. |
 | `runner/media/` | Working disks, startup ISO, startup files and base image hashes. |
-| `runner/preflight.js`, `runner/resources.js`, `runner/metrics.js` | Executable checks; CPU and memory sampling. |
+| `runner/preflight.js`, `runner/resources.js`, `runner/metrics.js`, `runner/runner-status.js` | Executable checks; CPU and memory sampling; the `runner.status` process view (ADM04). |
 | `common/` | Runner protocol framing (`runner-protocol.js`), `.topo` parsing (`topology.js`), IDs, launch settings, `config.json` validation, JSON writes, shell quoting. |
 
 ### Web interface
@@ -674,7 +674,13 @@ Session: `session.create {sessionId, owner, createdAt, engine?}` (directory,
 `session.json`, `meta.json`; the engine asked, else the runner's first), `session.delete {ifEmpty?}` (destroy every node, remove the
 directory; with `ifEmpty` only a session without any node is deleted, else `{deleted: false}`), `session.settings` / `session.setEngine {engine}`,
 `session.summary` (counts, running nodes, reserved RAM and CPU, for `/admin`),
-`runner.shutdown` (every session, used at server stop).
+`runner.shutdown` (every session, used at server stop), `runner.status` (without a session, read-only, for the
+Runners tab of `/admin`: `runner/runner-status.js` measures the runner process and the children it holds, QEMU,
+`vde_switch` and `vdeterm`, from `/proc/stat`, `/proc/<pid>/stat` and `/proc/<pid>/status` only, parsed by
+`runner/metrics.js`, and a VirtualBox VM from the runner's own samples; never another process, a command line, a path
+or the environment; CPU in percent of one core between two samples, the previous call's or two taken 0.5 s apart without
+blocking, one measurement shared by calls made at once; at most 256 sessions, 1024 nodes and 64 character texts, the
+shape in `common/runner-status.js`).
 
 Nodes (args mirror the HTTP bodies and queries): `nodes.list`,
 `nodes.metrics`, `nodes.stopAll`, `nodes.startAll`,

@@ -17,7 +17,7 @@ const {createRegisterRouter, createRateLimiter} = require('../../server/routes/r
 const fakeClient = () => Object.assign(new EventEmitter(), {close() { this.emit('close', null); }});
 
 // An HTTP server around the router, as admin.js mounts it (same `audited` contract).
-async function setup(t, {trustProxy = false, localRunner = true} = {}) {
+async function setup(t, {trustProxy = false, localRunner = true, statusTimeoutMs} = {}) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-adminr-'));
   const registry = new RunnerRegistry();
   const store = createRunnerStore(path.join(dir, 'runners.json'));
@@ -44,7 +44,7 @@ async function setup(t, {trustProxy = false, localRunner = true} = {}) {
   app.use(express.json());
   app.use((req, _res, next) => { req.user = {login: 'boss', role: 'admin'}; next(); });
   app.use('/api/runner/register', createRegisterRouter({tokens, store, audit: {record: (admin, action, target, result) => audit.push({admin, action, target, result})}}));
-  app.use('/runners', createRunnersRouter({manager, store, tokens, audited, port: 3002, graceSeconds: 300, trustProxy, localRunner}));
+  app.use('/runners', createRunnersRouter({manager, store, tokens, audited, port: 3002, graceSeconds: 300, trustProxy, localRunner, statusTimeoutMs}));
   const server = http.createServer(app);
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   t.after(() => { server.close(); server.closeAllConnections(); fs.rmSync(dir, {recursive: true, force: true}); });
@@ -220,4 +220,37 @@ test('forced loss: drops the sessions of an offline runner at once, refused whil
   assert.equal((await call('POST', '/runners/local/drop-sessions')).body.dropped, 2);
   body = (await call('GET', '/runners')).body;
   assert.equal(body.runners[0].sessions, 0);
+});
+
+test('runner status (ADM04): asked to the runner itself, checked, 404 unknown, 503 offline or not ready, 504 without answer; not audited', async t => {
+  const {registry, store, call, audit} = await setup(t, {statusTimeoutMs: 100});
+  store.ensureLocal();
+  assert.equal((await call('GET', '/runners/local/status')).status, 503, 'registered but never connected: offline');
+  assert.equal((await call('GET', '/runners/r-nothere/status')).status, 404);
+  assert.equal((await call('GET', '/runners/..%2Fx/status')).status, 404);
+  const local = fakeClient();
+  const asked = [];
+  let answer = {runner: {pid: 4242, uptimeSeconds: 30, rssBytes: 1024, cpuPercent: 1.25, env: {SECRET: 'x'}}, sessions: [], truncated: false,
+    sampledAt: '2026-11-26T10:00:00.000Z', cmdline: 'secret'};
+  local.request = async (command, args) => { asked.push([command, args]); return answer; };
+  registry.add({id: 'local', client: local});
+  let response = await call('GET', '/runners/local/status');
+  assert.equal(response.status, 503, 'starting: no hello yet');
+  assert.match(response.body.error, /not ready/);
+  local.emit('hello', {engines: ['qemu']});
+  response = await call('GET', '/runners/local/status');
+  assert.equal(response.status, 200);
+  assert.deepEqual(asked, [['runner.status', undefined]]);
+  assert.deepEqual(response.body.runner, {pid: 4242, uptimeSeconds: 30, rssBytes: 1024, cpuPercent: 1.3});
+  assert.deepEqual([response.body.sessions, response.body.totals.hosts, response.body.truncated], [[], 0, false]);
+  assert.ok(!JSON.stringify(response.body).includes('secret') && !JSON.stringify(response.body).includes('SECRET'), 'only the known fields');
+  local.request = async () => { throw Object.assign(new Error('Runner connection lost.'), {status: 503}); };
+  assert.equal((await call('GET', '/runners/local/status')).status, 503);
+  local.request = () => new Promise(() => {});
+  response = await call('GET', '/runners/local/status');
+  assert.deepEqual([response.status, response.body.error], [504, 'The runner did not answer in time.']);
+  local.close();
+  response = await call('GET', '/runners/local/status');
+  assert.deepEqual([response.status, response.body.error], [503, 'Runner offline.']);
+  assert.deepEqual(audit, [], 'reading the status is not audited');
 });
