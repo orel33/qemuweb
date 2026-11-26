@@ -531,6 +531,10 @@ body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailab
    under control, or an observer following with Follow checked), every control that changes the
    view state (class view-control) is disabled in the same way. */
 body[data-view-driven="true"] .view-control { opacity: .45; }
+/* The Graphic view follows that rule too: no pan or zoom while the view is driven, and a node is
+   moved by the session's driver only (a write), so the grab cursor goes. */
+body[data-write-blocked="true"] .topology-node { cursor: pointer; }
+body[data-view-driven="true"] #graphic-canvas, body[data-view-driven="true"] .topology-node { cursor: default; }
 
 
 /* Load Session and Save Session: one frame (heading with the toolbar icon, a form pane, Cancel / primary button). The form pane and

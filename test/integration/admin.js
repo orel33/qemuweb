@@ -183,7 +183,7 @@ async function run() {
   // owner's page (here alice's switch in the last pane, as the pane node menu can do).
   const paneCount = {single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4};
   const ownerView = view => {
-    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, floating: false, geometry: null, ...view};
+    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, floating: false, geometry: null, viewport: null, ...view};
     const count = paneCount[full.layout] || 0;
     return {panes: Array.from({length: count}, (_, index) => (index === count - 1 ? aliceSwitch : null)), views: Array(count).fill('console'), ...full};
   };
@@ -194,7 +194,8 @@ async function run() {
   for (const invalid of [{mode: 'invalid'}, {layout: 2}, {layout: 'columns-3'}, {switches: 'yes'}, {active: 3}, {layout: 'single', panes: [aliceSwitch, null]},
     {panes: [aliceSwitch]}, {panes: [aliceSwitch, null, null]}, {panes: [1, null]}, {panes: 'x'}, {views: ['console']}, {views: ['console', 'tty']}, {views: undefined},
     {floating: 'yes'}, {floating: undefined}, {geometry: undefined}, {geometry: {left: 0, top: 0, width: 1}},
-    {geometry: {left: 0, top: 0, width: 1, height: 1, z: 1}}, {geometry: {left: '0', top: 0, width: 1, height: 1}}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
+    {geometry: {left: 0, top: 0, width: 1, height: 1, z: 1}}, {geometry: {left: '0', top: 0, width: 1, height: 1}},
+    {viewport: undefined}, {viewport: {cx: 0, cy: 0}}, {viewport: {cx: 0, cy: 1e6, k: 1}}, {viewport: {cx: 0, cy: 0, k: 'x'}}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
   // Unknown nodes become null, in the active node and in the panes; a node shown twice is kept once.
   aliceSession.socket.emit('owner-view', ownerView({active: 'h-0000000000000000', panes: ['h-0000000000000000', aliceSwitch]}));
   await waitFor('unknown node relayed as null', () => observer.events.some(item => item.event === 'owner-view' && item.payload.active === null));
@@ -226,6 +227,10 @@ async function run() {
   aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', floating: true, geometry: {left: 0.123456, top: -1, width: 2, height: 0.5}}));
   await waitFor('geometry relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.geometry));
   assert.deepEqual(observer.events.find(item => item.event === 'owner-view' && item.payload.geometry).payload.geometry, {left: 0.1235, top: 0, width: 1, height: 0.5});
+  // The pan and zoom of the Graphic view (CTL03): the world point at the canvas center and the zoom, rounded and clamped.
+  aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', viewport: {cx: 120.04, cy: -33.333, k: 7}}));
+  await waitFor('viewport relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.viewport));
+  assert.deepEqual(observer.events.find(item => item.event === 'owner-view' && item.payload.viewport).payload.viewport, {cx: 120, cy: -33.3, k: 3});
   aliceConsole.socket.emit('input', 'showinfo\r');
   await waitFor('alice\'s output at the observer', () => /showinfo/.test(observer.output()));
   const resetsBefore = aliceConsole.count('serial-reset');
@@ -237,6 +242,33 @@ async function run() {
   assert.doesNotMatch(aliceConsole.output(), /observermarker/, 'the observer typed into alice\'s console');
   assert.equal(aliceConsole.count('serial-reset'), resetsBefore, 'the observer cleared alice\'s console');
   assert.equal((await alice.request('/api/nodes'))[0].running, true);
+  // CTL03: node positions of the Graphic view are session data. Alice (the driver: nobody
+  // controls her session) moves her switch: the drag is relayed to the observers, the final
+  // position is kept and read by everyone; an invalid event or an unknown node changes nothing,
+  // and the observer without control is refused.
+  const positionsAt = recorded => recorded.events.filter(item => item.event === 'node-position').map(item => item.payload);
+  const layoutOf = async (client, options = {}) => (await client.request('/api/graphic-layout', options)).positions;
+  assert.deepEqual(await layoutOf(alice), {}, 'no position yet: automatic layout');
+  aliceSession.socket.emit('node-position', {nodeId: aliceSwitch, x: 12.34, y: -5, final: false});
+  await waitFor('drag relayed to the observer', () => positionsAt(observer).length > 0);
+  assert.deepEqual(positionsAt(observer), [{nodeId: aliceSwitch, x: 12.3, y: -5}]);
+  assert.deepEqual(await layoutOf(alice), {}, 'a position during the drag is not kept');
+  for (const invalid of [{nodeId: 'h-0000000000000000', x: 0, y: 0, final: true}, {nodeId: aliceSwitch, x: 1e6, y: 0, final: true},
+    {nodeId: aliceSwitch, x: 'a', y: 0, final: true}, {nodeId: aliceSwitch, x: 0, y: 0}, {nodeId: aliceSwitch, x: 0, y: 0, final: true, extra: 1}]) {
+    aliceSession.socket.emit('node-position', invalid);
+  }
+  aliceSession.socket.emit('node-position', {nodeId: aliceSwitch, x: 40, y: 60.06, final: true});
+  await waitFor('final position relayed', () => positionsAt(observer).length >= 2);
+  await waitFor('final position kept', async () => (await layoutOf(alice))[aliceSwitch]?.x === 40);
+  assert.deepEqual(positionsAt(observer), [{nodeId: aliceSwitch, x: 12.3, y: -5}, {nodeId: aliceSwitch, x: 40, y: 60.1}], 'invalid events are not relayed');
+  assert.deepEqual(await layoutOf(alice), {[aliceSwitch]: {x: 40, y: 60.1}});
+  assert.deepEqual(await layoutOf(boss, observeAlice), {[aliceSwitch]: {x: 40, y: 60.1}}, 'the observer reads the same layout');
+  assert.ok(!positionsAt(aliceSession).length, 'not sent back to the page that moved the node');
+  observer.socket.emit('node-position', {nodeId: aliceSwitch, x: 0, y: 0, final: true});
+  await waitFor('observer refused', () => observer.events.some(item => item.event === 'node-error' && /take control to move nodes/.test(item.payload)));
+  await delay(300);
+  assert.deepEqual(await layoutOf(alice), {[aliceSwitch]: {x: 40, y: 60.1}}, 'the observer moved a node');
+  assert.ok(!positionsAt(aliceSession).length, 'the observer\'s move was relayed');
   // Observing an offline user works: bob has a session but no connected browser.
   assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'bob').browsers, 0);
   const offlineObserver = recorder(boss, 'boss observing bob', {auth: {observe: 'bob'}});
@@ -293,7 +325,7 @@ async function run() {
   // admin's page reaches alice's pages; never from alice, nor once control has ended.
   // The admin's floating console of the Graphic view is open: alice's pages open it too (CTL01).
   const controllerView = {mode: 'graphic', layout: 'rows-2', panes: [null, aliceSwitch], views: ['console', 'log'], switches: true, active: aliceSwitch, floating: true,
-    geometry: {left: 0.25, top: 0.1, width: 0.5, height: 0.6}};
+    geometry: {left: 0.25, top: 0.1, width: 0.5, height: 0.6}, viewport: {cx: 10, cy: 20, k: 0.5}};
   aliceSession.socket.emit('controller-view', controllerView);
   observer.socket.emit('controller-view', {...controllerView, layout: 'grid-3'}); // Invalid: dropped.
   observer.socket.emit('controller-view', controllerView);
@@ -303,6 +335,16 @@ async function run() {
   await waitFor('controller-view for a page opened during control', () => aliceLateTab.events.some(item => item.event === 'controller-view'));
   aliceLateTab.socket.close();
   aliceSecondTab.socket.close();
+  // CTL03: under control the admin moves the nodes and alice cannot (one driver at a time):
+  // her node-position is dropped silently, the admin's reaches her pages and is kept.
+  const observerPositions = positionsAt(observer).length;
+  aliceSession.socket.emit('node-position', {nodeId: aliceSwitch, x: -1, y: -1, final: true});
+  observer.socket.emit('node-position', {nodeId: aliceSwitch, x: 70, y: 80, final: true});
+  await waitFor('the admin\'s move at alice', () => positionsAt(aliceSession).some(item => item.x === 70));
+  await waitFor('the admin\'s move kept', async () => (await layoutOf(alice))[aliceSwitch]?.x === 70);
+  await delay(300);
+  assert.deepEqual(await layoutOf(alice), {[aliceSwitch]: {x: 70, y: 80}}, 'alice moved a node while controlled');
+  assert.equal(positionsAt(observer).length, observerPositions, 'alice\'s move was relayed while controlled');
   // CTL01: the admin holding control does what alice can, audited; alice's writes are refused
   // meanwhile (one driver at a time); Delete session stays with the admin page.
   const aliceCtl = newId('switch');
@@ -312,9 +354,11 @@ async function run() {
   assert.ok(!bossOwnNodes.includes(aliceCtl), 'not in the admin\'s own session');
   assert.equal((await boss.request('/api/general-settings')).sessionId, bossSettings.sessionId, 'the admin\'s own session was replaced');
   await boss.request(`/api/nodes/${aliceCtl}/stop`, {...observeAlice, method: 'POST'});
+  observer.socket.emit('node-position', {nodeId: aliceCtl, x: 5, y: 5, final: true});
+  await waitFor('position of the new node kept', async () => !!(await layoutOf(alice))[aliceCtl]);
   const saved = await expectStatus(boss, '/api/session-archive/export', 'POST', 200, {...observeAlice, body: {includeDisks: false}});
   assert.match(saved.headers.get('content-disposition') || '', /filename="qemuweb-session-alice\.zip"/);
-  await saved.arrayBuffer();
+  assert.ok(Buffer.from(await saved.arrayBuffer()).includes('layout.json'), 'the archive carries the layout');
   const refusedDelete = await expectStatus(boss, '/api/session', 'DELETE', 403, observeAlice);
   assert.equal((await refusedDelete.json()).error, 'Delete the session of alice from the admin page.');
   assert.equal((await alice.request('/api/general-settings')).sessionId, aliceSettings.sessionId, 'alice\'s session was deleted');
@@ -327,6 +371,7 @@ async function run() {
   await expectStatus(alice, '/api/session', 'DELETE', 403);
   assert.ok(Array.isArray(await alice.request('/api/nodes')), 'alice still reads');
   await boss.request(`/api/nodes/${aliceCtl}`, {...observeAlice, method: 'DELETE'});
+  assert.deepEqual(Object.keys(await layoutOf(alice)), [aliceSwitch], 'a removed node loses its position');
   // Clear and resize: the admin's are applied, alice's dropped silently.
   const resetsUnderControl = aliceConsole.count('serial-reset');
   const observerEventsBefore = observer.events.length;

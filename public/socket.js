@@ -7,7 +7,7 @@ import {followEngineChange, scheduleSessionSync, syncSessionsFromServer} from '.
 import {sessionLost} from './api.js';
 import {liveConnectionLost, receiveLiveData, receiveLiveEnd} from './capture-live.js';
 import {forgetCaptures, loadAllCaptures, refreshCaptureAccess, refreshCaptureRules, setCaptures} from './captures.js';
-import {renderGraphic} from './graphic-view.js';
+import {graphicLayoutReceived, loadGraphicLayout, nodePositionReceived, renderGraphic} from './graphic-view.js';
 import {applyControl, applyObservers, controlledByAdmin, holdingControl, observationUnavailable, observing, socketOptions, viewReceived} from './observe.js';
 
 let socket = null;
@@ -165,11 +165,11 @@ export function initSockets() {
   socket.on('capture-live-data', receiveLiveData);
   socket.on('capture-live-end', receiveLiveEnd);
   socket.on('disconnect', liveConnectionLost);
-  socket.on('connect', () => { syncSessionsFromServer(); publishView({force: true}); loadAllCaptures(); });
+  socket.on('connect', () => { syncSessionsFromServer(); loadGraphicLayout(); publishView({force: true}); loadAllCaptures(); });
   // The runner of the session is offline (a network cut; the machines keep running) or back.
   socket.on('runner-state', ({online}) => {
     if (!online) showStatusError('Runner offline, reconnecting…');
-    else { syncSessionsFromServer(); publishView({force: true}); }
+    else { syncSessionsFromServer(); loadGraphicLayout(); publishView({force: true}); }
   });
   socket.on('general-settings-changed', event => {
     if (event?.engine && ['qemu', 'vbox'].includes(event.engine)) {
@@ -185,6 +185,10 @@ export function initSockets() {
     showPage();
   });
   socket.on('node-error', showStatusError);
+  // Node positions of the Graphic view (session data): the driver moves a node, or the whole
+  // layout is replaced (a session archive was loaded).
+  socket.on('node-position', nodePositionReceived);
+  socket.on('graphic-layout', graphicLayoutReceived);
   // The session was deleted (here or in another tab): reload into the new, empty one. An
   // observed session is gone: say so, with a link back to the Admin page.
   socket.on('session-deleted', () => { if (observing) observationUnavailable('deleted'); else location.reload(); });

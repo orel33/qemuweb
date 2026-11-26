@@ -13,11 +13,17 @@
 //                                active node whenever the Graphic view shows (kept true in the
 //                                Terminals view, so that coming back reopens it); normalized to
 //                                false when the active node is not in a pane
-//    geometry: {left, top, width, height} | null}   the floating console's window, as fractions
+//    geometry: {left, top, width, height} | null,   the floating console's window, as fractions
 //                                of the Graphic view's width and height (browsers differ in
 //                                size), left/top in [0, 1], width/height in [0.05, 1]; null
 //                                before it was first placed (default geometry). Each page turns
 //                                it into pixels and keeps the window inside its viewport.
+//    viewport: {cx, cy, k} | null}  the pan and zoom of the Graphic view: the world point at the
+//                                center of the canvas and the zoom factor (node positions are
+//                                world coordinates, so browsers of other sizes center the same
+//                                point at the same zoom); |cx|, |cy| <= 100000 rounded to 0.1, k
+//                                clamped to [0.2, 3] and rounded to 1e-4; null before the Graphic
+//                                view was first shown (each page then fits the drawing itself).
 // The console page is not part of it: paging only decides which nodes are assigned to the
 // panes, and the resulting panes are what is published.
 (function (root, factory) {
@@ -28,8 +34,13 @@
   const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
   const MODES = ['terminals', 'graphic'];
   const PANE_VIEWS = ['console', 'console2', 'monitor', 'log'];
-  const KEYS = ['mode', 'layout', 'panes', 'views', 'switches', 'active', 'floating', 'geometry'];
+  const KEYS = ['mode', 'layout', 'panes', 'views', 'switches', 'active', 'floating', 'geometry', 'viewport'];
   const GEOMETRY_KEYS = ['left', 'top', 'width', 'height'];
+  const VIEWPORT_KEYS = ['cx', 'cy', 'k'];
+  // Bounds of the Graphic view's viewport (public/graphic-view.js has the same zoom range).
+  const MAX_CENTER = 100000;
+  const MIN_ZOOM = 0.2;
+  const MAX_ZOOM = 3;
   // Smallest width or height of the floating window, as a fraction of the Graphic view.
   const MIN_FRACTION = 0.05;
   // Most administrators listed by session-observers, and the longest login.
@@ -52,6 +63,20 @@
     if (!GEOMETRY_KEYS.every(key => typeof raw[key] === 'number' && Number.isFinite(raw[key]))) return undefined;
     const clamp = (value, min) => Math.round(Math.max(min, Math.min(1, value)) * 10000) / 10000;
     return {left: clamp(raw.left, 0), top: clamp(raw.top, 0), width: clamp(raw.width, MIN_FRACTION), height: clamp(raw.height, MIN_FRACTION)};
+  }
+
+  // The Graphic view's viewport from `raw` (see the header): null stays null, the center rounded
+  // to 0.1 and the zoom clamped and rounded; a center out of bounds, another field, a missing
+  // one or a non-number is undefined, which makes the view invalid.
+  function normalizeViewport(raw) {
+    if (raw === null) return null;
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+    const keys = Object.keys(raw);
+    if (keys.length !== VIEWPORT_KEYS.length || !VIEWPORT_KEYS.every(key => keys.includes(key))) return undefined;
+    if (!VIEWPORT_KEYS.every(key => typeof raw[key] === 'number' && Number.isFinite(raw[key]))) return undefined;
+    if (Math.abs(raw.cx) > MAX_CENTER || Math.abs(raw.cy) > MAX_CENTER || !(raw.k > 0)) return undefined;
+    const round = (value, step) => Math.round(value * step) / step || 0;
+    return {cx: round(raw.cx, 10), cy: round(raw.cy, 10), k: round(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, raw.k)), 10000)};
   }
 
   // Where the floating window goes in pixels, from a normalized geometry, the Graphic view's
@@ -81,7 +106,8 @@
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
     const {mode, layout, panes, views, switches, active, floating} = raw;
     const geometry = normalizeGeometry(raw.geometry);
-    if (geometry === undefined) return null;
+    const viewport = normalizeViewport(raw.viewport);
+    if (geometry === undefined || viewport === undefined) return null;
     const count = paneCount(layout);
     if (!MODES.includes(mode) || !count || typeof switches !== 'boolean' || typeof floating !== 'boolean') return null;
     if (!Array.isArray(panes) || panes.length !== count || panes.some(id => id !== null && typeof id !== 'string')) return null;
@@ -95,16 +121,17 @@
     const ids = panes.map(known).map((id, index, list) => (id && list.indexOf(id) === index ? id : null));
     const activeId = known(active);
     return {mode, layout, panes: ids, views: views.map((view, index) => (ids[index] ? view : 'console')), switches, active: activeId,
-      floating: floating && !!activeId && ids.includes(activeId), geometry};
+      floating: floating && !!activeId && ids.includes(activeId), geometry, viewport};
   }
 
   // Whether two view states are equal (both valid).
   function sameView(a, b) {
     if (!a || !b) return false;
-    const sameGeometry = (x, y) => (x === null || y === null ? x === y : GEOMETRY_KEYS.every(key => x[key] === y[key]));
+    const sameFields = fields => (x, y) => (x === null || y === null ? x === y : fields.every(key => x[key] === y[key]));
+    const compare = {geometry: sameFields(GEOMETRY_KEYS), viewport: sameFields(VIEWPORT_KEYS)};
     return KEYS.every(key => (key === 'panes' || key === 'views'
       ? a[key].length === b[key].length && a[key].every((item, index) => item === b[key][index])
-      : key === 'geometry' ? sameGeometry(a[key], b[key]) : a[key] === b[key]));
+      : compare[key] ? compare[key](a[key], b[key]) : a[key] === b[key]));
   }
 
   // Which received view a page follows (kind 'owner' on an observer's page, 'controller' on the
@@ -129,5 +156,5 @@
     return [...new Set(admins)].sort();
   }
 
-  return {LAYOUT_PANES, paneCount, normalizeView, normalizeGeometry, geometryPixels, geometryFraction, sameView, followsView, normalizeObservers};
+  return {LAYOUT_PANES, paneCount, normalizeView, normalizeGeometry, normalizeViewport, geometryPixels, geometryFraction, sameView, followsView, normalizeObservers};
 });

@@ -3,10 +3,17 @@
 // Node positions and the viewport are in world coordinates (independent of the zoom): the
 // viewport is a translation and a scale applied to one SVG group, so there is no frame and no
 // edge to the area where a node can be put.
-import {graphicLayoutKey, graphicLinksKey, machines, store} from './state.js';
+// Node positions are session data, kept by the runner (layout.json, runner/commands/layout.js):
+// read with GET /api/graphic-layout, moved by the session's driver only (the owner while nobody
+// controls the session, the admin holding control) with the node-position socket event, which
+// the server relays to the session's other pages during the drag and keeps at its end. The
+// viewport is part of the view state (viewport {cx, cy, k}, public/view-state.js): a page
+// whose view is driven by the other side shows the driver's pan and zoom and cannot change them.
+import {graphicLinksKey, machines, store} from './state.js';
 import {fitTerminals} from './terminal.js';
 import {closeLayoutMenu, selectMachine, viewChanged, workspace} from './workspace.js';
-import {viewDriver} from './observe.js';
+import {canWrite, viewDriver} from './observe.js';
+import {emitOnSession} from './socket.js';
 import {onCapturesChanged, recordingOf} from './captures.js';
 import {hideFloatingConsole, openFloatingConsole, refreshFloatingConsole, showFloatingConsole} from './graphic-console.js';
 import {cancelEditMode, handleEditClick, refreshEditTools} from './graphic-edit.js';
@@ -49,38 +56,80 @@ const MIN_ZOOM = 0.2;
 const MAX_ZOOM = 3;
 const DRAG_THRESHOLD = 5;
 const DOUBLE_CLICK_MS = 400;
+// How often a node drag, a pan or a zoom is published while it lasts (its end is published at once).
+const PUBLISH_INTERVAL = 100;
+// The bound of the published viewport center (public/view-state.js).
+const MAX_CENTER = 100000;
 
 // The viewport: world (wx, wy) is drawn at pixel (x + wx * k, y + wy * k) of the canvas.
 const view = {x: 0, y: 0, k: 1};
 let fitPending = true;
+// A viewport {cx, cy, k} to show once the canvas has a size (the Graphic view hidden meanwhile),
+// and the last one applied from a view state: a driven page centers it again when resized.
+let wantedViewport = null;
+let appliedViewport = null;
+// The viewport this page shows, as published in its view state (null before the first one).
+let shownViewport = null;
 export let graphicGraph = null;
 const graphicPositions = new Map();
-let graphicSessionId = null;
 let drag = null;
 let lastTap = {id: null, time: 0};
 let selectedLink = null;
 
-export function loadGraphicPositions(sessionId) {
-  graphicSessionId = sessionId;
+// The positions of a received layout ({positions: {nodeId: {x, y}}}), finite numbers only.
+function setPositions(positions) {
   graphicPositions.clear();
+  if (!positions || typeof positions !== 'object') return;
+  for (const [id, position] of Object.entries(positions)) {
+    if (Number.isFinite(position?.x) && Number.isFinite(position?.y)) graphicPositions.set(id, {x: position.x, y: position.y});
+  }
+}
+
+// Reads the session's layout (at each connection of the session socket and when its runner is back).
+export async function loadGraphicLayout() {
+  try {
+    const response = await fetch('/api/graphic-layout', {cache: 'no-store'});
+    if (!response.ok) return;
+    if (!drag || drag.type !== 'node') setPositions((await response.json()).positions);
+    renderGraphic();
+  } catch (_) { /* The next connection reads it again. */ }
+}
+
+// graphic-layout {positions}: the whole layout was replaced (a session archive was loaded): the
+// drawing is fitted again.
+export function graphicLayoutReceived(layout) {
+  setPositions(layout?.positions);
   fitPending = true;
-  try {
-    const saved = JSON.parse(localStorage.getItem(graphicLayoutKey) || '{}');
-    if (saved.sessionId !== sessionId || !saved.positions || typeof saved.positions !== 'object') return;
-    for (const [id, position] of Object.entries(saved.positions)) {
-      if (Number.isFinite(position?.x) && Number.isFinite(position?.y)) graphicPositions.set(id, position);
-    }
-  } catch (_) {}
+  renderGraphic();
 }
-function saveGraphicPositions() {
-  if (!graphicSessionId) return;
-  try {
-    localStorage.setItem(graphicLayoutKey, JSON.stringify({sessionId: graphicSessionId, positions: Object.fromEntries(graphicPositions)}));
-  } catch (_) {}
+
+// node-position {nodeId, x, y}: the driver moves a node (during its drag, then its final place).
+export function nodePositionReceived(moved) {
+  if (!moved || typeof moved.nodeId !== 'string' || !Number.isFinite(moved.x) || !Number.isFinite(moved.y)) return;
+  if (drag?.type === 'node' && drag.id === moved.nodeId) return;
+  graphicPositions.set(moved.nodeId, {x: moved.x, y: moved.y});
+  renderGraphic();
 }
+
+// Publishes a node's position: throttled during a drag, at once at its end (final: kept by the runner).
+let positionTimer = null;
+let positionPending = null;
+function sendPosition() {
+  clearTimeout(positionTimer);
+  positionTimer = null;
+  if (positionPending) emitOnSession('node-position', positionPending);
+  positionPending = null;
+}
+function publishPosition(nodeId, {x, y}, final) {
+  positionPending = {nodeId, x, y, final};
+  if (final) sendPosition();
+  else if (positionTimer === null) positionTimer = setTimeout(sendPosition, PUBLISH_INTERVAL);
+}
+
+// The place of a node created in the Graphic view (graphic-edit.js), kept like a dropped node.
 export function setGraphicPosition(id, position) {
   graphicPositions.set(id, position);
-  saveGraphicPositions();
+  publishPosition(id, position, true);
 }
 
 // {memory, cpus} of a host: its own settings, else the defaults of its system.
@@ -107,6 +156,45 @@ function applyViewport() {
   graphicCanvas.style.setProperty('--graphic-grid', `${22 * view.k}px`);
   graphicCanvas.style.backgroundPosition = `${view.x}px ${view.y}px`;
   updateZoomControls();
+  noteViewport();
+}
+
+// The viewport of the view state: the world point at the canvas center (kept within the bounds)
+// and the zoom. A change is published throttled (viewChanged publishes only actual changes, and
+// only on the driver's page).
+let viewportTimer = null;
+function noteViewport() {
+  const rect = canvasSize();
+  if (!rect.width || !rect.height) return;
+  const center = value => clamp(value, -MAX_CENTER, MAX_CENTER);
+  const viewport = ViewState.normalizeViewport({cx: center((rect.width / 2 - view.x) / view.k), cy: center((rect.height / 2 - view.y) / view.k), k: view.k});
+  if (shownViewport && viewport.cx === shownViewport.cx && viewport.cy === shownViewport.cy && viewport.k === shownViewport.k) return;
+  shownViewport = viewport;
+  if (viewportTimer === null) viewportTimer = setTimeout(publishViewport, PUBLISH_INTERVAL);
+}
+function publishViewport() {
+  clearTimeout(viewportTimer);
+  viewportTimer = null;
+  viewChanged();
+}
+export const graphicViewport = () => shownViewport;
+
+// Shows a viewport of a view state (workspace.js applyView: Follow, the owner's page under
+// control, the view restored in this browser); null fits the drawing.
+export function setGraphicViewport(viewport) {
+  appliedViewport = viewport;
+  if (!viewport) { wantedViewport = null; fitPending = true; if (store.graphicVisible) renderGraphic(); return; }
+  fitPending = false;
+  centerOn(viewport);
+}
+function centerOn(viewport) {
+  const rect = canvasSize();
+  if (!rect.width || !rect.height) { wantedViewport = viewport; return; }
+  wantedViewport = null;
+  view.k = clamp(viewport.k, MIN_ZOOM, MAX_ZOOM);
+  view.x = rect.width / 2 - viewport.cx * view.k;
+  view.y = rect.height / 2 - viewport.cy * view.k;
+  applyViewport();
 }
 
 // Zooms by `factor` around the canvas pixel (cx, cy): the world point under it stays there.
@@ -118,11 +206,13 @@ function zoomAt(factor, cx, cy) {
   applyViewport();
 }
 function zoomCentered(factor) {
+  if (viewDriver()) return;
   const rect = canvasSize();
   zoomAt(factor, rect.width / 2, rect.height / 2);
 }
 
 export function fitToView() {
+  if (viewDriver() && !fitPending) return false;
   const bounds = graphicGraph && TopologyGraphic.boundsOf(graphicGraph);
   const rect = canvasSize();
   if (!bounds || !rect.width || !rect.height) return false;
@@ -153,7 +243,8 @@ export function renderGraphic() {
   graphicGraph = graph;
   if (selectedLink && !graph.links.some(link => `${link.hostId}:${link.nicIndex}` === selectedLink)) selectedLink = null;
   graphicSummary.textContent = `${graph.hosts} host${graph.hosts === 1 ? '' : 's'} · ${graph.switches} switch${graph.switches === 1 ? '' : 'es'} · ${graph.links.length} link${graph.links.length === 1 ? '' : 's'}`;
-  if (fitPending && graph.nodes.length && fitToView()) fitPending = false;
+  if (wantedViewport) centerOn(wantedViewport);
+  else if (fitPending && graph.nodes.length && fitToView()) fitPending = false;
   else applyViewport();
   if (focusedId) graphicCanvas.querySelector(`.topology-node[data-node-id="${CSS.escape(focusedId)}"]`)?.focus({preventScroll: true});
   refreshEditTools();
@@ -187,9 +278,12 @@ function finishDrag(event) {
   drag = null;
   delete graphicCanvas.dataset.dragging;
   if (graphicCanvas.hasPointerCapture(event.pointerId)) graphicCanvas.releasePointerCapture(event.pointerId);
-  if (event.type === 'pointercancel') { if (finished.type === 'node') saveGraphicPositions(); return; }
+  const dropped = finished.type === 'node' && finished.moved && !finished.locked;
+  if (dropped) publishPosition(finished.id, graphicPositions.get(finished.id), true);
+  if (finished.type !== 'node' && finished.moved && !finished.locked) publishViewport();
+  if (event.type === 'pointercancel') return;
   if (finished.type === 'node') {
-    if (finished.moved) { saveGraphicPositions(); return; }
+    if (finished.moved) return;
     if (handleEditClick({nodeId: finished.id, event})) return;
     const now = performance.now();
     const double = lastTap.id === finished.id && now - lastTap.time < DOUBLE_CLICK_MS;
@@ -212,7 +306,9 @@ function startDrag(event) {
   event.preventDefault();
   hideTooltip();
   const start = canvasPoint(event);
-  const base = {pointerId: event.pointerId, startX: start.x, startY: start.y, moved: false};
+  // A node moves for the driver only (a write: canWrite), the canvas pans when this page drives
+  // its view (viewDriver); a locked drag is still a click.
+  const base = {pointerId: event.pointerId, startX: start.x, startY: start.y, moved: false, locked: nodeElement ? !canWrite() : !!viewDriver()};
   if (nodeElement) {
     const node = findNode(nodeElement.dataset.nodeId);
     if (!node) return;
@@ -228,10 +324,13 @@ function moveDrag(event) {
   const dx = point.x - drag.startX;
   const dy = point.y - drag.startY;
   if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+  if (drag.locked) return;
   drag.moved = true;
   graphicCanvas.dataset.dragging = drag.type === 'node' ? 'node' : 'pan';
   if (drag.type === 'node') {
-    graphicPositions.set(drag.id, {x: drag.x + dx / view.k, y: drag.y + dy / view.k});
+    const position = {x: drag.x + dx / view.k, y: drag.y + dy / view.k};
+    graphicPositions.set(drag.id, position);
+    publishPosition(drag.id, position, false);
     renderGraphic();
   } else {
     view.x = drag.viewX + dx;
@@ -314,6 +413,7 @@ export function initGraphicView() {
   graphicCanvas.addEventListener('dragstart', event => event.preventDefault());
   graphicCanvas.addEventListener('wheel', event => {
     event.preventDefault();
+    if (viewDriver()) return;
     const point = canvasPoint(event);
     zoomAt(Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.0015)), point.x, point.y);
   }, {passive: false});
@@ -323,7 +423,7 @@ export function initGraphicView() {
       event.preventDefault();
       if (selectNode(nodeElement.dataset.nodeId) && event.key === 'Enter') openFloatingConsole();
     } else if (event.key === 'Escape') { hideTooltip(); cancelEditMode(); if (selectedLink) selectGraphicLink(null); }
-    else if (event.target === graphicCanvas || nodeElement) {
+    else if ((event.target === graphicCanvas || nodeElement) && !viewDriver()) {
       if (event.key === '+' || event.key === '=') zoomCentered(1.25);
       else if (event.key === '-') zoomCentered(0.8);
       else if (event.key === '0') fitToView();
@@ -335,6 +435,12 @@ export function initGraphicView() {
   graphicFit.addEventListener('click', fitToView);
   graphicLinks.addEventListener('click', toggleLinkStyle);
   loadLinkStyle();
-  new ResizeObserver(() => { if (store.graphicVisible && fitPending) renderGraphic(); }).observe(graphicCanvas);
+  // A driven page keeps the driver's center and zoom when resized; the driver publishes its new center.
+  new ResizeObserver(() => {
+    if (!store.graphicVisible) return;
+    if (viewDriver() && appliedViewport) centerOn(appliedViewport);
+    else if (fitPending) renderGraphic();
+    else noteViewport();
+  }).observe(graphicCanvas);
   applyViewport();
 }

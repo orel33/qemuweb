@@ -29,7 +29,7 @@ const {linkUserAlias, unlinkUserAlias} = require('./runtime-tidy');
 
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
 const RUNNER_EVENTS = ['state', 'log', 'logs-reset', 'serial', 'serial-reset', 'nodes-removed', 'captures', 'capture-live', 'guest-info'];
-const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology', 'archives', 'consoles', 'captures']
+const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology', 'archives', 'consoles', 'captures', 'layout']
   .map(name => require(`./commands/${name}`).commands));
 // Commands that answer for an unknown node themselves: the launch preview describes host
 // drafts that do not exist yet, and consoles have their own messages.

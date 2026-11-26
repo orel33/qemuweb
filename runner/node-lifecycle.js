@@ -243,6 +243,7 @@ function createLifecycle(ctx) {
       ctx.session.nodes.delete(node.id);
       fs.rmSync(node.runtimeDir, {recursive: true, force: true});
       ctx.session.saveMetadata();
+      ctx.session.prunePositions();
       return;
     }
     node.action = 'destroy';
@@ -279,6 +280,7 @@ function createLifecycle(ctx) {
     ctx.session.nodes.delete(node.id);
     fs.rmSync(node.runtimeDir, {recursive: true, force: true});
     ctx.session.saveMetadata();
+    ctx.session.prunePositions();
   }
 
   async function exitAllNodes() {

@@ -12,6 +12,7 @@ const {validateLaunchSettings} = require('../common/launch-settings');
 const {selectedProfile, validateHostConfig, resolveHostConfig, engines} = require('../common/system-config');
 const {WORKING_DISKS} = require('./media/disks');
 const {createArchiveDisks} = require('./archive-disks');
+const {parseLayout} = require('../common/graphic-layout');
 
 // session: runner/session.js Session; runner: runner/session-runner.js; commands: resolved executables;
 // emit(event, payload): send to every browser of this session.
@@ -33,6 +34,8 @@ function createSessionSnapshot({session, runner, commands, emit}) {
     }
     const all = [...session.nodes.values()];
     const sources = [{name: 'session.json', file: session.metadataFile}];
+    // The node positions of the Graphic view, when there are any (layout.json is then up to date).
+    if (session.positions.size) sources.push({name: 'layout.json', file: session.layoutFile});
     const switches = all.filter(item => item.kind === 'switch').map(item => {
       sources.push({name: `${item.id}/switch.json`, file: tempFile(item, 'switch.json')});
       return {id: item.id, name: item.hostname};
@@ -78,7 +81,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
     }
     if (!runner.availableEngines.includes(snapshot.engine)) throw new Error('The archived session requires VirtualBox, which is unavailable on this server.');
     const ids = new Set(), names = new Set(), switches = new Set(), macs = new Set(), ports = new Set();
-    const expectedFiles = new Set(['session.json']);
+    const expectedFiles = new Set(['session.json', ...(snapshot.positions.size ? ['layout.json'] : [])]);
     for (const sw of snapshot.switches) {
       if (!sw || typeof sw !== 'object') throw new Error('Invalid switch entry.');
       entityKind(sw.id, 'switch');
@@ -146,6 +149,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
         fs.renameSync(source, target); moved.push({source, target});
       }
       session.engine = snapshot.engine;
+      session.positions = new Map(snapshot.positions);
       for (const entry of snapshot.switches) {
         const item = createNode(entry.id, 'switch', {existingDir: true}); created.push(item);
         setNodeHostname(item, entry.name); item.lastMessage = 'VDE switch stopped';
@@ -163,17 +167,21 @@ function createSessionSnapshot({session, runner, commands, emit}) {
         setNodeHostname(item, entry.name);
         persistHostConfiguration(item);
       }
-      // The session writes its own session.json instead of copying the archive's.
+      // The session writes its own session.json and layout.json instead of copying the archive's.
       session.saveMetadata();
+      session.saveLayout();
     } catch (error) {
       for (const item of created.reverse()) { try { removeHostnameAlias(item); } catch (_) {} session.nodes.delete(item.id); }
       for (const {source, target} of moved.reverse()) { try { fs.renameSync(target, source); } catch (_) {} }
       session.engine = oldEngine;
-      try { session.saveMetadata(oldEngine); } catch (_) {}
+      session.positions = new Map();
+      try { session.saveMetadata(oldEngine); session.saveLayout(); } catch (_) {}
       throw error;
     }
     emit('general-settings-changed', {sessionId: session.id, engine: session.engine});
     emit('nodes-changed', {nodeId: null});
+    // The loaded layout replaces what the pages show.
+    emit('graphic-layout', {positions: Object.fromEntries(session.positions)});
   }
 
   function archivedSessionFiles(stage, paths) {
@@ -202,7 +210,10 @@ function createSessionSnapshot({session, runner, commands, emit}) {
       return {...data, disks: WORKING_DISKS.filter(kind => paths.includes(`${id}/${kind.file}`)).map(kind => kind.format)};
     });
     const switches = metadata.switches.map(id => readEntity(id, 'switch'));
-    return {engine: metadata.engine, hosts, switches, files: paths};
+    // layout.json is optional: without it the loaded session has no position (automatic layout).
+    const positions = paths.includes('layout.json')
+      ? parseLayout(JSON.parse(fs.readFileSync(path.join(stage, 'layout.json'), 'utf8')), ids) : new Map();
+    return {engine: metadata.engine, hosts, switches, positions, files: paths};
   }
 
   return {archiveSources, validateArchiveSession, installArchive, archivedSessionFiles};

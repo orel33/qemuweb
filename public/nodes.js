@@ -6,7 +6,7 @@ import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedV
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
-import {loadGraphicPositions, renderGraphic} from './graphic-view.js';
+import {renderGraphic} from './graphic-view.js';
 import {observedLogin, refollow} from './observe.js';
 import {sessionPhrase} from './file-kinds.js';
 import {parseStartErrors, showStartFailure} from './start-failure.js';
@@ -315,7 +315,6 @@ export function initNodes() {
   ]).then(([items, sessionSettings, existing, schemes]) => {
     generalSettings.engine = sessionSettings.engine;
     store.availableEngines = sessionSettings.availableEngines || [];
-    loadGraphicPositions(sessionSettings.sessionId);
     store.images = items;
     store.namingSchemes = schemes?.classic?.prefixes ? schemes : {classic: {label: 'Classic (h1, s1, ...)', prefixes: {host: 'h', switch: 's'}}};
     if (schemes?.error || !schemes?.classic?.prefixes) {
