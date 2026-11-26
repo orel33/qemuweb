@@ -196,9 +196,9 @@ test('the observation gate admits every request of the admin holding the control
   // Another admin, or the lock of another session, gives nothing.
   assert.equal(run({method: 'POST', path: `/api/nodes/${HOST}/captures`, user: {login: 'other', role: 'admin'}}).status, 403);
   assert.equal(run({method: 'GET', path: `/api/nodes/${HOST}/captures`, user: {login: 'other', role: 'admin'}}).req.observedControl, undefined);
-  // The mounted gate sees paths relative to /api; Delete session stays refused.
+  // The mounted gate sees paths relative to /api; Reset session is allowed to the admin holding the lock (UXS02).
   assert.equal(run({method: 'POST', baseUrl: '/api', path: `/nodes/${HOST}/captures`}).passed, true);
-  assert.equal(run({method: 'DELETE', baseUrl: '/api', path: '/session'}).status, 403);
+  assert.equal(run({method: 'POST', baseUrl: '/api', path: '/session/reset'}).passed, true);
   // The observation of an unknown user is still 404 for a read and 403 for a write.
   assert.equal(run({headers: {'x-observe': 'nobody'}, get: () => 'nobody'}).status, 404);
 });

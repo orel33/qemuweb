@@ -106,7 +106,7 @@ function createVirtualBox(ctx) {
 
   // A disk.vdi loaded from an archive has no VirtualBox machine around it: creates the machine and
   // attaches that disk. VirtualBox resolves the parent of a differencing disk in its global media
-  // registry, which forgets a base image once nothing uses it (after Remove all, or in another
+  // registry, which forgets a base image once nothing uses it (after Reset session, or in another
   // session), so the base is registered again first: the way that surely works is the one of the
   // first start, a differencing medium of the base (a probe file in the node directory, closed
   // after the attach); the registry is then CHECKED for the parent UUID of the saved disk.

@@ -90,10 +90,10 @@ test('the pane view menu is a view-control; the pane views are carried by the vi
 
 test('observation disables the write actions instead of hiding them; the view controls follow the driver', () => {
   const css = fs.readFileSync(path.join(publicDir, 'css', 'app.css'), 'utf8');
-  assert.match(css, /body\[data-write-blocked="true"\] \.write-action, body\[data-owner-only-blocked="true"\] \.owner-only \{ opacity: \.45; \}/);
+  assert.match(css, /body\[data-write-blocked="true"\] \.write-action \{ opacity: \.45; \}/);
   assert.doesNotMatch(css, /body\.observing[^{]*\{[^}]*display: none/, 'nothing is hidden in an observation tab');
   const observe = moduleSource('observe');
-  assert.match(observe, /write: !!element\.closest\('\.write-action'\), ownerOnly: !!element\.closest\('\.owner-only'\)\}, controlState\(\)\)/);
+  assert.match(observe, /write: !!element\.closest\('\.write-action'\)\}, controlState\(\)\)/);
   assert.match(observe, /for \(const type of \['click', 'dblclick', 'mousedown', 'keydown', 'keyup'\]\) document\.addEventListener\(type, blockDisabledControls, true\)/);
   assert.match(observe, /setAttribute\('aria-disabled', 'true'\)/);
   assert.match(moduleSource('workspace'), /renderGraphic\(\);\s*markDisabledControls\(\);/, 'tabs created later are marked too');

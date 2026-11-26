@@ -8,15 +8,14 @@ const owner = {observing: false, login: null, following: false, holding: false, 
 const observer = {...owner, observing: true, login: 'toto'};
 const VIEW = {view: true, write: false};
 const WRITE = {view: false, write: true};
-const OWNER_ONLY = {view: false, write: true, ownerOnly: true};
 
 test('the owner: no reason in a free session; under control, the view and the write actions, naming the admin', async () => {
   const {controlReason, canWrite} = await load();
   const controlled = {...owner, admin: 'root'};
-  for (const kind of [VIEW, WRITE, OWNER_ONLY]) assert.equal(controlReason(kind, owner), '');
+  for (const kind of [VIEW, WRITE]) assert.equal(controlReason(kind, owner), '');
   assert.equal(controlReason(VIEW, controlled), 'root controls your view');
   assert.equal(controlReason(WRITE, controlled), 'root controls your session');
-  assert.equal(controlReason(OWNER_ONLY, controlled), 'root controls your session');
+  assert.equal(controlReason(WRITE, controlled), 'root controls your session');
   assert.equal(canWrite(owner), true);
   assert.equal(canWrite(controlled), false, 'one driver at a time');
 });
@@ -27,16 +26,16 @@ test('an observer: view controls disabled while following, write actions always'
   assert.equal(controlReason(VIEW, following), 'The view follows toto; uncheck Follow to change it');
   assert.equal(controlReason(VIEW, observer), '', 'Follow unchecked');
   for (const state of [following, observer, {...following, admin: 'other'}]) {
-    for (const kind of [WRITE, OWNER_ONLY]) assert.equal(controlReason(kind, state), 'Read-only: you observe the session of toto');
+    assert.equal(controlReason(WRITE, state), 'Read-only: you observe the session of toto');
   }
 });
 
-test('the admin in control: free view, every write action of the owner except Delete session', async () => {
+test('the admin in control: free view, every write action of the owner, Reset session included (UXS02)', async () => {
   const {controlReason, canWrite} = await load();
   const holding = {...observer, holding: true, admin: 'root'};
   assert.equal(controlReason(VIEW, holding), '');
   assert.equal(controlReason(WRITE, holding), '');
-  assert.equal(controlReason(OWNER_ONLY, holding), 'Delete the session of toto from the admin page');
+  assert.equal(controlReason({view: false, write: true, ownerOnly: true}, holding), '', 'no owner-only action any more');
   assert.equal(canWrite(holding), true);
   assert.equal(canWrite(observer), false, 'an observer without control');
   assert.equal(canWrite({...observer, admin: 'other'}), false, 'another admin holds control');
@@ -109,14 +108,16 @@ test('observe.js shows the reason on every disabled control, on the summary of a
   assert.doesNotMatch(css, /\.(view-control|write-action) \{[^}]*pointer-events: none/);
 });
 
-test('CTL01: the write actions are greyed while the page may not write, Delete session (owner-only) also under control', () => {
+test('CTL01: the write actions are greyed while the page may not write; Reset session is a plain write action (UXS02)', () => {
   const css = read('css/app.css');
-  assert.match(css, /body\[data-write-blocked="true"\] \.write-action, body\[data-owner-only-blocked="true"\] \.owner-only \{ opacity: \.45; \}/);
+  assert.match(css, /body\[data-write-blocked="true"\] \.write-action \{ opacity: \.45; \}/);
   assert.doesNotMatch(css, /body\.observing \.write-action/);
-  assert.match(read('index.html'), /id="delete-session" class="icon-button write-action owner-only"/);
+  assert.doesNotMatch(css, /owner-only/);
+  assert.match(read('index.html'), /id="reset-session" class="icon-button write-action"/);
+  assert.doesNotMatch(read('index.html'), /owner-only|id="delete-session"|id="exit-all"/);
   const observe = moduleSource('observe');
   assert.match(observe, /document\.body\.dataset\.writeBlocked = String\(!canWrite\(\)\)/);
-  assert.match(observe, /ownerOnly: classList\.contains\('owner-only'\)/);
+  assert.doesNotMatch(observe, /ownerOnly|owner-only/);
 });
 
 test('CTL03: the owner\'s banner, short: the control first, else who observes (one, two, or how many), logins in bold', async () => {

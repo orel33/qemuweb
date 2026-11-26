@@ -129,12 +129,16 @@ async function run() {
   const credentials = Object.fromEntries(testUsers.users.map(user => [user.login, user]));
   const signIn = login => new QemuWebClient(baseUrl).signIn(login, credentials[login].password);
 
-  // 1. Manual server, no runner: it spawns nothing and answers 503.
+  // 1. Manual server, no runner: it spawns nothing; the implicit session reads as empty (UXS02), and only a node creation answers 503.
   server = startServer(port, logDir);
   await new QemuWebClient(baseUrl).waitForServer(30000, () => server.exitCode === null);
   let boss = await signIn('boss');
   let carol = await signIn('carol');
-  assert.equal((await carol.fetch('/api/nodes')).status, 503, 'a session route answers 503 without a runner');
+  assert.deepEqual(await carol.request('/api/nodes'), [], 'the implicit session answers empty without any runner: no 503 at login');
+  assert.equal((await carol.request('/api/general-settings')).engine, 'qemu');
+  const noRunner = await carol.fetch('/api/switches', {method: 'POST', body: {id: newSwitchId(), name: 'sw0', autostart: true}});
+  assert.equal(noRunner.status, 503, 'a node creation answers 503 without a runner');
+  assert.equal((await noRunner.json()).error, 'No runner is available.');
   const before = await adminRunners(boss);
   assert.deepEqual(before.runners.map(item => [item.id, item.state]), [['local', 'offline']], 'the record of the local runner, created by --local-runner');
   assert.match(before.connectHint, /scripts\/runner\.sh --port \d+$/);
@@ -146,7 +150,7 @@ async function run() {
   assert.equal(await dial(port, {'X-Runner-Id': 'local'}), 401, 'local without a token');
   assert.equal(await dial(port, {'X-Runner-Id': 'local', Authorization: 'Bearer wrong'}), 401, 'local with a wrong token');
   assert.equal(await dial(port, {'X-Runner-Id': 'local', Authorization: `Bearer ${firstToken}`, 'X-Forwarded-For': '10.0.0.1'}), 101, 'local with its token');
-  console.log('Manual: no runner, session routes answer 503, the local record exists with its token file, local needs the token');
+  console.log('Manual: no runner, the empty session reads, a node creation answers 503, the local record exists with its token file, local needs the token');
 
   // 2. A runner started by hand connects; it prints its own checks.
   const runner = startRunner(port, runnerRuntime, 'runner');
@@ -160,8 +164,10 @@ async function run() {
   assert.equal((await adminRunners(boss)).connectHint, null);
   console.log(`Manual: runner ${runner.pid} connected (${info.engines.join(', ')}), checks printed by the runner itself`);
 
-  // 3. A session works on it; the server touches nothing of the runner's files.
+  // 3. A session works on it; the server touches nothing of the runner's files. It is placed by its first node.
   const {sessionId} = await carol.request('/api/general-settings');
+  assert.equal(fs.existsSync(path.join(runtime, 'bindings.json')), false, 'an unplaced session is not bound');
+  assert.equal((await adminRunners(boss)).runners[0].sessions, 0, 'nor counted on the runner');
   const switchId = newSwitchId();
   const created = await carol.request('/api/switches', {method: 'POST', body: {id: switchId, name: 'sw1', autostart: true}});
   assert.equal(created.running, true);

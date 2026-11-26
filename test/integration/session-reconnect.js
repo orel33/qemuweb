@@ -146,7 +146,7 @@ async function run() {
 async function cleanup() {
   for (const socket of sockets) socket.close();
   if (child && child.exitCode === null) {
-    try { await client?.request('/api/session', {method: 'DELETE'}); } catch (_) {}
+    try { await client?.request('/api/session/reset', {method: 'POST'}); } catch (_) {}
     child.kill('SIGTERM');
     await Promise.race([new Promise(resolve => child.once('exit', resolve)),
       delay(12000).then(() => { if (child.exitCode === null) child.kill('SIGKILL'); })]);

@@ -115,6 +115,10 @@ async function run() {
   console.log('Admin: every /api/admin route and /admin answer 403 to a student');
 
   // (2) The admin lists the sessions; admin calls never open a session for the admin.
+  // UXS02: alice's session is implicit, empty and placed on no runner until her first node.
+  assert.deepEqual(await alice.request('/api/nodes'), [], 'an implicit, empty session');
+  const unplaced = (await boss.request('/api/admin/sessions')).find(session => session.login === 'alice');
+  assert.deepEqual([unplaced.placed, unplaced.runnerId, unplaced.nodes, unplaced.active], [false, null, 0, false]);
   const aliceSwitch = newId('switch'), bobSwitch = newId('switch');
   await alice.request('/api/switches', {method: 'POST', body: {id: aliceSwitch, name: 'alicesw', autostart: true}});
   await bob.request('/api/switches', {method: 'POST', body: {id: bobSwitch, name: 'bobsw', autostart: true}});
@@ -122,6 +126,9 @@ async function run() {
   assert.deepEqual(sessions.map(session => session.login), ['alice', 'bob'], 'an admin call opened a session for the admin');
   const aliceRow = sessions.find(session => session.login === 'alice');
   assert.equal(aliceRow.switches, 1);
+  assert.equal(aliceRow.placed, true, 'placed by its first node');
+  assert.equal(aliceRow.sessionId, unplaced.sessionId, 'the same session');
+  assert.ok(aliceRow.runnerId);
   assert.equal(aliceRow.runningSwitches, 1);
   assert.equal(aliceRow.active, true);
   assert.equal(aliceRow.browsers, 0, 'a session is not a connection');
@@ -140,7 +147,7 @@ async function run() {
   await expectStatus(boss, '/api/nodes', 'GET', 404, {headers: {'x-observe': 'nobody'}});
   await expectStatus(boss, `/api/nodes/${aliceSwitch}/stop`, 'POST', 403, observeAlice);
   await expectStatus(boss, `/api/nodes/${aliceSwitch}`, 'DELETE', 403, observeAlice);
-  await expectStatus(boss, '/api/session', 'DELETE', 403, observeAlice);
+  await expectStatus(boss, '/api/session/reset', 'POST', 403, observeAlice);
   await expectStatus(boss, '/api/switches', 'POST', 403, {...observeAlice, body: {id: newId('switch'), name: 'intruder'}});
   assert.equal((await alice.request('/api/nodes'))[0].running, true, 'a refused request changed alice\'s switch');
   assert.equal((await boss.request('/api/general-settings')).sessionId, bossSettings.sessionId, 'the admin\'s own session changed');
@@ -358,7 +365,7 @@ async function run() {
   assert.deepEqual(await layoutOf(alice), {[aliceSwitch]: {x: 70, y: 80}}, 'alice moved a node while controlled');
   assert.equal(positionsAt(observer).length, observerPositions, 'alice\'s move was relayed while controlled');
   // CTL01: the admin holding control does what alice can, audited; alice's writes are refused
-  // meanwhile (one driver at a time); Delete session stays with the admin page.
+  // meanwhile (one driver at a time); the former Delete session route is gone (Reset session, UXS02, below).
   const aliceCtl = newId('switch');
   await boss.request('/api/switches', {...observeAlice, method: 'POST', body: {id: aliceCtl, name: 'alicectl', autostart: true}});
   assert.ok((await alice.request('/api/nodes')).some(node => node.id === aliceCtl), 'the admin\'s switch is in alice\'s session');
@@ -371,8 +378,7 @@ async function run() {
   const saved = await expectStatus(boss, '/api/session-archive/export', 'POST', 200, {...observeAlice, body: {includeDisks: false}});
   assert.match(saved.headers.get('content-disposition') || '', /filename="qemuweb-session-alice\.zip"/);
   assert.ok(Buffer.from(await saved.arrayBuffer()).includes('layout.json'), 'the archive carries the layout');
-  const refusedDelete = await expectStatus(boss, '/api/session', 'DELETE', 403, observeAlice);
-  assert.equal((await refusedDelete.json()).error, 'Delete the session of alice from the admin page.');
+  await expectStatus(boss, '/api/session', 'DELETE', 404, observeAlice);
   assert.equal((await alice.request('/api/general-settings')).sessionId, aliceSettings.sessionId, 'alice\'s session was deleted');
   assert.equal((await boss.request('/api/general-settings')).sessionId, bossSettings.sessionId, 'the admin\'s own session was deleted');
   assert.deepEqual((await boss.request('/api/nodes')).map(node => node.id), bossOwnNodes, 'the admin\'s own nodes changed');
@@ -380,7 +386,8 @@ async function run() {
   assert.equal((await refusedOwner.json()).error, 'boss controls your session.');
   assert.ok((await alice.request('/api/nodes')).some(node => node.id === aliceCtl), 'alice\'s refused deletion removed the node');
   await expectStatus(alice, '/api/switches', 'POST', 403, {body: {id: newId('switch'), name: 'alicewhile'}});
-  await expectStatus(alice, '/api/session', 'DELETE', 403);
+  const refusedReset = await expectStatus(alice, '/api/session/reset', 'POST', 403);
+  assert.equal((await refusedReset.json()).error, 'boss controls your session.');
   assert.ok(Array.isArray(await alice.request('/api/nodes')), 'alice still reads');
   await boss.request(`/api/nodes/${aliceCtl}`, {...observeAlice, method: 'DELETE'});
   assert.deepEqual(Object.keys(await layoutOf(alice)), [aliceSwitch], 'a removed node loses its position');
@@ -452,6 +459,24 @@ async function run() {
   await waitFor('socket closed', () => goneObserver.events.some(item => item.event === 'disconnect'));
   await expectStatus(boss, '/api/nodes', 'GET', 404, {headers: {'x-observe': 'alice'}});
   console.log('Admin: stop-all keeps the nodes; bulk deletion frees vde_switch processes and runtime directories');
+
+  // UXS02: alice's next request opens a new, empty session; the admin holding control resets it: it stays, empty and unplaced.
+  const aliceNew = (await alice.request('/api/general-settings')).sessionId;
+  assert.notEqual(aliceNew, aliceSettings.sessionId, 'a new session after the deletion');
+  const aliceAgain = newId('switch');
+  await alice.request('/api/switches', {method: 'POST', body: {id: aliceAgain, name: 'aliceagain', autostart: true}});
+  const resetter = recorder(boss, 'boss resetting alice', {auth: {observe: 'alice'}});
+  await resetter.connected;
+  assert.deepEqual(await emitAck(resetter.socket, 'take-control'), {ok: true});
+  assert.deepEqual(await boss.request('/api/session/reset', {...observeAlice, method: 'POST'}), {reset: true});
+  assert.deepEqual(await alice.request('/api/nodes'), [], 'every node removed');
+  assert.equal((await alice.request('/api/general-settings')).sessionId, aliceNew, 'the session stays');
+  const resetRow = (await boss.request('/api/admin/sessions')).find(session => session.login === 'alice');
+  assert.deepEqual([resetRow.placed, resetRow.nodes], [false, 0], 'unplaced once empty');
+  await waitFor(`processes of ${aliceNew} to exit`, () => sessionProcesses(aliceNew).length === 0, 5000);
+  assert.equal(fs.existsSync(path.join(runtimeDir, 'sessions', aliceNew)), false, 'the runner removed the directory');
+  resetter.socket.close();
+  console.log('Admin: the admin holding control resets a session; it stays, empty and placed on no runner');
 
   // (6) Accounts: create, reset, disable (own account protected); a disabled account loses
   // its cookie and its sockets at once, also when disabled in users.json directly.
@@ -535,10 +560,11 @@ async function run() {
   // socket of an admin on a login), never by a request. Alice was observed twice: by the first
   // observer sockets (the late observer joined while they were open), then, after they had all
   // closed, by the socket that checked controller-view after control. Bob once, while offline.
-  assert.equal(count('observe', target => target.login === 'alice'), 2, 'one observe line per observation period of alice');
+  assert.equal(count('observe', target => target.login === 'alice'), 3, 'one observe line per observation period of alice');
   assert.equal(count('observe', target => target.login === 'bob'), 1, 'one observe line for bob');
-  assert.equal(count('control-start', target => target.login === 'alice' && !('nodeId' in target)), 2);
-  assert.equal(count('control-end', target => target.login === 'alice' && target.reason === 'disconnected'), 1);
+  assert.equal(count('control-start', target => target.login === 'alice' && !('nodeId' in target)), 3);
+  assert.equal(count('control-end', target => target.login === 'alice' && target.reason === 'disconnected'), 2);
+  assert.equal(count('session-reset', target => target.login === 'alice'), 1, 'the reset under control (UXS02)');
   assert.equal(count('control-end', target => target.login === 'alice' && target.reason === 'released'), 1);
   assert.equal(count('stop-all', target => target.login === 'alice'), 1);
   // CTL01: the actions of the admin in control on alice's session.
@@ -569,8 +595,10 @@ async function run() {
   const has = (user, event, target = () => true) => events.some(line => line.user === user && line.event === event && target(line.target || {}));
   for (const login of ['boss', 'alice', 'bob', 'carol', 'dave', 'erin']) assert.ok(has(login, 'login'), `no login line for ${login}`);
   assert.ok(has('erin', 'login-failed') && has('carol', 'login-failed'));
-  assert.ok(has('alice', 'session-created') && has('alice', 'node-created', target => target.nodeId === aliceSwitch && target.kind === 'switch'));
+  assert.ok(has('alice', 'session-placed', target => target.sessionId === aliceSettings.sessionId && typeof target.runnerId === 'string') && has('alice', 'node-created', target => target.nodeId === aliceSwitch && target.kind === 'switch'));
   assert.ok(has('alice', 'session-deleted', target => target.sessionId === aliceSettings.sessionId && target.by === 'boss'));
+  assert.ok(has('alice', 'session-reset', target => target.by === 'boss'), 'the reset under control is in alice\'s users.log');
+  assert.ok(!events.some(line => line.event === 'session-created'), 'no session-created any more: a session is implicit');
   assert.ok(has('erin', 'session-deleted', target => target.sessionId === erinSettings.sessionId && target.by === 'boss'));
   assert.ok(!events.some(line => line.user === 'boss' && /^(node|archive)-/.test(line.event)), 'observation or admin actions reached users.log');
   for (const event of ['node-created', 'node-stopped', 'node-deleted']) {
