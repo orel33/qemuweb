@@ -174,6 +174,12 @@ written **before** `session.create` is sent and removed when a session is delete
 client answering 503, `manager.available` false), so that nobody opens a second session for a user while the runner of the first reconnects. On the hello of runner X (any
 runner): a binding of X that the hello reports is bound to the new connection (`RunnerClient.adopt`); one it does not report is dropped (`runner lost`); a reported session
 without a binding of X is deleted. A lost `bindings.json` means the runners' sessions are deleted at their next hello; a stale entry is dropped at the hello.
+*Since UXS02* a user's session is implicit and **placed lazily**: it exists from the login on no runner (its reads answer as an
+empty session, `server/unbound-runner.js`), is placed by `pickRunner` when its first node is created or a file is loaded (the
+binding is written then, before `session.create`), and is **released** when it is empty again (Reset, its last node removed, a
+load that created nothing, a restored session reported without nodes): `session.delete {ifEmpty}` on the runner, the binding
+removed, the session unplaced with the same ID, free to go to another runner at its next node (PRN01). Only placed sessions are
+bound and restored; an unplaced one is simply implicit again after a restart. See "Session lifecycle" in [architecture.md](architecture.md#session-lifecycle).
 
 **R7. One loss rule.** When a connection drops, the sessions of that runner stay offline for `--runner-grace` seconds (503, `runner-state`), then are dropped; a returning runner
 deletes (`session.delete`) what the server dropped and the server drops what the runner lost. The server never removes a directory. `start.sh` passes `--runner-grace 0` unless given

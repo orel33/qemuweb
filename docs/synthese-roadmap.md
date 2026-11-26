@@ -77,7 +77,7 @@ De la version 0.9.7 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | HSV01 | Onglet « Services » d'un hôte : DHCP, DNS, web, FTP, telnet… à cocher, appliqués au redémarrage | 4 |
 | FIL01 | **Fait (0.9.2).** Un seul bouton Load et un seul Save (topologie `.topo` ou session `.zip`), avec les fichiers d'exemple du serveur | 3 |
 | UXS01 | Conception écrite de l'interface autour de la session, validée par l'utilisateur | 2 |
-| UXS02 | Session créée à la connexion, une seule action « Reset » à la place de deux boutons confus | 2 |
+| UXS02 | **Fait.** Une session implicite par utilisateur dès la connexion, placée sur un runner seulement à son premier nœud ou chargement et libérée une fois vide ; une seule action « Reset session » à la place de « Remove all » et « Delete session » | 2 |
 | UXS03 | Actions regroupées en catégories claires : Session, Nœuds, Affichage | 2 |
 | CAP04 | Capture du trafic d'un **switch entier** par une prise VDE (`vde_plug`), fichier PCAP, **étude d'abord** | 4 |
 | UXS04 | Mode édition et mode exécution, un seul endroit décide des contrôles actifs | 4 |

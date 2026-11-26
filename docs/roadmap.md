@@ -570,7 +570,8 @@ personal runner and any guest access exist only for trusted users.
     goes on into the existing review dialog (summary, warnings about changed base images, **Start hosts and switches after
     loading**, **Discard working disks**); a `.topo` goes through the existing topology load. A click on a server file loads it exactly
     as an uploaded one (same validation, same warnings, same placement on a runner). Keep the rule that a session can only be
-    loaded into an empty one, and say it in the dialog (with a shortcut to the reset of UXS02 once it exists).
+    loaded into an empty one, and say it in the dialog (with a shortcut to the reset of UXS02 once it exists; done: the dialog
+    resets the session first, as Reset session does, and says so).
   - **Save.** One dialog with the checkbox **Save only the topology (.topo)**, unchecked by default. Unchecked: the existing session
     ZIP options (include working disks, the size estimate, the progress) and `qemuweb-session.zip`. Checked: the disk options
     disappear and the topology text file is downloaded. The last choice may be remembered in the browser.
@@ -594,7 +595,11 @@ personal runner and any guest access exist only for trusted users.
   Today the bottom-left toolbar (`public/index.html`) puts in one row: Load/Save topology, Load/Save session ZIP, New host,
   New switch, Clone, Resume all, Stop all, **Remove all hosts and switches** (`exit-all`) and **Delete session** (the red
   trash button). Both of the last two empty the session; the difference (the session itself) means nothing to a student.
-  - **UXS02** (M) Session lifecycle. A user always has one session, so it should exist from the login without a
+  - [x] **UXS02** (M) Session lifecycle. Delivered: the session is implicit from the login (random ID, no runner), placed
+    on a runner at its first node or load and released once empty; one **Reset session** (`POST /api/session/reset`, also for
+    the admin holding control) replaces Remove all and Delete session (`DELETE /api/session`, `DELETE /api/nodes` removed);
+    administrators get an implicit session too; observation never opens one. See "Session lifecycle" in `docs/architecture.md`.
+    The original request: A user always has one session, so it should exist from the login without a
     "create" step, and the two destructive actions become **one**: *Reset session* (confirm, stop and remove every node,
     the session stays, empty). *Delete session* leaves the student's toolbar (an administrator still deletes sessions
     from `/admin`). To settle: whether an administrator gets an implicit session too or only on demand (an admin
