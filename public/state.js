@@ -4,7 +4,6 @@ import {observing} from './observe.js';
 export const machines = new Map();
 
 const viewSettingsKey = 'qemuweb.view-settings';
-export const graphicLayoutKey = 'qemuweb.graphic-layout';
 // How the Graphic view draws links in this browser: 'curved' (default) or 'rectilinear'. A display preference
 // of this browser: not part of the view state, so Follow and observation never carry it.
 export const graphicLinksKey = 'qemuweb.graphic-links';

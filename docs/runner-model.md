@@ -138,7 +138,7 @@ loopback WebSocket was that nobody else could connect; the token gives the same 
 | Directory | Owner | Holds |
 |---|---|---|
 | server directory `<server runtime>` | server | `server-<port>.pid`, `bindings.json` (R6), `local-runner.token` (2.4); `server-<port>.session` is **dropped** (R9); no socket; nothing of a runner |
-| runner directory `<runner runtime>` | runner | `sessions/<id>/` (`session.json`, `meta.json`, nodes, disks, node sockets), `users/<login>` aliases (R8), `runner.pid` (lock, R9) |
+| runner directory `<runner runtime>` | runner | `sessions/<id>/` (`session.json`, `meta.json`, `layout.json`, nodes, disks, node sockets), `users/<login>` aliases (R8), `runner.pid` (lock, R9) |
 | `runners.json`, `users.json`, logs | server | as today (outside both) |
 
 The server never opens a path under a runner's directory. The one file that crosses is the credential `local-runner.token`: written by the server in

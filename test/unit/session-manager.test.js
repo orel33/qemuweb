@@ -146,7 +146,7 @@ test('the owner is not part of the session definition: an archive that carries o
   snapshot.installArchive(files, stage);
   assert.deepEqual(JSON.parse(fs.readFileSync(session.metadataFile, 'utf8')), {schemaVersion: 1, engine: 'qemu', hosts: [], switches: []});
   assert.equal(JSON.parse(fs.readFileSync(session.metaFile, 'utf8')).owner, 'titi');
-  assert.deepEqual(emitted, ['general-settings-changed', 'nodes-changed']);
+  assert.deepEqual(emitted, ['general-settings-changed', 'nodes-changed', 'graphic-layout']);
   for (const extra of [{owner: 'toto'}, {baseImages: {}}, {intruder: 1}]) {
     fs.writeFileSync(path.join(stage, 'session.json'), JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: [], switches: [], ...extra}));
     assert.throws(() => snapshot.archivedSessionFiles(stage, ['session.json']), /Invalid session.json/, `refused: ${Object.keys(extra)}`);

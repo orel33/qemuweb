@@ -30,6 +30,7 @@ do the same in their own writer.
 | `~/.config/qemuweb-runner/runner.json` (or `--runner-config`) | `runner register` | 0600 | no | `runner/config-file.js` |
 | `<session>/session.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import), `runner/session.js` (start-up pruning) |
 | `<session>/meta.json` | runner | 0600 | never | `scripts/status.js` (age only) |
+| `<session>/layout.json` | runner | 0600 | yes, optional | `common/graphic-layout.js` (`runner/archive-snapshot.js`, import) |
 | `<host>/host.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
 | `<switch>/switch.json` | runner | 0600 | yes | `runner/archive-snapshot.js` (import) |
 | `*.topo` (text, `topo/`) | user, topology export | umask | no | `common/topology.js` |
@@ -38,7 +39,7 @@ do the same in their own writer.
 | `logs/users.log` | server | 0600 | no | `server/audit.js` |
 
 `<session>` stands for `<runtime>/sessions/<id>` (`<runtime>` is the runner's directory: `/tmp/qw-<login>/l-<port>` by default for the local runner), `<host>` and `<switch>` for `<session>/<node ID>`. The runner
-never reads `session.json`, `host.json`, `switch.json` or `meta.json` back to
+never reads `session.json`, `host.json`, `switch.json`, `meta.json` or `layout.json` back to
 rebuild a live session: it keeps the state in memory and writes these files so
 that they can be archived and inspected. They are read only when a ZIP is loaded
 (into a staging directory) and, for `session.json`, to prune the empty sessions an
@@ -278,6 +279,38 @@ the server sends; never exported, and a ZIP containing it is refused.
 {"schemaVersion": 1, "owner": "alice", "createdAt": "2026-11-18T08:30:12.123Z"}
 ```
 
+### 2.6b `<session>/layout.json`
+
+**Format decision (CTL03): new file, `schemaVersion` 1, no migration.** The node positions of
+the Graphic view are session data: before CTL03 each browser kept them in its `localStorage`
+(key `qemuweb.graphic-layout`, no longer read or written; an old entry is left in the browser
+and can be removed by hand). `session.json` does not change.
+
+The positions of the nodes someone moved in the Graphic view, in world coordinates of the view
+(independent of the zoom). Written by the runner when the session's driver drops a node
+(`layout.set`, through the server's `node-position` event, coalesced: at most every 250 ms),
+when a node is removed (its position goes) and when a ZIP is loaded; removed when no position
+is left and with the session. A node without a position is placed automatically.
+
+| Keyword | Values / validation | Default | Flag |
+|:--|:--|:--|:--|
+| `schemaVersion` | `{1}` | `1` | F |
+| `positions` | object: node ID of the session → `{x, y}`, sorted by node ID; `x`, `y` finite numbers within [-100000, 100000], rounded to 0.1; exactly these two keys | `{}` | G |
+
+```json
+{
+  "schemaVersion": 1,
+  "positions": {
+    "h-2b493e734492f941": {"x": 120, "y": 40.5},
+    "s-210a52699538eb60": {"x": 300, "y": 40.5}
+  }
+}
+```
+
+In a ZIP, `layout.json` is optional (an archive without it loads with an automatic layout) and
+is refused unless it is exactly this format with positions of nodes of the archive only
+(`parseLayout`: no repair); the runner then writes its own `layout.json`.
+
 ### 2.7 `<host>/host.json`
 
 **Format decision (VBX02): `schemaVersion` 2, no migration.** The host no longer has an
@@ -403,6 +436,7 @@ HOST debian13-cloud   grave    s1
 
 ```text
 session.json
+layout.json                                (only when a node was moved in the Graphic view)
 h-2ff82cc0d54ff610/host.json
 h-2ff82cc0d54ff610/startup/start.sh        (and companion files)
 h-2ff82cc0d54ff610/disk.qcow2              (only "save with working disks", QEMU disk if it exists)
@@ -418,17 +452,18 @@ What is rejected on load (`runner/archive-zip.js`, `runner/archive-snapshot.js`)
 
 | Check | Rule |
 |:--|:--|
-| Entry names | only `session.json`, `<id>/host.json` \| `switch.json` \| `disk.qcow2` \| `disk.vdi` \| `startup/<path>`; no `..`, absolute, `\` or control character; no duplicate |
+| Entry names | only `session.json`, `layout.json`, `<id>/host.json` \| `switch.json` \| `disk.qcow2` \| `disk.vdi` \| `startup/<path>`; no `..`, absolute, `\` or control character; no duplicate |
 | Structure | single volume; sizes, CRC, local and central headers must agree; no hidden or overlapping entry; no comment, no symbolic link |
-| Limits | archive 4 GiB; 10000 entries; metadata files 4 MiB; one working disk 64 GiB; total 256 GiB; 64 MiB free space kept |
+| Limits | archive 4 GiB; 10000 entries; metadata files (`session.json`, `layout.json`, node JSON) 4 MiB; one working disk 64 GiB; total 256 GiB; 64 MiB free space kept |
 | `session.json` | `schemaVersion` 1, only `engine`, `hosts`, `switches`; engine available on this runner; no duplicate ID |
+| `layout.json` | optional; `schemaVersion` 1, only `positions`, each a node ID of the archive with exactly finite `x`, `y` within ±100000 (2.6b) |
 | Node files | `id` equals the directory; `host.json` `schemaVersion` 2 (1 is refused, with no migration), `switch.json` `schemaVersion` 1 with `kind: vde` |
 | Hosts | only the keys of 2.7 (`engine`, `disk`, `baseImage` are refused); `system` exists in this `config.json`; `config` keys valid (`keyword`, `keyword:qemu`, `keyword:vbox`), each value valid for the profile of its engine (an unsuffixed one for both); at most 4 interfaces; MACs and (switch, port) unique; a connected interface names a switch of the archive; start script variables resolvable when the startup disk is on |
 | Working disks | `baseImages` has exactly one record `{size, sha256}` per disk member (`raw` for `disk.qcow2`, `vdi` for `disk.vdi`), none when there is no disk; each equals the size and SHA-256 of the local base image of that format (a missing local image counts as different), else the whole load is refused, or every disk of the archive is discarded with "Discard working disks" (no partial acceptance). `disk.qcow2` must have a raw backing file and the recorded virtual size, then is rebased and checked; `disk.vdi` must be a differencing VDI (header) of the same disk size whose parent UUID is the local base `.vdi`'s. **A saved VirtualBox disk only loads on a machine whose base `.vdi` is byte-identical**: every conversion to VDI gets a new UUID, so images rebuilt or built elsewhere differ; there is no re-parenting |
 | Session | the current session must be empty (HTTP 409 otherwise) |
 
-On success the runner writes its own `session.json` and `host.json` files; the
-archive's `session.json` is not copied.
+On success the runner writes its own `session.json`, `layout.json` and `host.json` files; the
+archive's `session.json` and `layout.json` are not copied.
 
 ### 2.11 Logs `logs/admin.log` and `logs/users.log`
 
@@ -607,9 +642,10 @@ when the startup disk is on.
 | Stop or Reset | sockets removed; Reset also removes the working disk of the current engine only; JSON unchanged |
 | Start a switch | `vde/`, `mgmt.sock`; removed at stop |
 | Save session (ZIP) | `session.json` rewritten; the ZIP is built in the session directory and streamed, then removed; with working disks, running nodes are stopped first |
-| Load session (ZIP) | staging directory, then `<node>/` directories moved in, `session.json` and node JSON rewritten by the runner |
-| Delete a node | its directory, then `session.json` |
-| Delete the session | the whole `<runtime>/sessions/<id>/` including `meta.json` |
+| Load session (ZIP) | staging directory, then `<node>/` directories moved in, `session.json`, `layout.json` (when the archive has one) and node JSON rewritten by the runner |
+| Move a node in the Graphic view (driver, drop) | `layout.json` (coalesced, at most every 250 ms) |
+| Delete a node | its directory, then `session.json`; its position in `layout.json` (the file is removed when none is left) |
+| Delete the session | the whole `<runtime>/sessions/<id>/` including `meta.json` and `layout.json` |
 | Edit `config.json` | nothing is rewritten (see below) |
 
 **What a change of `config.json` does to existing hosts.** The file is re-read at

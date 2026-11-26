@@ -6,7 +6,7 @@ import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setP
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
-import {renderGraphic, setGraphicView} from './graphic-view.js';
+import {graphicViewport, renderGraphic, setGraphicView, setGraphicViewport} from './graphic-view.js';
 import {closeFloatingConsole, floatingConsoleOpen, floatingGeometry, openFloatingConsole, setFloatingGeometry} from './graphic-console.js';
 import {canWrite, controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
 import {publishView} from './socket.js';
@@ -252,7 +252,7 @@ export function captureView() {
     panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null),
     views: panes.slice(0, store.layoutSize).map(pane => (pane.machineId ? pane.view : 'console')),
     switches: store.showSwitchConsoles, active: store.activeId || null, floating: floatingConsoleOpen(),
-    geometry: floatingGeometry()};
+    geometry: floatingGeometry(), viewport: graphicViewport()};
 }
 
 // Shows a view state (already normalized against this page's nodes; unknown nodes are left
@@ -279,6 +279,8 @@ export function applyView(view) {
     if (view.active && machines.has(view.active)) store.activeId = view.active;
     // The floating console's geometry first, so that the mode or the opening shows it there.
     setFloatingGeometry(view.geometry);
+    // The pan and zoom of the Graphic view too (kept until it shows, when it is hidden).
+    setGraphicViewport(view.viewport);
     if ((view.mode === 'graphic') !== store.graphicVisible) setGraphicView(view.mode === 'graphic');
     // After the mode (setGraphicView shows or hides it): open or closed on the active node, without
     // taking the focus (a follower does not type; the controlling admin focuses it by clicking).

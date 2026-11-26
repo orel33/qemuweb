@@ -1,11 +1,14 @@
 'use strict';
 
 // Node listing, switches, start, stop, Resume all, Stop all, reboot, reset, monitor, rename
-// and deletion. Each route sends one runner command (runner/commands/nodes.js).
+// and deletion. Each route sends one runner command (runner/commands/nodes.js). The node
+// positions of the Graphic view are read here (runner/commands/layout.js) and written through
+// the node-position socket event (server/sockets.js), by the session's driver only.
 
 function register({app, handle}) {
   const node = req => ({nodeId: req.params.nodeId});
   app.get('/api/nodes', handle('nodes.list', () => ({}), 500));
+  app.get('/api/graphic-layout', handle('layout.get', () => ({}), 500, {noStore: true}));
   app.get('/api/nodes/:nodeId/options', handle('node.preview', req => ({nodeId: req.params.nodeId, query: req.query})));
   app.post('/api/nodes/stop-all', handle('nodes.stopAll', () => ({}), 409));
   app.post('/api/nodes/resume-all', handle('nodes.startAll', () => ({}), 409));

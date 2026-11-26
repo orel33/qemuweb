@@ -168,7 +168,7 @@ async function readArchive(filename, stage) {
       if (!Buffer.from(name).equals(rawName)) throw new Error('Invalid UTF-8 ZIP path.');
       safeName(name);
       if (method === 8 && !isDisk(name)) throw new Error('Only working disks may be compressed.');
-      if ((name === 'session.json' || /\/(?:host|switch)\.json$/.test(name)) && size > 4 * 1024 * 1024) {
+      if ((name === 'session.json' || name === 'layout.json' || /\/(?:host|switch)\.json$/.test(name)) && size > 4 * 1024 * 1024) {
         throw new Error(`Session metadata exceeds 4 MiB limit: ${name}`);
       }
       if (entries.has(name)) throw new Error(`Duplicate archive path: ${name}`);
@@ -237,7 +237,7 @@ async function readArchive(filename, stage) {
     if (session.size > 4 * 1024 * 1024 || session.method !== 0) throw new Error('Invalid session metadata entry.');
     const names = [...entries.keys()];
     for (const name of names) {
-      if (name !== 'session.json' && !/^[hs]-[0-9a-f]{16}\/(?:host\.json|switch\.json|disk\.qcow2|disk\.vdi|startup\/.+)$/.test(name)) {
+      if (name !== 'session.json' && name !== 'layout.json' && !/^[hs]-[0-9a-f]{16}\/(?:host\.json|switch\.json|disk\.qcow2|disk\.vdi|startup\/.+)$/.test(name)) {
         throw new Error(`Unexpected session archive file: ${name}`);
       }
     }

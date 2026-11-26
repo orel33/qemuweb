@@ -30,6 +30,8 @@ const {ConsoleControl} = require('./console-control');
 const {attachCaptureLive} = require('./capture-live');
 const {attachCaptureLease} = require('./capture-lease');
 const {normalizeView, normalizeObservers} = require('../public/view-state');
+const {normalizeNodePosition} = require('../common/graphic-layout');
+const {createEventBudget, createLayoutWriter} = require('./layout-writes');
 const {baseNodeId} = require('../common/console-id');
 const {createTransportRegistry} = require('./ws-transports');
 
@@ -45,7 +47,8 @@ function consoleRoom(session, consoleId) { return `console:${session.id}:${conso
 const OBSERVER_REFUSALS = {
   input: 'Read-only observation: take control to type into this session.',
   resize: 'Read-only observation: the console cannot be resized.',
-  clear: 'Read-only observation: the console cannot be cleared.'
+  clear: 'Read-only observation: the console cannot be cleared.',
+  layout: 'Read-only observation: take control to move nodes.'
 };
 function consoleRefusal({observer, lock, admin, action = 'input'}) {
   if (observer) return lock?.admin === admin ? null : OBSERVER_REFUSALS[action];
@@ -93,7 +96,7 @@ function bindWorkspace(io, {session, runner}) {
     });
   }
   runner.events.on('state', state => io.to(sessionRoom(session)).emit('nodes-changed', state));
-  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed', 'captures', 'guest-info']) {
+  for (const event of ['nodes-removed', 'nodes-changed', 'node-renamed', 'general-settings-changed', 'captures', 'guest-info', 'graphic-layout']) {
     runner.events.on(event, payload => io.to(sessionRoom(session)).emit(event, payload));
   }
 }
@@ -104,6 +107,15 @@ function bindWorkspace(io, {session, runner}) {
 function attachSockets(io, manager, {audit, currentUser, control: options = {}, transports = createTransportRegistry()}) {
   // The controlling admin's last view, per session ID, kept only while a lock exists there.
   const controllerViews = new Map();
+  // The coalesced writes of the final node positions, per session ID, while some are pending.
+  const layoutWriters = new Map();
+  const layoutWriterOf = (sessionId, runner) => {
+    if (!layoutWriters.has(sessionId)) {
+      layoutWriters.set(sessionId, createLayoutWriter({write: (nodeId, {x, y}) => runner.request('layout.set', {nodeId, x, y}),
+        onIdle: () => layoutWriters.delete(sessionId)}));
+    }
+    return layoutWriters.get(sessionId);
+  };
   // The capture leases of each session, shared by its sockets (server/capture-lease.js).
   const leaseRegistry = new Map();
   const leasesOf = sessionId => { if (!leaseRegistry.has(sessionId)) leaseRegistry.set(sessionId, new Map()); return leaseRegistry.get(sessionId); };
@@ -259,6 +271,29 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
       });
     }));
     if (!observer && controllerViews.has(session.id)) socket.emit('controller-view', controllerViews.get(session.id));
+    // A node moved in the Graphic view (node positions are session data, runner/commands/layout.js):
+    // {nodeId, x, y, final}, from the driver only (the owner while nobody controls the session,
+    // the admin holding control). It is relayed to the session's other sockets during the drag,
+    // and the final position is kept by the runner. Others are refused like console input.
+    // At most 20 events per second per socket (the excess is dropped), the final positions written
+    // coalesced (server/layout-writes.js).
+    const layoutRefusal = () => consoleRefusal({observer, lock: control.get(session.id), admin: user.login, action: 'layout'});
+    const positionBudget = createEventBudget({max: 20, windowMs: 1000});
+    socket.on('node-position', guard(received => {
+      if (!positionBudget.take()) return;
+      const refusal = layoutRefusal();
+      if (refusal) { if (observer) refuse(refusal); return; }
+      const moved = normalizeNodePosition(received);
+      if (!moved) return;
+      withNodeIds(async nodeIds => {
+        if (!nodeIds.includes(moved.nodeId) || layoutRefusal()) return;
+        if (observer) control.touch(session.id, user.login);
+        else session.touch();
+        const {nodeId, x, y} = moved;
+        socket.to(sessionRoom(session)).emit('node-position', {nodeId, x, y});
+        if (moved.final) layoutWriterOf(session.id, runner).set(nodeId, {x, y});
+      });
+    }));
     socket.on('leave-node', id => {
       if (id !== socket.data.nodeId) return;
       leaveRooms(id);

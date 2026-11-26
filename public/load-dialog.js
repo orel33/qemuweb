@@ -1,7 +1,7 @@
 // The Load Session dialog, opened by the Load button: one file selector (the server's examples or the user's own files),
 // the options, and a single Load click that shows its steps. The file is read and checked in the browser, a session ZIP
 // and a topology go through the same pipeline whatever the source, and nothing is closed before the file passed its check.
-import {graphicLayoutKey, generalSettings, machines, saveViewSettings} from './state.js';
+import {generalSettings, machines, saveViewSettings} from './state.js';
 import {jsonRequest, requestJson} from './api.js';
 import {archiveSummaryText, checkArchiveBaseImages, importArchive, importExample, readArchiveSummary} from './archive-read.js';
 import {closeWarning, countPhrase, loadOptionStates, loadStepList, nodeCounts, openingSource, restoreText, routeFile, staleDisksRefusal} from './file-kinds.js';
@@ -178,7 +178,6 @@ async function create(info, found, {autoStart: start, discardDisks}, onStep) {
       : await importArchive(found.file, {autoStart: start, discardDisks}, percent => steps.set('upload', 'running', `${percent}%`), uploaded);
     loaded = true;
     saveViewSettings();
-    localStorage.removeItem(graphicLayoutKey);
     steps.set('create', 'done', `${countPhrase(data.hosts, 'host')} and ${countPhrase(data.switches, 'switch', 'switches')}`);
     steps.set('restore', data.warnings?.length ? 'warning' : 'done', [restoreText({hasDisks: found.hasDisks, discard: discardDisks}), ...(data.warnings || [])].join('\n'));
     startErrors = data.startErrors || [];

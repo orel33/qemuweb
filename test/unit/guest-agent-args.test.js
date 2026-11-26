@@ -71,6 +71,6 @@ test('a node has its agent socket path, the node list carries the addresses, and
 test('the runner sends guest-info and the server forwards it to the session room', () => {
   const root = path.join(__dirname, '..', '..');
   assert.match(fs.readFileSync(path.join(root, 'runner', 'service.js'), 'utf8'), /RUNNER_EVENTS = \[[^\]]*'guest-info'/);
-  assert.match(fs.readFileSync(path.join(root, 'server', 'sockets.js'), 'utf8'), /'captures', 'guest-info'\]/);
+  assert.match(fs.readFileSync(path.join(root, 'server', 'sockets.js'), 'utf8'), /'captures', 'guest-info', 'graphic-layout'\]/);
   assert.ok(moduleSource('socket').includes('guest-info'), 'the browser listens for guest-info');
 });

@@ -956,6 +956,16 @@ commit message.
   (3) The owner's page shows a yellow banner while administrators observe the session (`session-observers` {admins} to the
   owner's main sockets on each change and at connection). (4) The owner's control banner is short ("admin controls your
   session: keyboard, actions and view"), the explanation in its tooltip. A view saved by an earlier version is dropped once.
+- [ ] **CTL03** (M) Follow-up of CTL02, after the user tried it. (1) Node positions of the Graphic view are session data:
+  the runner keeps them in `<session>/layout.json` (new format, `schemaVersion` 1; `layout.get`/`layout.set`), an optional
+  entry of the session ZIP, pruned with a removed node, gone with the session, replaced by a loaded ZIP; read with
+  `GET /api/graphic-layout`, moved with the `node-position` socket event from the driver only (the owner, or the admin holding
+  control), relayed during the drag, bounded to 20 events per second per socket, final positions written coalesced. No layout in
+  `localStorage` any more. The pan and zoom are in the view state (`viewport` {cx, cy, k}: world center and zoom). (2) One driver
+  at a time in the Graphic view: a follower (Follow, or the owner's page under control) cannot pan, zoom or move nodes; with
+  Follow unchecked an observer pans and zooms freely but never moves a node. (3) The yellow and orange banners share one sentence
+  form ("<login> is observing | is controlling your session", "You are observing | controlling the session of <login>"), only the
+  logins bold, the explanation in the tooltip. A view saved before CTL03 (no `viewport`) is dropped once.
 - [ ] **TOD05** A `--version` option for `server/main.js` and `runner/main.js`, and a version check between the two: the runner's `hello`
   carries its version, and the server says "restart the runner" (in its log and in `/admin -> Runners`) when it differs from its own, instead of
   letting an archive fail with `Invalid session.json in archive.` after a format change. Useful with runners on other machines.

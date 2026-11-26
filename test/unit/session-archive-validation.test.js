@@ -40,7 +40,7 @@ function setup(t) {
     const files = ['session.json', `${HOST}/host.json`, ...(disks.includes('raw') ? [`${HOST}/disk.qcow2`] : []), ...(disks.includes('vdi') ? [`${HOST}/disk.vdi`] : [])];
     if (disks.includes('raw')) fs.writeFileSync(path.join(stage, HOST, 'disk.qcow2'), 'disk');
     if (disks.includes('vdi')) fs.writeFileSync(path.join(stage, HOST, 'disk.vdi'), 'disk');
-    return {engine: 'qemu', hosts, switches: [], files, ...extra};
+    return {engine: 'qemu', hosts, switches: [], positions: new Map(), files, ...extra};
   };
   const sha = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
   return {dir, stage, snapshot, host, archive, profile, size: fs.statSync(image).size, vdiSize: fs.statSync(`${image}.vdi`).size,

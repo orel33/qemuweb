@@ -433,9 +433,9 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .admin-link:hover, .admin-link:focus-visible { background: #3a3220; }
 .admin-link[hidden] { display: none; }
 /* The observation and control banners share one fixed height; their text is truncated. */
-.observe-banner { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--banner-height); padding: 0 16px; overflow: hidden; white-space: nowrap; color: #1d1405; background: #f2b84b; font-weight: 600; }
+.observe-banner { display: flex; flex: none; flex-wrap: nowrap; align-items: center; gap: 8px; height: var(--banner-height); padding: 0 16px; overflow: hidden; white-space: nowrap; color: #1d1405; background: #f2b84b; font-weight: 400; }
 .observe-banner[hidden], .control-banner[hidden] { display: none; }
-.observe-banner[data-control="true"] { background: #f08a5d; }
+.observe-banner[data-kind="controlling"] { background: #f08a5d; }
 .observe-banner select { flex: none; height: 28px; padding: 0 9px; color: #1d1405; background: #ffe3a8; border-color: #8a6420; }
 /* Banner buttons: the dark UI button with a coloured Lucide icon (and text), 28px high. */
 .observe-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: none; height: 28px; min-width: 28px; padding: 0 8px; border: 1px solid #405166; border-radius: 6px; background: #202c3a; font-weight: 600; text-decoration: none; transition: background .15s, border-color .15s; }
@@ -444,10 +444,11 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .observe-button:focus-visible { outline: 2px solid #1d1405; outline-offset: 2px; }
 #observe-previous, #observe-next { padding: 0 4px; }
 .observe-banner > * { flex: none; }
-.observe-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; }
-.observe-banner > .observe-status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 400; }
+.observe-banner > .observe-status { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .observe-follow { display: inline-flex; align-items: center; gap: 4px; font-weight: 400; }
-.control-banner { flex: none; height: var(--banner-height); padding: 0 16px; overflow: hidden; line-height: var(--banner-height); white-space: nowrap; text-overflow: ellipsis; color: #1d1405; background: #f08a5d; font-weight: 600; }
+.control-banner { flex: none; height: var(--banner-height); padding: 0 16px; overflow: hidden; line-height: var(--banner-height); white-space: nowrap; text-overflow: ellipsis; color: #1d1405; background: #f08a5d; font-weight: 400; }
+/* The same sentence on both banners: only the logins are bold. */
+.observe-status strong, .control-banner strong { font-weight: 700; }
 /* On the owner's page, while administrators observe without control: yellow like the observer's banner. */
 .control-banner[data-kind="observed"] { background: #f2b84b; }
 /* One driver at a time for the writes too: the server refuses every change of an observer
@@ -530,6 +531,10 @@ body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailab
    under control, or an observer following with Follow checked), every control that changes the
    view state (class view-control) is disabled in the same way. */
 body[data-view-driven="true"] .view-control { opacity: .45; }
+/* The Graphic view follows that rule too: no pan or zoom while the view is driven, and a node is
+   moved by the session's driver only (a write), so the grab cursor goes. */
+body[data-write-blocked="true"] .topology-node { cursor: pointer; }
+body[data-view-driven="true"] #graphic-canvas, body[data-view-driven="true"] .topology-node { cursor: default; }
 
 
 /* Load Session and Save Session: one frame (heading with the toolbar icon, a form pane, Cancel / primary button). The form pane and
