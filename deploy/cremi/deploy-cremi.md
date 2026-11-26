@@ -366,7 +366,7 @@ If `install` says that `/etc/qemuweb/server.args` exists and differs, an earlier
 (`sudoedit`), then run `./scripts/qwctl.sh install server --force` without the options of the server. If the server does not start after step 4, `./scripts/qwctl.sh logs server 40` gives the reason; the options are corrected in `/etc/qemuweb/server.args`.
 To go back, restore the two old unit files from the output kept above (`sudoedit`), then `sudo systemctl daemon-reload`.
 
-### Upgrading to 8-character session and node IDs (IDS01, one-time: live sessions are lost)
+### Upgrading from 0.9.7 to 0.9.8: 8-character session and node IDs (IDS01, one-time: live sessions are lost)
 
 Session IDs become 8 hex characters and host and switch IDs `h-`/`s-` and 8 (they were 16). The live sessions of the
 installed version are **lost** at the upgrade: the server skips the bindings of `bindings.json` with the old IDs (one warning

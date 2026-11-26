@@ -1,10 +1,10 @@
 # QemuWeb : feuille de route pour décideurs
 
-De la version 0.9.7 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [roadmap.md](roadmap.md), en français à la demande du responsable du projet ; le détail technique de chaque tâche est dans ce fichier.
+De la version 0.9.8 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [roadmap.md](roadmap.md), en français à la demande du responsable du projet ; le détail technique de chaque tâche est dans ce fichier.
 
 ## En bref
 
-- **Aujourd'hui (0.9.7)** : le serveur tourne au CREMI derrière Apache et OpenID, avec un runner local, un runner distant validé et les consoles par WebSocket à travers le relais. Livré depuis la 0.9.0 : la capture de trafic (fichier PCAP et vue `tcpdump`), un seul menu Load et un seul Save avec des exemples du serveur, la page d'administration en onglets, le moteur VirtualBox réparé avec un sélecteur de moteur, et la construction des quatre images derrière le proxy du CREMI. Il reste réservé à des utilisateurs de confiance : pas de quotas, de limitation des commandes ni d'isolation des machines.
+- **Aujourd'hui (0.9.8)** : le serveur tourne au CREMI derrière Apache et OpenID, avec un runner local, un runner distant validé et les consoles par WebSocket à travers le relais. Livré depuis la 0.9.0 : la capture de trafic (fichier PCAP et vue `tcpdump`), un seul menu Load et un seul Save avec des exemples du serveur, la page d'administration en onglets, le moteur VirtualBox réparé avec un sélecteur de moteur, et la construction des quatre images derrière le proxy du CREMI. Il reste réservé à des utilisateurs de confiance : pas de quotas, de limitation des commandes ni d'isolation des machines.
 - **1.0 : ouvrir à une promo entière** (environ 30 sessions simultanées) sans faire confiance aux utilisateurs : sécurité, exploitation sans surprise, test de charge, et la capture de trafic, fonction phare pour les TP de réseau.
 - **1.1 à 1.3 : confort et portée** : services d'un hôte, interface retravaillée, runners sur les postes de TP, davantage de systèmes invités.
 - **2.0 : au-delà des consoles série** : affichage graphique (Windows, bureaux Linux), conteneurs Docker, macOS.
@@ -27,6 +27,7 @@ De la version 0.9.7 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | **0.9.5** | Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>` : fin de l'erreur « Runtime socket path is too long » (TOD02, validée) ; la taille de la police n'est plus affichée entre A− et A+ (elle reste dans l'infobulle) |
 | **0.9.6** | **Adresse IP en direct** de chaque interface (avec son préfixe) dans la vue graphique, lue par l'agent invité de QEMU (`GAG01`) ; commande `scripts/guest-agent.sh` ; `prepare.sh` sans argument liste les images (et indique l'agent et ttyS1), `--system <id\|all>` et `--all` pour construire (`PRP02`) |
 | **0.9.7** | **Runner local comme les autres** (RUN03a à f) : connexion WebSocket avec un fichier de jeton, un dossier par processus, sessions restaurées hors ligne et perte forcée ; page Admin avec colonnes Nom et ID ; `prepare.sh --parallel` ; schéma d'architecture mis à jour ; services systemd avec `scripts/qwctl.sh` (SVC01, première partie) ; adresse d'écoute `--bind` ; dialogues Load et Save Session ; liens rectilignes dans la vue graphique ; console silencieuse des images Debian |
+| **0.9.8** | **Observation et contrôle cohérents** : la console flottante, sa position, la disposition des nœuds, le zoom et le style des liens suivent celui qui pilote ; l'admin qui prend le contrôle agit comme l'étudiant (Load et Save compris), l'étudiant est en lecture seule pendant ce temps ; **session implicite** et un seul bouton **Reset session** ; identifiants de 8 caractères ; page Admin : colonnes Session et Runner, état d'un runner, logs redimensionnables |
 
 ## Décisions attendues
 
