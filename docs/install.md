@@ -277,6 +277,15 @@ available with `dmesg`. The line `debian13-legacy  quiet console: no (rebuild fo
 marks an image built earlier: rebuild it with `bash scripts/prepare.sh --system debian13-legacy --force` (and
 `debian13-cloud`). A saved session with working disks must then be discarded, because the base image identity changes.
 
+**Lighter and quieter Debian 13 Cloud.** `debian13-cloud` starts no DHCP client, no IPv6 autoconfiguration and no
+network service, and no longer contains cloud-init, `unattended-upgrades`, `qemu-utils` or the locales (only
+`C.UTF-8`): see [Network and services of Debian 13 Cloud hosts](user-guide.md#network-and-services-of-debian-13-cloud-hosts).
+An image built earlier keeps the old behaviour: rebuild it with
+`bash scripts/prepare.sh --system debian13-cloud --force`; a saved session with working disks must then be discarded.
+To measure an image (boot time, memory, disk, services, frames sent at idle; KVM needed, the image is not
+modified): `scripts/measure-image.py images/debian13-cloud.raw`, and with `--check` (Internet access needed) to
+check `apt` and the services started by hand.
+
 **Addresses on the Graphic view (guest agent).** The addresses a running host reports are read from the QEMU
 guest agent (`qemu-guest-agent`, `qemu-ga` on OpenWrt) through a virtio-serial channel QemuWeb adds to
 the QEMU command line for the systems that have `guestAgent:qemu` in `config.json`. The four systems have it, but

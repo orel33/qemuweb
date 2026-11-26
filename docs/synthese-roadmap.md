@@ -63,6 +63,7 @@ De la version 0.9.8 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | SEC02 | Liste blanche des commandes de l'hyperviseur et quotas (machine, session, serveur) | 3 |
 | SEC04 | Runner sous un compte dédié, un cgroup par session limitant mémoire et processeur | 4 |
 | IMG01 | Image Debian plus légère, démarrage le plus rapide, aucun trafic réseau spontané | 3 |
+| IMG03 | Image `debian13-cloud` allégée et silencieuse : aucune trame envoyée au repos, services réseau installés mais désactivés (Apache et BIND ajoutés), paquets inutiles retirés, image RAW réduite, script de mesure | 3 |
 | CAP01 | **Fait (0.9.1).** Capture de trafic : fichier PCAP à télécharger pour Wireshark et vue `tcpdump` en direct | 4 |
 | LOD01 | Test de charge de 30 sessions simultanées, équilibrage selon la mémoire libre | 3 |
 | QUA01 | Défauts ouverts corrigés, fiche de test manuelle déroulée en production, PDF à jour | 2 |

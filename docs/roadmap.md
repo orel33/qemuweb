@@ -542,6 +542,15 @@ personal runner and any guest access exist only for trusted users.
   `/etc/sysctl.d/10-console.conf` with `kernel.printk = 3 4 1 3` into both Debian images (`debian13-legacy` and `debian13-cloud`).
   Existing images keep the old behaviour until rebuilt, and a saved session with working disks must be discarded after the
   rebuild (the base image identity changes).
+- [ ] **IMG03** (M) A lighter, quieter `debian13-cloud` image, with its measurements in
+  [image-debian13-cloud.md](image-debian13-cloud.md). Goals: a shorter boot, a smaller image, and a freshly booted idle
+  host that **sends no frame**. At boot: no DHCP client and no IPv6 autoconfiguration (both can still be started by
+  hand), no LLMNR, mDNS or NTP; every optional network service (SSH, DHCP and DNS servers, `inetd` with telnet and
+  FTP, OpenVPN, Apache, BIND) installed but disabled and startable by hand; useless periodic timers disabled.
+  `cloud-init` (purged at the end of the build), `unattended-upgrades`, `qemu-utils` (with the cloud image tools),
+  `locales` and `libc-l10n` removed, the lab tools kept; `apache2` and `bind9` added, disabled, for HSV01. APT caches
+  and lists removed and free blocks discarded, so that the RAW image really shrinks; `apt update` and installing a
+  package still work. A repeatable measurement script: `scripts/measure-image.py`.
 - [ ] **LOD01** (L) Load test of about 30 simultaneous sessions (a switch and 5 nodes each) on the server, the pool and
   lab workstations: memory and CPU measured, no VM killed, a responsive interface. Balance by free memory instead of a
   session count if the test shows it is needed.

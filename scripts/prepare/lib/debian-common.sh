@@ -9,7 +9,7 @@ prepare_debian_image() {
   local source_dir="$SOURCES/$id" raw="$IMAGES/$id.raw" vdi="$IMAGES/$id.vdi"
   local cloud_source sums url='https://cloud.debian.org/images/cloud/trixie/latest'
   # Not local: the EXIT trap below runs after this function has returned.
-  temp_dir=''; qemu_pid=''
+  temp_dir=''; qemu_pid=''; socket_dir=''
   mkdir -p "$source_dir"
   cloud_source="$source_dir/debian-13-genericcloud-amd64.qcow2"
   sums="$source_dir/SHA512SUMS"
@@ -29,18 +29,21 @@ prepare_debian_image() {
     guest_proxy_note
     temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
     chmod 700 "$temp_dir"
-    trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; [[ -n "${temp_dir:-}" ]] && rm -rf "$temp_dir"' EXIT
+    # A UNIX socket path is limited to 107 bytes, which a deep project directory exceeds: private short directory.
+    socket_dir="$(mktemp -d "/tmp/qw-prepare.XXXXXX")"
+    trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; [[ -n "${socket_dir:-}" ]] && rm -rf "$socket_dir"; [[ -n "${temp_dir:-}" ]] && rm -rf "$temp_dir"' EXIT
     local overlay="$temp_dir/debian-bootstrap.qcow2" seed="$temp_dir/debian-seed.iso"
-    local serial_log="$temp_dir/debian-serial.log" qmp_socket="$temp_dir/debian-qmp.sock"
+    local serial_log="$temp_dir/debian-serial.log" qmp_socket="$socket_dir/qmp.sock"
     local user_data="$temp_dir/user-data" meta_data="$temp_dir/meta-data" network_config="$temp_dir/network-config"
-    # Cloud-init creates the lab account, enables both consoles, and configures
-    # the guest NIC for DHCP. The VDE switch itself does not provide DHCP.
-    local hook_b64 unit_b64 qga_conf_b64
+    # Cloud-init creates the lab account, enables both consoles, and configures the
+    # network of the finished image (no DHCP client: the labs set the addresses).
+    local hook_b64 unit_b64 qga_conf_b64 finalize_b64
     hook_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/guest-start.sh")"
     unit_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/qemuweb-start.service")"
     qga_conf_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/qemu-ga.conf")"
+    finalize_b64="$(base64 -w 0 "$ROOT/scripts/prepare/resources/debian-cloud-finalize.sh")"
     # The VM cannot see this shell's environment: give cloud-init the proxy for apt
-    # (empty: none). The file it writes is removed again by the last runcmd.
+    # (empty: none). The file it writes is removed again by the finalize script.
     local apt_proxy_yaml='' guest_proxy
     if [[ -n "$PROXY_URL" ]]; then
       guest_proxy="$(guest_proxy_url)"
@@ -63,6 +66,7 @@ packages:
   - sudo
   - procps
   - nano
+  - vim
   - bash-completion
   - curl
   - wget
@@ -96,6 +100,9 @@ packages:
   - inetutils-telnetd
   - tnftp
   - inetutils-ftpd
+  # Web and DNS servers, installed for the labs and disabled like every other server.
+  - apache2
+  - bind9
   # QemuWeb reads the addresses of a running host from the guest agent (docs/guest-agent.md).
   - qemu-guest-agent
 users:
@@ -110,7 +117,7 @@ chpasswd:
 write_files:
   # No service is started while the image is built: a package whose service cannot start without a
   # configuration (isc-dhcp-server, dnsmasq) would make dpkg, apt and cloud-init fail. The file is
-  # removed again by the last runcmd, so the image keeps the normal behaviour.
+  # removed again by the finalize script, so the image keeps the normal behaviour.
   - path: /usr/sbin/policy-rc.d
     permissions: '0755'
     content: |
@@ -138,13 +145,46 @@ write_files:
     permissions: '0644'
     content: |
       kernel.printk = 3 4 1 3
+  # An idle host sends no frame: the links come up without DHCP, IPv6 link-local address, router
+  # solicitation, LLMNR or mDNS. Addresses are set by the lab (docs/user-guide.md says how to turn DHCP
+  # or IPv6 autoconfiguration on by hand).
   - path: /etc/systemd/network/20-qemunet.network
     permissions: '0644'
     content: |
       [Match]
       Name=eth*
+      [Link]
+      RequiredForOnline=no
       [Network]
-      DHCP=yes
+      DHCP=no
+      LinkLocalAddressing=no
+      IPv6AcceptRA=no
+      LLMNR=no
+      MulticastDNS=no
+  - path: /etc/systemd/resolved.conf.d/10-qemuweb.conf
+    permissions: '0644'
+    content: |
+      [Resolve]
+      LLMNR=no
+      MulticastDNS=no
+  # dnsmasq started by hand must not collide with the stub of systemd-resolved (127.0.0.53:53): it
+  # binds the addresses one by one instead of the wildcard address.
+  - path: /etc/dnsmasq.d/qemuweb.conf
+    permissions: '0644'
+    content: |
+      bind-dynamic
+  - path: /etc/apt/apt.conf.d/90qemuweb-no-recommends
+    permissions: '0644'
+    content: |
+      APT::Install-Recommends "false";
+  - path: /etc/ssh/sshd_config.d/10-qemuweb.conf
+    permissions: '0644'
+    content: |
+      PasswordAuthentication yes
+  - path: /usr/local/sbin/qemuweb-image-finalize
+    permissions: '0755'
+    encoding: b64
+    content: $finalize_b64
 runcmd:
   - [passwd, -d, root]
   - [systemctl, enable, serial-getty@ttyS0.service]
@@ -152,13 +192,8 @@ runcmd:
   - [systemctl, enable, getty@tty1.service]
   - [systemctl, enable, systemd-networkd.service]
   - [systemctl, enable, qemuweb-start.service]
-  - [touch, /etc/cloud/cloud-init.disabled]
-  # The build proxy must not stay in the image, which is used on other networks.
-  - [rm, -f, /etc/apt/apt.conf.d/90cloud-init-aptproxy]
-  - [rm, -f, /usr/sbin/policy-rc.d]
-  # Finish the template with no fixed machine ID. This is the last guest-side
-  # change before the temporary preparation VM is shut down.
-  - [sh, -c, 'if update-grub && grep -q "net.ifnames=0" /boot/grub/grub.cfg && test -x /usr/sbin/ifconfig && command -v ping >/dev/null && command -v tcpdump >/dev/null && command -v nano >/dev/null && dpkg -s qemu-guest-agent >/dev/null && test -s /etc/qemu/qemu-ga.conf && grep -qx "kernel.printk = 3 4 1 3" /etc/sysctl.d/10-console.conf; then : > /etc/machine-id && mkdir -p /var/lib/dbus && rm -f /var/lib/dbus/machine-id && ln -s /etc/machine-id /var/lib/dbus/machine-id && test ! -s /etc/machine-id && test "\$(readlink /var/lib/dbus/machine-id)" = /etc/machine-id && echo QEMUNET_IMAGE_PREPARED >/dev/ttyS0; else echo QEMUNET_IMAGE_SETUP_FAILED >/dev/ttyS0; exit 1; fi']
+  # Cleanup, checks and the final marker: after cloud-final, so that cloud-init can be purged.
+  - [systemd-run, --no-block, --unit=qemuweb-image-finalize, --property=After=cloud-final.service, --property=StandardOutput=journal+console, --property=StandardError=journal+console, /usr/local/sbin/qemuweb-image-finalize]
 CLOUD_CONFIG
     cat > "$meta_data" <<EOF_META
 instance-id: qemuweb-$id-$(date +%s)
@@ -179,23 +214,24 @@ NETWORK_CONFIG
     genisoimage -quiet -output "$seed" -volid cidata -joliet -rock "$user_data" "$meta_data" "$network_config"
     qemu-system-x86_64 -machine q35 -accel "$(prep_acceleration)" -m 1024 -smp 1 \
       -display none -monitor none -qmp "unix:$qmp_socket,server=on,wait=off" -serial "file:$serial_log" \
-      -no-reboot -drive "file=$overlay,if=virtio,format=qcow2" \
+      -no-reboot -drive "file=$overlay,if=virtio,format=qcow2,discard=unmap,detect-zeroes=unmap" \
       -drive "file=$seed,media=cdrom,readonly=on" -boot order=c -nic user,model=virtio-net-pci \
       >"$temp_dir/qemu.stdout" 2>"$temp_dir/qemu.stderr" &
     qemu_pid=$!
     build_log_info "Building the image in a VM" "$serial_log"
-    # Success: our marker and cloud-init's last line are both in the log. Cloud-init
+    # Success: the marker of the finalize script is in the log. Cloud-init
     # prints nothing while it installs packages, so a silent VM is only reported
     # (no stall limit); the total limit in lib/common.sh still applies.
     if ! watch_vm "Debian cloud image build of $id" "$qemu_pid" "$serial_log" \
         "$CLOUD_INIT_DONE" 0 0 CLOUD_INIT_FAILURES CLOUD_INIT_PHASES; then
       qemu_pid=''
       rm -f "$overlay"
+      rm -rf "$socket_dir"
       trap - EXIT
       echo "Preparation files preserved in $temp_dir" >&2
       exit 1
     fi
-    # Ask the guest to shut down cleanly so cloud-init finishes before conversion.
+    # Ask the guest to shut down cleanly before the conversion.
     python3 - "$qmp_socket" <<'PY'
 import json
 import socket
@@ -218,8 +254,8 @@ PY
     qemu-img convert -p -f qcow2 -O raw "$overlay" "$raw.tmp"
     chmod 444 "$raw.tmp"
     mv "$raw.tmp" "$raw"
-    rm -rf "$temp_dir"
-    temp_dir=''
+    rm -rf "$temp_dir" "$socket_dir"
+    temp_dir=''; socket_dir=''
     trap - EXIT
   fi
   chmod 444 "$raw"

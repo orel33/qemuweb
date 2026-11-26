@@ -9,6 +9,8 @@ StandardOutput=journal
 StandardError=journal
 SyslogLevel=debug
 TimeoutStartSec=30
+# 66: no startup disk (see qemuweb-guest-start). A start.sh that fails still fails the unit.
+SuccessExitStatus=66
 
 [Install]
 WantedBy=multi-user.target
