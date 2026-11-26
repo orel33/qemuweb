@@ -205,6 +205,8 @@ A rebuild changes the identity of the base image: a saved session with working d
 - **Left as they are**, possible later gains: `grub-common.service` (about 0.2 s), `apparmor` (about 0.2 s),
   `netplan.io` (no configuration left), the kernel command line (about 1.8 s of kernel time).
 
+## Journal
+
 - **26 November 2026:** initial measurement and static inspection. No change to the image or to the build scripts.
 - **26 November 2026:** build scripts, finalize step, measurement script, user guide and install notes, IMG03 added to
   the roadmaps. Static checks only (`sh -n`, `bash -n`, Python syntax): nothing built, started or tested.
