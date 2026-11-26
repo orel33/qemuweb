@@ -50,6 +50,7 @@ De la version 0.9.9 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | PRN02 | **Priorité** : page « My runner » pour créer son jeton, copier la commande, voir l'état et révoquer ; message « runner offline » | 2 |
 | VBX01 | **Fait (0.9.3).** Réparation prioritaire : le moteur VirtualBox ne démarre pas à côté de QEMU/KVM (VT-x occupé) ; message clair et garde par runner | 3 |
 | AUT01 | **Fait.** Retirer le mode d'authentification mixte `both`, gérer l'expiration de la session OpenID en cours d'usage | 2 |
+| CFG01 | Fichier `qemuweb.conf` : les emplacements par défaut d'une installation (comptes, runners, journaux, dossiers de travail), lus par le serveur, le runner et les scripts ; `user.sh` écrit alors dans le bon fichier et l'affiche | 2 |
 | SVC01 | **Première partie faite (0.9.7, `qwctl.sh`).** Services systemd, rotation des journaux, renouvellement du certificat, contrôles au démarrage | 2 |
 | DOC01 | Un seul parcours d'installation documenté, guide utilisateur à jour | 1 |
 | PRP01 | **Fait (0.9.4)** : Construction des images derrière le proxy du CREMI sans option particulière | 1 |

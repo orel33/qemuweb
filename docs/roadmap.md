@@ -242,6 +242,26 @@ What separates a deployment that works from one you can operate calmly.
     group may grant the admin role, and how to list a student in `/admin` without a prior `--no-password` entry.
   - The proxy identity has no throttling of its own (see SEC01).
   - Rotating the shared key without interruption, described in the tutorial.
+- [ ] **CFG01** (M, agreed with the user on 26 November 2026) **`qemuweb.conf`, the default locations of an installation.**
+  `scripts/user.sh` without `--users` writes the `users.json` of the repository, while an installed server may read another
+  file (`--users` of `server.args`): at the CREMI, accounts were added to a file the server never reads, without any warning.
+  - **The file.** `qemuweb.conf` at the repository root, ignored by Git, `KEY=VALUE` lines like `.env`, with a versioned
+    and commented model `qemuweb.conf.example`. Keys for **locations only**: the users file, the runners file, the logs
+    directory, the server runtime directory and the runner runtime directory (names of the keys to settle). No
+    authentication mode and no network setting: they stay in the options (`server.args`).
+  - **Precedence.** Command line option, then `qemuweb.conf`, then today's default. Without the file nothing changes.
+  - **One reader**, shared by the server, the runner, `user.sh`, `qwctl.sh` and `status.sh` (and the scripts that need
+    these paths). `qwctl.sh install` no longer writes the paths covered by the file into `server.args` or `runner.args`:
+    an old option there would silently win over the file.
+  - **Said plainly.** Each program shows the file it uses and where the value comes from, for example
+    `Users file: /etc/qemuweb/users.json (qemuweb.conf)`; every command of `user.sh` does, `list` included.
+  - **Strict.** An unknown or misspelt key, or an invalid value, stops the program with a message.
+  - **Isolation.** `scripts/demo.sh` and the tests **never** read the `qemuweb.conf` of the repository: they must not
+    reach the real accounts, runners or sessions.
+  - **Scope.** The file suits the main installation of a machine; other servers and runners give their paths as options.
+    It does not move anything: `/etc` and `/var`, or directories inside `qemuweb/`, stay the choice of the installation.
+    No compatibility or migration: the CREMI files (`server.args`, `qemuweb.conf`) are edited by hand, with the commands
+    in `deploy/cremi/deploy-cremi.md`. Update the documents (install, deployment, reference, user guide, `.gitignore`).
 - [ ] **SVC01** (M) Services and operation.
   - [x] **First part: a generic `scripts/qwctl.sh`** (it replaces the one of `deploy/cremi/`): `install`, `uninstall`, `start`, `stop`, `restart`,
     `status`, `logs` of the system units of the server, the local runner and remote runners (several per machine with `--name`); options kept in
