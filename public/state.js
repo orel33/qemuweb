@@ -4,8 +4,9 @@ import {observing} from './observe.js';
 export const machines = new Map();
 
 const viewSettingsKey = 'qemuweb.view-settings';
-// How the Graphic view draws links in this browser: 'curved' (default) or 'rectilinear'. A display preference
-// of this browser: not part of the view state, so Follow and observation never carry it.
+// This browser's preferred link style for the Graphic view: 'curved' (default) or 'rectilinear'. The style
+// shown is part of the view state (linkStyle), so Follow and control carry it; only a choice made on this
+// page is saved here, never a followed one (public/graphic-view.js).
 export const graphicLinksKey = 'qemuweb.graphic-links';
 // View settings saved in this browser: {view: a view state (public/view-state.js)}.
 // savedView is the last saved view state (node IDs unchecked), or null; anything unreadable

@@ -1,5 +1,5 @@
 // Rectilinear links of the Graphic view (GRA05): the pure routing function and the places the button and
-// the browser preference are wired.
+// the browser preference are wired (the style is part of the view state since CTL04).
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const {CARD_HEIGHT, CARD_WIDTH, buildGraph, rectilinearRoute} = require('../../public/topology-graphic');
@@ -99,18 +99,25 @@ test('four hosts on one switch: rectilinear paths only, distinct middle runs, cu
   for (const list of Object.values(runs)) assert.equal(new Set(list).size, list.length, 'no two links share the same middle run');
 });
 
-test('the Link style button is a plain toggle, and the preference is read, written and not shared', () => {
+test('CTL04: the Link style button is a view control; the style is in the view state, the preference saved by a choice of this page only', () => {
   const html = read('index.html');
   const button = html.match(/<button id="graphic-links"[^>]*>/)[0];
   assert.match(button, /aria-pressed=/);
   assert.match(button, /title="Rectilinear links"/);
   assert.match(button, /aria-label="Rectilinear links"/);
-  assert.doesNotMatch(button, /write-action|view-control/);
+  assert.match(button, /class="view-control"/);
+  assert.doesNotMatch(button, /write-action/);
   assert.match(moduleSource('state'), /export const graphicLinksKey = 'qemuweb\.graphic-links'/);
   const view = moduleSource('graphic-view');
-  assert.match(view, /localStorage\.getItem\(graphicLinksKey\)/);
-  assert.match(view, /localStorage\.setItem\(graphicLinksKey, linkStyle\)/);
+  assert.match(view, /savedLinkStyle = ViewState\.normalizeLinkStyle\(localStorage\.getItem\(graphicLinksKey\)\)/);
+  assert.match(view, /localStorage\.setItem\(graphicLinksKey, savedLinkStyle\)/);
+  assert.match(view, /ViewState\.linkStyleChange\(\{shown: linkStyle, saved: savedLinkStyle\}, style, \{own\}\)/);
+  assert.match(view, /export function setGraphicLinkStyle\(style\) \{ changeLinkStyle\(style, false\); \}/, 'a received style is not saved');
+  assert.match(view, /function toggleLinkStyle\(\) \{\s*if \(viewDriver\(\)\) return;\s*changeLinkStyle\([^;]*, true\);\s*viewChanged\(\);/, 'the driver saves and publishes');
   assert.match(view, /Curved links/);
-  assert.doesNotMatch(read('view-state.js'), /linkStyle|graphic-links/);
+  const workspace = moduleSource('workspace');
+  assert.match(workspace, /setGraphicLinkStyle\(view\.linkStyle\);/, 'applyView shows the received style');
+  assert.match(workspace, /applyView\(\{\.\.\.view, linkStyle: graphicLinkPreference\(\)\}\)/, 'the saved view is restored with the preference');
+  assert.match(read('view-state.js'), /'linkStyle'\]/);
   assert.doesNotMatch(moduleSource('load-dialog'), /graphicLinksKey/);
 });

@@ -9,6 +9,7 @@
 // the server relays to the session's other pages during the drag and keeps at its end. The
 // viewport is part of the view state (viewport {cx, cy, k}, public/view-state.js): a page
 // whose view is driven by the other side shows the driver's pan and zoom and cannot change them.
+// So is the link style (linkStyle, below).
 import {graphicLinksKey, machines, store} from './state.js';
 import {fitTerminals} from './terminal.js';
 import {closeLayoutMenu, selectMachine, viewChanged, workspace} from './workspace.js';
@@ -32,12 +33,22 @@ const TERMINALS_ICON = '<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" 
 
 // The link style button names what a press does and carries its icon (a Z polyline to go rectilinear, a
 // curve to go back to curves), like the Graphic/Terminals button; aria-pressed tells whether rectilinear is on.
+// The style is part of the view state (linkStyle, public/view-state.js): a view control, published by
+// the driver and applied on the follower. linkStyle is the style shown, savedLinkStyle this browser's
+// preference (graphicLinksKey), changed only by a choice made on this page (ViewState.linkStyleChange).
 const LINKS_ICONS = {curved: '<path d="M3 6h7v12h11"/>', rectilinear: '<path d="M3 6c9 0 9 12 18 12"/>'};
+let savedLinkStyle = 'curved';
 let linkStyle = 'curved';
 
-// The saved style, read again each time the view is shown. A private window may refuse storage.
-function loadLinkStyle() {
-  try { linkStyle = localStorage.getItem(graphicLinksKey) === 'rectilinear' ? 'rectilinear' : 'curved'; } catch (_) {}
+// This browser's preference, read once at start (initGraphicView). A private window may refuse
+// storage: the default style then.
+function loadLinkPreference() {
+  try { savedLinkStyle = ViewState.normalizeLinkStyle(localStorage.getItem(graphicLinksKey)); } catch (_) {}
+  linkStyle = savedLinkStyle;
+  renderLinkStyleButton();
+}
+
+function renderLinkStyleButton() {
   const rectilinear = linkStyle === 'rectilinear';
   const label = rectilinear ? 'Curved links' : 'Rectilinear links';
   graphicLinks.setAttribute('aria-pressed', String(rectilinear));
@@ -45,11 +56,27 @@ function loadLinkStyle() {
   graphicLinks.setAttribute('aria-label', label);
   graphicLinks.querySelector('svg').innerHTML = LINKS_ICONS[linkStyle];
 }
-function toggleLinkStyle() {
-  linkStyle = linkStyle === 'rectilinear' ? 'curved' : 'rectilinear';
-  try { localStorage.setItem(graphicLinksKey, linkStyle); } catch (_) {}
-  loadLinkStyle();
+function changeLinkStyle(style, own) {
+  const next = ViewState.linkStyleChange({shown: linkStyle, saved: savedLinkStyle}, style, {own});
+  if (next.saved !== savedLinkStyle) {
+    savedLinkStyle = next.saved;
+    try { localStorage.setItem(graphicLinksKey, savedLinkStyle); } catch (_) {}
+  }
+  if (next.shown === linkStyle) return;
+  linkStyle = next.shown;
+  renderLinkStyleButton();
   renderGraphic();
+}
+// The style shown (captureView) and this browser's preference (the saved view is restored with it).
+export const graphicLinkStyle = () => linkStyle;
+export const graphicLinkPreference = () => savedLinkStyle;
+// From a view state (applyView): shown, never saved as this browser's preference.
+export function setGraphicLinkStyle(style) { changeLinkStyle(style, false); }
+// A press of the button by this page's driver: shown, saved and published.
+function toggleLinkStyle() {
+  if (viewDriver()) return;
+  changeLinkStyle(linkStyle === 'rectilinear' ? 'curved' : 'rectilinear', true);
+  viewChanged();
 }
 
 const MIN_ZOOM = 0.2;
@@ -388,7 +415,7 @@ export function setGraphicView(visible) {
   const label = visible ? 'Show Terminals view' : 'Show Graphic view';
   graphicToggle.setAttribute('aria-label', label);
   graphicToggle.title = label;
-  if (visible) { loadLinkStyle(); renderGraphic(); showFloatingConsole(); }
+  if (visible) { renderGraphic(); showFloatingConsole(); }
   else requestAnimationFrame(fitTerminals);
   viewChanged();
 }
@@ -434,7 +461,7 @@ export function initGraphicView() {
   graphicZoomIn.addEventListener('click', () => zoomCentered(1.25));
   graphicFit.addEventListener('click', fitToView);
   graphicLinks.addEventListener('click', toggleLinkStyle);
-  loadLinkStyle();
+  loadLinkPreference();
   // A driven page keeps the driver's center and zoom when resized; the driver publishes its new center.
   new ResizeObserver(() => {
     if (!store.graphicVisible) return;

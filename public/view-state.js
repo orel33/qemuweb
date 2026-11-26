@@ -18,12 +18,16 @@
 //                                size), left/top in [0, 1], width/height in [0.05, 1]; null
 //                                before it was first placed (default geometry). Each page turns
 //                                it into pixels and keeps the window inside its viewport.
-//    viewport: {cx, cy, k} | null}  the pan and zoom of the Graphic view: the world point at the
+//    viewport: {cx, cy, k} | null,  the pan and zoom of the Graphic view: the world point at the
 //                                center of the canvas and the zoom factor (node positions are
 //                                world coordinates, so browsers of other sizes center the same
 //                                point at the same zoom); |cx|, |cy| <= 100000 rounded to 0.1, k
 //                                clamped to [0.2, 3] and rounded to 1e-4; null before the Graphic
 //                                view was first shown (each page then fits the drawing itself).
+//    linkStyle: 'curved' | 'rectilinear'}  how the Graphic view draws links (GRA05). Each browser
+//                                also remembers its own choice (public/state.js graphicLinksKey):
+//                                a page shows that preference until it follows a view, and only a
+//                                choice made on the page itself is saved as the preference.
 // The console page is not part of it: paging only decides which nodes are assigned to the
 // panes, and the resulting panes are what is published.
 (function (root, factory) {
@@ -34,7 +38,8 @@
   const LAYOUT_PANES = Object.freeze({single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4});
   const MODES = ['terminals', 'graphic'];
   const PANE_VIEWS = ['console', 'console2', 'monitor', 'log'];
-  const KEYS = ['mode', 'layout', 'panes', 'views', 'switches', 'active', 'floating', 'geometry', 'viewport'];
+  const LINK_STYLES = ['curved', 'rectilinear'];
+  const KEYS = ['mode', 'layout', 'panes', 'views', 'switches', 'active', 'floating', 'geometry', 'viewport', 'linkStyle'];
   const GEOMETRY_KEYS = ['left', 'top', 'width', 'height'];
   const VIEWPORT_KEYS = ['cx', 'cy', 'k'];
   // Bounds of the Graphic view's viewport (public/graphic-view.js has the same zoom range).
@@ -79,6 +84,19 @@
     return {cx: round(raw.cx, 10), cy: round(raw.cy, 10), k: round(Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, raw.k)), 10000)};
   }
 
+  // A link style read from the browser's preference: 'rectilinear' or the default 'curved'.
+  function normalizeLinkStyle(raw) {
+    return raw === 'rectilinear' ? 'rectilinear' : 'curved';
+  }
+
+  // The link style a page shows and the preference its browser saves, after `style` is applied:
+  // {shown, saved}. A choice made on the page itself (own) becomes the preference; a style that
+  // comes with a followed view (an observer with Follow, the owner's page under control) is only
+  // shown, the follower's preference stays.
+  function linkStyleChange({saved}, style, {own}) {
+    return {shown: style, saved: own ? style : saved};
+  }
+
   // Where the floating window goes in pixels, from a normalized geometry, the Graphic view's
   // rectangle {left, top, width, height} and the viewport {width, height}: at least min
   // {width, height} pixels, at most the viewport (less margin), and kept inside the viewport.
@@ -104,12 +122,12 @@
   // With nodeIds null, any string is accepted as a node ID (shape check only).
   function normalizeView(raw, nodeIds = null) {
     if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
-    const {mode, layout, panes, views, switches, active, floating} = raw;
+    const {mode, layout, panes, views, switches, active, floating, linkStyle} = raw;
     const geometry = normalizeGeometry(raw.geometry);
     const viewport = normalizeViewport(raw.viewport);
     if (geometry === undefined || viewport === undefined) return null;
     const count = paneCount(layout);
-    if (!MODES.includes(mode) || !count || typeof switches !== 'boolean' || typeof floating !== 'boolean') return null;
+    if (!MODES.includes(mode) || !LINK_STYLES.includes(linkStyle) || !count || typeof switches !== 'boolean' || typeof floating !== 'boolean') return null;
     if (!Array.isArray(panes) || panes.length !== count || panes.some(id => id !== null && typeof id !== 'string')) return null;
     if (!Array.isArray(views) || views.length !== count || views.some(view => !PANE_VIEWS.includes(view))) return null;
     if (active !== null && typeof active !== 'string') return null;
@@ -121,7 +139,7 @@
     const ids = panes.map(known).map((id, index, list) => (id && list.indexOf(id) === index ? id : null));
     const activeId = known(active);
     return {mode, layout, panes: ids, views: views.map((view, index) => (ids[index] ? view : 'console')), switches, active: activeId,
-      floating: floating && !!activeId && ids.includes(activeId), geometry, viewport};
+      floating: floating && !!activeId && ids.includes(activeId), geometry, viewport, linkStyle};
   }
 
   // Whether two view states are equal (both valid).
@@ -156,5 +174,5 @@
     return [...new Set(admins)].sort();
   }
 
-  return {LAYOUT_PANES, paneCount, normalizeView, normalizeGeometry, normalizeViewport, geometryPixels, geometryFraction, sameView, followsView, normalizeObservers};
+  return {LAYOUT_PANES, LINK_STYLES, paneCount, normalizeView, normalizeLinkStyle, linkStyleChange, normalizeGeometry, normalizeViewport, geometryPixels, geometryFraction, sameView, followsView, normalizeObservers};
 });

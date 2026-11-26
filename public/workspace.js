@@ -6,7 +6,7 @@ import {fitTerminal, fitTerminals, isConsoleView, panes, selectPaneConsole, setP
 import {closeMachine} from './nodes.js';
 import {createDialog, engineSelect, imageSelect} from './node-dialogs.js';
 import {renderQemuOptions} from './host-settings.js';
-import {graphicViewport, renderGraphic, setGraphicView, setGraphicViewport} from './graphic-view.js';
+import {graphicLinkPreference, graphicLinkStyle, graphicViewport, renderGraphic, setGraphicLinkStyle, setGraphicView, setGraphicViewport} from './graphic-view.js';
 import {closeFloatingConsole, floatingConsoleOpen, floatingGeometry, openFloatingConsole, setFloatingGeometry} from './graphic-console.js';
 import {canWrite, controlChanged, markDisabledControls, observedLogin, observing} from './observe.js';
 import {publishView} from './socket.js';
@@ -252,7 +252,7 @@ export function captureView() {
     panes: panes.slice(0, store.layoutSize).map(pane => pane.machineId || null),
     views: panes.slice(0, store.layoutSize).map(pane => (pane.machineId ? pane.view : 'console')),
     switches: store.showSwitchConsoles, active: store.activeId || null, floating: floatingConsoleOpen(),
-    geometry: floatingGeometry(), viewport: graphicViewport()};
+    geometry: floatingGeometry(), viewport: graphicViewport(), linkStyle: graphicLinkStyle()};
 }
 
 // Shows a view state (already normalized against this page's nodes; unknown nodes are left
@@ -281,6 +281,8 @@ export function applyView(view) {
     setFloatingGeometry(view.geometry);
     // The pan and zoom of the Graphic view too (kept until it shows, when it is hidden).
     setGraphicViewport(view.viewport);
+    // The link style is shown, not saved as this browser's preference (public/graphic-view.js).
+    setGraphicLinkStyle(view.linkStyle);
     if ((view.mode === 'graphic') !== store.graphicVisible) setGraphicView(view.mode === 'graphic');
     // After the mode (setGraphicView shows or hides it): open or closed on the active node, without
     // taking the focus (a follower does not type; the controlling admin focuses it by clicking).
@@ -306,7 +308,9 @@ export function restoreSavedView() {
   viewRestored = true;
   if (observing || !savedView) return;
   const view = ViewState.normalizeView(savedView, machines);
-  if (view && view.panes.some(Boolean)) applyView(view);
+  // Shown with this browser's link style preference, not the style saved with the view (it may be
+  // one received while the view was driven).
+  if (view && view.panes.some(Boolean)) applyView({...view, linkStyle: graphicLinkPreference()});
   publishView();
 }
 

@@ -488,6 +488,8 @@ body[data-write-blocked="true"] .write-action { opacity: .45; }
 .admin-actions .admin-button { font: inherit; font-size: 13px; line-height: 1.2; }
 .admin-actions .admin-button { display: inline-flex; align-items: center; height: var(--control-small); padding: 0 9px; color: inherit; text-decoration: none; background: #243244; border: 1px solid #506176; border-radius: 6px; }
 .admin-actions .admin-button:hover, .admin-actions .admin-button:focus-visible { background: #304256; }
+.admin-actions .admin-button { gap: 5px; }
+.admin-actions .admin-button svg { width: 15px; height: 15px; flex: none; }
 /* /admin action colours, from the palette of the header icon buttons; the .icon-button look
    (40x38, 22px icon, border in currentColor on hover) is unchanged. */
 .act-blue { color: #8ec5ff; } .act-green { color: #9ee6b4; } .act-amber { color: #f2c46d; } .act-red { color: #ff777d; }
@@ -525,7 +527,11 @@ body[data-observe-unavailable="true"] #machine-tabs, body[data-observe-unavailab
 .admin-log-tabs { display: inline-flex; gap: 4px; }
 .admin-log-tabs button { height: var(--control-small); padding: 0 10px; font-size: 13px; }
 .admin-log-tabs button[aria-selected="true"] { background: #355177; border-color: #70a8ff; }
-.admin-log-view { height: 260px; margin: 0; padding: 8px 10px; overflow: auto; color: #cfd9e4; background: #0b0f14; border: 1px solid #2c3743; border-radius: 6px; font: 12px/1.45 var(--console-font-family); white-space: pre; }
+/* The log view: resized in height with the grip at its bottom right (min-height and max-height
+   bound the grip), 60vh by default; the chosen height is remembered by admin.js. A phone keeps a
+   fixed height, without grip. */
+.admin-log-view { box-sizing: border-box; height: 60vh; min-height: 160px; max-height: 85vh; resize: vertical; margin: 0; padding: 8px 10px; overflow: auto; color: #cfd9e4; background: #0b0f14; border: 1px solid #2c3743; border-radius: 6px; font: 12px/1.45 var(--console-font-family); white-space: pre; }
+@media (max-width: 640px) { .admin-log-view { height: 260px !important; resize: none; } }
 /* One driver at a time: while this page's view is driven by the other side (the owner's page
    under control, or an observer following with Follow checked), every control that changes the
    view state (class view-control) is disabled in the same way. */

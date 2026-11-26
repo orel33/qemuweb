@@ -191,8 +191,12 @@ can:
   mode. The test creates no session. The server also writes one line to its
   output when a connection is still on polling 20 seconds after it connected
   (see [docs/deployment.md](deployment.md#websocket-check)).
-- Read the last 200 entries of the two server logs in the **Logs** panel at
-  the bottom of the page (**Admin** and **Users** tabs), or **Download** them.
+- Read the last 200 entries of the two server logs in the **Logs** tab
+  (**Admin** and **Users**), or **Download** them (the button with the
+  download arrow). Drag the grip at the bottom right of the log to make it
+  taller or shorter (between about 160 pixels and 85% of the window; 60% by
+  default); the height is remembered in this browser. At phone width the log
+  keeps a fixed height.
 
 Every administration action is written to `logs/admin.log`, an audit log of
 administrator actions; user events (logins, sessions, nodes started or
@@ -395,9 +399,12 @@ drawn for a host without an address or whose agent has not started yet (the firs
 - **Link style**: the button left of the zoom buttons switches the links between smooth **curves** (the
   default) and **rectilinear** lines, made of horizontal and vertical segments only, like a classic network
   diagram. The icon shows the style a press switches to. Only the path of the links changes: the interface and
-  port labels, the addresses, selection, hover and the recording colour are the same. It is a display
-  preference of this browser (kept in `localStorage`, key `qemuweb.graphic-links`, and kept when you load a session):
-  an administrator observing a session can use it, and **Follow** does not change it.
+  port labels, the addresses, selection, hover and the recording colour are the same. The style is part of
+  the view: **Follow** shows the student's style on the observer's page, and while an administrator holds
+  control the student's page shows the administrator's; the button is then disabled, its tooltip says why.
+  Your own choice is remembered in this browser for your next visits (`localStorage`, key
+  `qemuweb.graphic-links`, kept when you load a session); a style shown because you follow another view never
+  replaces it.
 - **Select**: a click selects a node, like its tab in the Terminals view (the selected node is
   highlighted and is the one the toolbar actions apply to).
 - **Console**: a double click (or Enter on a focused card) opens the node's console as a
