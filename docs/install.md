@@ -381,7 +381,7 @@ The runtime directories default to `/tmp/qw-<login>/<port>` for the server and `
 the location of the project no longer matters. `./start.sh --runtime DIR` moves the server's directory only; add `--runner-runtime DIR` for the runner's. Two messages can still appear at startup:
 
 - `… is too long (N bytes) … Use a shorter --runtime.` Only for the runner, with an explicit `--runtime` (the server's directory has no limit): a Unix socket path is limited
-  to 107 bytes, which leaves 49 bytes for the runner's directory (the message gives the exact numbers). Choose a shorter one.
+  to 107 bytes, which leaves 65 bytes for the runner's directory (the message gives the exact numbers). Choose a shorter one.
 - `/tmp/qw-<login> … refusing to use it`: the directory exists but is a symbolic link, belongs to someone else, or is open to group or
   others. Someone else created it, or it was changed: look at it, delete it if it is yours, or use `--runtime DIR`.
 

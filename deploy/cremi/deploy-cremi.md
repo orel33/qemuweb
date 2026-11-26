@@ -366,6 +366,30 @@ If `install` says that `/etc/qemuweb/server.args` exists and differs, an earlier
 (`sudoedit`), then run `./scripts/qwctl.sh install server --force` without the options of the server. If the server does not start after step 4, `./scripts/qwctl.sh logs server 40` gives the reason; the options are corrected in `/etc/qemuweb/server.args`.
 To go back, restore the two old unit files from the output kept above (`sudoedit`), then `sudo systemctl daemon-reload`.
 
+### Upgrading to 8-character session and node IDs (IDS01, one-time: live sessions are lost)
+
+Session IDs become 8 hex characters and host and switch IDs `h-`/`s-` and 8 (they were 16). The live sessions of the
+installed version are **lost** at the upgrade: the server skips the bindings of `bindings.json` with the old IDs (one warning
+line, "an invalid entry was skipped"), and the runner ignores the session directories with the old names (it neither loads nor
+removes them). The session ZIPs saved by earlier versions are **refused** ("archive from an earlier version"): tell the users
+before, so that they note their topologies (a `.topo` file still loads) rather than count on their saved ZIPs. Put the
+maintenance site first ("Maintenance mode"). Run on the server as `qemuweb`:
+
+```sh
+cd /srv/qemuweb && git pull --tags && npm ci
+./scripts/qwctl.sh restart server
+./scripts/qwctl.sh restart runner                       # stops every machine
+# the old session directories (16 hex characters), kept by the runner: delete them by hand
+S=/var/lib/qemuweb/runner/sessions
+ls "$S" | grep -E '^[0-9a-f]{16}$'                       # check the list first
+ls "$S" | grep -E '^[0-9a-f]{16}$' | sed "s|^|$S/|" | xargs -r rm -rf
+find /var/lib/qemuweb/runner/users -xtype l -delete      # aliases left pointing to them
+./scripts/qwctl.sh status
+```
+
+A remote runner is upgraded the same way (`git pull`, restart), then its old directories under its `--runtime` are deleted by
+hand. Its runtime path may now be 65 characters long (49 before).
+
 ### Upgrading from 0.9.6 or earlier to 0.9.7 (one-time breaking change)
 
 The local runner no longer uses a Unix socket and no longer shares a directory with the server: the server and the runner each
@@ -438,7 +462,7 @@ do not restart it). Always run `configtest` before `reload`, and do not restart 
 
 Runs the machines on this machine, under `qemuweb`, and dials the server at `ws://127.0.0.1:3002` with the token that the
 server wrote in `/var/lib/qemuweb/server/local-runner.token` (`--local-runner`). The runner keeps its own files in its own
-directory, `/var/lib/qemuweb/runner` (at most 49 characters): the server touches none of them. Each host of `examples/lan.zip`
+directory, `/var/lib/qemuweb/runner` (at most 65 characters): the server touches none of them. Each host of `examples/lan.zip`
 takes 1 GiB (`free -g`, `nproc`).
 
 ```sh
@@ -526,7 +550,7 @@ curl -s -o /dev/null -w '%{http_code}\n' -X POST -H 'Content-Type: application/j
 
 # 23. browser: admin, /admin -> Runners, create a registration token (shown once)
 
-# 24. register once, then run (--ca FILE only for a private authority). The runtime path: at most 49 characters
+# 24. register once, then run (--ca FILE only for a private authority). The runtime path: at most 65 characters
 ./scripts/runner.sh register --url https://qemuweb.emi.u-bordeaux.fr --token TOKEN --name salle-test \
   --runtime ~/qemuweb/runtime --runner-config ~/.config/qemuweb-runner/runner.json
 ./scripts/runner.sh run --runner-config ~/.config/qemuweb-runner/runner.json \

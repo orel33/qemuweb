@@ -155,6 +155,9 @@ node sockets** are under that limit: the longest is `sessions/<16 hex>/s-<16 hex
 | Local runner | `/tmp/qw-<login>/l-<port>` (7 characters) | 49 bytes |
 | Remote runner | `/tmp/qw-<login>/r-<first 6 hex of its id>` (8 characters) | 49 bytes |
 
+Since IDS01 (8-character session and node IDs), the longest path is `sessions/<8 hex>/s-<8 hex>/serial1.sock` (41 bytes) and
+the budget of a runner directory is **65 bytes**; the defaults above take at most 49.
+
 Two runners of one account never share a directory (a collision is refused by the lock `runner.pid`, R9). `--runtime DIR` replaces any default. The runner no
 longer needs to know where the server's directory is: it dials a URL and reads a token file.
 
