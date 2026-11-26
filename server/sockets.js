@@ -31,6 +31,7 @@ const {attachCaptureLive} = require('./capture-live');
 const {attachCaptureLease} = require('./capture-lease');
 const {normalizeView, normalizeObservers} = require('../public/view-state');
 const {normalizeNodePosition} = require('../common/graphic-layout');
+const {createEventBudget, createLayoutWriter} = require('./layout-writes');
 const {baseNodeId} = require('../common/console-id');
 const {createTransportRegistry} = require('./ws-transports');
 
@@ -106,6 +107,15 @@ function bindWorkspace(io, {session, runner}) {
 function attachSockets(io, manager, {audit, currentUser, control: options = {}, transports = createTransportRegistry()}) {
   // The controlling admin's last view, per session ID, kept only while a lock exists there.
   const controllerViews = new Map();
+  // The coalesced writes of the final node positions, per session ID, while some are pending.
+  const layoutWriters = new Map();
+  const layoutWriterOf = (sessionId, runner) => {
+    if (!layoutWriters.has(sessionId)) {
+      layoutWriters.set(sessionId, createLayoutWriter({write: (nodeId, {x, y}) => runner.request('layout.set', {nodeId, x, y}),
+        onIdle: () => layoutWriters.delete(sessionId)}));
+    }
+    return layoutWriters.get(sessionId);
+  };
   // The capture leases of each session, shared by its sockets (server/capture-lease.js).
   const leaseRegistry = new Map();
   const leasesOf = sessionId => { if (!leaseRegistry.has(sessionId)) leaseRegistry.set(sessionId, new Map()); return leaseRegistry.get(sessionId); };
@@ -265,8 +275,12 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
     // {nodeId, x, y, final}, from the driver only (the owner while nobody controls the session,
     // the admin holding control). It is relayed to the session's other sockets during the drag,
     // and the final position is kept by the runner. Others are refused like console input.
+    // At most 20 events per second per socket (the excess is dropped), the final positions written
+    // coalesced (server/layout-writes.js).
     const layoutRefusal = () => consoleRefusal({observer, lock: control.get(session.id), admin: user.login, action: 'layout'});
+    const positionBudget = createEventBudget({max: 20, windowMs: 1000});
     socket.on('node-position', guard(received => {
+      if (!positionBudget.take()) return;
       const refusal = layoutRefusal();
       if (refusal) { if (observer) refuse(refusal); return; }
       const moved = normalizeNodePosition(received);
@@ -277,7 +291,7 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
         else session.touch();
         const {nodeId, x, y} = moved;
         socket.to(sessionRoom(session)).emit('node-position', {nodeId, x, y});
-        if (moved.final) await runner.request('layout.set', {nodeId, x, y});
+        if (moved.final) layoutWriterOf(session.id, runner).set(nodeId, {x, y});
       });
     }));
     socket.on('leave-node', id => {

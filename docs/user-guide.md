@@ -127,12 +127,16 @@ can:
   or deleted) shows a message and a link back to **Admin**. The server refuses every change from an observer without
   control, including console input, Clear and resizing.
   While an admin observes without control, the student's page shows a yellow banner
-  ("boss is observing your session"; two names, or "3 administrators are observing your
-  session" with the logins in its tooltip), gone when the last observation page closes.
+  ("**boss** is observing your session"; two names, or "3 administrators are observing your
+  session" with the logins in its tooltip), gone when the last observation page closes. The
+  admin's banner says "You are observing the session of **toto**" (yellow), "You are
+  controlling the session of **toto**" (orange) or "**chef** is controlling the session of
+  **toto**" when another admin holds control. Every banner is one sentence with the logins in
+  bold, and its tooltip gives the explanation (read-only, whether the view follows the student).
 - **Take control** of the student's session: an exclusive lock on the whole
   session (Follow is forced on and the student's current view applied first; the
   Follow box stays checked and disabled while control is held). The student's keyboard is blocked on every console and a banner
-  tells them who controls it ("boss controls your session: keyboard, actions and view", the
+  tells them who controls it (orange, "**boss** is controlling your session", the
   explanation in its tooltip; it replaces the observation banner); they still see the commands and their output.
   The admin types into whatever console they display. While the admin holds
   control, the student's page follows the admin's view and layout (the reverse
@@ -363,8 +367,17 @@ drawn for a host without an address or whose agent has not started yet (the firs
 
 - **Move the view**: drag the background to pan, use the mouse wheel to zoom around the
   pointer, or the zoom buttons (`+`, `-` and `0` on the keyboard). **Fit to view** shows the
-  whole network. The canvas has no edge: a node can be dragged anywhere you can see, at any
-  zoom level. Positions are saved in this browser; nodes you have not moved are placed
+  whole network. The pan and the zoom are part of the view: **Follow** shows the student's on
+  the observer's page (centered on the same point at the same zoom, whatever the size of the
+  window), and the student's page shows the controlling admin's; that page then cannot pan or
+  zoom (the zoom buttons are disabled, with the reason as their tooltip).
+- **Move a node**: drag its card. The canvas has no edge: a node can be dragged anywhere you
+  can see, at any zoom level. Node positions belong to the session, not to the browser: the
+  server keeps them (`layout.json`, saved in the session ZIP and restored by **Load Session**),
+  so every browser of the student and every observer shows the same layout, and the other
+  pages see the node move during the drag. Only the session's driver moves nodes: the student,
+  or the admin holding control (meanwhile the student's page cannot move them); an observer
+  without control cannot, even with **Follow** unchecked. Nodes nobody moved are placed
   automatically (a layered layout that limits crossings), and a loaded topology gets a fresh
   layout.
 - **Link style**: the button left of the zoom buttons switches the links between smooth **curves** (the

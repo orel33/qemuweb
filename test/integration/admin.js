@@ -269,6 +269,18 @@ async function run() {
   await delay(300);
   assert.deepEqual(await layoutOf(alice), {[aliceSwitch]: {x: 40, y: 60.1}}, 'the observer moved a node');
   assert.ok(!positionsAt(aliceSession).length, 'the observer\'s move was relayed');
+  // At most 20 node-position events per second per socket: the excess of a burst is dropped,
+  // and the final positions are coalesced (the last one kept).
+  const beforeBurst = positionsAt(observer).length;
+  await delay(1100);
+  for (let index = 1; index <= 30; index++) aliceSession.socket.emit('node-position', {nodeId: aliceSwitch, x: index, y: 0, final: true});
+  await waitFor('burst relayed', () => positionsAt(observer).length >= beforeBurst + 20);
+  await delay(500);
+  assert.equal(positionsAt(observer).length - beforeBurst, 20, 'the excess of the burst was relayed');
+  await waitFor('last accepted position kept', async () => (await layoutOf(alice))[aliceSwitch]?.x === 20);
+  aliceSession.socket.emit('node-position', {nodeId: aliceSwitch, x: 40, y: 60.1, final: true});
+  await waitFor('position back', async () => (await layoutOf(alice))[aliceSwitch]?.x === 40);
+  await delay(1100);
   // Observing an offline user works: bob has a session but no connected browser.
   assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'bob').browsers, 0);
   const offlineObserver = recorder(boss, 'boss observing bob', {auth: {observe: 'bob'}});

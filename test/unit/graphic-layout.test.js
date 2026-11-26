@@ -12,6 +12,7 @@ const {LAYOUT_SCHEMA_VERSION} = require('../../common/schema-versions');
 const {Session, removeEmptySessionDirectory} = require('../../runner/session');
 const {commands} = require('../../runner/commands/layout');
 const {writeArchive, readArchive} = require('../../runner/archive-zip');
+const {createEventBudget, createLayoutWriter} = require('../../server/layout-writes');
 const {moduleSource, read} = require('./web-ui-source');
 
 const HOST = 'h-0123456789abcdef';
@@ -114,7 +115,10 @@ test('the server accepts node-position from the driver only, checks the node, re
   assert.match(sockets, /const layoutRefusal = \(\) => consoleRefusal\(\{observer, lock: control\.get\(session\.id\), admin: user\.login, action: 'layout'\}\);/);
   assert.match(sockets, /if \(refusal\) \{ if \(observer\) refuse\(refusal\); return; \}\s*const moved = normalizeNodePosition\(received\);/);
   assert.match(sockets, /if \(!nodeIds\.includes\(moved\.nodeId\) \|\| layoutRefusal\(\)\) return;/);
-  assert.match(sockets, /socket\.to\(sessionRoom\(session\)\)\.emit\('node-position', \{nodeId, x, y\}\);\s*if \(moved\.final\) await runner\.request\('layout\.set', \{nodeId, x, y\}\);/);
+  assert.match(sockets, /socket\.to\(sessionRoom\(session\)\)\.emit\('node-position', \{nodeId, x, y\}\);\s*if \(moved\.final\) layoutWriterOf\(session\.id, runner\)\.set\(nodeId, \{x, y\}\);/);
+  assert.match(sockets, /const positionBudget = createEventBudget\(\{max: 20, windowMs: 1000\}\);\s*socket\.on\('node-position', guard\(received => \{\s*if \(!positionBudget\.take\(\)\) return;/,
+    'at most 20 events per second per socket, the excess dropped');
+  assert.match(sockets, /write: \(nodeId, \{x, y\}\) => runner\.request\('layout\.set', \{nodeId, x, y\}\)/);
   assert.match(sockets, /'guest-info', 'graphic-layout'\]/, 'a loaded layout reaches the session room');
   assert.match(fs.readFileSync('server/routes/nodes.js', 'utf8'), /app\.get\('\/api\/graphic-layout', handle\('layout\.get', \(\) => \(\{\}\), 500, \{noStore: true\}\)\);/);
 });
@@ -146,4 +150,56 @@ test('the browser reads the layout from the server, publishes a drag throttled a
   const css = read('css/app.css');
   assert.match(css, /body\[data-write-blocked="true"\] \.topology-node \{ cursor: pointer; \}/);
   assert.match(css, /body\[data-view-driven="true"\] #graphic-canvas, body\[data-view-driven="true"\] \.topology-node \{ cursor: default; \}/);
+});
+
+test('node-position is bounded per socket: at most 20 events per second, the excess dropped', () => {
+  let time = 1000;
+  const budget = createEventBudget({max: 20, windowMs: 1000, now: () => time});
+  const taken = Array.from({length: 30}, () => budget.take());
+  assert.equal(taken.filter(Boolean).length, 20);
+  assert.deepEqual(taken.slice(18, 22), [true, true, false, false], 'the excess is dropped');
+  time += 999;
+  assert.equal(budget.take(), false, 'still the same second');
+  time += 1;
+  assert.equal(budget.take(), true, 'a new second');
+});
+
+test('the final positions of a session are coalesced: the latest per node, a few writes per second, the last one delivered', async () => {
+  const writes = [];
+  const timers = [];
+  let idle = 0;
+  let failNext = false;
+  const writer = createLayoutWriter({intervalMs: 250, setTimer: (callback, delay) => { timers.push({callback, delay}); return timers.length; },
+    onIdle: () => { idle += 1; },
+    write: async (nodeId, position) => { writes.push([nodeId, position]); if (failNext) { failNext = false; throw new Error('Unknown node.'); } }});
+  for (let index = 0; index < 50; index++) writer.set(HOST, {x: index, y: 0});
+  writer.set(SWITCH, {x: 1, y: 1});
+  assert.equal(timers.length, 1, 'one write scheduled for the whole burst');
+  assert.equal(timers[0].delay, 250);
+  assert.equal(writer.pending, 2);
+  failNext = true;
+  await timers[0].callback();
+  assert.deepEqual(writes, [[HOST, {x: 49, y: 0}], [SWITCH, {x: 1, y: 1}]], 'the latest position of each node only; a failed write does not stop the others');
+  assert.equal(idle, 1, 'nothing pending: idle');
+  writer.set(HOST, {x: 7, y: 7});
+  assert.equal(timers.length, 2, 'a later move is written too');
+  await timers[1].callback();
+  assert.deepEqual(writes.at(-1), [HOST, {x: 7, y: 7}], 'the last one is always delivered');
+});
+
+test('a position set while a write is in flight is written after it', async () => {
+  const writes = [];
+  const timers = [];
+  let release;
+  const writer = createLayoutWriter({setTimer: callback => { timers.push(callback); return timers.length; },
+    write: (nodeId, position) => { writes.push(position.x); return position.x === 1 ? new Promise(resolve => { release = resolve; }) : Promise.resolve(); }});
+  writer.set(HOST, {x: 1, y: 0});
+  const flushing = timers[0]();
+  writer.set(HOST, {x: 2, y: 0});
+  assert.equal(timers.length, 1, 'not scheduled while writing');
+  release();
+  await flushing;
+  assert.equal(timers.length, 2, 'scheduled once the write is done');
+  await timers[1]();
+  assert.deepEqual(writes, [1, 2]);
 });
