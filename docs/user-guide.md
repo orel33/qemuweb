@@ -112,7 +112,13 @@ your session is dropped after N seconds": the session is kept for `--runner-grac
 again with its machines and consoles when the runner returns, and is dropped when the time is over (the next request opens a new, empty
 session). While it waits, a user cannot reset it and gets no second session; the row of an offline session reads **runner offline**
 in **Sessions**. In **Runners**, **Drop sessions** drops the sessions of an offline runner at once (confirmation asked); **Revoke** does too;
-an offline runner row shows the seconds left before its sessions are dropped. From there an admin
+an offline runner row shows the seconds left before its sessions are dropped. Below the runners table, **Runner status**
+shows for the runner chosen in its list (the online runners can be chosen) what `scripts/status.sh` shows on the runner's
+machine: the runner process (pid, uptime, memory, CPU), then each session (ID, owner, age, totals) with its nodes (name,
+kind, system, engine, pid, memory used over the memory configured for a host, CPU in percent of one core; a stopped node
+reads **stopped**, a VirtualBox host has no pid), and the totals of the runner. The runner measures it itself, so a
+remote runner works too; only its own processes are measured. It refreshes every few seconds while the Runners tab is
+open; "Runner offline" or "No session" shows when there is nothing to list. From there an admin
 can:
 
 - **Observe** a session: `/?observe=<login>` opens the normal interface on the

@@ -97,8 +97,9 @@ function renderPending(data, {pending, act}) {
 
 // Returns refresh(): fetches and draws the table; errors are shown in `status`. `elements` are the
 // panel's nodes: body, hint, status, pending (list of unused tokens), lifetime (select), create
-// (button), tokenBox (where the new command is shown once) and error.
-export function createRunnersPanel({api, cell, confirm, elements}) {
+// (button), tokenBox (where the new command is shown once) and error. updateStatus(runners) refreshes the
+// "Runner status" section (admin-runner-status.js) with the same list, at each refresh of the panel.
+export function createRunnersPanel({api, cell, confirm, elements, updateStatus = async () => {}}) {
   const {body, hint, status, pending, lifetime, create, tokenBox, error} = elements;
   async function refresh() {
     try {
@@ -110,6 +111,7 @@ export function createRunnersPanel({api, cell, confirm, elements}) {
       renderRunners(data, {body, hint, cell, act});
       renderPending(data, {pending, act});
       status.textContent = `Sessions of a runner that lost its connection (or of a server that restarted) are kept ${data.runnerGraceSeconds} s.`;
+      await updateStatus(data.runners);
     } catch (problem) { status.textContent = `Not updated: ${problem.message}`; }
   }
   // confirmation: {title, message, accept} asked first; the path is built lazily, the result shown by refresh.
