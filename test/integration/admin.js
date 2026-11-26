@@ -278,9 +278,9 @@ async function run() {
   await delay(500);
   assert.equal(positionsAt(observer).length - beforeBurst, 20, 'the excess of the burst was relayed');
   await waitFor('last accepted position kept', async () => (await layoutOf(alice))[aliceSwitch]?.x === 20);
+  await delay(1100);
   aliceSession.socket.emit('node-position', {nodeId: aliceSwitch, x: 40, y: 60.1, final: true});
   await waitFor('position back', async () => (await layoutOf(alice))[aliceSwitch]?.x === 40);
-  await delay(1100);
   // Observing an offline user works: bob has a session but no connected browser.
   assert.equal((await boss.request('/api/admin/sessions')).find(session => session.login === 'bob').browsers, 0);
   const offlineObserver = recorder(boss, 'boss observing bob', {auth: {observe: 'bob'}});
