@@ -176,8 +176,10 @@ classic script shared by the server and the browser: `paneCount`,
   geometry: {left, top, width, height} | null,
                                  the floating console's window as fractions of the
                                  Graphic view (#graphic-workspace); null = default
-  viewport: {cx, cy, k} | null } the pan and zoom of the Graphic view: the world point at
+  viewport: {cx, cy, k} | null, the pan and zoom of the Graphic view: the world point at
                                  the canvas center and the zoom; null = not shown yet
+  linkStyle: 'curved' | 'rectilinear' }
+                                 how the Graphic view draws links (GRA05, CTL04)
 ```
 
 `normalizeView` returns a valid view state or null: known keys only (others
@@ -203,7 +205,12 @@ the same zoom (and its own size decides how much is visible around it). `null` m
 fit the drawing itself. The driver publishes its viewport while it pans or zooms at most every
 100 ms (the trailing change always goes out); a driven page has no pan, wheel zoom, `+`/`-`/`0`
 keys or Fit, its zoom buttons are `view-control`, and a resize keeps the driver's center and
-zoom. The console page is not part
+zoom. `linkStyle` (CTL04) is required, `curved` or `rectilinear`; anything else makes the view
+invalid (a view saved before CTL04, without it, is dropped once, no migration). The Link style button
+is a `view-control`: the driver's press changes the style shown, publishes it and saves it as this
+browser's preference (`localStorage` key `qemuweb.graphic-links`); a followed style (`applyView`) is
+shown but never saved as the preference (the pure rule `linkStyleChange`), and the saved view is
+restored with the browser's preference rather than the style saved with it. The console page is not part
 of the view: paging only decides which nodes are assigned to the panes, and
 the resulting `panes` is what is published.
 

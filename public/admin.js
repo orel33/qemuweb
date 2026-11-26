@@ -284,6 +284,26 @@ async function refreshLog({polling = false} = {}) {
   } catch (error) { $('log-status').textContent = `Not updated: ${error.message}`; }
 }
 
+// The height of the log view chosen with its grip (CSS resize, bounded by min-height and
+// max-height in app.css), remembered in this browser for the next visit. A private window may
+// refuse storage: the default height then.
+const LOG_HEIGHT_KEY = 'qemuweb.admin-log-height';
+const MIN_LOG_HEIGHT = 160;
+function restoreLogHeight() {
+  const view = $('log-view');
+  let height = NaN;
+  try { height = Number(localStorage.getItem(LOG_HEIGHT_KEY)); } catch (_) {}
+  if (Number.isFinite(height) && height >= MIN_LOG_HEIGHT) view.style.height = `${Math.round(height)}px`;
+  // The grip sets an inline height in pixels, which is saved; a resize of the window or a phone
+  // width (fixed height, no grip) saves nothing.
+  const phone = window.matchMedia('(max-width: 640px)');
+  new ResizeObserver(() => {
+    const chosen = parseFloat(view.style.height);
+    if (phone.matches || !(chosen >= MIN_LOG_HEIGHT)) return;
+    try { localStorage.setItem(LOG_HEIGHT_KEY, String(Math.round(chosen))); } catch (_) {}
+  }).observe(view);
+}
+
 function selectLog(name) {
   logName = name;
   for (const tab of document.querySelectorAll('.admin-log-tabs [data-log]')) tab.setAttribute('aria-selected', String(tab.dataset.log === name));
@@ -356,6 +376,7 @@ function init() {
     } catch (error) { showError('password-error', error); }
   });
   for (const tab of document.querySelectorAll('.admin-log-tabs [data-log]')) tab.addEventListener('click', () => selectLog(tab.dataset.log));
+  restoreLogHeight();
 }
 
 // The refresh of each tab's panel; a tab never refreshes while it is hidden (admin-tabs.js).

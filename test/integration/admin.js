@@ -190,7 +190,7 @@ async function run() {
   // owner's page (here alice's switch in the last pane, as the pane node menu can do).
   const paneCount = {single: 1, 'columns-2': 2, 'rows-2': 2, 'grid-4': 4};
   const ownerView = view => {
-    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, floating: false, geometry: null, viewport: null, ...view};
+    const full = {mode: 'terminals', layout: 'columns-2', switches: true, active: aliceSwitch, floating: false, geometry: null, viewport: null, linkStyle: 'curved', ...view};
     const count = paneCount[full.layout] || 0;
     return {panes: Array.from({length: count}, (_, index) => (index === count - 1 ? aliceSwitch : null)), views: Array(count).fill('console'), ...full};
   };
@@ -202,7 +202,8 @@ async function run() {
     {panes: [aliceSwitch]}, {panes: [aliceSwitch, null, null]}, {panes: [1, null]}, {panes: 'x'}, {views: ['console']}, {views: ['console', 'tty']}, {views: undefined},
     {floating: 'yes'}, {floating: undefined}, {geometry: undefined}, {geometry: {left: 0, top: 0, width: 1}},
     {geometry: {left: 0, top: 0, width: 1, height: 1, z: 1}}, {geometry: {left: '0', top: 0, width: 1, height: 1}},
-    {viewport: undefined}, {viewport: {cx: 0, cy: 0}}, {viewport: {cx: 0, cy: 1e6, k: 1}}, {viewport: {cx: 0, cy: 0, k: 'x'}}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
+    {viewport: undefined}, {viewport: {cx: 0, cy: 0}}, {viewport: {cx: 0, cy: 1e6, k: 1}}, {viewport: {cx: 0, cy: 0, k: 'x'}},
+    {linkStyle: undefined}, {linkStyle: 'straight'}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
   // Unknown nodes become null, in the active node and in the panes; a node shown twice is kept once.
   aliceSession.socket.emit('owner-view', ownerView({active: 'h-0000000000000000', panes: ['h-0000000000000000', aliceSwitch]}));
   await waitFor('unknown node relayed as null', () => observer.events.some(item => item.event === 'owner-view' && item.payload.active === null));
@@ -238,6 +239,10 @@ async function run() {
   aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', viewport: {cx: 120.04, cy: -33.333, k: 7}}));
   await waitFor('viewport relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.viewport));
   assert.deepEqual(observer.events.find(item => item.event === 'owner-view' && item.payload.viewport).payload.viewport, {cx: 120, cy: -33.3, k: 3});
+  // The link style of the Graphic view (CTL04): relayed like the rest of the view.
+  aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', linkStyle: 'rectilinear'}));
+  await waitFor('link style relayed', () => observer.events.some(item => item.event === 'owner-view' && item.payload.linkStyle === 'rectilinear'));
+  assert.deepEqual(observer.events.find(item => item.event === 'owner-view' && item.payload.linkStyle === 'rectilinear').payload, ownerView({mode: 'graphic', linkStyle: 'rectilinear'}));
   aliceConsole.socket.emit('input', 'showinfo\r');
   await waitFor('alice\'s output at the observer', () => /showinfo/.test(observer.output()));
   const resetsBefore = aliceConsole.count('serial-reset');
@@ -344,7 +349,7 @@ async function run() {
   // admin's page reaches alice's pages; never from alice, nor once control has ended.
   // The admin's floating console of the Graphic view is open: alice's pages open it too (CTL01).
   const controllerView = {mode: 'graphic', layout: 'rows-2', panes: [null, aliceSwitch], views: ['console', 'log'], switches: true, active: aliceSwitch, floating: true,
-    geometry: {left: 0.25, top: 0.1, width: 0.5, height: 0.6}, viewport: {cx: 10, cy: 20, k: 0.5}};
+    geometry: {left: 0.25, top: 0.1, width: 0.5, height: 0.6}, viewport: {cx: 10, cy: 20, k: 0.5}, linkStyle: 'rectilinear'};
   aliceSession.socket.emit('controller-view', controllerView);
   observer.socket.emit('controller-view', {...controllerView, layout: 'grid-3'}); // Invalid: dropped.
   observer.socket.emit('controller-view', controllerView);

@@ -18,7 +18,7 @@ const {Session} = require('../../server/session');
 const {ConsoleControl, CONTROL_IDLE_MS} = require('../../server/console-control');
 const {observationGate, observationRule, sessionSummary} = require('../../server/routes/admin');
 const {consoleRefusal, createObservationTracker} = require('../../server/sockets');
-const {paneCount, normalizeView, normalizeGeometry, normalizeViewport, geometryPixels, geometryFraction, sameView, followsView, normalizeObservers} = require('../../public/view-state');
+const {paneCount, normalizeView, normalizeGeometry, normalizeViewport, normalizeLinkStyle, linkStyleChange, geometryPixels, geometryFraction, sameView, followsView, normalizeObservers} = require('../../public/view-state');
 
 const root = path.join(__dirname, '..', '..');
 const settingsFor = (usersFile, extra = {}) => ({...defaultSettings(root), usersFile, ...extra});
@@ -425,7 +425,7 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
   assert.deepEqual([paneCount('single'), paneCount('columns-2'), paneCount('rows-2'), paneCount('grid-4'), paneCount('grid-9'), paneCount('toString')],
     [1, 2, 2, 4, 0, 0]);
   const view = {mode: 'graphic', layout: 'grid-4', panes: [host, null, sw, null], views: ['monitor', 'console', 'console2', 'console'], switches: false, active: sw, floating: true, geometry: {left: 0.5, top: 0.25, width: 0.4, height: 0.5},
-    viewport: {cx: 120.5, cy: -40, k: 1.25}};
+    viewport: {cx: 120.5, cy: -40, k: 1.25}, linkStyle: 'rectilinear'};
   assert.deepEqual(normalizeView({...view, page: 2, expanded: 1, extra: 1}, nodes), view, 'extra keys (page, a former expanded) are dropped');
   assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
@@ -447,13 +447,14 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
     {...view, geometry: {left: 0, top: 0, width: 1, height: 1, extra: 1}}, {...view, geometry: {left: '0', top: 0, width: 1, height: 1}},
     {...view, geometry: {left: NaN, top: 0, width: 1, height: 1}}, {...view, geometry: {left: 0, top: Infinity, width: 1, height: 1}},
     {...view, viewport: undefined}, {...view, viewport: 'x'}, {...view, viewport: {cx: 0, cy: 0}}, {...view, viewport: {cx: 0, cy: 0, k: 1, x: 0}},
-    {...view, viewport: {cx: NaN, cy: 0, k: 1}}, {...view, viewport: {cx: 0, cy: 100001, k: 1}}, {...view, viewport: {cx: 0, cy: 0, k: 0}}];
+    {...view, viewport: {cx: NaN, cy: 0, k: 1}}, {...view, viewport: {cx: 0, cy: 100001, k: 1}}, {...view, viewport: {cx: 0, cy: 0, k: 0}},
+    {...view, linkStyle: undefined}, {...view, linkStyle: 'straight'}, {...view, linkStyle: 1}, {...view, linkStyle: null}];
   for (const raw of invalid) assert.equal(normalizeView(raw, nodes), null, JSON.stringify(raw));
 });
 
 test('the view of an empty pane or of a node dropped by normalisation is console', () => {
   const host = 'h-0123456789abcdef';
-  const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host, floating: false, geometry: null, viewport: null};
+  const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host, floating: false, geometry: null, viewport: null, linkStyle: 'curved'};
   assert.deepEqual(normalizeView(view, [host]).views, ['log', 'console'], 'null pane');
   assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', null]}, [host]).views, ['console', 'console'], 'unknown node');
   assert.deepEqual(normalizeView({...view, panes: [host, host]}, [host]).views, ['log', 'console'], 'node shown twice');
@@ -461,7 +462,7 @@ test('the view of an empty pane or of a node dropped by normalisation is console
 
 test('the floating console is part of the view in both modes (open when the Graphic view shows), on an active node shown in a pane', () => {
   const sw = 's-0123456789abcdef', host = 'h-0123456789abcdef';
-  const view = {mode: 'graphic', layout: 'columns-2', panes: [host, sw], views: ['console', 'console'], switches: true, active: sw, floating: true, geometry: null, viewport: null};
+  const view = {mode: 'graphic', layout: 'columns-2', panes: [host, sw], views: ['console', 'console'], switches: true, active: sw, floating: true, geometry: null, viewport: null, linkStyle: 'curved'};
   assert.equal(normalizeView(view, [sw, host]).floating, true, 'open on the active node');
   assert.equal(normalizeView({...view, floating: false}, [sw, host]).floating, false, 'closed');
   assert.equal(normalizeView({...view, mode: 'terminals'}, [sw, host]).floating, true, 'kept in the Terminals view: shown again with the Graphic view');
@@ -480,7 +481,7 @@ test('the floating console geometry: fractions of the Graphic view, clamped and 
     {left: null, top: 0, width: 1, height: 1}, {left: 0, top: 0, width: 1, height: NaN}, {left: 0, top: 0, width: -Infinity, height: 1}]) {
     assert.equal(normalizeGeometry(raw), undefined, JSON.stringify(raw));
   }
-  const view = {mode: 'graphic', layout: 'single', panes: ['a'], views: ['console'], switches: true, active: 'a', floating: true, geometry: {left: 0.1, top: 0.2, width: 0.5, height: 0.5}, viewport: null};
+  const view = {mode: 'graphic', layout: 'single', panes: ['a'], views: ['console'], switches: true, active: 'a', floating: true, geometry: {left: 0.1, top: 0.2, width: 0.5, height: 0.5}, viewport: null, linkStyle: 'curved'};
   assert.equal(sameView(view, {...view, geometry: {...view.geometry}}), true);
   assert.equal(sameView(view, {...view, geometry: {...view.geometry, left: 0.2}}), false, 'a move is a change of the view');
   assert.equal(sameView(view, {...view, geometry: null}), false);
@@ -496,7 +497,7 @@ test('CTL03: the Graphic view\'s viewport: the world point at the canvas center 
     {cx: 100000.5, cy: 0, k: 1}, {cx: 0, cy: 0, k: 0}, {cx: 0, cy: 0, k: -1}, {cx: 0, cy: 0, k: NaN}]) {
     assert.equal(normalizeViewport(raw), undefined, JSON.stringify(raw));
   }
-  const view = {mode: 'graphic', layout: 'single', panes: ['a'], views: ['console'], switches: true, active: 'a', floating: false, geometry: null, viewport: {cx: 1, cy: 2, k: 1}};
+  const view = {mode: 'graphic', layout: 'single', panes: ['a'], views: ['console'], switches: true, active: 'a', floating: false, geometry: null, viewport: {cx: 1, cy: 2, k: 1}, linkStyle: 'curved'};
   assert.equal(sameView(view, {...view, viewport: {cx: 1, cy: 2, k: 1}}), true);
   assert.equal(sameView(view, {...view, viewport: {cx: 1, cy: 2, k: 1.5}}), false, 'a zoom is a change of the view');
   assert.equal(sameView(view, {...view, viewport: null}), false);
@@ -556,12 +557,30 @@ test('one driver at a time: which received view a page follows', () => {
   assert.equal(followsView('other', owner), false);
 });
 
+test('CTL04: the link style is part of the view state; a followed style is shown, never saved as the preference', () => {
+  const {LINK_STYLES} = require('../../public/view-state');
+  assert.deepEqual(LINK_STYLES, ['curved', 'rectilinear']);
+  const view = {mode: 'graphic', layout: 'single', panes: ['a'], views: ['console'], switches: true, active: 'a', floating: false, geometry: null, viewport: null, linkStyle: 'rectilinear'};
+  assert.equal(normalizeView(view, null).linkStyle, 'rectilinear');
+  const {linkStyle, ...withoutStyle} = view;
+  assert.equal(linkStyle, 'rectilinear');
+  assert.equal(normalizeView(withoutStyle, null), null, 'required: a view saved without it is dropped');
+  assert.equal(sameView(normalizeView(view, null), normalizeView({...view, linkStyle: 'curved'}, null)), false, 'a change of the link style is a change of the view');
+  assert.deepEqual([normalizeLinkStyle('rectilinear'), normalizeLinkStyle('curved'), normalizeLinkStyle(null), normalizeLinkStyle('x')],
+    ['rectilinear', 'curved', 'curved', 'curved'], 'the browser preference, curved by default');
+  assert.deepEqual(linkStyleChange({shown: 'curved', saved: 'curved'}, 'rectilinear', {own: true}), {shown: 'rectilinear', saved: 'rectilinear'},
+    'a choice made on the page is saved');
+  assert.deepEqual(linkStyleChange({shown: 'curved', saved: 'curved'}, 'rectilinear', {own: false}), {shown: 'rectilinear', saved: 'curved'},
+    'a followed style is shown, the preference stays');
+  assert.deepEqual(linkStyleChange({shown: 'rectilinear', saved: 'curved'}, 'curved', {own: false}), {shown: 'curved', saved: 'curved'});
+});
+
 test('two view states are compared field by field', () => {
-  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], views: ['console', 'console'], switches: true, active: 'a', floating: false, geometry: null, viewport: null};
+  const view = {mode: 'terminals', layout: 'columns-2', panes: ['a', null], views: ['console', 'console'], switches: true, active: 'a', floating: false, geometry: null, viewport: null, linkStyle: 'curved'};
   assert.equal(sameView(view, {...view, panes: ['a', null], views: ['console', 'console']}), true);
   assert.equal(sameView(view, {...view, views: ['console2', 'console']}), false);
   for (const change of [{mode: 'graphic'}, {layout: 'rows-2'}, {panes: [null, 'a']}, {switches: false}, {active: null}, {floating: true}, {geometry: {left: 0, top: 0, width: 1, height: 1}},
-    {viewport: {cx: 0, cy: 0, k: 1}}]) {
+    {viewport: {cx: 0, cy: 0, k: 1}}, {linkStyle: 'rectilinear'}]) {
     assert.equal(sameView(view, {...view, ...change}), false, JSON.stringify(change));
   }
   assert.equal(sameView(view, null), false);

@@ -635,6 +635,11 @@ personal runner and any guest access exist only for trusted users.
   - Rename in the interface: "Supervision" is the link's text and the page title; keep one word for it everywhere.
   - Unit tests for the tab logic if it is pure (which tab from the fragment, which panels poll); the layout is checked
     by hand.
+- [ ] **ADM02** (S) Admin page, Logs tab. (1) The log view (`.admin-log-view`, 260 pixels high) is resized in height with a
+  grip at its bottom right (CSS `resize: vertical`), between 160 pixels and 85vh, 60vh by default; the chosen height is
+  remembered in the browser (`localStorage` key `qemuweb.admin-log-height`). At phone width it keeps a fixed 260 pixels,
+  without grip. (2) The **Download** link gets the Lucide `download` icon (inline SVG, `currentColor`, `aria-hidden`), its
+  text, title and accessible name unchanged. Source-assertion unit test; the layout is checked by hand.
 - [ ] **NET01** (S) **Cut and restore a cable** on a running host. QEMU's monitor has `set_link <name> off|on`, so a link goes
   down and up under the guest (the kernel logs "link down" then "link up"), without a reboot and without losing anything.
   A **Disconnect cable** / **Reconnect cable** pair on the link popover and in Host Settings > Network, distinct from
@@ -971,6 +976,13 @@ commit message.
   Follow unchecked an observer pans and zooms freely but never moves a node. (3) The yellow and orange banners share one sentence
   form ("<login> is observing | is controlling your session", "You are observing | controlling the session of <login>"), only the
   logins bold, the explanation in the tooltip. A view saved before CTL03 (no `viewport`) is dropped once.
+- [ ] **CTL04** (S) The Link style of the Graphic view (GRA05) is followed. It was a preference of each browser, so an admin
+  observing with Follow, or the owner's page under control, kept its own style. The style is now a required key of the view
+  state (`linkStyle`: `curved` | `rectilinear`, validated by `normalizeView`, so by the server too), published by the driver
+  and applied by the follower; the button is a `view-control` (disabled with the TOD04 reason while the view is driven). The
+  driver's own choice stays saved in its browser (`qemuweb.graphic-links`) for its next visits; a follower never overwrites its
+  saved preference with a received style. A view saved before CTL04 (no `linkStyle`) is dropped once. Unit tests
+  (`normalizeView`, `sameView`, `linkStyleChange`) and the admin integration test relays it.
 - [ ] **TOD05** A `--version` option for `server/main.js` and `runner/main.js`, and a version check between the two: the runner's `hello`
   carries its version, and the server says "restart the runner" (in its log and in `/admin -> Runners`) when it differs from its own, instead of
   letting an archive fail with `Invalid session.json in archive.` after a format change. Useful with runners on other machines.

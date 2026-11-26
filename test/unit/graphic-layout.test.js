@@ -143,7 +143,7 @@ test('the browser reads the layout from the server, publishes a drag throttled a
   assert.match(socket, /socket\.on\('graphic-layout', graphicLayoutReceived\);/);
   assert.match(socket, /socket\.on\('connect', \(\) => \{ syncSessionsFromServer\(\); loadGraphicLayout\(\);/);
   const workspace = moduleSource('workspace');
-  assert.match(workspace, /geometry: floatingGeometry\(\), viewport: graphicViewport\(\)\};/, 'captureView reads the viewport');
+  assert.match(workspace, /geometry: floatingGeometry\(\), viewport: graphicViewport\(\), linkStyle: graphicLinkStyle\(\)\};/, 'captureView reads the viewport and the link style');
   assert.ok(workspace.indexOf('setGraphicViewport(view.viewport)') < workspace.indexOf('setGraphicView(view.mode'), 'the viewport before the mode shows it');
   const html = read('index.html');
   for (const id of ['graphic-zoom-out', 'graphic-zoom-in', 'graphic-fit']) assert.match(html, new RegExp(`<button id="${id}" class="view-control"`), id);

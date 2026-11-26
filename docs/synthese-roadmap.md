@@ -85,6 +85,7 @@ De la version 0.9.7 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | NET02 | Points de sauvegarde d'un hôte ou d'une session : revenir à l'état d'avant une erreur | 4 |
 | NET03 | Ajouter ou retirer une interface d'un hôte sans le redémarrer | 4 |
 | ADM01 | **Fait (0.9.3).** Page d'administration en onglets (sessions, comptes, runners, WebSocket, journaux) | 2 |
+| ADM02 | Onglet Logs de la page d'administration : vue du journal redimensionnable en hauteur (mémorisée dans le navigateur), icône sur le lien Download | 1 |
 | GRA02 | Plusieurs consoles flottantes dans la vue graphique | 3 |
 | GRA03 | Points restants de la vue graphique : zoom au pincement, invite du shell, tooltips | 2 |
 | GRA04 | Relier deux nœuds en glissant d'une prise à l'autre dans la vue graphique | 3 |
@@ -92,6 +93,7 @@ De la version 0.9.7 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | CTL01 | **Fait.** Suivi et contrôle complétés : la console flottante suit la vue (corrigé), l'admin qui a le contrôle peut tout faire comme l'utilisateur | 2 |
 | CTL02 | Suite de CTL01 : la position et la taille de la console flottante sont suivies, elle reste ouverte au retour dans la vue graphique, l'utilisateur voit qu'un admin l'observe, bannière de contrôle courte | 2 |
 | CTL03 | Suite de CTL02 : les positions des nœuds de la vue graphique deviennent des données de session (`layout.json`, dans le ZIP), le pan et le zoom sont suivis, un seul conducteur dans la vue graphique, bannières jaune et orange formulées de la même façon | 2 |
+| CTL04 | Le style des liens de la vue graphique (courbes ou rectilignes) fait partie de la vue : suivi par Follow et sous contrôle, la préférence de chaque navigateur reste la sienne | 1 |
 | BUG04, TOD05, TOD08 | Petites tâches indépendantes de l'annexe, à prendre au fil des creux | 1 |
 
 *Critère de sortie* : un étudiant sans aide sait créer, lancer, arrêter et remettre à zéro sa session, et reconnaît les actions de session de celles d'un nœud.

@@ -88,3 +88,20 @@ test('admin.js has one tab-driven refresh and no interval refreshing every panel
   assert.match(tabs, /history\.replaceState/);
   assert.match(tabs, /hashchange/);
 });
+
+test('ADM02: the log view is resizable in height, remembered in the browser; the Download link has its icon', () => {
+  const html = fs.readFileSync(path.join(publicDir, 'admin.html'), 'utf8');
+  const css = fs.readFileSync(path.join(publicDir, 'css', 'app.css'), 'utf8');
+  const admin = fs.readFileSync(path.join(publicDir, 'admin.js'), 'utf8');
+  const rule = css.match(/\.admin-log-view \{[^}]*\}/)[0];
+  for (const declaration of [/height: 60vh/, /min-height: 160px/, /max-height: 85vh/, /resize: vertical/]) assert.match(rule, declaration);
+  assert.match(css, /@media \(max-width: 640px\) \{ \.admin-log-view \{ height: 260px !important; resize: none; \} \}/, 'a phone keeps a fixed height');
+  assert.match(admin, /const LOG_HEIGHT_KEY = 'qemuweb\.admin-log-height';/);
+  assert.match(admin, /try \{ height = Number\(localStorage\.getItem\(LOG_HEIGHT_KEY\)\); \} catch \(_\) \{\}/);
+  assert.match(admin, /try \{ localStorage\.setItem\(LOG_HEIGHT_KEY, String\(Math\.round\(chosen\)\)\); \} catch \(_\) \{\}/);
+  assert.match(admin, /restoreLogHeight\(\);/);
+  const link = html.match(/<a id="log-download"[^>]*>([\s\S]*?)<\/a>/);
+  assert.match(link[0], /title="Download the raw JSON lines file"/);
+  assert.match(link[1], /^<svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor"[^>]*>.*<\/svg>Download$/, 'the icon, then the text');
+  assert.doesNotMatch(link[0], /aria-label/, 'the accessible name stays the text');
+});

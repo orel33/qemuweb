@@ -107,7 +107,7 @@ test('the floating console follows the view state: open and geometry captured, a
   assert.match(html, /id="floating-console-close" class="view-control"/, 'a follower cannot close it');
   // CTL02: the Terminals view hides it without closing it, the Graphic view shows it again.
   assert.match(graphic, /hideFloatingConsole\(\);\s*store\.graphicVisible = visible;/);
-  assert.match(graphic, /if \(visible\) \{ loadLinkStyle\(\); renderGraphic\(\); showFloatingConsole\(\); \}/);
+  assert.match(graphic, /if \(visible\) \{ renderGraphic\(\); showFloatingConsole\(\); \}/);
   assert.doesNotMatch(graphic, /closeFloatingConsole/, 'changing the mode never closes it');
   // A follower can neither move nor resize it; the driver publishes it throttled, and at the end of a move.
   assert.match(floating, /event\.target\.closest\('button'\) \|\| viewDriven\(\)\) return;/);
