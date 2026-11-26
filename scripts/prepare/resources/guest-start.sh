@@ -18,6 +18,8 @@ if mountpoint -q "$target" 2>/dev/null || grep -q " $target " /proc/mounts; then
   umount "$target" || { echo 'QEMUWEB_START_ERROR cannot unmount old media'; exit 1; }
 fi
 device=''
+# systemd guests: wait for udev once, so that a missing medium is known at the first pass (see below).
+if [ -d /run/systemd/system ]; then udevadm settle --timeout=5 || true; fi
 for attempt in 1 2 3; do
   for candidate in /dev/disk/by-label/QWEBSTART /dev/sr0 /dev/sr1 /dev/cdrom; do
     [ -e "$candidate" ] || continue
@@ -27,11 +29,14 @@ for attempt in 1 2 3; do
     if [ "$volume_id" = "$label" ]; then device=$candidate; break; fi
   done
   [ -n "$device" ] && break
+  # With udev settled and a CD drive present, waiting would not make a medium appear.
+  if [ -d /run/systemd/system ] && [ -b /dev/sr0 ]; then break; fi
   [ "$attempt" = 3 ] || sleep 1
 done
 if [ -z "$device" ]; then
   echo "QEMUWEB_START_ERROR ISO label $label missing"
-  exit 1
+  # EX_NOINPUT: a host without a startup disk is normal, so qemuweb-start.service accepts this status.
+  exit 66
 fi
 if ! mount -t iso9660 -o ro "$device" "$target"; then
   echo "QEMUWEB_START_ERROR cannot mount $device at $target"

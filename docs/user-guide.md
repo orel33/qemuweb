@@ -437,6 +437,38 @@ drawn for a host without an address or whose agent has not started yet (the firs
   (the interface itself stays; remove it in Host Settings). A running host needs a restart
   for the change to apply, as in Host Settings. `Esc` cancels an editing mode.
 
+### Network and services of Debian 13 Cloud hosts
+
+A freshly booted `debian13-cloud` host sends no frame: its interfaces are up, without any address. It runs no
+DHCP client, no IPv6 autoconfiguration (so no IPv6 link-local address), no LLMNR, mDNS or NTP, and no network
+service. The startup script or the console configures the network, for example `ifconfig eth0 192.168.0.1/24`.
+Everything below is typed as `root` (or with `sudo`) and lasts as long as the host's working disk allows.
+
+- **DHCP client:** `dhclient -v eth0` (`dhclient -r eth0` gives the lease back and stops it). To have it at
+  every boot, put the command in the startup script, or set `DHCP=yes` in
+  `/etc/systemd/network/20-qemunet.network` and run `systemctl restart systemd-networkd`.
+- **IPv6 link-local address and autoconfiguration** on `eth0`:
+  `sysctl -w net.ipv6.conf.eth0.addr_gen_mode=0 net.ipv6.conf.eth0.accept_ra=1`, then
+  `ip link set eth0 down; ip link set eth0 up` (a forwarding host needs `accept_ra=2` to accept router
+  advertisements). A static address needs nothing first: `ip -6 addr add fd00::1/64 dev eth0`; add the link-local
+  address as above for routing protocols and router advertisements.
+- **Services:** installed and disabled. `systemctl start <unit>` starts one until the next shutdown,
+  `systemctl enable --now <unit>` also at each boot.
+
+| Service | Unit | Before it can serve |
+| --- | --- | --- |
+| SSH server | `ssh` | nothing (password login; every host of a base image has the same host keys) |
+| DHCP and DNS (dnsmasq) | `dnsmasq` | a configuration for DHCP, in `/etc/dnsmasq.d/` |
+| DHCP server (ISC) | `isc-dhcp-server` | a subnet in `/etc/dhcp/dhcpd.conf`, an interface in `/etc/default/isc-dhcp-server` |
+| DNS server (BIND) | `named` | nothing for a cache; zones in `/etc/bind/` (do not run it with dnsmasq) |
+| Web server (Apache) | `apache2` | nothing |
+| Telnet and FTP | `inetutils-inetd` | a `telnet` or `ftp` line in `/etc/inetd.conf` |
+| VPN | `openvpn@<name>` | `/etc/openvpn/<name>.conf` |
+| Time synchronisation | `systemd-timesyncd` | a reachable NTP server |
+
+The package lists are not in the image: run `apt update` before `apt install` (the host then needs access to the
+Debian mirrors).
+
 ### Capturing traffic
 
 QemuWeb can record the frames of a host's Ethernet interface, in both directions, into a

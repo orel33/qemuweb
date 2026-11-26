@@ -326,7 +326,7 @@ DEBIAN_INSTALLER_FAILURES=(
   'No Ethernet card detected'
 )
 CLOUD_INIT_FAILURES=(
-  'QEMUNET_IMAGE_SETUP_FAILED'         # the final runcmd of debian-common.sh
+  'QEMUNET_IMAGE_SETUP_FAILED'         # resources/debian-cloud-finalize.sh
   'Failed to install packages'
   'Package install failed'
   'Failed to run module'
@@ -368,12 +368,14 @@ CLOUD_INIT_PHASES=(
   '25@Cloud-init: network up@running.init.at|ci-info'
   '35@Cloud-init: configuring (apt)@modules:config'
   '45@Cloud-init: updating and installing packages (nothing is printed here)@modules:final'
-  '92@Image prepared, waiting for cloud-init to finish@QEMUNET_IMAGE_PREPARED'
+  '90@Cleaning the image@QEMUNET_IMAGE_CLEANUP'
+  '98@Image prepared, waiting for the VM to stop@QEMUNET_IMAGE_PREPARED'
 )
 # End markers (regex on the normalised log). Debian installer: the late command
-# prints it, then the VM must power off. Cloud-init: both its last line and ours.
+# prints it, then the VM must power off. Cloud image: the finalize script prints it
+# after cloud-init has finished, then the VM is asked to power off.
 DEBIAN_INSTALLER_DONE='QEMUNET_IMAGE_PREPARED'
-CLOUD_INIT_DONE='QEMUNET_IMAGE_PREPARED.*Cloud-initv.*finishedat|Cloud-initv.*finishedat.*QEMUNET_IMAGE_PREPARED'
+CLOUD_INIT_DONE='QEMUNET_IMAGE_PREPARED'
 
 # Alpine and OpenWrt run a python driver that types a script into the console of the VM and reads the
 # serial socket itself: it writes the serial log, which watch_vm reads like the Debian ones (same rules:
