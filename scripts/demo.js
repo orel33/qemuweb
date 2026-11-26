@@ -58,11 +58,19 @@ async function prepare(usersFile) {
     ({login, role, hash: await hashPassword(password)}))));
 }
 
-// The server answers 503 until its runner has connected (a few seconds after both started).
-async function waitForRunner(client) {
+// A session is placed on a runner only when something is loaded into it (UXS02): the import answers
+// 503 "No runner is available" until the local runner has connected, a few seconds after both
+// started. It is retried every half second, for 60 s at most.
+async function importWhenRunnerReady(client, data) {
   const deadline = Date.now() + 60000;
-  while ((await client.fetch('/api/nodes')).status === 503) {
-    if (Date.now() > deadline) throw new Error('no runner connected to the server within 60 s');
+  for (;;) {
+    try {
+      return await client.request('/api/session-archive/import?autoStart=true', {
+        method: 'POST', body: data, headers: {'content-type': 'application/zip'}
+      });
+    } catch (error) {
+      if (error.status !== 503 || Date.now() > deadline) throw error;
+    }
     await new Promise(resolve => setTimeout(resolve, 500));
   }
 }
@@ -75,10 +83,7 @@ async function load(baseUrl) {
     try {
       await client.waitForServer(30000);
       await client.signIn(login, password);
-      await waitForRunner(client);
-      const result = await client.request('/api/session-archive/import?autoStart=true', {
-        method: 'POST', body: data, headers: {'content-type': 'application/zip'}
-      });
+      const result = await importWhenRunnerReady(client, data);
       console.log(`Demo: ${login}: ${path.relative(root, archive)} loaded and started (${result.hosts} hosts, ${result.switches} switches).`);
       for (const error of result.startErrors || []) console.log(`  start error: ${error}`);
       for (const warning of result.warnings || []) console.log(`  warning: ${warning}`);
