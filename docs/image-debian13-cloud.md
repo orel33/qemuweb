@@ -13,7 +13,7 @@ hand). A **Services** tab in Host Settings (roadmap HSV01) comes later.
 | 0 | Measure the current image | **Done** (26 November 2026) |
 | 1 | Disable the optional services, remove what is not needed | **Done** (build scripts) |
 | 2 | Rebuild and measure again, run four tests | **Done** (26 November 2026, in the task worktree, current Debian cloud image) |
-| 3 | Validation by the user: manual test of the Web interface, merge | To do |
+| 3 | Validation by the user: manual test of the Web interface, merge | **Done** (26 November 2026) |
 | - | Services tab in Host Settings (HSV01) | Not part of IMG03 |
 
 Roadmap code of this work: **IMG03** (IMG01 is about `debian13-legacy`).
@@ -218,8 +218,7 @@ A rebuild changes the identity of the base image: a saved session with working d
 
 ## Remaining limits
 
-- **Not tried yet:** a manual test of the Web interface (`scripts/demo.sh`), the example labs other than loading and
-  starting `lan`, and VirtualBox.
+- **Manual test:** the user ran the Web interface after the merge and validated it. VirtualBox is not tried.
 - **Base image:** `prepare.sh` reuses the cloud image already downloaded in `sources/` and never upgrades packages
   during the build. To get a current base, delete the two files of `sources/debian13-cloud/` before a build. With
   `unattended-upgrades` removed, a host never updates itself.
@@ -240,3 +239,4 @@ A rebuild changes the identity of the base image: a saved session with working d
 - **26 November 2026,** with the user's approval: the two downloaded files of the worktree deleted (not those of the main
   checkout, left unchanged), current Debian cloud image downloaded, image rebuilt with `--force` (successful at once,
   2 min 34 s), both images measured, `--check` 11 of 11, then the four tests above, all passed.
+- **26 November 2026:** merged into `main`, the tested image copied into `images/`; manual test validated by the user.

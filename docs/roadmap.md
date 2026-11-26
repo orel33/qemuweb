@@ -542,7 +542,7 @@ personal runner and any guest access exist only for trusted users.
   `/etc/sysctl.d/10-console.conf` with `kernel.printk = 3 4 1 3` into both Debian images (`debian13-legacy` and `debian13-cloud`).
   Existing images keep the old behaviour until rebuilt, and a saved session with working disks must be discarded after the
   rebuild (the base image identity changes).
-- [ ] **IMG03** (M) A lighter, quieter `debian13-cloud` image, with its measurements in
+- [x] **IMG03** (M) A lighter, quieter `debian13-cloud` image, with its measurements in
   [image-debian13-cloud.md](image-debian13-cloud.md). Goals: a shorter boot, a smaller image, and a freshly booted idle
   host that **sends no frame**. At boot: no DHCP client and no IPv6 autoconfiguration (both can still be started by
   hand), no LLMNR, mDNS or NTP; every optional network service (SSH, DHCP and DNS servers, `inetd` with telnet and
