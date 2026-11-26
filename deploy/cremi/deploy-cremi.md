@@ -366,6 +366,21 @@ If `install` says that `/etc/qemuweb/server.args` exists and differs, an earlier
 (`sudoedit`), then run `./scripts/qwctl.sh install server --force` without the options of the server. If the server does not start after step 4, `./scripts/qwctl.sh logs server 40` gives the reason; the options are corrected in `/etc/qemuweb/server.args`.
 To go back, restore the two old unit files from the output kept above (`sudoedit`), then `sudo systemctl daemon-reload`.
 
+### Upgrading from 0.9.8 to 0.9.9: rebuild the debian13-cloud image (IMG03)
+
+Images are not in Git: after the update of the code, rebuild `debian13-cloud` where the runners read their images
+(`/srv/qemuweb` here), as the account that owns `images/`, while no host uses it. Delete the downloaded cloud image first,
+so that the build starts from the current Debian one:
+
+```sh
+cd /srv/qemuweb
+rm -f sources/debian13-cloud/debian-13-genericcloud-amd64.qcow2 sources/debian13-cloud/SHA512SUMS
+bash scripts/prepare.sh --system debian13-cloud --force
+```
+
+A saved session with working disks of the earlier image must then be loaded without them. Hosts no longer start a DHCP
+client or any network service at boot (see "Network and services of Debian 13 Cloud hosts" in the user guide).
+
 ### Upgrading from 0.9.7 to 0.9.8: 8-character session and node IDs (IDS01, one-time: live sessions are lost)
 
 Session IDs become 8 hex characters and host and switch IDs `h-`/`s-` and 8 (they were 16). The live sessions of the

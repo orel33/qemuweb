@@ -14,7 +14,7 @@ lab workstations, behind the CREMI HTTPS front end and OpenID.
 Until the hardening milestone (8), give accounts only to **trusted users**: any user can run any single-line QEMU
 monitor command on their own hosts, and there are no quotas and no jail.
 
-## Where we are (main after 0.9.8)
+## Where we are (main after 0.9.9)
 
 | Milestone | Content | Version |
 | --- | --- | --- |
@@ -32,6 +32,7 @@ monitor command on their own hosts, and there are no quotas and no jail.
 | Services and network | `scripts/qwctl.sh` installs and controls the systemd services of the server and the runners (SVC01, first part); `--bind` and runner `--host` (LST01); `runner.sh register` refuses to replace a runner file without `--force` | **0.9.7** |
 | Interface, images, examples | Load Session and Save Session dialogs (FIL02), rectilinear links in the Graphic view (GRA05), quiet serial console on the Debian images (IMG02), examples on `debian13-cloud` (EXA01) | **0.9.7** |
 | Observation and control, session, IDs | The floating console, its geometry, the node positions (`layout.json`), the viewport and the link style follow the driver (CTL01 to CTL04); the admin holding control acts as the owner, the owner's page is read-only meanwhile; one banner wording; an implicit session per user placed on a runner at its first node and released when empty, one **Reset session** (UXS02); 8-character session and node IDs everywhere, example archives rewritten (IDS01); `/admin`: Session and Runner columns (ADM03), resizable log view (ADM02), Runner status measured by the runner (ADM04); BUGS01 | **0.9.8** |
+| Debian 13 Cloud image | A lighter, quiet `debian13-cloud` image: no frame sent at idle, network services installed but disabled (`apache2` and `bind9` added), unused packages removed, RAW image from 1.33 to 0.74 GiB, faster boot; `scripts/measure-image.py` and [the report](image-debian13-cloud.md) (IMG03) | **0.9.9** |
 
 Formats: from 0.9.0, every change of a format increments its number and comes with an explicit decision on
 compatibility.
