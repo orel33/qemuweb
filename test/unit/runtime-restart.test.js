@@ -30,7 +30,7 @@ test('after a reboot the runtime directory is gone: it is created again, private
   const {tmpRoot, options, runtime} = scratch(t);
   const runner = localRunnerRuntime(3002, options);
   prepareRunnerRuntime(runner, options);
-  fs.mkdirSync(path.join(runner, 'sessions', '0123456789abcdef'));
+  fs.mkdirSync(path.join(runner, 'sessions', '89abcdef'));
   fs.rmSync(accountRoot(options), {recursive: true, force: true});
   assert.equal(fs.existsSync(accountRoot(options)), false, 'what /tmp looks like after a reboot');
   const again = prepareRunnerRuntime(runner, options);
@@ -52,7 +52,7 @@ test('a partial server directory (a stale record, a half-written token file) sta
   // The token file of an old run that holds no token: the server writes a new one.
   fs.writeFileSync(path.join(runtime, 'local-runner.token'), 'half');
   fs.mkdirSync(path.join(runtime, 'users'));
-  fs.symlinkSync('../sessions/1111111111111111', path.join(runtime, 'users', 'carol'));
+  fs.symlinkSync('../sessions/11111111', path.join(runtime, 'users', 'carol'));
 
   prepareServerRuntime(runtime, options);
   assert.equal(fs.existsSync(path.join(runtime, 'sessions')), false, 'the server directory never gets a sessions/');

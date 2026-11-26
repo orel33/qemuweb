@@ -11,8 +11,8 @@ const {commands: consoleCommands} = require('../../runner/commands/consoles');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage'};
-const HOST = 'h-0000000000000001';
-const SWITCH = 's-0000000000000001';
+const HOST = 'h-00000001';
+const SWITCH = 's-00000001';
 
 function setup() {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-console-'));
@@ -65,7 +65,7 @@ test('console IDs select the buffer, the input socket and the clear of one chann
   assert.equal(runner.attachConsole(HOST).nodeId, HOST);
   assert.equal(runner.attachConsole(`${HOST}:1`).serial, 'one');
   assert.equal(runner.attachConsole(`${HOST}:1`).nodeId, `${HOST}:1`);
-  for (const id of [`${HOST}:2`, `${SWITCH}:1`, 'h-00000000000000aa', `h-00000000000000aa:1`, 'bogus']) {
+  for (const id of [`${HOST}:2`, `${SWITCH}:1`, 'h-000000aa', `h-000000aa:1`, 'bogus']) {
     assert.throws(() => runner.attachConsole(id), /Unknown node/, id);
   }
   runner.writeConsoleInput(host, 'a', 0);

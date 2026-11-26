@@ -24,7 +24,7 @@ const root = path.join(__dirname, '..', '..');
 // token file, no sessions/) and the local runner's (/tmp/qw-<login>/l-<port>: sessions, aliases, runner.pid).
 let serverDir = null;
 let runtime = null;
-const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
+const newSwitchId = () => `s-${crypto.randomBytes(4).toString('hex')}`;
 let child;
 let testUsers;
 let serverOutput = '';

@@ -149,30 +149,30 @@ test('worst case: a 32 character login, the longest runner name and the longest 
   const login = 'l'.repeat(MAX_LOGIN);
   const identity = {username: login, uid: 1};
   const {maxRuntimeLength} = runtimeBudget();
-  assert.equal(maxRuntimeLength, 49, 'the budget of a runner directory');
+  assert.equal(maxRuntimeLength, 65, 'the budget of a runner directory: 107 - 1 - 41 (sessions/<8 hex>/s-<8 hex>/serial1.sock)');
   const local = localRunnerRuntime(65535, {tmpRoot, identity});
   const remote = remoteRunnerRuntime('r-ffffffff', {tmpRoot, identity});
   assert.equal(local, `/tmp/qw-${login}/l-65535`);
   assert.equal(remote, `/tmp/qw-${login}/r-ffffff`);
   assert.equal(Buffer.byteLength(local), 48, 'l- and 5 digits: 40 + 1 + 7');
-  assert.equal(Buffer.byteLength(remote), 49, 'r- and 6 hex digits: 40 + 1 + 8, exactly the budget');
+  assert.equal(Buffer.byteLength(remote), 49, 'r- and 6 hex digits: 40 + 1 + 8, 16 bytes below the budget');
   assert.equal(runtimeTooLong(local), null);
   assert.equal(runtimeTooLong(remote), null);
   // The server directory has no socket and no limit: a 5 digit port is not even checked.
   assert.equal(Buffer.byteLength(serverRuntime(65535, {tmpRoot, identity})), 46);
   // The paths the runner really builds (not the list of the helper), for a host and a switch.
   for (const runtime of [local, remote]) {
-    const session = 'f'.repeat(16);
+    const session = 'f'.repeat(8);
     const ctx = {runtimeRoot: runtime, session: {id: session, runtimeDir: path.join(runtime, 'sessions', session)}};
     const {sessionPaths} = createSessionRuntime(ctx);
     const built = [];
-    for (const id of [`h-${'f'.repeat(16)}`, `s-${'f'.repeat(16)}`]) {
+    for (const id of [`h-${'f'.repeat(8)}`, `s-${'f'.repeat(8)}`]) {
       const paths = sessionPaths(id, id.startsWith('s-') ? 'switch' : 'host');
       built.push(paths.socketPath, paths.socketPath1, paths.monitorPath, ...(paths.mgmtPath ? [paths.mgmtPath, path.join(paths.socketDir, 'ctl')] : []));
     }
     for (const file of built) assert.ok(Buffer.byteLength(file) <= SOCKET_LIMIT, `${file} is ${Buffer.byteLength(file)} bytes`);
     const longest = Math.max(...built.map(file => Buffer.byteLength(file)));
-    assert.equal(longest, runtime === remote ? 107 : 106, 'the longest path: 107 bytes for the remote name (the limit), 106 for the local one');
+    assert.equal(longest, runtime === remote ? 91 : 90, 'the longest path: 91 bytes for the remote name, 90 for the local one (the limit is 107)');
     // The length of the helper's list is the one of the real builder.
     assert.equal(Math.max(...socketPathsBelowRuntime().map(file => Buffer.byteLength(path.join(runtime, file)))), longest);
   }
@@ -181,7 +181,7 @@ test('worst case: a 32 character login, the longest runner name and the longest 
 
 test('the length limit is derived from the longest path, and the message names it', t => {
   const {longest, maxRuntimeLength} = runtimeBudget();
-  assert.match(longest, /^sessions\/[0-9a-f]{16}\/[hs]-[0-9a-f]{16}\//);
+  assert.match(longest, /^sessions\/[0-9a-f]{8}\/[hs]-[0-9a-f]{8}\//);
   const exact = '/' + 'a'.repeat(maxRuntimeLength - 1);
   assert.equal(Buffer.byteLength(exact), maxRuntimeLength);
   assert.equal(runtimeTooLong(exact), null);

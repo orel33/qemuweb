@@ -79,7 +79,7 @@ function pollerFixture({answers}) {
     clearTimer: timer => { timer.cleared = true; },
     random: () => 0.5
   });
-  const node = {id: 'h-0000000000000001', kind: 'host', engine: 'qemu', machine: {}, generation: 1, guestAgentPath: '/run/qga.sock',
+  const node = {id: 'h-00000001', kind: 'host', engine: 'qemu', machine: {}, generation: 1, guestAgentPath: '/run/qga.sock',
     guestAddresses: {}, networkInterfaces: [{mac: '52:54:00:aa:bb:01'}, {mac: '52:54:00:aa:bb:02'}]};
   const pending = () => timers.filter(timer => !timer.cleared && !timer.fired);
   const fire = async () => { const timer = pending().at(-1); timer.fired = true; await timer.fn(); return timer; };
@@ -214,6 +214,6 @@ test('the agent socket is accounted in the 107 byte budget and is never the long
   assert.ok(paths.some(file => file.endsWith(`/${NODE_FILES.qga}`)), 'qga.sock is listed');
   assert.equal(NODE_FILES.qga, 'qga.sock');
   const longest = Math.max(...paths.map(file => Buffer.byteLength(file)));
-  assert.ok(Buffer.byteLength(path.join('sessions', '0'.repeat(16), `h-${'0'.repeat(16)}`, NODE_FILES.qga)) <= longest);
+  assert.ok(Buffer.byteLength(path.join('sessions', '0'.repeat(8), `h-${'0'.repeat(8)}`, NODE_FILES.qga)) <= longest);
   assert.ok(longest + 1 < SOCKET_LIMIT);
 });

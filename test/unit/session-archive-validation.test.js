@@ -14,7 +14,7 @@ const {selectedProfile, readCatalog} = require('../../common/system-config');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage'};
-const HOST = 'h-0123456789abcdef';
+const HOST = 'h-89abcdef';
 const ZERO = '0'.repeat(64);
 
 function setup(t) {
@@ -22,7 +22,7 @@ function setup(t) {
   const image = path.join(dir, 'base.raw');
   fs.writeFileSync(image, 'base image content');
   fs.writeFileSync(`${image}.vdi`, 'base vdi content!');
-  const session = new Session({runtimeRoot: dir, id: '0000000000000001'});
+  const session = new Session({runtimeRoot: dir, id: '00000001'});
   const runner = createSessionRunner({session, commands, root, runtimeRoot: dir, configPath: path.join(root, 'config.json')});
   t.after(() => { runner.stopResourceSampling(); fs.rmSync(dir, {recursive: true, force: true}); });
   // The base image of every system is a small temporary file, so that no real image is read.
@@ -133,9 +133,9 @@ test('archivedSessionFiles reads format 2, computes the disks from the members a
   assert.deepEqual(snapshot.archivedSessionFiles(stage, [...base, `${HOST}/disk.qcow2`, `${HOST}/disk.vdi`]).hosts[0].disks, ['raw', 'vdi']);
   assert.deepEqual(snapshot.archivedSessionFiles(stage, base).hosts[0].baseImages, baseImages);
   write({...plain, schemaVersion: 1});
-  assert.throws(() => snapshot.archivedSessionFiles(stage, base), /Invalid configuration for h-0123456789abcdef/);
+  assert.throws(() => snapshot.archivedSessionFiles(stage, base), /Invalid configuration for h-89abcdef/);
   write({...plain, disks: ['raw']});
-  assert.throws(() => snapshot.archivedSessionFiles(stage, base), /Invalid configuration for h-0123456789abcdef/);
+  assert.throws(() => snapshot.archivedSessionFiles(stage, base), /Invalid configuration for h-89abcdef/);
 });
 
 test('discardDisks ignores every working disk, even when the base images are unchanged', async t => {

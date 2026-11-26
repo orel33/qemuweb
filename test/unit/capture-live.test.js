@@ -14,7 +14,7 @@ const {attachCaptureLive} = require('../../server/capture-live');
 const {commands} = require('../../runner/commands/captures');
 
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
-const HOST = 'h-0000000000000001';
+const HOST = 'h-00000001';
 const CAP = 'eth0-20261120T101530Z';
 const LIVE = '0123456789abcdef';
 
@@ -145,14 +145,14 @@ test('stopping a view kills its tcpdump and says nothing more; a node or the con
   t.after(fixture.cleanup);
   const {live, spawned, node, emitted} = fixture;
   live.start(node, {liveId: LIVE, captureId: CAP});
-  live.start({id: 'h-0000000000000002'}, {liveId: 'fedcba9876543210', captureId: CAP});
+  live.start({id: 'h-00000002'}, {liveId: 'fedcba9876543210', captureId: CAP});
   await sleep(40);
   assert.deepEqual(live.stop(LIVE), {ok: true});
   assert.deepEqual(spawned[0].child.kills, ['SIGTERM']);
   assert.equal(live.count(), 1);
   live.stopNode(HOST);
   assert.deepEqual(spawned[1].child.kills, [], 'another node is left alone');
-  live.stopNode('h-0000000000000002');
+  live.stopNode('h-00000002');
   assert.deepEqual(spawned[1].child.kills, ['SIGTERM']);
   assert.deepEqual(live.stop(LIVE), {ok: true}, 'stopping twice is harmless');
   assert.deepEqual(live.stop('0000000000000000'), {ok: true});
@@ -239,7 +239,7 @@ test('the live commands go to the capture-live module of the session', () => {
   const session = {nodes: new Map([[HOST, {id: HOST}]])};
   assert.deepEqual(commands['capture.live.start']({session, runner}, {nodeId: HOST, captureId: CAP, liveId: LIVE, filter: 'arp'}), {liveId: LIVE});
   assert.deepEqual(commands['capture.live.stop']({session, runner}, {liveId: LIVE}), {ok: true});
-  assert.throws(() => commands['capture.live.start']({session, runner}, {nodeId: 'h-ffffffffffffffff', captureId: CAP, liveId: LIVE}), error => error.status === 404);
+  assert.throws(() => commands['capture.live.start']({session, runner}, {nodeId: 'h-ffffffff', captureId: CAP, liveId: LIVE}), error => error.status === 404);
   assert.deepEqual(calls, [['start', HOST, {liveId: LIVE, captureId: CAP, filter: 'arp'}], ['stop', LIVE]]);
 });
 

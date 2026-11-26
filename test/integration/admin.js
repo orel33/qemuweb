@@ -16,7 +16,7 @@ const {localRunnerRuntime} = require('../../common/runtime-dir');
 const {setDisabled} = require('../../server/auth/users-store');
 
 const root = path.join(__dirname, '..', '..');
-const newId = kind => `${kind === 'switch' ? 's' : 'h'}-${crypto.randomBytes(8).toString('hex')}`;
+const newId = kind => `${kind === 'switch' ? 's' : 'h'}-${crypto.randomBytes(4).toString('hex')}`;
 let runtimeDir = null; // the default directory of the local runner of the server's port, l-<port> (common/runtime-dir.js)
 let child;
 let testUsers;
@@ -205,7 +205,7 @@ async function run() {
     {viewport: undefined}, {viewport: {cx: 0, cy: 0}}, {viewport: {cx: 0, cy: 1e6, k: 1}}, {viewport: {cx: 0, cy: 0, k: 'x'}},
     {linkStyle: undefined}, {linkStyle: 'straight'}]) aliceSession.socket.emit('owner-view', ownerView(invalid));
   // Unknown nodes become null, in the active node and in the panes; a node shown twice is kept once.
-  aliceSession.socket.emit('owner-view', ownerView({active: 'h-0000000000000000', panes: ['h-0000000000000000', aliceSwitch]}));
+  aliceSession.socket.emit('owner-view', ownerView({active: 'h-00000000', panes: ['h-00000000', aliceSwitch]}));
   await waitFor('unknown node relayed as null', () => observer.events.some(item => item.event === 'owner-view' && item.payload.active === null));
   aliceSession.socket.emit('owner-view', ownerView({mode: 'graphic', layout: 'single'}));
   // A new observer starts from the owner's last view.
@@ -265,7 +265,7 @@ async function run() {
   await waitFor('drag relayed to the observer', () => positionsAt(observer).length > 0);
   assert.deepEqual(positionsAt(observer), [{nodeId: aliceSwitch, x: 12.3, y: -5}]);
   assert.deepEqual(await layoutOf(alice), {}, 'a position during the drag is not kept');
-  for (const invalid of [{nodeId: 'h-0000000000000000', x: 0, y: 0, final: true}, {nodeId: aliceSwitch, x: 1e6, y: 0, final: true},
+  for (const invalid of [{nodeId: 'h-00000000', x: 0, y: 0, final: true}, {nodeId: aliceSwitch, x: 1e6, y: 0, final: true},
     {nodeId: aliceSwitch, x: 'a', y: 0, final: true}, {nodeId: aliceSwitch, x: 0, y: 0}, {nodeId: aliceSwitch, x: 0, y: 0, final: true, extra: 1}]) {
     aliceSession.socket.emit('node-position', invalid);
   }

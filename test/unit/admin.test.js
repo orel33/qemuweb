@@ -203,8 +203,9 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', asyn
   // ...and the control plane adds what it owns.
   const session = new Session({runtimeRoot: '/nonexistent', runnerId: 'local', owner: 'toto', createdAt: '2026-01-01T00:00:00.000Z'});
   const runner = {request: async command => { assert.equal(command, 'session.summary'); return counts; }};
-  const summary = await sessionSummary({owner: 'toto', session, runner}, 'boss', 2);
-  assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, runnerOffline: false, sessionId: session.id, runnerId: 'local', placed: true, createdAt: '2026-01-01T00:00:00.000Z',
+  const summary = await sessionSummary({owner: 'toto', session, runner}, 'boss', 2, 'local');
+  assert.match(summary.sessionId, /^[0-9a-f]{8}$/);
+  assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, runnerOffline: false, sessionId: session.id, runnerId: 'local', runnerName: 'local', placed: true, createdAt: '2026-01-01T00:00:00.000Z',
     lastActivity: '2026-01-01T00:00:00.000Z', nodes: 4, hosts: 3, switches: 1, runningHosts: 2, runningSwitches: 1,
     reservedRamMb: 1536, cpuPercent: 12.5, active: true});
   assert.equal((await sessionSummary({owner: 'boss', session, runner}, 'boss')).own, true);
@@ -218,7 +219,11 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', asyn
   const unplacedSession = new Session({owner: 'titi'});
   const unbound = new UnboundClient({settings: () => ({}), setEngine: () => ({}), forward: async () => []});
   const empty = await sessionSummary({owner: 'titi', session: unplacedSession, runner: unbound.session(unplacedSession.id)}, 'boss');
-  assert.deepEqual([empty.placed, empty.runnerId, empty.runnerOffline, empty.nodes, empty.active], [false, null, false, 0, false]);
+  assert.deepEqual([empty.placed, empty.runnerId, empty.runnerName, empty.runnerOffline, empty.nodes, empty.active], [false, null, null, false, 0, false]);
+  // ADM03: the runner's name comes from the router (runners.json); without one the ID stands for it.
+  const remote = new Session({runnerId: 'r-1a2b3c4d', owner: 'tata'});
+  assert.equal((await sessionSummary({owner: 'tata', session: remote, runner}, 'boss', 0, 'salle-12')).runnerName, 'salle-12');
+  assert.equal((await sessionSummary({owner: 'tata', session: remote, runner}, 'boss')).runnerName, 'r-1a2b3c4d');
   await assert.rejects(sessionSummary({owner: 'toto', session, runner: {request: async () => { throw new Error('boom'); }}}, 'boss'), /boom/);
 });
 
@@ -281,9 +286,9 @@ test('the observation rule (CTL01): one driver at a time for the HTTP writes', (
   for (const method of WRITES) assert.equal(rule({method, lockAdmin: 'chef'}).status, 403, `${method}: another admin holds the lock`);
   // The admin holding the lock does what the owner can, reads too (marked control).
   assert.deepEqual(rule({lockAdmin: 'boss'}), {observed: true, control: true});
-  for (const [method, url] of [['POST', '/api/nodes/h-0000000000000001/start'], ['DELETE', '/api/nodes/h-0000000000000001'], ['PUT', '/api/nodes/h-0000000000000001/config'],
-    ['PATCH', '/api/nodes/h-0000000000000001'], ['POST', '/api/session-archive/import'], ['POST', '/api/session-archive/export'],
-    ['POST', '/api/examples/load'], ['PUT', '/api/general-settings'], ['POST', '/api/nodes/h-0000000000000001/captures']]) {
+  for (const [method, url] of [['POST', '/api/nodes/h-00000001/start'], ['DELETE', '/api/nodes/h-00000001'], ['PUT', '/api/nodes/h-00000001/config'],
+    ['PATCH', '/api/nodes/h-00000001'], ['POST', '/api/session-archive/import'], ['POST', '/api/session-archive/export'],
+    ['POST', '/api/examples/load'], ['PUT', '/api/general-settings'], ['POST', '/api/nodes/h-00000001/captures']]) {
     assert.deepEqual(rule({method, url, lockAdmin: 'boss'}), {observed: true, control: true}, `${method} ${url}`);
   }
   // UXS02: with the lock, Reset session too (the confirmation names the owner); never the admin API through an observation.
@@ -355,13 +360,13 @@ test('users.log entries carry the user and the event, never anything else', t =>
   const file = path.join(tempDir(t), USERS_LOG);
   const log = createUserLog({file, now: () => new Date('2026-01-02T03:04:05Z')});
   log.record('toto', 'login');
-  log.record('toto', 'node-started', {nodeId: 's-0123456789abcdef'}, 'ok');
-  log.record('toto', 'node-stopped', {nodeId: 's-0123456789abcdef'}, new Error('busy'));
+  log.record('toto', 'node-started', {nodeId: 's-89abcdef'}, 'ok');
+  log.record('toto', 'node-stopped', {nodeId: 's-89abcdef'}, new Error('busy'));
   assert.equal(fs.statSync(file).mode & 0o777, 0o600);
   assert.deepEqual(readLogTail(file), [
     {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'login'},
-    {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'node-started', target: {nodeId: 's-0123456789abcdef'}, result: 'ok'},
-    {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'node-stopped', target: {nodeId: 's-0123456789abcdef'}, result: 'error: busy'}
+    {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'node-started', target: {nodeId: 's-89abcdef'}, result: 'ok'},
+    {time: '2026-01-02T03:04:05.000Z', user: 'toto', event: 'node-stopped', target: {nodeId: 's-89abcdef'}, result: 'error: busy'}
   ]);
 });
 
@@ -380,7 +385,7 @@ test('readLogTail returns the last entries from the end of the file only', t => 
 });
 
 test('only explicit node and archive actions of the owner become users.log events', () => {
-  const id = 's-0123456789abcdef';
+  const id = 's-89abcdef';
   const event = (method, url, body) => userEvent({method, path: url, body});
   assert.deepEqual(event('POST', '/api/switches', {id, name: 'sw'}), {event: 'node-created', target: {nodeId: id, kind: 'switch'}});
   assert.deepEqual(event('POST', '/api/hosts', {id: 'not an id; rm -rf /'}), {event: 'node-created', target: {nodeId: null, kind: 'host'}});
@@ -420,7 +425,7 @@ test('the login routes write login, login-failed and logout to users.log, never 
 });
 
 test('a view state is normalized: known keys, layouts, lengths and ranges; unknown nodes become null', () => {
-  const sw = 's-0123456789abcdef', host = 'h-0123456789abcdef';
+  const sw = 's-89abcdef', host = 'h-89abcdef';
   const nodes = new Map([[sw, {}], [host, {}]]);
   assert.deepEqual([paneCount('single'), paneCount('columns-2'), paneCount('rows-2'), paneCount('grid-4'), paneCount('grid-9'), paneCount('toString')],
     [1, 2, 2, 4, 0, 0]);
@@ -428,7 +433,7 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
     viewport: {cx: 120.5, cy: -40, k: 1.25}, linkStyle: 'rectilinear'};
   assert.deepEqual(normalizeView({...view, page: 2, expanded: 1, extra: 1}, nodes), view, 'extra keys (page, a former expanded) are dropped');
   assert.deepEqual(normalizeView(view, [sw, host]), view, 'node IDs as an array');
-  assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', sw, sw, host], active: 'h-0000000000000000'}, nodes),
+  assert.deepEqual(normalizeView({...view, panes: ['h-00000000', sw, sw, host], active: 'h-00000000'}, nodes),
     {...view, panes: [null, sw, null, host], views: ['console', 'console', 'console', 'console'], active: null, floating: false},
     'unknown nodes become null (their pane shows the console), a node is kept in its first pane');
   assert.deepEqual(normalizeView({...view, panes: ['x', null, null, null]}, null).panes, ['x', null, null, null], 'shape check only');
@@ -453,15 +458,15 @@ test('a view state is normalized: known keys, layouts, lengths and ranges; unkno
 });
 
 test('the view of an empty pane or of a node dropped by normalisation is console', () => {
-  const host = 'h-0123456789abcdef';
+  const host = 'h-89abcdef';
   const view = {mode: 'terminals', layout: 'columns-2', panes: [host, null], views: ['log', 'monitor'], switches: true, active: host, floating: false, geometry: null, viewport: null, linkStyle: 'curved'};
   assert.deepEqual(normalizeView(view, [host]).views, ['log', 'console'], 'null pane');
-  assert.deepEqual(normalizeView({...view, panes: ['h-0000000000000000', null]}, [host]).views, ['console', 'console'], 'unknown node');
+  assert.deepEqual(normalizeView({...view, panes: ['h-00000000', null]}, [host]).views, ['console', 'console'], 'unknown node');
   assert.deepEqual(normalizeView({...view, panes: [host, host]}, [host]).views, ['log', 'console'], 'node shown twice');
 });
 
 test('the floating console is part of the view in both modes (open when the Graphic view shows), on an active node shown in a pane', () => {
-  const sw = 's-0123456789abcdef', host = 'h-0123456789abcdef';
+  const sw = 's-89abcdef', host = 'h-89abcdef';
   const view = {mode: 'graphic', layout: 'columns-2', panes: [host, sw], views: ['console', 'console'], switches: true, active: sw, floating: true, geometry: null, viewport: null, linkStyle: 'curved'};
   assert.equal(normalizeView(view, [sw, host]).floating, true, 'open on the active node');
   assert.equal(normalizeView({...view, floating: false}, [sw, host]).floating, false, 'closed');
@@ -584,4 +589,20 @@ test('two view states are compared field by field', () => {
     assert.equal(sameView(view, {...view, ...change}), false, JSON.stringify(change));
   }
   assert.equal(sameView(view, null), false);
+});
+
+test('ADM03: the Runner column of the Sessions tab: name and ID, "local", "not placed"', async () => {
+  const {sessionRunnerLabel} = await import('../../public/admin-sessions.js');
+  assert.equal(sessionRunnerLabel({placed: true, runnerId: 'r-1a2b3c4d', runnerName: 'salle-12'}).text, 'salle-12 (r-1a2b3c4d)');
+  assert.equal(sessionRunnerLabel({placed: true, runnerId: 'r-1a2b3c4d', runnerName: 'r-1a2b3c4d'}).text, 'r-1a2b3c4d', 'a runner named after its ID');
+  assert.equal(sessionRunnerLabel({placed: true, runnerId: 'local', runnerName: 'local'}).text, 'local');
+  const unplaced = sessionRunnerLabel({placed: false, runnerId: null, runnerName: null});
+  assert.equal(unplaced.text, 'not placed');
+  assert.match(unplaced.title, /no runner/);
+  // The page shows the session ID and the Runner column in each row of the Sessions table.
+  const html = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'admin.html'), 'utf8');
+  assert.match(html, /<th>User<\/th><th[^>]*>Session<\/th><th[^>]*>State<\/th><th[^>]*>Runner<\/th><th>Created<\/th>/);
+  const page = fs.readFileSync(path.join(__dirname, '..', '..', 'public', 'admin.js'), 'utf8');
+  assert.match(page, /textContent: session\.sessionId/);
+  assert.match(page, /sessionRunnerLabel\(session\)/);
 });

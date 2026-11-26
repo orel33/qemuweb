@@ -17,7 +17,7 @@ const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client'
 
 const root = path.resolve(__dirname, '../..');
 const imageId = 'debian13-legacy';
-const hostId = `h-${crypto.randomBytes(8).toString('hex')}`;
+const hostId = `h-${crypto.randomBytes(4).toString('hex')}`;
 let child;
 let testUsers;
 let client;

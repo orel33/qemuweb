@@ -12,8 +12,8 @@ const {createCapture} = require('../../runner/capture');
 const {completeLength} = require('../../runner/pcap');
 const {commands} = require('../../runner/commands/captures');
 
-const HOST = 'h-0000000000000001';
-const SWITCH = 's-0000000000000001';
+const HOST = 'h-00000001';
+const SWITCH = 's-00000001';
 
 // A fake monitor that behaves like QEMU's: object_add creates the file (unless told to fail
 // silently, as QEMU does for a bad netdev or path), object_del forgets the filter.
@@ -298,8 +298,8 @@ test('captures.list and capture.start/stop/delete answer with the capture and th
   const started = await commands['capture.start']({session, runner}, {nodeId: HOST, interface: 'eth0'});
   assert.equal(started.state, 'recording');
   assert.equal(commands['captures.list']({session, runner}, {nodeId: HOST}).captures.length, 1);
-  assert.throws(() => commands['captures.list']({session, runner}, {nodeId: 's-ffffffffffffffff'}), error => error.status === 404);
-  await assert.rejects(async () => commands['capture.start']({session, runner}, {nodeId: 'h-ffffffffffffffff', interface: 'eth0'}), error => error.status === 404);
+  assert.throws(() => commands['captures.list']({session, runner}, {nodeId: 's-ffffffff'}), error => error.status === 404);
+  await assert.rejects(async () => commands['capture.start']({session, runner}, {nodeId: 'h-ffffffff', interface: 'eth0'}), error => error.status === 404);
   assert.equal((await commands['capture.stop']({session, runner}, {nodeId: HOST, captureId: started.id})).state, 'stopped');
   assert.deepEqual(commands['capture.delete']({session, runner}, {nodeId: HOST, captureId: started.id}), {ok: true});
   assert.deepEqual(commands['captures.list']({session, runner}, {}).captures, []);

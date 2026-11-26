@@ -15,13 +15,13 @@ const {writeArchive, readArchive} = require('../../runner/archive-zip');
 const {createEventBudget, createLayoutWriter} = require('../../server/layout-writes');
 const {moduleSource, read} = require('./web-ui-source');
 
-const HOST = 'h-0123456789abcdef';
-const SWITCH = 's-0123456789abcdef';
+const HOST = 'h-89abcdef';
+const SWITCH = 's-89abcdef';
 
 function sessionDir(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-layout-'));
   t.after(() => fs.rmSync(dir, {recursive: true, force: true}));
-  const session = new Session({runtimeRoot: dir, id: '0000000000000001'});
+  const session = new Session({runtimeRoot: dir, id: '00000001'});
   fs.mkdirSync(session.runtimeDir, {recursive: true});
   return {dir, session};
 }
@@ -69,7 +69,7 @@ test('the runner keeps the positions of existing nodes in layout.json, prunes re
   commands['layout.set']({session}, {nodeId: SWITCH, x: 0, y: 0});
   assert.deepEqual(JSON.parse(fs.readFileSync(session.layoutFile, 'utf8')), {schemaVersion: 1, positions: {[HOST]: {x: 10, y: -3}, [SWITCH]: {x: 0, y: 0}}});
   assert.deepEqual(commands['layout.get']({session}), {positions: {[HOST]: {x: 10, y: -3}, [SWITCH]: {x: 0, y: 0}}});
-  assert.throws(() => commands['layout.set']({session}, {nodeId: 'h-ffffffffffffffff', x: 0, y: 0}), /Unknown node/);
+  assert.throws(() => commands['layout.set']({session}, {nodeId: 'h-ffffffff', x: 0, y: 0}), /Unknown node/);
   for (const [x, y] of [[NaN, 0], [0, '1'], [1e6, 0]]) assert.throws(() => commands['layout.set']({session}, {nodeId: HOST, x, y}), /Invalid node position/);
   session.nodes.delete(SWITCH);
   session.prunePositions();

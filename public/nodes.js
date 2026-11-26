@@ -1,6 +1,7 @@
 // Node model, server synchronization and host/switch lifecycle actions.
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
+import {createWithNewIds, newNodeId as newId} from './node-ids.js';
 import {isConsoleView, panes, selectPaneConsole, syncConsoleScroll} from './terminal.js';
 import {activeMachine, consoleSessions, renderTabs, restoreSavedView, resetSessionButton, resumeAllButton, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
 import {imageSelect} from './node-dialogs.js';
@@ -40,31 +41,13 @@ export function nextMachineName(kind) {
   return `${prefix}${String(number).padStart(numberWidth, '0')}`;
 }
 
-// A new host or switch ID: h-/s- and 8 hex characters (32 random bits), none of the IDs this page knows.
-export function newNodeId(kind) {
-  let id;
-  do id = `${kind === 'switch' ? 's' : 'h'}-${[...crypto.getRandomValues(new Uint8Array(4))].map(byte => byte.toString(16).padStart(2, '0')).join('')}`;
-  while (machines.has(id));
-  return id;
-}
-
-// Creates a node with the given ID, then with new ones while the runner answers 409 (an ID already
-// in the session, which this page did not know yet): a few attempts, then the error.
-const ID_ATTEMPTS = 4;
-async function createNode(kind, id, request) {
-  for (let attempt = 1; ; attempt++) {
-    try { return {id, body: await request(id)}; }
-    catch (error) {
-      if (error.status !== 409 || !/ID already exists/.test(error.message) || attempt >= ID_ATTEMPTS) throw error;
-      id = newNodeId(kind);
-    }
-  }
-}
+// A new host or switch ID, none of the nodes of this page.
+export const newNodeId = kind => newId(kind, machines);
 
 export async function addHost({id = newNodeId('host'), name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled = false, select = true}) {
   const image = store.images.find(item => item.id === imageId);
   let body;
-  ({id, body} = await createNode('host', id, nodeId => requestJson('/api/hosts', jsonRequest('POST', {id: nodeId, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled}), 'Cannot create host')));
+  ({id, body} = await createWithNewIds('host', id, nodeId => requestJson('/api/hosts', jsonRequest('POST', {id: nodeId, name, imageId, engine, interfaces, settings, guestMedia, startupDiskEnabled}), 'Cannot create host'), machines));
   const machine = {id, kind: 'host', hostname: body.name, osHint: image?.label || 'System', imageId: body.imageId, hasDifferentialDisk: !!image?.hasDifferentialDisk, engine: body.engine, interfaces: body.interfaces, networkInterfaces: body.networkInterfaces || [], settings: body.settings, settingsLoaded: !!body.settings, guestMedia: body.guestMedia, startupDiskEnabled: body.startupDiskEnabled, serialPorts: body.settings?.serialPorts ?? ['ttyS0'], running: false, hasLaunched: false, addresses: {}, message: 'Host ready to start', logs: [], serial: '', serial2: '', monitorOutput: ''};
   machines.set(id, machine);
   if (select) selectMachine(id);
@@ -72,7 +55,7 @@ export async function addHost({id = newNodeId('host'), name, imageId, engine, in
   return machine;
 }
 export async function addSwitch({name, autostart}) {
-  const {id, body} = await createNode('switch', newNodeId('switch'), nodeId => requestJson('/api/switches', jsonRequest('POST', {id: nodeId, name, autostart}), 'Cannot create switch'));
+  const {id, body} = await createWithNewIds('switch', newNodeId('switch'), nodeId => requestJson('/api/switches', jsonRequest('POST', {id: nodeId, name, autostart}), 'Cannot create switch'), machines);
   machines.set(id, {id, kind: 'switch', hostname: body.name, osHint: 'VDE switch', interfaces: [], running: body.running, hasLaunched: body.running, message: body.message, logs: [], serial: ''});
   selectMachine(id);
 }

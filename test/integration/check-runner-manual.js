@@ -30,7 +30,7 @@ const root = path.join(__dirname, '..', '..');
 // The default directory of the SERVER of the port (/tmp/qw-<login>/<port>), set once the port is chosen.
 let runtime = null;
 let tokenFile = null;
-const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
+const newSwitchId = () => `s-${crypto.randomBytes(4).toString('hex')}`;
 const sockets = [];
 const runners = [];
 let server;

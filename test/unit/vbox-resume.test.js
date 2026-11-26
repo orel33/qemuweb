@@ -32,7 +32,7 @@ const {createSessionSnapshot} = require('../../runner/archive-snapshot');
 const {installFake, vdi, BASE_UUID} = require('./vbox-fake');
 
 const projectRoot = path.join(__dirname, '..', '..');
-const HOST = 'h-0000000000000001';
+const HOST = 'h-00000001';
 const CHILD_UUID = '0a19a6ce-c842-4786-bd8b-e0a78f4802c5';
 
 function setup(t, {startupDiskEnabled}) {
@@ -45,7 +45,7 @@ function setup(t, {startupDiskEnabled}) {
   const fake = installFake(dir, {modelVms: true});
   const geniso = path.join(dir, 'genisoimage');
   fs.writeFileSync(geniso, `#!${process.execPath}\nconst a = process.argv.slice(2); require('fs').writeFileSync(a[a.indexOf('-o') + 1], 'iso');\n`, {mode: 0o755});
-  const session = new Session({runtimeRoot: path.join(dir, 'runtime'), id: '0000000000000001', engine: 'qemu'});
+  const session = new Session({runtimeRoot: path.join(dir, 'runtime'), id: '00000001', engine: 'qemu'});
   fs.mkdirSync(session.runtimeDir, {recursive: true});
   const commands = {VBOXMANAGE: fake.bin, GENISOIMAGE: geniso};
   const runner = createSessionRunner({session, commands, root, runtimeRoot: path.join(dir, 'runtime'), configPath: path.join(root, 'config.json')});

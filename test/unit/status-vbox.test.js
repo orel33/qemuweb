@@ -10,23 +10,23 @@ const path = require('node:path');
 const {serverRuntime, localRunnerRuntime} = require('../../common/runtime-dir');
 const {parseVBoxHeadless, vboxProcessesOf, runnerSessionsDir, runtimeOfProcess, memoryFromShowVmInfo, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('../../scripts/status-vbox');
 
-const HEADLESS_1 = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-1478098-7535bdff74b4f486-h-d1cacd841664407c --startvm a34c81c3-5414-4b9f-810d-6d999d37b156 --vrde config';
-const HEADLESS_2 = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-1478098-7535bdff74b4f486-h-c0abdd91a8684ce2 --startvm af201149-3b0b-4df8-bf06-7b463909c3fa --vrde config';
+const HEADLESS_1 = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-1478098-74b4f486-h-1664407c --startvm a34c81c3-5414-4b9f-810d-6d999d37b156 --vrde config';
+const HEADLESS_2 = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-1478098-74b4f486-h-a8684ce2 --startvm af201149-3b0b-4df8-bf06-7b463909c3fa --vrde config';
 const FOREIGN = '/usr/lib/virtualbox/VBoxHeadless --comment My Ubuntu --startvm 11111111-2222-3333-4444-555555555555 --vrde config';
-const OTHER_RUNNER = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-999-7535bdff74b4f486-h-aaaaaaaaaaaaaaaa --startvm 22222222-2222-3333-4444-555555555555 --vrde config';
+const OTHER_RUNNER = '/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-999-74b4f486-h-aaaaaaaa --startvm 22222222-2222-3333-4444-555555555555 --vrde config';
 
 test('a QemuWeb VBoxHeadless command line gives its VM name, uuid, runner, session and node', () => {
-  assert.deepEqual(parseVBoxHeadless(HEADLESS_1), {name: 'qemuweb-1478098-7535bdff74b4f486-h-d1cacd841664407c', uuid: 'a34c81c3-5414-4b9f-810d-6d999d37b156',
-    runnerPid: 1478098, sessionId: '7535bdff74b4f486', nodeId: 'h-d1cacd841664407c'});
-  assert.equal(parseVBoxHeadless(HEADLESS_2).nodeId, 'h-c0abdd91a8684ce2');
+  assert.deepEqual(parseVBoxHeadless(HEADLESS_1), {name: 'qemuweb-1478098-74b4f486-h-1664407c', uuid: 'a34c81c3-5414-4b9f-810d-6d999d37b156',
+    runnerPid: 1478098, sessionId: '74b4f486', nodeId: 'h-1664407c'});
+  assert.equal(parseVBoxHeadless(HEADLESS_2).nodeId, 'h-a8684ce2');
 });
 
 test('the VirtualBox daemon, the user\'s own VMs and other programs are never QemuWeb hosts', () => {
   assert.equal(parseVBoxHeadless('/usr/lib/virtualbox/VBoxSVC --auto-shutdown --inherit-startup-pipe 6'), null);
   assert.equal(parseVBoxHeadless(FOREIGN), null, 'a VM named "My Ubuntu"');
   assert.equal(parseVBoxHeadless('/usr/lib/virtualbox/VBoxHeadless --startvm 11111111-2222-3333-4444-555555555555'), null, 'no --comment');
-  assert.equal(parseVBoxHeadless('/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-12-notasession-h-d1cacd841664407c --startvm x'), null, 'a malformed name');
-  assert.equal(parseVBoxHeadless('/usr/bin/vim --comment qemuweb-1478098-7535bdff74b4f486-h-d1cacd841664407c'), null, 'another program');
+  assert.equal(parseVBoxHeadless('/usr/lib/virtualbox/VBoxHeadless --comment qemuweb-12-notasession-h-1664407c --startvm x'), null, 'a malformed name');
+  assert.equal(parseVBoxHeadless('/usr/bin/vim --comment qemuweb-1478098-74b4f486-h-1664407c'), null, 'another program');
   assert.equal(parseVBoxHeadless('[iprt-VBoxTscThread]'), null);
 });
 

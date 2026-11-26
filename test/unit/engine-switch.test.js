@@ -17,8 +17,8 @@ const {selectedProfile} = require('../../common/system-config');
 
 const projectRoot = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage', VBOXMANAGE: 'VBoxManage'};
-const HOST_1 = 'h-0000000000000001';
-const HOST_2 = 'h-0000000000000002';
+const HOST_1 = 'h-00000001';
+const HOST_2 = 'h-00000002';
 
 // A project root of its own: config.json and base images in the QEMU format for every system, in the
 // VirtualBox format for alpine only.
@@ -31,7 +31,7 @@ function setup(t, {vbox = true} = {}) {
   const runtimeDir = path.join(dir, 'runtime', 'sessions', 'test');
   fs.mkdirSync(runtimeDir, {recursive: true});
   const saved = [];
-  const session = {id: '0000000000000001', nodes: new Map(), engine: 'qemu', runtimeDir, saveMetadata(engine) { if (engine) saved.push(engine); }};
+  const session = {id: '00000001', nodes: new Map(), engine: 'qemu', runtimeDir, saveMetadata(engine) { if (engine) saved.push(engine); }};
   const runner = createSessionRunner({session, commands: vbox ? commands : {...commands, VBOXMANAGE: undefined}, root: dir,
     runtimeRoot: path.join(dir, 'runtime'), configPath: path.join(dir, 'config.json')});
   const emitted = [];
@@ -112,7 +112,7 @@ test('a running or busy host refuses the change with 409, and nothing changes', 
   assert.deepEqual(emitted, emitted.filter(([event]) => event === 'nodes-changed'), 'no general-settings-changed');
   // A running switch does not block the change.
   Object.assign(node, {machine: null, action: null, stopping: false});
-  runner.createNode('s-0000000000000001', 'switch').machine = {};
+  runner.createNode('s-00000001', 'switch').machine = {};
   assert.equal(setEngine('vbox').engine, 'vbox');
 });
 

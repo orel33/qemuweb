@@ -11,7 +11,7 @@ const {createSessionRouter, userEvent, auditEntries} = require('../../server/rou
 const {observationGate} = require('../../server/routes/admin');
 const {MAX_DOWNLOAD} = require('../../server/routes/captures');
 
-const HOST = 'h-0000000000000001';
+const HOST = 'h-00000001';
 const CAP = 'eth0-20261120T101530Z';
 const session = {owner: 'toto', id: 'sess'};
 

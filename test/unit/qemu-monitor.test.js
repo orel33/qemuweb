@@ -39,7 +39,7 @@ async function fakeMonitor(t, reply) {
 
 test('a long command line, echoed with escape sequences, still gets its reply', async t => {
   const send = await fakeMonitor(t, () => '');
-  const base = 'object_add filter-dump,id=cap-eth0-20261119T232602Z,netdev=lan0,file=/tmp/qemuweb-demo-uGPrRN/runtime/sessions/f5e5c0349880ad4a/h-6557f03fb2f98c44/captures/eth0-20261119T232602Z.pcap,queue=all,';
+  const base = 'object_add filter-dump,id=cap-eth0-20261119T232602Z,netdev=lan0,file=/tmp/qemuweb-demo-uGPrRN/runtime/sessions/9880ad4a/h-b2f98c44/captures/eth0-20261119T232602Z.pcap,queue=all,';
   const command = base + 'x'.repeat(280 - base.length);
   assert.equal(command.length, 280);
   // The echo alone is far above the 65536 characters of a reply.

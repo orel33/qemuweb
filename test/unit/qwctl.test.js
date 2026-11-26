@@ -224,7 +224,7 @@ test('local runner: the account of the server, its own runtime directory, only o
   m.ok('install server');
   m.refused('install runner --sysuser other', /must run under the account of the server.*--sysuser qemuweb/, {status: 1});
   m.refused('install runner --runtime /var/lib/qemuweb/server', /is the one of the server/, {status: 1});
-  m.refused(`install runner --runtime /${'x'.repeat(60)}`, /is too long/, {status: 1});
+  m.refused(`install runner --runtime /${'x'.repeat(70)}`, /is too long/, {status: 1});
   m.ok('install runner');
   m.refused('install runner --name second', /qemuweb-runner is already the local runner/, {status: 1});
 });

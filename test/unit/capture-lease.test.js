@@ -8,7 +8,7 @@ const test = require('node:test');
 const {attachCaptureLease, MAX_LEASES} = require('../../server/capture-lease');
 const {captureId, isCaptureId} = require('../../common/capture');
 
-const HOST = 'h-0123456789abcdef';
+const HOST = 'h-89abcdef';
 // Capture IDs as the runner builds them (common/capture.js captureId), not typed by hand: the lease
 // checks the same format as the live view and the routes, and does not look a capture up (the dialog
 // leases right after Start, before any list could know the capture).
@@ -57,7 +57,7 @@ test('a lease belongs to one tab: another tab lists it but cannot take it', asyn
   assert.deepEqual(await first.ask('capture-lease', {nodeId: HOST, captureId: CAP}), {ok: true}, 'again, by its tab');
   assert.match((await second.ask('capture-lease', {nodeId: HOST, captureId: CAP})).error, /another window/);
   assert.deepEqual(await second.ask('capture-leased', {nodeId: HOST}), {leased: [CAP]});
-  assert.deepEqual(await second.ask('capture-leased', {nodeId: 'h-ffffffffffffffff'}), {leased: []});
+  assert.deepEqual(await second.ask('capture-leased', {nodeId: 'h-ffffffff'}), {leased: []});
   second.socket.emit('capture-unlease', {nodeId: HOST, captureId: CAP});
   assert.equal(leases.size, 1, 'another tab cannot release it');
   first.socket.emit('capture-unlease', {nodeId: HOST, captureId: CAP});

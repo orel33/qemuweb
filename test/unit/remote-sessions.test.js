@@ -121,7 +121,7 @@ test('a network cut keeps the session for the grace period; the runner\'s return
   const first = await far.connect();
   const workspace = manager.open('toto');
   await manager.place(workspace);
-  await workspace.runner.request('switch.create', {id: 's-00000000000000aa', name: 'sw', autostart: false});
+  await workspace.runner.request('switch.create', {id: 's-000000aa', name: 'sw', autostart: false});
   const changes = [];
   manager.on('connectivity', (_workspace, online) => changes.push(online));
 
@@ -137,8 +137,8 @@ test('a network cut keeps the session for the grace period; the runner\'s return
   assert.equal(manager.available(workspace), true);
   assert.deepEqual(changes, [false, true]);
   const nodes = await workspace.runner.request('nodes.list');
-  assert.ok(JSON.stringify(nodes).includes('s-00000000000000aa'), 'the node is still there');
-  await workspace.runner.request('switch.create', {id: 's-00000000000000bb', name: 'sw2', autostart: false});
+  assert.ok(JSON.stringify(nodes).includes('s-000000aa'), 'the node is still there');
+  await workspace.runner.request('switch.create', {id: 's-000000bb', name: 'sw2', autostart: false});
 });
 
 test('a session the runner no longer lists is dropped when it returns', async t => {
@@ -184,9 +184,9 @@ test('a server restart keeps the sessions of a local and of a remote runner: res
   const bindings = createSessionBindings();
   const near = await remoteRunner(t, registry, 'local');
   const far = await remoteRunner(t, registry, 'r-00000001');
-  const ID = n => n.toString(16).padStart(16, '0');
+  const ID = n => n.toString(16).padStart(8, '0');
   // Before the restart the runners already ran machines for their users; the server's bindings name the owners.
-  for (const [service, id, owner, node] of [[near.service, ID(1), 'toto', 's-00000000000000a1'], [far.service, ID(2), 'titi', 's-00000000000000a2']]) {
+  for (const [service, id, owner, node] of [[near.service, ID(1), 'toto', 's-000000a1'], [far.service, ID(2), 'titi', 's-000000a2']]) {
     await service.handle('session.create', id, {owner});
     await service.handle('switch.create', id, {id: node, name: 'sw', autostart: false});
   }
@@ -207,8 +207,8 @@ test('a server restart keeps the sessions of a local and of a remote runner: res
   assert.equal(manager.available(toto), false, 'the local runner has not come back yet');
   await near.connect();
   assert.deepEqual(adopted.sort(), ['titi', 'toto']);
-  assert.ok(JSON.stringify(await toto.runner.request('nodes.list')).includes('s-00000000000000a1'), 'the local runner\'s machine');
-  assert.ok(JSON.stringify(await manager.get('titi').runner.request('nodes.list')).includes('s-00000000000000a2'), 'the remote runner\'s machine');
+  assert.ok(JSON.stringify(await toto.runner.request('nodes.list')).includes('s-000000a1'), 'the local runner\'s machine');
+  assert.ok(JSON.stringify(await manager.get('titi').runner.request('nodes.list')).includes('s-000000a2'), 'the remote runner\'s machine');
   await until(() => !far.service.hello().sessions.some(item => item.sessionId === ID(3)));
   assert.deepEqual(far.service.hello().sessions.map(item => item.sessionId), [ID(2)], 'the unknown session was deleted, the bound one kept');
 });
@@ -238,13 +238,13 @@ test('a remote runner offers and accepts only the systems whose image it has', a
   const make = requireImages => createRunnerService({commands, root, runtimeRoot: path.join(dir, requireImages ? 'remote' : 'local'), configPath, requireImages});
   const remote = make(true);
   t.after(() => remote.shutdown());
-  await remote.handle('session.create', '00000000000000a1', {owner: 'toto'});
-  assert.deepEqual(await remote.handle('catalog.systems', '00000000000000a1', {}), [], 'nothing is offered');
-  await assert.rejects(remote.handle('host.create', '00000000000000a1', {body: {id: 'h-00000000000000a1', imageId: system}}), /not installed on this runner/);
+  await remote.handle('session.create', '000000a1', {owner: 'toto'});
+  assert.deepEqual(await remote.handle('catalog.systems', '000000a1', {}), [], 'nothing is offered');
+  await assert.rejects(remote.handle('host.create', '000000a1', {body: {id: 'h-000000a1', imageId: system}}), /not installed on this runner/);
   const local = make(false);
   t.after(() => local.shutdown());
-  await local.handle('session.create', '00000000000000a2', {owner: 'toto'});
-  assert.ok((await local.handle('catalog.systems', '00000000000000a2', {})).length > 0, 'the local runner is unchanged');
+  await local.handle('session.create', '000000a2', {owner: 'toto'});
+  assert.ok((await local.handle('catalog.systems', '000000a2', {})).length > 0, 'the local runner is unchanged');
 });
 
 test('UXS02: the catalog reads of a session not placed yet run without a session and create nothing on the runner', async t => {

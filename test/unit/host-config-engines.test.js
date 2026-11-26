@@ -87,7 +87,7 @@ function setup(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-host-config-'));
   const runtimeDir = path.join(dir, 'sessions', 'test');
   fs.mkdirSync(runtimeDir, {recursive: true});
-  const session = {id: '0000000000000001', nodes: new Map(), engine: 'qemu', runtimeDir, saveMetadata() {}};
+  const session = {id: '00000001', nodes: new Map(), engine: 'qemu', runtimeDir, saveMetadata() {}};
   const runner = createSessionRunner({session, commands: {QEMU_IMG: 'q', QEMU_SYSTEM_X86_64: 'q', GENISOIMAGE: 'g', VBOXMANAGE: 'v'}, root, runtimeRoot: dir, configPath: path.join(root, 'config.json')});
   t.after(() => { runner.stopResourceSampling(); fs.rmSync(dir, {recursive: true, force: true}); });
   const emit = () => {};
@@ -103,7 +103,7 @@ function setup(t) {
 
 test('Host Settings under VirtualBox never changes the QEMU values, and they are back after switching', t => {
   const {runner, session, emit, configure, config} = setup(t);
-  const ID = 'h-0000000000000001';
+  const ID = 'h-00000001';
   hostCommands['host.create']({session, runner, emit}, {body: {id: ID, name: 'web', imageId: 'alpine', settings: {memory: 2048}}});
   assert.deepEqual(config(ID), {'memory:qemu': 2048});
 
@@ -135,7 +135,7 @@ function configureBody(runner, id) {
 
 test('the startup disk option and serial ports are per engine too', t => {
   const {runner, session, emit, configure, config} = setup(t);
-  const ID = 'h-0000000000000001';
+  const ID = 'h-00000001';
   hostCommands['host.create']({session, runner, emit}, {body: {id: ID, name: 'srv', imageId: 'debian13-legacy'}});
   assert.deepEqual(config(ID), {});
   configure(ID, {serialPorts: ['ttyS0']});

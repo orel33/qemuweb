@@ -15,7 +15,7 @@ const {parseGuestInterfaces, matchAddresses} = require('../../common/guest-addre
 const fixtures = require('../fixtures/guest-agent-replies');
 const {startFakeAgent} = require('../fixtures/fake-guest-agent');
 
-const SESSION = '0123456789abcdef';
+const SESSION = '89abcdef';
 const MAC = '52:54:00:aa:bb:01';
 const CONTROL = /[\u0000-\u0008\u000b-\u001f\u007f-\u009f]/;
 
@@ -42,7 +42,7 @@ async function cli(args, {query = queryAgent, timeoutMs = 1000, sleeps = []} = {
 
 test('ping prints ok and sends the handshake and guest-ping only', async t => {
   const runtime = makeRuntime(t);
-  const agent = await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice'});
+  const agent = await addHost(t, runtime, {id: 'h-11111111', name: 'alice'});
   const result = await cli(['--runtime', runtime, 'ping']);
   assert.deepEqual(result, {status: 0, out: 'ok\n', err: ''});
   assert.deepEqual(agent.seen, ['guest-sync-delimited', 'guest-ping']);
@@ -50,8 +50,8 @@ test('ping prints ok and sends the handshake and guest-ping only', async t => {
 
 test('interfaces prints the table and what the Graphic view shows, through the validation of the runner', async t => {
   const runtime = makeRuntime(t);
-  await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice'});
-  const result = await cli(['--runtime', runtime, 'h-1111111111111111', 'interfaces']);
+  await addHost(t, runtime, {id: 'h-11111111', name: 'alice'});
+  const result = await cli(['--runtime', runtime, 'h-11111111', 'interfaces']);
   assert.equal(result.status, 0, result.err);
   const lines = result.out.split('\n');
   assert.match(lines[0], /^NIC +NAME +MAC +ADDRESS\/PREFIX$/);
@@ -67,17 +67,17 @@ test('interfaces prints the table and what the Graphic view shows, through the v
 test('info lists what the agent reports as enabled and warns about a risky command', async t => {
   const runtime = makeRuntime(t);
   const commands = names => names.map(name => ({enabled: true, name, 'success-response': true}));
-  await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice', value: {version: '10.0.13', supported_commands: [...commands(['guest-ping', 'guest-info']), {enabled: false, name: 'guest-exec'}]}});
+  await addHost(t, runtime, {id: 'h-11111111', name: 'alice', value: {version: '10.0.13', supported_commands: [...commands(['guest-ping', 'guest-info']), {enabled: false, name: 'guest-exec'}]}});
   const restricted = await cli(['--runtime', runtime, 'info']);
   assert.equal(restricted.out, 'guest agent version: 10.0.13\nenabled commands (2): guest-ping, guest-info\n');
   const open = makeRuntime(t);
-  await addHost(t, open, {id: 'h-2222222222222222', name: 'bob', value: {version: '10.0.13', supported_commands: commands(['guest-ping', 'guest-exec'])}});
+  await addHost(t, open, {id: 'h-22222222', name: 'bob', value: {version: '10.0.13', supported_commands: commands(['guest-ping', 'guest-exec'])}});
   assert.match((await cli(['--runtime', open, 'info'])).out, /WARNING: this agent is NOT restricted, it allows guest-exec/);
 });
 
 test('a silent agent ends at the deadline with status 1 and no output', async t => {
   const runtime = makeRuntime(t);
-  await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice', mode: 'silent'});
+  await addHost(t, runtime, {id: 'h-11111111', name: 'alice', mode: 'silent'});
   const result = await cli(['--runtime', runtime, 'ping'], {timeoutMs: 200});
   assert.equal(result.status, 1);
   assert.equal(result.out, '');
@@ -86,7 +86,7 @@ test('a silent agent ends at the deadline with status 1 and no output', async t 
 
 test('an endless reply is cut at the 64 KB cap', async t => {
   const runtime = makeRuntime(t);
-  await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice', mode: 'huge'});
+  await addHost(t, runtime, {id: 'h-11111111', name: 'alice', mode: 'huge'});
   const result = await cli(['--runtime', runtime, 'interfaces']);
   assert.equal(result.status, 1);
   assert.equal(result.out, '');
@@ -96,7 +96,7 @@ test('an endless reply is cut at the 64 KB cap', async t => {
 test('malformed and refused replies are reported, never printed', async t => {
   for (const mode of ['malformed', 'error', 'wrong-sync']) {
     const runtime = makeRuntime(t);
-    await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice', mode});
+    await addHost(t, runtime, {id: 'h-11111111', name: 'alice', mode});
     const result = await cli(['--runtime', runtime, 'ping']);
     assert.equal(result.status, 1, mode);
     assert.equal(result.out, '');
@@ -106,7 +106,7 @@ test('malformed and refused replies are reported, never printed', async t => {
 
 test('hostile replies: only validated strings reach the terminal, no control character', async t => {
   const runtime = makeRuntime(t);
-  await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice', value: fixtures.hostile});
+  await addHost(t, runtime, {id: 'h-11111111', name: 'alice', value: fixtures.hostile});
   const result = await cli(['--runtime', runtime, 'interfaces']);
   assert.equal(result.status, 0, result.err);
   assert.doesNotMatch(result.out, /[<>]|script|onerror|rm -rf|99999|999\.1|%eth0/);
@@ -117,24 +117,24 @@ test('hostile replies: only validated strings reach the terminal, no control cha
   assert.deepEqual(JSON.parse((await cli(['--runtime', runtime, '--json', 'interfaces'])).out).shown, shown);
   // A reply that is not a list, or a description with control characters in its fields.
   const text = makeRuntime(t);
-  await addHost(t, text, {id: 'h-2222222222222222', name: 'bob', value: '\u001b[31mred\u0007'});
+  await addHost(t, text, {id: 'h-22222222', name: 'bob', value: '\u001b[31mred\u0007'});
   const bad = await cli(['--runtime', text, 'interfaces']);
   assert.equal(bad.status, 1);
   assert.doesNotMatch(bad.err + bad.out, CONTROL);
   const info = makeRuntime(t);
-  await addHost(t, info, {id: 'h-3333333333333333', name: 'eve', value: {version: '\u001b[2J1.0', supported_commands: [{enabled: true, name: 'guest-ping\u001b[0m'}, {enabled: true, name: 'guest-info'}]}});
+  await addHost(t, info, {id: 'h-33333333', name: 'eve', value: {version: '\u001b[2J1.0', supported_commands: [{enabled: true, name: 'guest-ping\u001b[0m'}, {enabled: true, name: 'guest-info'}]}});
   const described = await cli(['--runtime', info, 'info']);
   assert.equal(described.out, 'guest agent version: unknown\nenabled commands (1): guest-info\n');
 });
 
 test('host choice: name, id, unique prefix; several matches are listed and refused (status 2)', async t => {
   const runtime = makeRuntime(t);
-  const first = await addHost(t, runtime, {id: 'h-aaaa111111111111', name: 'alice'});
-  const second = await addHost(t, runtime, {id: 'h-aaaa222222222222', name: 'alina\u001b[31m'});
-  await addHost(t, runtime, {id: 'h-bbbb333333333333', name: 'stopped', mode: null});
+  const first = await addHost(t, runtime, {id: 'h-aaaa1111', name: 'alice'});
+  const second = await addHost(t, runtime, {id: 'h-aaaa2222', name: 'alina\u001b[31m'});
+  await addHost(t, runtime, {id: 'h-bbbb3333', name: 'stopped', mode: null});
   const ambiguous = await cli(['--runtime', runtime, 'ping']);
   assert.equal(ambiguous.status, 2);
-  assert.match(ambiguous.err, /Several hosts.*\n {2}h-aaaa111111111111 {2}alice .*\n {2}h-aaaa222222222222 {2}alina\[31m /);
+  assert.match(ambiguous.err, /Several hosts.*\n {2}h-aaaa1111 {2}alice .*\n {2}h-aaaa2222 {2}alina\[31m /);
   assert.doesNotMatch(ambiguous.err, CONTROL);
   assert.equal((await cli(['--runtime', runtime, 'h-aaaa', 'ping'])).status, 2); // two ids with this prefix
   assert.equal((await cli(['--runtime', runtime, 'ali', 'ping'])).status, 2); // two names with this prefix
@@ -142,7 +142,7 @@ test('host choice: name, id, unique prefix; several matches are listed and refus
   assert.equal((await cli(['--runtime', runtime, 'alice', 'ping'])).out, 'ok\n'); // exact name
   assert.equal((await cli(['--runtime', runtime, 'alic', 'ping'])).out, 'ok\n'); // unique prefix of a name
   assert.equal((await cli(['--runtime', runtime, 'h-aaaa2', 'ping'])).out, 'ok\n'); // unique prefix of an ID
-  assert.equal((await cli(['--runtime', runtime, 'h-aaaa222222222222', 'ping'])).out, 'ok\n');
+  assert.equal((await cli(['--runtime', runtime, 'h-aaaa2222', 'ping'])).out, 'ok\n');
   assert.deepEqual([first.seen.length, second.seen.length], [4, 4]); // two pings each (handshake + command)
   const missing = await cli(['--runtime', runtime, 'zed', 'ping']);
   assert.equal(missing.status, 1);
@@ -157,14 +157,14 @@ test('without HOST the only host with a socket is used; none is an error (1)', a
   const none = await cli(['--runtime', runtime, 'ping']);
   assert.equal(none.status, 1);
   assert.match(none.err, /No running host/);
-  await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice'});
-  await addHost(t, runtime, {id: 'h-2222222222222222', name: 'stopped', mode: null});
+  await addHost(t, runtime, {id: 'h-11111111', name: 'alice'});
+  await addHost(t, runtime, {id: 'h-22222222', name: 'stopped', mode: null});
   assert.equal((await cli(['--runtime', runtime, 'ping'])).out, 'ok\n');
 });
 
 test('no other command can be sent: unknown words, raw JSON and extra arguments are usage errors (2) and nothing is sent', async t => {
   const runtime = makeRuntime(t);
-  const agent = await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice'});
+  const agent = await addHost(t, runtime, {id: 'h-11111111', name: 'alice'});
   assert.deepEqual(COMMANDS, {ping: 'guest-ping', info: 'guest-info', interfaces: 'guest-network-get-interfaces'});
   for (const name of Object.values(COMMANDS)) assert.ok(ALLOWED_COMMANDS.has(name));
   assert.equal(Object.keys(COMMANDS).length, ALLOWED_COMMANDS.size);
@@ -182,7 +182,7 @@ test('no other command can be sent: unknown words, raw JSON and extra arguments 
 test('a refused or closed connection is retried three times, one second apart, and said so', async () => {
   const runtime = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-cli-'));
   try {
-    const directory = path.join(runtime, 'sessions', SESSION, 'h-1111111111111111');
+    const directory = path.join(runtime, 'sessions', SESSION, 'h-11111111');
     fs.mkdirSync(directory, {recursive: true});
     // A socket file for discovery without a server: connections are refused by the fake query below.
     const server = require('node:net').createServer().listen(path.join(directory, 'qga.sock'));
@@ -209,8 +209,8 @@ test('a refused or closed connection is retried three times, one second apart, a
 });
 
 test('a socket path that is too long gets the friendly runtime message', () => {
-  assert.equal(socketPathProblem('/tmp/qw-x/3002', '/tmp/qw-x/3002/sessions/0123456789abcdef/h-0123456789abcdef/qga.sock'), null);
-  const runtime = `/tmp/${'d'.repeat(60)}`;
+  assert.equal(socketPathProblem('/tmp/qw-x/3002', '/tmp/qw-x/3002/sessions/89abcdef/h-89abcdef/qga.sock'), null);
+  const runtime = `/tmp/${'d'.repeat(76)}`; // 81 bytes: over the 65-byte budget, its qga.sock over 107
   const message = socketPathProblem(runtime, `${runtime}/sessions/${SESSION}/h-${SESSION}/qga.sock`);
   assert.match(message, /too long/);
   assert.match(message, /107/);
@@ -218,7 +218,7 @@ test('a socket path that is too long gets the friendly runtime message', () => {
 
 test('the shell wrapper runs it end to end: ping, usage error and exit codes', async t => {
   const runtime = makeRuntime(t);
-  await addHost(t, runtime, {id: 'h-1111111111111111', name: 'alice'});
+  await addHost(t, runtime, {id: 'h-11111111', name: 'alice'});
   const script = path.join(__dirname, '..', '..', 'scripts', 'guest-agent.sh');
   const exec = args => new Promise(resolve => execFile('bash', [script, ...args], {encoding: 'utf8', timeout: 10000}, (error, stdout, stderr) => resolve({status: error ? error.code : 0, stdout, stderr})));
   assert.deepEqual(await exec(['--runtime', runtime, 'alice', 'ping']), {status: 0, stdout: 'ok\n', stderr: ''});

@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const {baseNodeId, consoleChannel, consoleId, portChannel, portName, validatePorts, PORTS} = require('../../common/console-id');
 
-const host = 'h-0123456789abcdef';
+const host = 'h-89abcdef';
 
 test('channel 0 console ID is the node ID, channel 1 appends :1', () => {
   assert.equal(consoleId(host), host);
@@ -19,7 +19,7 @@ test('baseNodeId and consoleChannel parse console IDs', () => {
   assert.equal(baseNodeId(`${host}:1`), host);
   assert.equal(consoleChannel(host), 0);
   assert.equal(consoleChannel(`${host}:1`), 1);
-  assert.equal(consoleChannel('s-0123456789abcdef'), 0);
+  assert.equal(consoleChannel('s-89abcdef'), 0);
 });
 
 test('port names and channel indexes map to each other', () => {

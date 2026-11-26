@@ -16,12 +16,12 @@ const {commands: archiveCommands} = require('../../runner/commands/archives');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage', VBOXMANAGE: 'VBoxManage'};
-const HOST = 'h-0000000000000001';
+const HOST = 'h-00000001';
 const ZERO = '0'.repeat(64);
 
 function setup(t, engine = 'qemu') {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-archive-disks-'));
-  const session = new Session({runtimeRoot: dir, id: '0000000000000001', engine});
+  const session = new Session({runtimeRoot: dir, id: '00000001', engine});
   fs.mkdirSync(session.runtimeDir, {recursive: true});
   const runner = createSessionRunner({session, commands, root, runtimeRoot: dir, configPath: path.join(root, 'config.json')});
   const emitted = [];

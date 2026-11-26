@@ -18,7 +18,7 @@ const {setTimeout: delay} = require('node:timers/promises');
 const {createTestUsers, spawnServer, QemuWebClient} = require('./qemuweb-client');
 
 const root = path.join(__dirname, '..', '..');
-const newSwitchId = () => `s-${crypto.randomBytes(8).toString('hex')}`;
+const newSwitchId = () => `s-${crypto.randomBytes(4).toString('hex')}`;
 const sockets = [];
 const children = [];
 let testUsers;
