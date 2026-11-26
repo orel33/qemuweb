@@ -213,7 +213,7 @@ How the units behave: restarts are systemd's job (`Restart=on-failure`), QemuWeb
 restarting a runner that the server refused (revoked). `KillMode=mixed` sends SIGTERM to the runner only, which stops its machines in order; SIGKILL goes to every
 remaining process of the unit (QEMU, `vde_switch`) only after the stop timeout. Stopping the runner stops its machines. Stopping the server leaves them
 running, and the sessions are adopted again when the server is back. The runtime directories are on a persistent disk, apart from the code; a runner's path is at
-most 49 characters.
+most 65 characters.
 
 ## Remote runners
 
@@ -384,7 +384,7 @@ never written; reading the session list or the logs is not logged.
 `users.log` records user events, one line each:
 
 ```json
-{"time":"2026-11-16T09:15:41.002Z","user":"alice","event":"node-started","target":{"nodeId":"h-0123456789abcdef"},"result":"ok"}
+{"time":"2026-11-16T09:15:41.002Z","user":"alice","event":"node-started","target":{"nodeId":"h-01234567"},"result":"ok"}
 ```
 
 | Event | Target |

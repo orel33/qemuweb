@@ -11,7 +11,7 @@ web interface is described in the [user guide](user-guide.md).
 | [`.env`](../.env) | Executable names used by QemuWeb. |
 | `.env.local` | Machine-specific overrides of `.env` (absolute paths); ignored by Git. |
 | `users.json` | User accounts (see [Users and sessions](user-guide.md#users-and-sessions)); ignored by Git. |
-| `<runtime>/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks (`<host>/disk.qcow2` for QEMU and `<host>/disk.vdi` for VirtualBox, up to one per engine), and sockets. The ID is random. |
+| `<runtime>/sessions/<id>/` | One user's session: `session.json` (its definition, identical to the one in a ZIP archive), `meta.json` (its `owner` and creation date, never exported), `<host>/host.json`, `<host>/startup/start.sh`, `<switch>/switch.json`, working disks (`<host>/disk.qcow2` for QEMU and `<host>/disk.vdi` for VirtualBox, up to one per engine), and sockets. The ID is random: 8 lowercase hex characters, a node directory `h-` or `s-` and 8 (IDS01). A runner ignores directories with the 16-character names of earlier versions. |
 | `<runtime>/users/<login>` | Link to the user's session directory, for administrators; made and removed by the runner in its own directory. |
 | `<runtime>/local-runner.token` | Token (mode 0600) of the local runner, created by the server started with `--local-runner`; the runner reads it to connect over the WebSocket. Never printed or logged. |
 
@@ -58,20 +58,20 @@ Each process owns its own directory (the server never opens a path in a runner's
 - the **server directory** holds `server-<port>.pid`, `bindings.json` and `local-runner.token`; it holds no socket, so it has **no length limit**;
 - a **runner directory** holds `sessions/<id>/` (with the Unix sockets of the nodes: consoles, monitor, VDE), the `users/<login>` aliases and `runner.pid`.
 
-A socket path is limited to 107 bytes, which leaves 49 bytes for a runner directory. The default is therefore a short private directory in `/tmp`,
+A socket path is limited to 107 bytes, which leaves 65 bytes for a runner directory. The default is therefore a short private directory in `/tmp`,
 one per account and per process (`common/runtime-dir.js` is the only place of the rule; the scripts ask it):
 
 | Process | Default | Length |
 |---|---|---|
 | Server | `/tmp/qw-<login>/<port>`, the port being its `--listen` (`/tmp/qw-<login>/3002` by default) | no limit |
-| Local runner (`runner.sh --port PORT`) | `/tmp/qw-<login>/l-<port>` (7 characters at most) | 49 bytes |
-| Remote runner (`runner.sh run`) without `--runtime` or a `runtime` in its runner file | `/tmp/qw-<login>/r-<first 6 hex digits of its runner ID>` (8 characters) | 49 bytes |
+| Local runner (`runner.sh --port PORT`) | `/tmp/qw-<login>/l-<port>` (7 characters at most) | 65 bytes |
+| Remote runner (`runner.sh run`) without `--runtime` or a `runtime` in its runner file | `/tmp/qw-<login>/r-<first 6 hex digits of its runner ID>` (8 characters) | 65 bytes |
 
 `<login>` is the operating system account that runs the process (`id -un`), each character outside `A-Za-z0-9._-`
 replaced by `_`; an empty name, or one of more than 32 characters, is replaced by the numeric user ID. `--runtime DIR`
 replaces the default and is used as given (there is no environment variable). Two servers on two ports, and two runners, of one
 account never share a directory, and a runner never shares the one of the server. Worst case, a 32 character login: `/tmp/qw-<login>` is 40 bytes,
-a runner directory at most 49 (`r-` and 6 hex digits), a longest socket path 107 bytes: it fits, so a default runner directory is never refused.
+a default runner directory at most 49 (`r-` and 6 hex digits), a longest socket path 91 bytes: it fits with 16 bytes to spare, so a default runner directory is never refused.
 
 The default directories are created with mode 0700. If `/tmp/qw-<login>` or the directory of the process exists already, the
 program REFUSES it, with no fallback and no change to it, unless it is a real directory (not a symbolic link) owned by
@@ -79,8 +79,8 @@ the same user and closed to group and others: `/tmp` is shared, and anyone could
 choose another place with `--runtime`. A directory given with `--runtime` is only created.
 
 The runner checks the length of its directory at startup, before any session exists. A `--runtime` that is too long is refused with
-the longest path built and the maximum length (49 bytes: `<runtime>/sessions/<16 hex>/<h- or s- and 16 hex>/serial1.sock`
-must stay within 107 bytes). Both programs print one warning, never an error, when the filesystem of the directory
+the longest path built and the maximum length (65 bytes: `<runtime>/sessions/<8 hex>/<h- or s- and 8 hex>/serial1.sock`,
+41 bytes after the directory, must stay within 107 bytes). Both programs print one warning, never an error, when the filesystem of the directory
 is a tmpfs (memory) or has less than 5 GB free, because the working disks of the sessions live there.
 
 **Sessions do not survive a reboot of the machine with the default directory**: `/tmp` is emptied, and the next start

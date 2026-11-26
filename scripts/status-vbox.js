@@ -9,7 +9,7 @@
 const path = require('path');
 const {serverRuntime, localRunnerRuntime} = require('../common/runtime-dir');
 
-const VM_NAME = /^qemuweb-(\d+)-([0-9a-f]{16})-(h-[0-9a-f]{16})$/;
+const VM_NAME = /^qemuweb-(\d+)-([0-9a-f]{8})-(h-[0-9a-f]{8})$/;
 
 // {name, uuid, runnerPid, sessionId, nodeId} for the command line of a QemuWeb VBoxHeadless, else null.
 function parseVBoxHeadless(args) {

@@ -44,7 +44,7 @@ test('without the agent in the image there is no channel, no virtio-serial devic
 
 test('qga.sock is a node file and the longest path of the runtime budget does not grow', () => {
   assert.equal(NODE_FILES.qga, 'qga.sock');
-  const node = path.join('/tmp/qw-someone/3002/sessions', '0'.repeat(16), `h-${'0'.repeat(16)}`);
+  const node = path.join('/tmp/qw-someone/3002/sessions', '0'.repeat(8), `h-${'0'.repeat(8)}`);
   assert.ok(Buffer.byteLength(path.join(node, NODE_FILES.qga)) < Buffer.byteLength(path.join(node, NODE_FILES.serial0)));
   assert.ok(Buffer.byteLength(path.join(node, NODE_FILES.qga)) <= SOCKET_LIMIT);
 });
@@ -57,7 +57,7 @@ test('a node has its agent socket path, the node list carries the addresses, and
   const session = {nodes: new Map(), engine: 'qemu', runtimeDir, saveMetadata() {}};
   const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage', VBOXMANAGE: 'VBoxManage'};
   const runner = createSessionRunner({session, commands, root: path.join(__dirname, '..', '..'), runtimeRoot, configPath: path.join(__dirname, '..', '..', 'config.json')});
-  const node = runner.createNode('h-0000000000000001', 'host');
+  const node = runner.createNode('h-00000001', 'host');
   assert.equal(node.guestAgentPath, path.join(node.runtimeDir, 'qga.sock'));
   assert.deepEqual(runner.listNodes().find(entry => entry.id === node.id).addresses, {});
   node.guestAddresses = {0: ['10.0.0.1/24']};

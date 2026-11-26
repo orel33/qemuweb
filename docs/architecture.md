@@ -396,7 +396,7 @@ order. State that several modules reassign lives on the `store` object of
 `state.js`. `monitor-terminal.js`, `session-log.js`, `network-node-icons.js`, `view-state.js` and
 `topology-graphic.js` (layout, link routing and SVG drawing of the Graphic view) remain classic scripts, also loaded by unit tests.
 `login.html` and its module `login.js` form the separate login page;
-`admin.html` and `admin.js` the Admin page `/admin`, served to admins only, one tab at a time (`admin-tabs.js` for the tab bar, the refresh rules and the badges; `admin-tabs-rules.js` for the pure rules). Only the visible tab polls, none while the browser tab is hidden.
+`admin.html` and `admin.js` the Admin page `/admin`, served to admins only, one tab at a time (`admin-tabs.js` for the tab bar, the refresh rules and the badges; `admin-tabs-rules.js` for the pure rules; `admin-sessions.js` the Runner column of the Sessions tab: the runner's name and ID, `local`, or `not placed`, next to the session ID, ADM03). Only the visible tab polls, none while the browser tab is hidden.
 
 | Module | Role |
 | --- | --- |
@@ -409,6 +409,7 @@ order. State that several modules reassign lives on the `store` object of
 | `host-console-settings.js` | Console tab of Host Settings: read-only console (`serial0.sock`, `serial1.sock`) and monitor sockets. |
 | `workspace.js` | Pane layout, paging, node tabs, state badges and metrics. |
 | `nodes.js` | Node model, server synchronization and lifecycle actions. |
+| `node-ids.js` | New host and switch IDs (`h-`/`s-` and 8 hex, none the page knows) and a creation sent again with a new ID when the runner answers 409 for its ID (IDS01). |
 | `node-dialogs.js` | Add switch and Clone dialogs. |
 | `host-settings.js` | Host Settings dialog, also used to add a host. |
 | `startup-media.js` | Startup tab: `start.sh` template, startup disk and extra files. |
@@ -580,6 +581,24 @@ The JSON files are specified in [json-files.md](json-files.md).
 stays random and never contains the login, which keeps socket paths short and
 logins out of archives.
 
+**Identifiers (IDS01).** A session ID is 8 lowercase hex characters (`/^[0-9a-f]{8}$/`), a node ID
+`h-` or `s-` and 8 (`/^[hs]-[0-9a-f]{8}$/`), the same everywhere: runtime directories, `bindings.json`,
+logs, `status.sh`, `/admin`, archives, consoles and captures. Each is 32 random bits
+(`crypto.randomBytes(4)`), so collisions are handled where an ID is made:
+- a new session ID (`SessionManager.open`) is never one the server knows: a workspace or a binding of
+  `bindings.json`, which together cover every placed session on every runner;
+- the runner refuses `session.create` (409) for a session it holds or whose directory exists (a stale
+  directory, kept at start because it has nodes). The placement then drops the unplaced, empty session
+  (`removed`, reason "session ID already used on the runner": its pages reload into a new session, with a
+  new ID) and the request answers 409 "Your session had to be renewed. Please retry."; there is no retry loop;
+- the runner refuses `host.create` and `switch.create` (409 "Host/Switch ID already exists; retry with another
+  ID.") for an ID its session has. The browser makes node IDs (`public/node-ids.js`: none of the IDs the page
+  knows) and sends the creation again with a new ID on that 409, 4 attempts at most; `topology.import`
+  draws IDs absent from the session (`newEntityId(kind, session.nodes)`).
+An archive with the 16-character IDs of earlier versions is refused ("archive from an earlier version"); a
+runner ignores session directories with old names (not removed: an administrator deletes them).
+Capture live view IDs and temporary file names keep 16 hex characters: they are not session or node IDs.
+
 Stopping a host keeps its working disk for a later start. Resetting recreates
 the disk of the current engine from the base image (the other engine's disk is kept). Removing a node or stopping the server cleans
 up its temporary files. A ZIP export can preserve a session explicitly; a
@@ -670,7 +689,7 @@ stream    either way    {type:'stream', id, op:'end'|'error'|'credit', message?,
 
 ### Commands
 
-Session: `session.create {sessionId, owner, createdAt, engine?}` (directory,
+Session: `session.create {sessionId, owner, createdAt, engine?}` (409 when the session or its directory exists; directory,
 `session.json`, `meta.json`; the engine asked, else the runner's first), `session.delete {ifEmpty?}` (destroy every node, remove the
 directory; with `ifEmpty` only a session without any node is deleted, else `{deleted: false}`), `session.settings` / `session.setEngine {engine}`,
 `session.summary` (counts, running nodes, reserved RAM and CPU, for `/admin`),
@@ -785,7 +804,8 @@ No 503 at login: the page loads with an empty session whatever the runners.
   middleware: `pickRunner` (503 "No runner is available" when there is none: the only place this
   error appears), the binding written to `bindings.json`, the runner's client takes the handle over
   (`RunnerClient.adopt`, the same object as before: routers and sockets keep working), then
-  `session.create {owner, createdAt, engine}`. A failed creation leaves the session unplaced.
+  `session.create {owner, createdAt, engine}`. A failed creation leaves the session unplaced, except a 409
+  (the runner already has a directory with this ID, see Identifiers): the session is dropped and the request answers 409.
   Concurrent placements share one. `users.log`: `session-placed {sessionId, runnerId}`.
 - **Release** (`release`). When a placed session may have become empty (a node removed, a load
   that created nothing, failed or not, a restored session that its runner's hello reports without
@@ -906,7 +926,7 @@ student's lab machine (roadmap, "Personal runners").
   nothing to `/etc` or `/var`. Every path is a parameter of `runner/main.js`:
   `--port PORT` (the server, `ws://127.0.0.1:PORT`), `--host ADDRESS` (the server's address when it is not loopback: `ws://ADDRESS:PORT`), `--token-file <file>` (the token of the server, default the file of the default SERVER directory of the port), `--runtime <dir>` (sessions,
   default `/tmp/qw-<login>/l-<port>` for the local runner and `/tmp/qw-<login>/r-<6 hex digits of its id>` for a remote one: one directory per runner,
-  within the 49-byte budget of the node sockets (common/runtime-dir.js)), `--config <file>` (system catalog,
+  within the 65-byte budget of the node sockets (common/runtime-dir.js)), `--config <file>` (system catalog,
   default the project's `config.json`).
   The runner itself knows nothing of systemd: `scripts/qwctl.sh` installs the
   system units (templates in `deploy/systemd/`), and only there are `/etc` and

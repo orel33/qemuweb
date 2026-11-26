@@ -15,7 +15,7 @@ const {moduleSource} = require('./web-ui-source');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage', VBOXMANAGE: 'VBoxManage'};
-const HOST = 'h-0000000000000001';
+const HOST = 'h-00000001';
 
 function setup(engine) {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-vbox-systems-'));

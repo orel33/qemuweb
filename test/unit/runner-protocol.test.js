@@ -53,10 +53,10 @@ test('responses match their requests in any order, errors keep the runner status
     }
   });
   await once(client, 'hello');
-  const session = client.session('0000000000000001');
+  const session = client.session('00000001');
   const [slow, fast] = await Promise.all([session.request('slow', {n: 1}), session.request('fast')]);
   assert.deepEqual(slow, {slow: 1});
-  assert.deepEqual(fast, {sessionId: '0000000000000001', command: 'fast'});
+  assert.deepEqual(fast, {sessionId: '00000001', command: 'fast'});
   await assert.rejects(session.request('fail'), error => error.status === 404 && error.message === 'No such node.');
   await assert.rejects(session.request('plain'), error => error.status === undefined && error.message === 'Plain failure.');
   client.close();
@@ -65,7 +65,7 @@ test('responses match their requests in any order, errors keep the runner status
 test('a lost connection fails pending and later requests with 503', async () => {
   const {client, runnerConnection} = fakeRunner({handle: () => new Promise(() => {})});
   await once(client, 'hello');
-  const pending = client.session('0000000000000001').request('never');
+  const pending = client.session('00000001').request('never');
   runnerConnection.close();
   await assert.rejects(pending, error => error.status === 503);
   await assert.rejects(client.request('again'), error => error.status === 503);
@@ -78,18 +78,18 @@ test('events reach only the handles of known sessions; input and requests keep t
     input: (sessionId, nodeId, data) => order.push(`input:${data}`)
   });
   await once(client, 'hello');
-  const toto = client.session('0000000000000001');
+  const toto = client.session('00000001');
   const seen = [];
   toto.events.on('state', payload => seen.push(payload.nodeId));
-  fake.events.emit('event', '0000000000000001', 'state', {nodeId: 'h-1'});
-  fake.events.emit('event', '00000000000000ff', 'state', {nodeId: 'h-2'});
+  fake.events.emit('event', '00000001', 'state', {nodeId: 'h-1'});
+  fake.events.emit('event', '000000ff', 'state', {nodeId: 'h-2'});
   toto.request('one', {n: 1});
   toto.input('h-1', 'a');
   await toto.request('two', {n: 2});
   assert.deepEqual(seen, ['h-1']);
   assert.deepEqual(order, ['one:1', 'input:a', 'two:2']);
-  client.release('0000000000000001');
-  fake.events.emit('event', '0000000000000001', 'state', {nodeId: 'h-3'});
+  client.release('00000001');
+  fake.events.emit('event', '00000001', 'state', {nodeId: 'h-3'});
   await client.request('sync', {n: 3});
   assert.deepEqual(seen, ['h-1'], 'a released session gets no event');
   client.close();
@@ -197,15 +197,15 @@ test('late frames for a cancelled stream are ignored; a stream sent before it is
 
 test('the dispatcher refuses unknown commands, sessions and nodes', async t => {
   const {client, service} = await runnerPair(t);
-  const sessionId = '00000000000000a1';
+  const sessionId = '000000a1';
   await assert.rejects(client.request('session.create', {owner: 'toto'}, 'not-an-id'), /Invalid session ID/);
   await client.request('session.create', {owner: 'toto'}, sessionId);
   await assert.rejects(client.request('session.create', {owner: 'toto'}, sessionId), error => error.status === 409);
   const session = client.session(sessionId);
   await assert.rejects(session.request('no.such.command'), /Unknown runner command/);
-  await assert.rejects(client.session('00000000000000a2').request('nodes.list'), error => error.status === 404);
-  await assert.rejects(session.request('node.start', {nodeId: 'h-00000000000000aa'}), error => error.status === 404 && /Unknown host or switch/.test(error.message));
-  await assert.rejects(session.request('console.attach', {nodeId: 'h-00000000000000aa'}), error => !error.status && error.message === 'Unknown node.');
+  await assert.rejects(client.session('000000a2').request('nodes.list'), error => error.status === 404);
+  await assert.rejects(session.request('node.start', {nodeId: 'h-000000aa'}), error => error.status === 404 && /Unknown host or switch/.test(error.message));
+  await assert.rejects(session.request('console.attach', {nodeId: 'h-000000aa'}), error => !error.status && error.message === 'Unknown node.');
   assert.deepEqual(await session.request('nodes.list'), []);
   // hello also carries each session's owner and creation date (the control plane adopts them).
   assert.deepEqual(service.hello().sessions.map(({createdAt, ...rest}) => ({...rest, dated: Number.isFinite(Date.parse(createdAt))})),
@@ -222,16 +222,16 @@ test('the dispatcher refuses unknown commands, sessions and nodes', async t => {
 
 test('UXS02: session.create takes the engine of the session, session.delete {ifEmpty} deletes only an empty session', async t => {
   const {client, service} = await runnerPair(t);
-  await assert.rejects(client.request('session.create', {owner: 'toto', engine: 'vbox'}, '00000000000000b1'), /VirtualBox is unavailable on this runner/);
-  await assert.rejects(client.request('session.create', {owner: 'toto', engine: 'other'}, '00000000000000b1'), /Invalid session engine/);
+  await assert.rejects(client.request('session.create', {owner: 'toto', engine: 'vbox'}, '000000b1'), /VirtualBox is unavailable on this runner/);
+  await assert.rejects(client.request('session.create', {owner: 'toto', engine: 'other'}, '000000b1'), /Invalid session engine/);
   assert.deepEqual(service.hello().sessions, [], 'a refused creation leaves nothing');
-  await client.request('session.create', {owner: 'toto', engine: 'qemu'}, '00000000000000b1');
-  const session = client.session('00000000000000b1');
+  await client.request('session.create', {owner: 'toto', engine: 'qemu'}, '000000b1');
+  const session = client.session('000000b1');
   assert.equal((await session.request('session.settings')).engine, 'qemu');
-  await session.request('switch.create', {id: 's-00000000000000b1', name: 'sw1', autostart: false});
+  await session.request('switch.create', {id: 's-000000b1', name: 'sw1', autostart: false});
   assert.deepEqual(await session.request('session.delete', {ifEmpty: true}), {deleted: false}, 'a session with a node stays');
-  assert.deepEqual(await session.request('nodes.ids'), ['s-00000000000000b1']);
-  await session.request('node.delete', {nodeId: 's-00000000000000b1'});
+  assert.deepEqual(await session.request('nodes.ids'), ['s-000000b1']);
+  await session.request('node.delete', {nodeId: 's-000000b1'});
   assert.deepEqual(await session.request('session.delete', {ifEmpty: true}), {deleted: true});
   assert.deepEqual(service.hello().sessions, []);
 });

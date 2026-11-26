@@ -11,7 +11,7 @@ const {createRunnerService} = require('../../runner');
 const {userAliasName, linkUserAlias, unlinkUserAlias, pruneUserAliases, pruneRuntime, takeRunnerLock} = require('../../runner/runtime-tidy');
 const {root, commands} = require('./runner-pair');
 
-const ID = n => n.toString(16).padStart(16, '0');
+const ID = n => n.toString(16).padStart(8, '0');
 const DEFINITION = JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: [], switches: []});
 
 function scratch(t) {
@@ -74,7 +74,7 @@ test('start-up pruning removes the empty session directories and keeps every oth
   const emptySubdirs = makeSession(runtime, ID(4), {'session.json': DEFINITION, 'meta.json': '{}'});
   fs.mkdirSync(path.join(emptySubdirs, 'hosts'));
   fs.mkdirSync(path.join(emptySubdirs, 'switches'));
-  const withNodes = makeSession(runtime, ID(5), {'session.json': JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: ['h-0123456789abcdef'], switches: []}), 'meta.json': '{}'});
+  const withNodes = makeSession(runtime, ID(5), {'session.json': JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: ['h-89abcdef'], switches: []}), 'meta.json': '{}'});
   const unexpected = makeSession(runtime, ID(6), {'session.json': DEFINITION, 'meta.json': '{}', 'keep.txt': 'x'});
   const badDefinition = makeSession(runtime, ID(7), {'session.json': 'not json'});
   const otherSchema = makeSession(runtime, ID(8), {'session.json': JSON.stringify({schemaVersion: 99, engine: 'qemu', hosts: [], switches: []})});
@@ -133,7 +133,7 @@ test('session.create refuses an owner that is not a login', async t => {
 
 test('a non-empty session left by an earlier runner survives the start-up pruning, with its alias', async t => {
   const runtime = scratch(t);
-  makeSession(runtime, ID(1), {'session.json': JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: ['h-0123456789abcdef'], switches: []}), 'meta.json': '{}'});
+  makeSession(runtime, ID(1), {'session.json': JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: ['h-89abcdef'], switches: []}), 'meta.json': '{}'});
   linkUserAlias(runtime, 'toto', ID(1));
   pruneRuntime(runtime, {log() {}});
   assert.equal(fs.existsSync(path.join(runtime, 'sessions', ID(1))), true);

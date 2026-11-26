@@ -35,14 +35,14 @@ const commands = {
       for (const entry of [...topology.switches, ...topology.hosts]) if (used.has(entry.name.toLowerCase())) throw new Error(`Name already exists: ${entry.name}.`);
       const switchIds = new Map();
       for (const sw of topology.switches) {
-        const id = newEntityId('switch');
+        const id = newEntityId('switch', session.nodes);
         const node = getNode(id, true, 'switch'); created.push(id);
         setNodeHostname(node, sw.name); node.lastMessage = 'VDE switch ready to start';
         persistSwitchConfiguration(node);
         switchIds.set(sw.name, id);
       }
       for (const host of topology.hosts) {
-        const id = newEntityId('host');
+        const id = newEntityId('host', session.nodes);
         const interfaces = assignNetworkInterfaces({id}, validateNetworkInterfaces(host.switches.map(name => switchIds.get(name)), engine, false));
         const node = getNode(id, true, 'host'); created.push(id);
         setNodeHostname(node, host.name); node.selectedImage = imageById(host.system); node.engine = engine;

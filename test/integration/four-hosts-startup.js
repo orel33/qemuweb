@@ -13,7 +13,7 @@ const root = path.resolve(__dirname, '../..');
 const imagePath = path.join(root, 'images/debian13-legacy.raw');
 const engine = 'qemu';
 const timeoutMs = Number(process.env.FOUR_HOSTS_TIMEOUT_MS || 120000);
-const newId = prefix => `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
+const newId = prefix => `${prefix}-${crypto.randomBytes(4).toString('hex')}`;
 const switchId = newId('s');
 const hosts = Array.from({length: 4}, (_, index) => ({id: newId('h'), name: `lan4-h${index + 1}`, label: `h${index + 1}`}));
 const expectedScript = '#!/bin/sh\nhostname @HOSTNAME@\nifconfig @IFNAME0@ 192.168.0.@SWPORT0@ netmask 255.255.255.0 up\n';

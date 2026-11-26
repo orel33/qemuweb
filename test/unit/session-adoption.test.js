@@ -12,7 +12,7 @@ const {RunnerRegistry} = require('../../server/runner-registry');
 const {runnerPair} = require('./runner-pair');
 
 const quiet = t => { t.mock.method(console, 'warn', () => {}); t.mock.method(console, 'log', () => {}); };
-const ID = n => n.toString(16).padStart(16, '0');
+const ID = n => n.toString(16).padStart(8, '0');
 const settle = async condition => {
   for (let turn = 0; turn < 400 && !condition(); turn++) await new Promise(resolve => setTimeout(resolve, 5));
 };
@@ -40,7 +40,7 @@ async function setup(t, {graceSeconds = 60, restoreRecord = record} = {}) {
 test('a binding is restored offline for its owner, then adopted at the hello: same handle, same session, the runner\'s machines continue', async t => {
   const {manager, bindings, service, restore, events} = await setup(t);
   await service.handle('session.create', ID(1), {owner: 'toto', createdAt: '2026-01-02T03:04:05.000Z'});
-  await service.handle('switch.create', ID(1), {id: 's-00000000000000aa', name: 'sw', autostart: false});
+  await service.handle('switch.create', ID(1), {id: 's-000000aa', name: 'sw', autostart: false});
   bind(bindings, ID(1), 'toto');
   restore();
   const workspace = manager.get('toto');
@@ -53,7 +53,7 @@ test('a binding is restored offline for its owner, then adopted at the hello: sa
   assert.equal(manager.available(workspace), false, 'offline until its runner is back');
   assert.equal(manager.open('toto'), workspace, 'the user finds his offline session, never a new one');
   await assert.rejects(workspace.runner.request('nodes.ids'), error => error.status === 503);
-  workspace.runner.input('s-00000000000000aa', 'x'); // dropped, no crash
+  workspace.runner.input('s-000000aa', 'x'); // dropped, no crash
   assert.throws(() => workspace.runner.outgoing(), error => error.status === 503);
   assert.throws(() => workspace.runner.incoming('x'), error => error.status === 503);
 });
@@ -61,7 +61,7 @@ test('a binding is restored offline for its owner, then adopted at the hello: sa
 test('the hello of the bound runner adopts the restored session through the real client', async t => {
   const {manager, bindings, service, client, registry, restore, events} = await setup(t);
   await service.handle('session.create', ID(1), {owner: 'toto'});
-  await service.handle('switch.create', ID(1), {id: 's-00000000000000aa', name: 'sw', autostart: false});
+  await service.handle('switch.create', ID(1), {id: 's-000000aa', name: 'sw', autostart: false});
   bind(bindings, ID(1), 'toto');
   restore();
   const workspace = manager.get('toto');
@@ -73,7 +73,7 @@ test('the hello of the bound runner adopts the restored session through the real
   assert.equal(handle.client, client);
   assert.equal(workspace.restored, false);
   assert.deepEqual(events.slice(1), [['adopted', 'toto'], ['connectivity', 'toto', true]]);
-  assert.deepEqual(await handle.request('nodes.ids'), ['s-00000000000000aa'], 'the machines of the runner are reached again');
+  assert.deepEqual(await handle.request('nodes.ids'), ['s-000000aa'], 'the machines of the runner are reached again');
   assert.deepEqual(runnerSessions(service), [ID(1)], 'nothing was deleted');
   assert.equal(manager.available(workspace), true);
   assert.equal(manager.graceLeft('local'), null, 'no grace runs once the runner is back');
@@ -142,7 +142,7 @@ test('an invalid session ID is ignored, never adopted', async t => {
 test('a restored session the runner no longer reports is dropped at its hello (runner lost), with its binding; the others stay', async t => {
   const {manager, bindings, service, registry, restore, events} = await setup(t);
   await service.handle('session.create', ID(6), {owner: 'toto'});
-  await service.handle('switch.create', ID(6), {id: 's-00000000000000aa', name: 'sw', autostart: false});
+  await service.handle('switch.create', ID(6), {id: 's-000000aa', name: 'sw', autostart: false});
   bind(bindings, ID(7), 'gone');
   bind(bindings, ID(6), 'toto');
   bind(bindings, ID(8), 'bob', 'r-00000001');
@@ -196,7 +196,7 @@ test('the grace period of restored sessions counts from the start; when it ends 
 test('a hello before the grace period ends cancels it', async t => {
   const {manager, bindings, service, registry, restore} = await setup(t, {graceSeconds: 0.08});
   await service.handle('session.create', ID(1), {owner: 'toto'});
-  await service.handle('switch.create', ID(1), {id: 's-00000000000000aa', name: 'sw', autostart: false});
+  await service.handle('switch.create', ID(1), {id: 's-000000aa', name: 'sw', autostart: false});
   bind(bindings, ID(1), 'toto');
   restore();
   registry.emit('online', registry.get('local'), service.hello());
@@ -279,7 +279,7 @@ test('the server never opens a path under the runner\'s directory, whatever its 
   const {runtimeRoot, manager, bindings, service, registry, restore} = await setup(t);
   registry.get('local').runtimeRoot = '/somewhere/else/runtime';
   await service.handle('session.create', ID(7), {owner: 'toto'});
-  await service.handle('switch.create', ID(7), {id: 's-00000000000000aa', name: 'sw', autostart: false});
+  await service.handle('switch.create', ID(7), {id: 's-000000aa', name: 'sw', autostart: false});
   bind(bindings, ID(7), 'toto');
   restore();
   manager.resync(registry.get('local'), service.hello());
@@ -318,7 +318,7 @@ test('reportedSessions keeps the valid session IDs of a hello and nothing else',
 test('after the adoption nothing is dropped when the former grace period would have ended', async t => {
   const {manager, bindings, service, registry, restore, events} = await setup(t, {graceSeconds: 0.08});
   await service.handle('session.create', ID(1), {owner: 'toto'});
-  await service.handle('switch.create', ID(1), {id: 's-00000000000000aa', name: 'sw', autostart: false});
+  await service.handle('switch.create', ID(1), {id: 's-000000aa', name: 'sw', autostart: false});
   bind(bindings, ID(1), 'toto');
   restore();
   manager.resync(registry.get('local'), service.hello()); // the hello itself, without the registry event

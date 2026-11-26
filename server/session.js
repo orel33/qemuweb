@@ -13,11 +13,11 @@
 //                 refuses changes meanwhile
 const crypto = require('crypto');
 
-// Session IDs are 16 hex characters, chosen by the control plane.
-const SESSION_ID = /^[0-9a-f]{16}$/;
+// Session IDs are 8 hex characters, chosen by the control plane.
+const SESSION_ID = /^[0-9a-f]{8}$/;
 
 class Session {
-  constructor({runnerId = null, id = crypto.randomBytes(8).toString('hex'), owner = null, createdAt = new Date().toISOString()}) {
+  constructor({runnerId = null, id = crypto.randomBytes(4).toString('hex'), owner = null, createdAt = new Date().toISOString()}) {
     this.id = id;
     this.owner = owner;
     this.createdAt = createdAt;

@@ -43,7 +43,8 @@ async function exampleFile(info) {
 
 async function inspectSession(file) {
   let summary = null;
-  try { summary = await readArchiveSummary(file); } catch (_) { return failed('read', 'Cannot read the archive: it is not a QemuWeb session.'); }
+  try { summary = await readArchiveSummary(file); }
+  catch (error) { return failed('read', error.earlierVersion ? error.message : 'Cannot read the archive: it is not a QemuWeb session.'); }
   const readText = archiveSummaryText(summary);
   try {
     const check = await checkArchiveBaseImages(file, summary);

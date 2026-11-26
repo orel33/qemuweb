@@ -1,7 +1,7 @@
 'use strict';
 
 // Console identifiers. A host has one console per serial port: channel 0 (ttyS0) is named by
-// the node ID alone, channel 1 (ttyS1) by the node ID followed by ':1' (h-<16 hex>:1). The
+// the node ID alone, channel 1 (ttyS1) by the node ID followed by ':1' (h-<8 hex>:1). The
 // identifier is used by the sockets layer and the runner (select-node, input, clear-console,
 // console.* commands, 'serial' and 'serial-reset' events); node ids stay plain everywhere else.
 // Shared by the runner and the tests (require) and by the browser (classic script served at
@@ -14,7 +14,7 @@
   // Serial ports a host can expose, in QEMU -serial order: the channel index of a port is its
   // position here (ttyS0 is the kernel console, COM1). Extend the list to allow more ports.
   const PORTS = ['ttyS0', 'ttyS1'];
-  const PATTERN = /^([hs]-[0-9a-f]{16})(?::([0-9]+))?$/;
+  const PATTERN = /^([hs]-[0-9a-f]{8})(?::([0-9]+))?$/;
 
   // The channel index of a port name, null if the name is not an allowed port.
   function portChannel(name) {

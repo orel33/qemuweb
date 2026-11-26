@@ -33,8 +33,10 @@ async function archiveJson(file, entry) {
 // Reads session.json and the list of working disks from the ZIP, without uploading it.
 export async function readArchiveSummary(file) {
   const entries = await archiveEntries(file);
+  // Host and switch IDs have 8 hex characters; earlier versions used 16 (runner/archive-zip.js refuses them too).
+  if ([...entries.keys()].some(name => /^[hs]-[0-9a-f]{16}\//.test(name))) throw Object.assign(new Error('This session archive comes from an earlier version of QemuWeb (16-character host and switch IDs): it cannot be loaded.'), {earlierVersion: true});
   // The hosts that carry a working disk, and how many disks of each engine (disk.qcow2, disk.vdi).
-  const diskNames = [...entries.keys()].map(name => /^(h-[0-9a-f]{16})\/disk\.(qcow2|vdi)$/.exec(name)).filter(Boolean);
+  const diskNames = [...entries.keys()].map(name => /^(h-[0-9a-f]{8})\/disk\.(qcow2|vdi)$/.exec(name)).filter(Boolean);
   const diskHosts = [...new Set(diskNames.map(match => match[1]))];
   const diskCounts = {qemu: diskNames.filter(match => match[2] === 'qcow2').length, vbox: diskNames.filter(match => match[2] === 'vdi').length};
   const session = await archiveJson(file, entries.get('session.json'));

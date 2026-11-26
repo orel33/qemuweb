@@ -17,7 +17,7 @@ const {writeJsonAtomic} = require('../common/json-file');
 const {SESSION_SCHEMA_VERSION} = require('../common/schema-versions');
 const {layoutFile} = require('../common/graphic-layout');
 
-const SESSION_ID = /^[0-9a-f]{16}$/;
+const SESSION_ID = /^[0-9a-f]{8}$/;
 
 class Session {
   constructor({runtimeRoot, id, engine = 'qemu', owner = null, createdAt = new Date().toISOString()}) {

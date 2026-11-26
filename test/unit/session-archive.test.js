@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const {writeArchive, readArchive, safeName} = require('../../runner/archive-zip');
+const {writeArchive, readArchive, safeName, EARLIER_ARCHIVE} = require('../../runner/archive-zip');
 
 function fixture(t) {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qemuweb-archive-test-'));
@@ -14,7 +14,7 @@ function fixture(t) {
   fs.writeFileSync(session, '{"schemaVersion":1,"engine":"qemu","hosts":[],"switches":[]}\n');
   return {dir, session};
 }
-const host = 'h-0123456789abcdef';
+const host = 'h-89abcdef';
 
 test('session ZIP mirrors the durable runtime paths and preserves bytes', async t => {
   const {dir, session} = fixture(t);
@@ -49,6 +49,23 @@ test('session ZIP rejects symlink sources, unsafe and duplicate paths', async t 
   await assert.rejects(writeArchive(path.join(dir, 'duplicate.zip'), [
     {name: 'session.json', file: session}, {name: 'session.json', file: session}
   ]), /Duplicate archive path/);
+});
+
+test('IDS01: an archive with the 16-character node IDs of an earlier version is refused, and says why', async t => {
+  const {dir, session} = fixture(t), zip = path.join(dir, 'session.zip'), stage = path.join(dir, 'stage');
+  fs.mkdirSync(stage);
+  await writeArchive(zip, [{name: 'session.json', file: session}, {name: 'h-0123456789abcdef/host.json', file: session}]);
+  await assert.rejects(readArchive(zip, stage), error => error.message === EARLIER_ARCHIVE && /earlier version/.test(error.message));
+  assert.deepEqual(fs.readdirSync(stage), [], 'nothing is extracted');
+});
+
+test('IDS01: the example archives carry 8-character node IDs only', () => {
+  const examples = path.join(__dirname, '..', '..', 'examples');
+  for (const file of fs.readdirSync(examples).filter(name => name.endsWith('.zip'))) {
+    const text = fs.readFileSync(path.join(examples, file)).toString('latin1');
+    assert.ok(/[hs]-[0-9a-f]{8}\//.test(text), `${file} has node directories`);
+    assert.doesNotMatch(text, /[hs]-[0-9a-f]{9}/, `${file} has no longer ID`);
+  }
 });
 
 test('session ZIP requires session.json', async t => {

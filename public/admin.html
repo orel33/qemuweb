@@ -32,7 +32,7 @@
         <table class="admin-table">
           <thead><tr>
             <th><input id="select-all" type="checkbox" aria-label="Select every session"></th>
-            <th>User</th><th title="active: at least one running node; idle: none">State</th><th>Created</th><th>Nodes</th><th>Running VMs</th><th>Reserved RAM</th><th>CPU</th><th>Last activity</th><th>Actions</th>
+            <th>User</th><th title="The session ID (8 hex characters), as in runtime/sessions/ and the logs">Session</th><th title="active: at least one running node; idle: none">State</th><th title="The runner the session is placed on: its name and ID; not placed: no node, no runner">Runner</th><th>Created</th><th>Nodes</th><th>Running VMs</th><th>Reserved RAM</th><th>CPU</th><th>Last activity</th><th>Actions</th>
           </tr></thead>
           <tbody id="sessions-body"></tbody>
         </table>

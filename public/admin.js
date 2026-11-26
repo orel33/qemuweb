@@ -3,6 +3,7 @@
 // the runners (admin-runners.js) and the status of one of them (admin-runner-status.js), the Socket.IO connections and the WebSocket test (admin-connections.js),
 // and the last entries of admin.log and users.log. Only the visible tab refreshes. Every change goes
 // through /api/admin/*, which checks the role and writes logs/admin.log.
+import {sessionRunnerLabel} from './admin-sessions.js';
 import {createRunnersPanel} from './admin-runners.js';
 import {createRunnerStatusPanel} from './admin-runner-status.js';
 import {createConnectionsPanel} from './admin-connections.js';
@@ -178,14 +179,19 @@ function renderSessions(sessions) {
         if (!await confirmDialog('Delete session', `Delete the session of ${session.login}? Every host and switch stops and is removed, with its disks.`, [], 'Delete')) return;
         runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}`, {method: 'DELETE'}));
       }, 'Delete session: every host and switch is removed, with its disks'));
-    row.append(cell(check), cell(user), cell(sessionState(session.active, session.runnerOffline, session.placed)), cell(shortDateTime(session.createdAt)),
+    const sessionId = Object.assign(document.createElement('code'), {className: 'admin-session-id', textContent: session.sessionId});
+    const runnerLabel = sessionRunnerLabel(session);
+    const runnerCell = cell(runnerLabel.text);
+    runnerCell.title = runnerLabel.title;
+    const createdCell = cell(shortDateTime(session.createdAt));
+    createdCell.title = dateTime(session.createdAt);
+    row.append(cell(check), cell(user), cell(sessionId), cell(sessionState(session.active, session.runnerOffline, session.placed)), runnerCell, createdCell,
       cell(`${plural(session.hosts, 'host')}, ${plural(session.switches, 'switch')}`),
       cell(`${session.runningHosts} / ${session.hosts}`),
       cell(session.reservedRamMb ? `${session.reservedRamMb} MB` : '—'),
       cell(Number.isFinite(session.cpuPercent) ? `${session.cpuPercent.toFixed(1)}%` : '—'),
       cell(age(session.lastActivity)), cell(actions));
-    row.cells[3].title = dateTime(session.createdAt);
-    row.cells[8].title = dateTime(session.lastActivity);
+    row.cells[row.cells.length - 2].title = dateTime(session.lastActivity);
     return row;
   }));
   updateSelection();

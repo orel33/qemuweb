@@ -44,7 +44,7 @@ test('each user gets one persistent session with a random ID, an owner and an al
   assert.notEqual(toto.runner, titi.runner);
   assert.notEqual(toto.runner.events, titi.runner.events);
   for (const {session} of [toto, titi]) {
-    assert.match(session.id, /^[0-9a-f]{16}$/);
+    assert.match(session.id, /^[0-9a-f]{8}$/);
     assert.equal(session.runnerId, 'local');
     assert.equal(session.runtimeDir, undefined, 'the server holds no path of the runner');
   }
@@ -70,7 +70,7 @@ test('sessions are independent: nodes and events stay in their session', async t
   toto.runner.events.on('nodes-changed', event => events.toto.push(event.nodeId));
   titi.runner.events.on('nodes-changed', event => events.titi.push(event.nodeId));
   // Archives keep node IDs, so two sessions can hold the same ID.
-  const id = 's-00000000000000aa';
+  const id = 's-000000aa';
   await toto.runner.request('switch.create', {id, name: 'sw1', autostart: false});
   await titi.runner.request('switch.create', {id, name: 'sw1', autostart: false});
   assert.deepEqual((await toto.runner.request('nodes.ids')), [id]);
@@ -84,7 +84,7 @@ test('sessions are independent: nodes and events stay in their session', async t
 test('deleting a session stops it, removes its files and alias, and the next open starts afresh', async t => {
   const {runtimeRoot, manager} = await setup(t);
   const toto = await opened(manager, 'toto');
-  await toto.runner.request('switch.create', {id: 's-00000000000000bb', name: 'sw', autostart: false});
+  await toto.runner.request('switch.create', {id: 's-000000bb', name: 'sw', autostart: false});
   const removed = [];
   manager.on('removed', (workspace, by, reason) => removed.push([workspace.session.id, by, reason]));
   assert.equal(await manager.remove('toto', 'boss'), true);
@@ -143,7 +143,7 @@ test('UXS02: a session is implicit and unplaced until it is placed; reads answer
   assert.equal(settings.engine, 'qemu');
   assert.deepEqual(settings.availableEngines, ['qemu']);
   assert.ok(Array.isArray(await toto.runner.request('catalog.systems')), 'the systems of the runner the session would go to');
-  await assert.rejects(toto.runner.request('node.start', {nodeId: 's-00000000000000aa'}), error => error.status === 404);
+  await assert.rejects(toto.runner.request('node.start', {nodeId: 's-000000aa'}), error => error.status === 404);
   await assert.rejects(toto.runner.request('session.setEngine', {body: {engine: 'vbox'}}), /VirtualBox is unavailable/);
   await assert.rejects(toto.runner.request('session.setEngine', {body: {engine: 'other'}}), /Invalid session engine/);
   assert.deepEqual(service.hello().sessions, [], 'still nothing on the runner');
@@ -159,10 +159,10 @@ test('UXS02: an empty session is released (unplaced, deleted on the runner, same
   const {runtimeRoot, manager, service} = await setup(t);
   const toto = await opened(manager, 'toto');
   const id = toto.session.id;
-  await toto.runner.request('switch.create', {id: 's-00000000000000a1', name: 'sw1', autostart: false});
+  await toto.runner.request('switch.create', {id: 's-000000a1', name: 'sw1', autostart: false});
   await manager.release(toto);
   assert.equal(toto.session.runnerId, 'local', 'a session with a node stays placed');
-  await toto.runner.request('node.delete', {nodeId: 's-00000000000000a1'});
+  await toto.runner.request('node.delete', {nodeId: 's-000000a1'});
   await manager.release(toto);
   assert.equal(toto.session.runnerId, null);
   assert.equal(toto.session.id, id, 'the session stays the same');
@@ -178,35 +178,35 @@ test('UXS02: an empty session is released (unplaced, deleted on the runner, same
 test('UXS02: a creation in flight blocks the release, a release in flight delays the placement', async t => {
   const {manager, service} = await setup(t);
   const toto = await opened(manager, 'toto');
-  await toto.runner.request('switch.create', {id: 's-00000000000000b1', name: 'sw1', autostart: false});
+  await toto.runner.request('switch.create', {id: 's-000000b1', name: 'sw1', autostart: false});
   // The last node is removed while another request creates one (another tab).
   const end = manager.beginCreation(toto);
-  await toto.runner.request('node.delete', {nodeId: 's-00000000000000b1'});
+  await toto.runner.request('node.delete', {nodeId: 's-000000b1'});
   await manager.release(toto);
   assert.equal(toto.session.runnerId, 'local', 'no release while a creation runs');
   await manager.place(toto);
-  await toto.runner.request('switch.create', {id: 's-00000000000000b2', name: 'sw2', autostart: false});
+  await toto.runner.request('switch.create', {id: 's-000000b2', name: 'sw2', autostart: false});
   end();
   end();
   assert.equal(toto.creations, 0, 'end() is idempotent');
-  assert.deepEqual(await toto.runner.request('nodes.ids'), ['s-00000000000000b2'], 'the node exists afterwards');
-  await toto.runner.request('node.delete', {nodeId: 's-00000000000000b2'});
+  assert.deepEqual(await toto.runner.request('nodes.ids'), ['s-000000b2'], 'the node exists afterwards');
+  await toto.runner.request('node.delete', {nodeId: 's-000000b2'});
   // A release already running: the placement waits for it, then places again.
   const releasing = manager.release(toto);
   const end2 = manager.beginCreation(toto);
   await manager.place(toto);
   await releasing;
   assert.equal(toto.session.runnerId, 'local');
-  await toto.runner.request('switch.create', {id: 's-00000000000000b3', name: 'sw3', autostart: false});
+  await toto.runner.request('switch.create', {id: 's-000000b3', name: 'sw3', autostart: false});
   end2();
-  assert.deepEqual(await toto.runner.request('nodes.ids'), ['s-00000000000000b3']);
+  assert.deepEqual(await toto.runner.request('nodes.ids'), ['s-000000b3']);
   assert.deepEqual(service.hello().sessions.map(item => item.sessionId), [toto.session.id]);
 });
 
 test('UXS02: Reset removes every node, keeps the session unplaced with its engine, and works on an unplaced session', async t => {
   const {runtimeRoot, manager, service} = await setup(t);
   const toto = await opened(manager, 'toto');
-  await toto.runner.request('switch.create', {id: 's-00000000000000c1', name: 'sw1', autostart: false});
+  await toto.runner.request('switch.create', {id: 's-000000c1', name: 'sw1', autostart: false});
   const resets = [];
   const changed = [];
   manager.on('reset', (workspace, by) => resets.push([workspace.owner, by]));
@@ -242,10 +242,10 @@ test('UXS02: a restored session that its runner reports without any node is rele
 test('a runner hello resynchronises: unknown sessions are deleted, missing ones dropped', async t => {
   const {manager, service, entry} = await setup(t);
   const toto = await opened(manager, 'toto');
-  await service.handle('session.create', '00000000000000cc', {owner: 'ghost'});
+  await service.handle('session.create', '000000cc', {owner: 'ghost'});
   const removed = [];
   manager.on('removed', (workspace, by, reason) => removed.push([workspace.owner, reason]));
-  manager.resync(entry, {sessions: [{sessionId: '00000000000000cc'}]});
+  manager.resync(entry, {sessions: [{sessionId: '000000cc'}]});
   assert.deepEqual(removed, [['toto', 'runner lost']]);
   for (let turn = 0; turn < 100 && service.hello().sessions.length > 1; turn++) await new Promise(resolve => setImmediate(resolve));
   assert.deepEqual(service.hello().sessions.map(item => item.sessionId), [toto.session.id]);
@@ -254,7 +254,7 @@ test('a runner hello resynchronises: unknown sessions are deleted, missing ones 
 test('the owner is not part of the session definition: an archive that carries one is refused, an import leaves meta.json alone', t => {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-owner-'));
   t.after(() => fs.rmSync(runtimeRoot, {recursive: true, force: true}));
-  const session = new Session({runtimeRoot, id: '00000000000000dd', owner: 'titi'});
+  const session = new Session({runtimeRoot, id: '000000dd', owner: 'titi'});
   fs.mkdirSync(session.runtimeDir, {recursive: true});
   session.saveMetadata();
   session.saveMeta();
@@ -298,4 +298,51 @@ test('the session manager and the session do not use the file system (the runner
     assert.doesNotMatch(source, /require\('(node:)?fs'\)|\bfs\./, file);
     assert.doesNotMatch(source, /runtimeDir|usersDir|rmSync|symlink/, file);
   }
+});
+
+test('IDS01: a new session ID is never one the server knows (a workspace or a binding)', async t => {
+  const {manager} = await setup(t);
+  const crypto = require('node:crypto');
+  const toto = manager.open('toto');
+  assert.match(toto.session.id, /^[0-9a-f]{8}$/);
+  manager.bindings.set({id: '0000000b', owner: 'gone', runnerId: 'local', createdAt: new Date().toISOString()});
+  const original = crypto.randomBytes;
+  const draws = [toto.session.id, '0000000b', '0000000c'].map(hex => Buffer.from(hex, 'hex'));
+  crypto.randomBytes = () => draws.shift();
+  let titi;
+  try { titi = manager.open('titi'); }
+  finally { crypto.randomBytes = original; }
+  assert.equal(titi.session.id, '0000000c', 'the IDs of a workspace and of a binding are drawn again');
+  assert.equal(draws.length, 0);
+});
+
+test('IDS01: a session ID the runner already has (a stale directory) drops the unplaced session and asks to retry', async t => {
+  const {runtimeRoot, manager, service} = await setup(t);
+  const removed = [];
+  manager.on('removed', (workspace, by, reason) => removed.push([workspace.owner, by, reason]));
+  const toto = manager.open('toto');
+  const stale = sessionDir(runtimeRoot, toto.session);
+  fs.mkdirSync(path.join(stale, 'h-0000000a'), {recursive: true});
+  await assert.rejects(manager.place(toto), error => error.status === 409 && /Please retry/.test(error.message));
+  assert.deepEqual(removed, [['toto', null, 'session ID already used on the runner']], 'its pages reload into a new session');
+  assert.equal(manager.get('toto'), null);
+  assert.deepEqual(manager.bindings.list(), [], 'no binding left');
+  assert.deepEqual(service.hello().sessions, [], 'the runner created nothing');
+  assert.ok(fs.existsSync(path.join(stale, 'h-0000000a')), 'nor touched the stale directory');
+  const again = await opened(manager, 'toto');
+  assert.notEqual(again.session.id, toto.session.id, 'the next request gets a new ID, which is placed');
+  assert.equal(again.session.runnerId, 'local');
+});
+
+test('IDS01: the runner refuses a host or switch ID its session already has, with a 409 the browser retries on', async t => {
+  const {manager} = await setup(t);
+  const toto = await opened(manager, 'toto');
+  await toto.runner.request('switch.create', {id: 's-0000000a', name: 'sw1', autostart: false});
+  await assert.rejects(toto.runner.request('switch.create', {id: 's-0000000a', name: 'sw2', autostart: false}),
+    error => error.status === 409 && /Switch ID already exists/.test(error.message));
+  await assert.rejects(toto.runner.request('switch.create', {id: 's-0000000b', name: 'sw1', autostart: false}),
+    error => error.status === 400 && /Switch name already exists/.test(error.message), 'a duplicate name is not a 409');
+  await assert.rejects(toto.runner.request('switch.create', {id: 's-0123456789abcdef', name: 'sw3', autostart: false}),
+    /8 lowercase hex characters/, 'the 16-character IDs of earlier versions are invalid');
+  assert.equal((await toto.runner.request('nodes.ids')).length, 1);
 });

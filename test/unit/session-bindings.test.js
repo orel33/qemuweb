@@ -7,7 +7,7 @@ const path = require('node:path');
 const test = require('node:test');
 const {createSessionBindings, parseBindings} = require('../../server/session-bindings');
 
-const ID = n => n.toString(16).padStart(16, '0');
+const ID = n => n.toString(16).padStart(8, '0');
 const DATE = '2026-01-02T03:04:05.000Z';
 const entry = (n, owner, runnerId = 'local') => ({id: ID(n), owner, runnerId, createdAt: DATE});
 const file = t => {

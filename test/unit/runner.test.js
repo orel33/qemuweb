@@ -10,10 +10,10 @@ const {createSessionRunner} = require('../../runner/session-runner');
 
 const root = path.join(__dirname, '..', '..');
 const commands = {QEMU_IMG: 'qemu-img', QEMU_SYSTEM_X86_64: 'qemu-system-x86_64', GENISOIMAGE: 'genisoimage'};
-const HOST_1 = 'h-0000000000000001';
-const HOST_2 = 'h-0000000000000002';
-const SWITCH_1 = 's-0000000000000001';
-const SWITCH_2 = 's-0000000000000002';
+const HOST_1 = 'h-00000001';
+const HOST_2 = 'h-00000002';
+const SWITCH_1 = 's-00000001';
+const SWITCH_2 = 's-00000002';
 
 function setup(options = {}) {
   const runtimeRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'qw-runner-'));
@@ -136,7 +136,7 @@ test('startAllNodes skips running and busy nodes and reports a host that cannot 
   const rebooting = runner.createNode(HOST_2, 'host');
   runner.setNodeHostname(rebooting, 'rebooting-host');
   rebooting.action = 'reboot';
-  const failing = runner.createNode('h-0000000000000003', 'host');
+  const failing = runner.createNode('h-00000003', 'host');
   runner.setNodeHostname(failing, 'failing-host');
   failing.engine = 'vbox';
   failing.selectedImage = runner.imageById('debian13-legacy');
@@ -144,7 +144,7 @@ test('startAllNodes skips running and busy nodes and reports a host that cannot 
   const result = await runner.startAllNodes();
   assert.deepEqual(result.started, []);
   assert.deepEqual(result.startErrors, ['failing-host: VirtualBox is unavailable on this server.']);
-  assert.deepEqual(states.map(state => [state.nodeId, state.message]), [['h-0000000000000003', 'Start failed: VirtualBox is unavailable on this server.']]);
+  assert.deepEqual(states.map(state => [state.nodeId, state.message]), [['h-00000003', 'Start failed: VirtualBox is unavailable on this server.']]);
   assert.equal(rebooting.machine, null);
 });
 

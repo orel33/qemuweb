@@ -14,7 +14,7 @@ const root = path.resolve(__dirname, '../..');
 const supported = ['debian13-legacy', 'debian13-cloud', 'alpine', 'openwrt'];
 const profiles = [(process.env.CHECK_HOST_PROFILE || '').trim()];
 const engine = 'qemu';
-const newHostId = () => `h-${crypto.randomBytes(8).toString('hex')}`;
+const newHostId = () => `h-${crypto.randomBytes(4).toString('hex')}`;
 const ids = profiles.map(() => newHostId());
 let child;
 let baseUrl;

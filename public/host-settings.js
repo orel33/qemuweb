@@ -2,7 +2,7 @@
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, launchOptionsUrl, nodeUrl, requestJson} from './api.js';
 import {activeMachine, renderTabs, selectMachine, showStatusError, updateControls} from './workspace.js';
-import {addHost, chooseRestartTiming, nextMachineName, scheduleSessionSync, startActiveMachine} from './nodes.js';
+import {addHost, chooseRestartTiming, newNodeId, nextMachineName, scheduleSessionSync, startActiveMachine} from './nodes.js';
 import {engineSelect} from './node-dialogs.js';
 import {clearStartupTemplateError, defaultStartScript, renderGuestMedia, renderStartupTemplateValues, showStartupTemplateError, validateStartScriptDraft} from './startup-media.js';
 import {renderGraphic} from './graphic-view.js';
@@ -312,7 +312,7 @@ export async function openHostSettingsCreate() {
   const hostname = nextMachineName('host');
   const interfaces = [null];
   hostSettingsDraft = {
-    id: `h-${crypto.randomUUID().replaceAll('-', '').slice(0, 16)}`,
+    id: newNodeId('host'),
     isNew: true, kind: 'host', hostname, imageId,
     osHint: image?.label || 'System', hasDifferentialDisk: !!image?.hasDifferentialDisk,
     engine: generalSettings.engine, interfaces,

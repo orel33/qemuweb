@@ -16,7 +16,7 @@ const profiles = (process.env.GUEST_NETWORK_PROFILES || '').split(',').map(s => 
 const engine = 'qemu';
 const timeout = Number(process.env.GUEST_NETWORK_TIMEOUT_MS || 120000);
 const addresses = ['192.0.2.101', '192.0.2.102'];
-const newId = prefix => `${prefix}-${crypto.randomBytes(8).toString('hex')}`;
+const newId = prefix => `${prefix}-${crypto.randomBytes(4).toString('hex')}`;
 const switchId = newId('s');
 const created = [];
 const results = [];

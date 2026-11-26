@@ -127,7 +127,7 @@ function createSessionSnapshot({session, runner, commands, emit}) {
     }
     const warnings = await archiveDisks.checkDisks(snapshot, stage, {discardDisks});
     for (const file of snapshot.files) {
-      const match = /^(h-[0-9a-f]{16})\/startup\/(.+)$/.exec(file);
+      const match = /^(h-[0-9a-f]{8})\/startup\/(.+)$/.exec(file);
       if (match && ids.has(match[1])) { expectedFiles.add(file); continue; }
       if (!expectedFiles.has(file)) throw new Error(`Unexpected session archive file: ${file}`);
     }

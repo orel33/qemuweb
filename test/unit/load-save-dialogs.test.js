@@ -352,7 +352,7 @@ test('the Save dialog says which engines disks are included; the Load dialog cou
   assert.equal(archiveDisksPhrase({qemu: 2, vbox: 1}), '3 working disks (2 qcow2, 1 vdi)');
   assert.equal(archiveDisksPhrase({qemu: 0, vbox: 1}), '1 working disk (1 vdi)');
   const read = moduleSource('archive-read');
-  assert.match(read, /\/\^\(h-\[0-9a-f\]\{16\}\)\\\/disk\\\.\(qcow2\|vdi\)\$\//, 'the Load dialog reads both disk kinds');
+  assert.match(read, /\/\^\(h-\[0-9a-f\]\{8\}\)\\\/disk\\\.\(qcow2\|vdi\)\$\//, 'the Load dialog reads both disk kinds');
   assert.match(moduleSource('save-dialog'), /\$\{workingDisksNote\(data\.workingDisks\)\}/, 'the estimate line carries the note');
   assert.match(read, /Object\.entries\(host\.baseImages \|\| \{\}\)/, 'the base image check sends the identity of each disk format');
 });

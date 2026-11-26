@@ -97,8 +97,10 @@ the first and last, Enter or Space activates). Only the visible tab refreshes (e
 and nothing refreshes while the browser tab is in the background. A badge on a tab label shows a problem without opening it,
 refreshed about every 30 seconds: **Runners** counts the runners offline or paused (amber when one is offline), **WebSocket**
 the connections on polling (amber), **Sessions** the sessions with a running node, **Accounts** the disabled accounts.
-**Sessions** lists every session, the admin's own marked: user, state (**active**: at least one running node, or
-**idle**), creation date, nodes, running VMs, reserved RAM, CPU and last
+**Sessions** lists every session, the admin's own marked: user, session ID (8 hex characters, as in the runtime
+directory `sessions/<id>/`, `status.sh` and the logs), state (**active**: at least one running node, or
+**idle**), runner (the runner the session is placed on: its name and ID, for example `salle-12 (r-1a2b3c4d)`,
+**local** for the local runner, **not placed** for a session without any node, which no runner holds), creation date, nodes, running VMs, reserved RAM, CPU and last
 activity (the owner's requests and console input; an admin observing does not
 count). Next to each user, a green dot shows **online** when a browser of that
 user is connected (**online ×n** for several tabs; the tooltip gives the count),
@@ -323,7 +325,10 @@ naming scheme and the console font).
   When the server has no example, **Server examples** is disabled (*No examples on the server*) and
   the dialog works with **My files**. The kind is the extension, confirmed by the content (a ZIP starts with `PK`, a topology is UTF-8
   text without control characters): a `.zip` that is text or a `.topo` that is binary
-  is refused in the card with a message, and **Load** stays disabled.
+  is refused in the card with a message, and **Load** stays disabled. A session ZIP saved by an earlier
+  version of QemuWeb (with 16-character host and switch IDs) is refused the same way: *This session archive comes
+  from an earlier version of QemuWeb (16-character host and switch IDs): it cannot be loaded.* Rebuild it from a
+  topology, or load the same machines again and save a new ZIP.
 - **Options** of Load Session: **Close the previous session** is always checked and greyed out, because
   loading always replaces the current session; **Start hosts and switches after loading** (checked
   by default, remembered); **Discard working disks** (unchecked by default, never remembered), usable

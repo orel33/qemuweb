@@ -640,6 +640,21 @@ personal runner and any guest access exist only for trusted users.
   remembered in the browser (`localStorage` key `qemuweb.admin-log-height`). At phone width it keeps a fixed 260 pixels,
   without grip. (2) The **Download** link gets the Lucide `download` icon (inline SVG, `currentColor`, `aria-hidden`), its
   text, title and accessible name unchanged. Source-assertion unit test; the layout is checked by hand.
+- [ ] **IDS01** (M) **8-character session and node IDs.** A session ID is 8 lowercase hex characters (`^[0-9a-f]{8}$`), a host
+  or switch ID `h-`/`s-` and 8 (`^[hs]-[0-9a-f]{8}$`), the same everywhere (runtime directories, `bindings.json`, logs,
+  `status.sh`, `/admin`, archives, consoles, captures), drawn with `crypto.randomBytes(4)`; 16 characters were long to read and
+  to type. Collisions (32 bits): a new session ID is never one the server knows (workspaces and `bindings.json`); the runner
+  refuses `session.create` for a session directory that exists (409) and the server then drops that unplaced, empty session
+  (its pages reload into a new one) and answers 409 "Please retry"; the runner refuses a node ID its session has (409) and the
+  browser (`public/node-ids.js`) sends the creation again with a new ID, 4 attempts at most; `topology.import` draws unused
+  IDs. The socket budget of a runner directory grows from 49 to 65 bytes. `examples/*.zip` are rewritten with 8-character
+  IDs. Beta, no compatibility: an archive with 16-character IDs is refused ("archive from an earlier version"), a runner ignores
+  the session directories with old names, live sessions are lost at the upgrade (deploy-cremi.md). Capture live view IDs and
+  temporary file names keep 16 hex characters.
+- [ ] **ADM03** (S) Admin page, Sessions tab: a **Runner** column with the runner of each session, its name and ID
+  (`salle-12 (r-1a2b3c4d)`, the local runner `local`), **not placed** for a session without any node (UXS02), and a
+  **Session** column with the session ID (8 characters, IDS01). Unit tests of the summary and of the column text
+  (`public/admin-sessions.js`).
 - [ ] **ADM04** (M) Admin page, Runners tab: **Runner status**. Below the runners table, a section with a select listing
   the runners (name and ID, only the online ones selectable) shows for the selected runner what `scripts/status.sh` shows
   for a runner of this machine: the runner process (pid, uptime, memory, CPU), each session (ID, owner login, age) with
