@@ -49,7 +49,7 @@ De la version 0.9.8 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | PRN02 | **Priorité** : page « My runner » pour créer son jeton, copier la commande, voir l'état et révoquer ; message « runner offline » | 2 |
 | VBX01 | **Fait (0.9.3).** Réparation prioritaire : le moteur VirtualBox ne démarre pas à côté de QEMU/KVM (VT-x occupé) ; message clair et garde par runner | 3 |
 | AUT01 | **Fait.** Retirer le mode d'authentification mixte `both`, gérer l'expiration de la session OpenID en cours d'usage | 2 |
-| SVC01 | Services systemd, rotation des journaux, renouvellement du certificat, contrôles au démarrage | 2 |
+| SVC01 | **Première partie faite (0.9.7, `qwctl.sh`).** Services systemd, rotation des journaux, renouvellement du certificat, contrôles au démarrage | 2 |
 | DOC01 | Un seul parcours d'installation documenté, guide utilisateur à jour | 1 |
 | PRP01 | **Fait (0.9.4)** : Construction des images derrière le proxy du CREMI sans option particulière | 1 |
 | TOD02 | **Fait (0.9.5).** Dossier de travail par défaut dans `/tmp/qw-<compte>/<port>`, court et privé : fin de l'erreur « Runtime socket path is too long » | 2 |
@@ -86,18 +86,18 @@ De la version 0.9.8 (essais au CREMI) à la 2.0, en cinq étapes. Synthèse de [
 | NET02 | Points de sauvegarde d'un hôte ou d'une session : revenir à l'état d'avant une erreur | 4 |
 | NET03 | Ajouter ou retirer une interface d'un hôte sans le redémarrer | 4 |
 | ADM01 | **Fait (0.9.3).** Page d'administration en onglets (sessions, comptes, runners, WebSocket, journaux) | 2 |
-| ADM02 | Onglet Logs de la page d'administration : vue du journal redimensionnable en hauteur (mémorisée dans le navigateur), icône sur le lien Download | 1 |
-| IDS01 | Identifiants de session et de nœud sur 8 caractères hexadécimaux (au lieu de 16), partout ; collisions traitées ; exemples réécrits ; archives et sessions des versions précédentes refusées | 2 |
-| ADM03 | Onglet Sessions de la page d'administration : colonne Runner (nom et ID du runner, `local`, « not placed ») et ID de session visible | 1 |
-| ADM04 | Onglet Runners de la page d'administration : état d'un runner choisi (processus du runner, sessions et nœuds avec pid, mémoire et CPU, totaux), mesuré par le runner lui-même, donc aussi pour un runner distant | 3 |
+| ADM02 | **Fait (0.9.8).** Onglet Logs de la page d'administration : vue du journal redimensionnable en hauteur (mémorisée dans le navigateur), icône sur le lien Download | 1 |
+| IDS01 | **Fait (0.9.8).** Identifiants de session et de nœud sur 8 caractères hexadécimaux (au lieu de 16), partout ; collisions traitées ; exemples réécrits ; archives et sessions des versions précédentes refusées | 2 |
+| ADM03 | **Fait (0.9.8).** Onglet Sessions de la page d'administration : colonne Runner (nom et ID du runner, `local`, « not placed ») et ID de session visible | 1 |
+| ADM04 | **Fait (0.9.8).** Onglet Runners de la page d'administration : état d'un runner choisi (processus du runner, sessions et nœuds avec pid, mémoire et CPU, totaux), mesuré par le runner lui-même, donc aussi pour un runner distant | 3 |
 | GRA02 | Plusieurs consoles flottantes dans la vue graphique | 3 |
 | GRA03 | Points restants de la vue graphique : zoom au pincement, invite du shell, tooltips | 2 |
 | GRA04 | Relier deux nœuds en glissant d'une prise à l'autre dans la vue graphique | 3 |
 | BUGS01 (BUG06, BUG07, TOD04) | **Fait.** Trois petites corrections : catalogue illisible, message de `start.sh`, infobulle d'un contrôle désactivé | 1 |
 | CTL01 | **Fait.** Suivi et contrôle complétés : la console flottante suit la vue (corrigé), l'admin qui a le contrôle peut tout faire comme l'utilisateur | 2 |
-| CTL02 | Suite de CTL01 : la position et la taille de la console flottante sont suivies, elle reste ouverte au retour dans la vue graphique, l'utilisateur voit qu'un admin l'observe, bannière de contrôle courte | 2 |
-| CTL03 | Suite de CTL02 : les positions des nœuds de la vue graphique deviennent des données de session (`layout.json`, dans le ZIP), le pan et le zoom sont suivis, un seul conducteur dans la vue graphique, bannières jaune et orange formulées de la même façon | 2 |
-| CTL04 | Le style des liens de la vue graphique (courbes ou rectilignes) fait partie de la vue : suivi par Follow et sous contrôle, la préférence de chaque navigateur reste la sienne | 1 |
+| CTL02 | **Fait (0.9.8).** Suite de CTL01 : la position et la taille de la console flottante sont suivies, elle reste ouverte au retour dans la vue graphique, l'utilisateur voit qu'un admin l'observe, bannière de contrôle courte | 2 |
+| CTL03 | **Fait (0.9.8).** Suite de CTL02 : les positions des nœuds de la vue graphique deviennent des données de session (`layout.json`, dans le ZIP), le pan et le zoom sont suivis, un seul conducteur dans la vue graphique, bannières jaune et orange formulées de la même façon | 2 |
+| CTL04 | **Fait (0.9.8).** Le style des liens de la vue graphique (courbes ou rectilignes) fait partie de la vue : suivi par Follow et sous contrôle, la préférence de chaque navigateur reste la sienne | 1 |
 | BUG04, TOD05, TOD08 | Petites tâches indépendantes de l'annexe, à prendre au fil des creux | 1 |
 
 *Critère de sortie* : un étudiant sans aide sait créer, lancer, arrêter et remettre à zéro sa session, et reconnaît les actions de session de celles d'un nœud.

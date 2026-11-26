@@ -636,12 +636,12 @@ personal runner and any guest access exist only for trusted users.
   - Rename in the interface: "Supervision" is the link's text and the page title; keep one word for it everywhere.
   - Unit tests for the tab logic if it is pure (which tab from the fragment, which panels poll); the layout is checked
     by hand.
-- [ ] **ADM02** (S) Admin page, Logs tab. (1) The log view (`.admin-log-view`, 260 pixels high) is resized in height with a
+- [x] **ADM02** (S) Admin page, Logs tab. (1) The log view (`.admin-log-view`, 260 pixels high) is resized in height with a
   grip at its bottom right (CSS `resize: vertical`), between 160 pixels and 85vh, 60vh by default; the chosen height is
   remembered in the browser (`localStorage` key `qemuweb.admin-log-height`). At phone width it keeps a fixed 260 pixels,
   without grip. (2) The **Download** link gets the Lucide `download` icon (inline SVG, `currentColor`, `aria-hidden`), its
   text, title and accessible name unchanged. Source-assertion unit test; the layout is checked by hand.
-- [ ] **IDS01** (M) **8-character session and node IDs.** A session ID is 8 lowercase hex characters (`^[0-9a-f]{8}$`), a host
+- [x] **IDS01** (M) **8-character session and node IDs.** A session ID is 8 lowercase hex characters (`^[0-9a-f]{8}$`), a host
   or switch ID `h-`/`s-` and 8 (`^[hs]-[0-9a-f]{8}$`), the same everywhere (runtime directories, `bindings.json`, logs,
   `status.sh`, `/admin`, archives, consoles, captures), drawn with `crypto.randomBytes(4)`; 16 characters were long to read and
   to type. Collisions (32 bits): a new session ID is never one the server knows (workspaces and `bindings.json`); the runner
@@ -652,11 +652,11 @@ personal runner and any guest access exist only for trusted users.
   IDs. Beta, no compatibility: an archive with 16-character IDs is refused ("archive from an earlier version"), a runner ignores
   the session directories with old names, live sessions are lost at the upgrade (deploy-cremi.md). Capture live view IDs and
   temporary file names keep 16 hex characters.
-- [ ] **ADM03** (S) Admin page, Sessions tab: a **Runner** column with the runner of each session, its name and ID
+- [x] **ADM03** (S) Admin page, Sessions tab: a **Runner** column with the runner of each session, its name and ID
   (`salle-12 (r-1a2b3c4d)`, the local runner `local`), **not placed** for a session without any node (UXS02), and a
   **Session** column with the session ID (8 characters, IDS01). Unit tests of the summary and of the column text
   (`public/admin-sessions.js`).
-- [ ] **ADM04** (M) Admin page, Runners tab: **Runner status**. Below the runners table, a section with a select listing
+- [x] **ADM04** (M) Admin page, Runners tab: **Runner status**. Below the runners table, a section with a select listing
   the runners (name and ID, only the online ones selectable) shows for the selected runner what `scripts/status.sh` shows
   for a runner of this machine: the runner process (pid, uptime, memory, CPU), each session (ID, owner login, age) with
   its nodes (name, kind, system, engine, pid, memory used over configured, CPU %), and the totals (hosts, switches,
@@ -987,7 +987,7 @@ commit message.
   admin page. The owner's page is read-only meanwhile, and the server refuses its writes ("<admin> controls your session.").
   Load, Stop all and Remove all name the owner, and Save names the file `qemuweb-session-<owner>.zip`. Design in
   `docs/architecture.md` (Session control).
-- [ ] **CTL02** (M) Follow-up of CTL01, after the user tried it. (1) The floating console's position and size are part of the
+- [x] **CTL02** (M) Follow-up of CTL01, after the user tried it. (1) The floating console's position and size are part of the
   view state (`geometry`, fractions of the Graphic view, normalized and clamped in `public/view-state.js` and the server): a
   follower shows the window where the driver put it, kept inside its own window, and cannot move or resize it; the driver
   publishes while dragging at most every 250 ms and at the end. (2) `floating` means "open whenever the Graphic view shows":
@@ -995,7 +995,7 @@ commit message.
   (3) The owner's page shows a yellow banner while administrators observe the session (`session-observers` {admins} to the
   owner's main sockets on each change and at connection). (4) The owner's control banner is short ("admin controls your
   session: keyboard, actions and view"), the explanation in its tooltip. A view saved by an earlier version is dropped once.
-- [ ] **CTL03** (M) Follow-up of CTL02, after the user tried it. (1) Node positions of the Graphic view are session data:
+- [x] **CTL03** (M) Follow-up of CTL02, after the user tried it. (1) Node positions of the Graphic view are session data:
   the runner keeps them in `<session>/layout.json` (new format, `schemaVersion` 1; `layout.get`/`layout.set`), an optional
   entry of the session ZIP, pruned with a removed node, gone with the session, replaced by a loaded ZIP; read with
   `GET /api/graphic-layout`, moved with the `node-position` socket event from the driver only (the owner, or the admin holding
@@ -1005,7 +1005,7 @@ commit message.
   Follow unchecked an observer pans and zooms freely but never moves a node. (3) The yellow and orange banners share one sentence
   form ("<login> is observing | is controlling your session", "You are observing | controlling the session of <login>"), only the
   logins bold, the explanation in the tooltip. A view saved before CTL03 (no `viewport`) is dropped once.
-- [ ] **CTL04** (S) The Link style of the Graphic view (GRA05) is followed. It was a preference of each browser, so an admin
+- [x] **CTL04** (S) The Link style of the Graphic view (GRA05) is followed. It was a preference of each browser, so an admin
   observing with Follow, or the owner's page under control, kept its own style. The style is now a required key of the view
   state (`linkStyle`: `curved` | `rectilinear`, validated by `normalizeView`, so by the server too), published by the driver
   and applied by the follower; the button is a `view-control` (disabled with the TOD04 reason while the view is driven). The
