@@ -13,8 +13,8 @@ QEMU's filter-dump records what the guest sends. The last boot of the N is the d
 --quiet seconds after the end of the boot, then counts the frames and reads the state of the guest.
 
 --check (one boot, needs Internet access): the card is on QEMU's user network. Starts DHCP by hand, runs
-'apt-get update' and installs a package, then starts the disabled services by hand. All of it stays in the
-temporary snapshot.
+'apt-get update' and installs a package, starts the disabled services by hand, then turns IPv6
+autoconfiguration on. All of it stays in the temporary snapshot.
 """
 import argparse
 import os
@@ -61,10 +61,11 @@ class Guest:
         self.process.stdin.flush()
 
     def run(self, command, timeout=200):
-        # The quotes keep the typed command, which the console echoes, from matching the end marker.
-        self.send(command + "; echo END''MARK")
+        # The quotes keep the typed command, which the console echoes, from matching the markers.
+        self.send("echo BEGIN''MARK; " + command + "; echo END''MARK")
+        self.expect('BEGINMARK\r*\n', timeout)
         output = self.expect(MARK, timeout)
-        return re.sub(r'\x1b\[[0-9;?]*[a-zA-Z]|\r', '', output).split('\n', 1)[-1].rstrip()
+        return re.sub(r'\x1b\[[0-9;?]*[a-zA-Z]|\r', '', output).rstrip()
 
     def login(self):
         """Wait for the login prompt and log in; returns the seconds from the QEMU launch to the prompt."""
@@ -143,6 +144,8 @@ def read_pcap(path):
 
 
 DETAILS = [
+    # Without a link up, a count of zero frames would prove nothing.
+    ('Interfaces', 'ip -br link; ip -br addr'),
     ('Memory (MiB)', 'free -m'),
     ('Root filesystem (MiB)', 'df -m /'),
     ('Installed packages and their installed size',
@@ -211,6 +214,13 @@ CHECKS = [
      "sudo tee /etc/dhcp/dhcpd.conf >/dev/null && "
      "sudo sed -i 's/^INTERFACESv4=.*/INTERFACESv4=\"dhcptest\"/' /etc/default/isc-dhcp-server && "
      "sudo systemctl start isc-dhcp-server && sleep 3 && pgrep -x dhcpd >/dev/null && echo started"),
+    # Last: taking the link down drops the IPv4 configuration. The commands are those of docs/user-guide.md;
+    # QEMU's user network sends router advertisements, so an autoconfigured address (kernel_ra) follows.
+    ('IPv6 autoconfiguration turned on by hand',
+     'sudo dhclient -r eth0; '
+     'sudo sysctl -w net.ipv6.conf.eth0.addr_gen_mode=0 net.ipv6.conf.eth0.accept_ra=1 && '
+     'sudo ip link set eth0 down && sudo ip link set eth0 up && sleep 10 && ip -6 addr show dev eth0 && '
+     'ip -6 addr show dev eth0 scope link | grep -q fe80 && ip -6 addr show dev eth0 | grep -q kernel_ra'),
 ]
 
 

@@ -84,7 +84,10 @@ for package in cloud-init qemu-utils unattended-upgrades locales libc-l10n; do
   fi
 done
 for unit in $services $timers; do
-  if systemctl is-enabled --quiet "$unit"; then echo "Unit still enabled: $unit"; exit 1; fi
+  # 'enabled-runtime' is accepted: netplan enables systemd-networkd-wait-online in /run (gone at the next
+  # boot) while the configuration of cloud-init exists, removed above.
+  state=$(systemctl is-enabled "$unit" 2>/dev/null || true)
+  if [ "$state" = enabled ]; then echo "Unit still enabled: $unit"; exit 1; fi
 done
 systemctl is-enabled --quiet systemd-networkd.service qemuweb-start.service
 test -s /etc/qemu/qemu-ga.conf

@@ -9,7 +9,7 @@ prepare_debian_image() {
   local source_dir="$SOURCES/$id" raw="$IMAGES/$id.raw" vdi="$IMAGES/$id.vdi"
   local cloud_source sums url='https://cloud.debian.org/images/cloud/trixie/latest'
   # Not local: the EXIT trap below runs after this function has returned.
-  temp_dir=''; qemu_pid=''
+  temp_dir=''; qemu_pid=''; socket_dir=''
   mkdir -p "$source_dir"
   cloud_source="$source_dir/debian-13-genericcloud-amd64.qcow2"
   sums="$source_dir/SHA512SUMS"
@@ -29,9 +29,11 @@ prepare_debian_image() {
     guest_proxy_note
     temp_dir="$(mktemp -d "$RUNTIME/.$id-prepare.XXXXXX")"
     chmod 700 "$temp_dir"
-    trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; [[ -n "${temp_dir:-}" ]] && rm -rf "$temp_dir"' EXIT
+    # A UNIX socket path is limited to 107 bytes, which a deep project directory exceeds: private short directory.
+    socket_dir="$(mktemp -d "/tmp/qw-prepare.XXXXXX")"
+    trap '[[ -n "${qemu_pid:-}" ]] && kill -TERM "$qemu_pid" 2>/dev/null || true; [[ -n "${socket_dir:-}" ]] && rm -rf "$socket_dir"; [[ -n "${temp_dir:-}" ]] && rm -rf "$temp_dir"' EXIT
     local overlay="$temp_dir/debian-bootstrap.qcow2" seed="$temp_dir/debian-seed.iso"
-    local serial_log="$temp_dir/debian-serial.log" qmp_socket="$temp_dir/debian-qmp.sock"
+    local serial_log="$temp_dir/debian-serial.log" qmp_socket="$socket_dir/qmp.sock"
     local user_data="$temp_dir/user-data" meta_data="$temp_dir/meta-data" network_config="$temp_dir/network-config"
     # Cloud-init creates the lab account, enables both consoles, and configures the
     # network of the finished image (no DHCP client: the labs set the addresses).
@@ -224,6 +226,7 @@ NETWORK_CONFIG
         "$CLOUD_INIT_DONE" 0 0 CLOUD_INIT_FAILURES CLOUD_INIT_PHASES; then
       qemu_pid=''
       rm -f "$overlay"
+      rm -rf "$socket_dir"
       trap - EXIT
       echo "Preparation files preserved in $temp_dir" >&2
       exit 1
@@ -251,8 +254,8 @@ PY
     qemu-img convert -p -f qcow2 -O raw "$overlay" "$raw.tmp"
     chmod 444 "$raw.tmp"
     mv "$raw.tmp" "$raw"
-    rm -rf "$temp_dir"
-    temp_dir=''
+    rm -rf "$temp_dir" "$socket_dir"
+    temp_dir=''; socket_dir=''
     trap - EXIT
   fi
   chmod 444 "$raw"
