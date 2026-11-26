@@ -34,6 +34,7 @@ const {normalizeNodePosition} = require('../common/graphic-layout');
 const {createEventBudget, createLayoutWriter} = require('./layout-writes');
 const {baseNodeId} = require('../common/console-id');
 const {createTransportRegistry} = require('./ws-transports');
+const {noSession} = require('./routes/admin');
 
 function sessionRoom(session) { return `session:${session.id}`; }
 function observerRoom(session) { return `observers:${session.id}`; }
@@ -137,7 +138,8 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
   // The runner of a session went offline or came back (a remote runner after a network cut): the
   // pages say so, and re-select their consoles when it is back (the runner kept the output).
   manager.on('connectivity', (workspace, online) => io.to(sessionRoom(workspace.session)).emit('runner-state', {online}));
-  // Browsers of a deleted session reload, which opens the user's new session.
+  // Browsers of a deleted session (an administrator, or a runner lost for good) reload, which opens
+  // the user's new, empty session. A Reset keeps the session: its pages only refresh (nodes-changed).
   manager.on('removed', ({session}) => {
     ownerViews.delete(session.id);
     controllerViews.delete(session.id);
@@ -153,11 +155,12 @@ function attachSockets(io, manager, {audit, currentUser, control: options = {}, 
     let workspace;
     try {
       if (observer && user.role !== 'admin') throw new Error('Administrator role required to observe a session.');
-      // Observing never creates a session.
+      // Observing never opens a session; the user's own one is implicit (opened here at first use,
+      // empty and not placed on any runner until it needs one).
       workspace = observer ? manager.get(target) : manager.open(user.login);
-      if (!workspace) throw new Error(`No session for ${target}.`);
+      if (!workspace) throw new Error(noSession(target));
     } catch (error) {
-      // An observer whose target has no session (never used since the server started, or
+      // An observer whose target has no session (not used since the server started, or
       // deleted) gets a distinct event, so that its page can say so instead of breaking.
       if (observer && user.role === 'admin') socket.emit('observe-unavailable', {login: target, error: error.message});
       socket.emit('node-error', error.message);

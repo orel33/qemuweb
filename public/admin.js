@@ -105,12 +105,14 @@ function presence(browsers, own) {
   return element;
 }
 
-// "active": at least one running node; "idle": none (as in the observation drop-down).
-function sessionState(active, runnerOffline = false) {
+// "active": at least one running node; "idle": none (as in the observation drop-down); "empty": the
+// session has no node and is placed on no runner (a user's implicit session, before its first node).
+function sessionState(active, runnerOffline = false, placed = true) {
   const element = document.createElement('span');
   element.className = 'session-state';
   element.dataset.state = active ? 'active' : 'idle';
-  element.textContent = runnerOffline ? 'runner offline' : active ? 'active' : 'idle';
+  element.textContent = runnerOffline ? 'runner offline' : active ? 'active' : placed ? 'idle' : 'empty';
+  if (!placed) element.title = 'No node: the session is placed on no runner';
   return element;
 }
 
@@ -175,7 +177,7 @@ function renderSessions(sessions) {
         if (!await confirmDialog('Delete session', `Delete the session of ${session.login}? Every host and switch stops and is removed, with its disks.`, [], 'Delete')) return;
         runAction('sessions-error', () => api(`/sessions/${encodeURIComponent(session.login)}`, {method: 'DELETE'}));
       }, 'Delete session: every host and switch is removed, with its disks'));
-    row.append(cell(check), cell(user), cell(sessionState(session.active, session.runnerOffline)), cell(shortDateTime(session.createdAt)),
+    row.append(cell(check), cell(user), cell(sessionState(session.active, session.runnerOffline, session.placed)), cell(shortDateTime(session.createdAt)),
       cell(`${plural(session.hosts, 'host')}, ${plural(session.switches, 'switch')}`),
       cell(`${session.runningHosts} / ${session.hosts}`),
       cell(session.reservedRamMb ? `${session.reservedRamMb} MB` : '—'),

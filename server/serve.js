@@ -40,7 +40,7 @@ function serve({root, settings}) {
   const audit = createAudit({file: path.join(logDir, ADMIN_LOG)});
   const userLog = createUserLog({file: path.join(logDir, USERS_LOG)});
 
-  // One session per user, each with its own HTTP router, executed by a runner that dials /runner/connect
+  // One session per user, each with its own HTTP router, executed (once placed) by a runner that dials /runner/connect
   // (server/remote-gateway.js): a registered remote runner, or the local one (--local-runner), started by ./scripts/runner.sh.
   const registry = new RunnerRegistry();
   // The server's own record of which session belongs to whom and to which runner (bindings.json):
@@ -71,12 +71,17 @@ function serve({root, settings}) {
   });
   manager.on('created', (workspace, {restored}) => {
     const {session, runner} = workspace;
-    workspace.router = createSessionRouter({session, runner, userLog, audit, examplesDir: settings.examplesDir});
+    const lifecycle = {place: () => manager.place(workspace), release: () => manager.release(workspace), reset: by => manager.reset(workspace, by)};
+    workspace.router = createSessionRouter({session, runner, userLog, audit, examplesDir: settings.examplesDir, lifecycle});
     // A session restored from bindings.json is not a new session: users.log hears of it when its runner takes it over (below), or drops it.
-    if (restored) return console.log(`Session ${session.id} of ${workspace.owner} restored offline (runner ${session.runnerId}).`);
-    userLog.record(workspace.owner, 'session-created', {sessionId: session.id});
-    console.log(`Session ${session.id} opened for ${workspace.owner}.`);
+    if (restored) console.log(`Session ${session.id} of ${workspace.owner} restored offline (runner ${session.runnerId}).`);
   });
+  // A session is placed on a runner when it first needs one (its first node, a load).
+  manager.on('placed', ({session, owner}) => {
+    userLog.record(owner, 'session-placed', {sessionId: session.id, runnerId: session.runnerId});
+    console.log(`Session ${session.id} of ${owner} placed on runner ${session.runnerId}.`);
+  });
+  manager.on('reset', ({session, owner}, by) => console.log(`Session ${session.id} of ${owner} reset${by === owner ? '' : ` by ${by}`}.`));
   manager.on('adopted', ({session, owner}) => {
     userLog.record(owner, 'session-adopted', {sessionId: session.id});
     console.log(`Session ${session.id} of ${owner} adopted again from runner ${session.runnerId}.`);
@@ -113,20 +118,14 @@ function serve({root, settings}) {
   app.use('/api', observationGate(manager, {control: {admin: sockets.controlAdmin, touch: sockets.controlTouch}}));
   app.use('/api/admin', createAdminRouter({manager, auth, audit, disconnectUser: sockets.disconnectUser, browsers: sockets.browsers, connections: sockets.connections, logDir, port, host: runnerHost(bind), runtime: settings.given.has('--runtime') ? runtime : null, localRunner: localRunner !== null,
     runnerStore, runnerTokens, runnerGrace: settings.runnerGrace, trustProxy: settings.trustProxy !== null}));
-  // Self-service deletion: stops and removes every node, then the session; the next request
-  // opens a new, empty session.
-  app.delete('/api/session', async (req, res) => {
-    try { res.json({deleted: await manager.remove(req.user.login)}); }
-    catch (error) { res.status(409).json({error: error.message}); }
-  });
-  // API requests go to the router of the user's own session (created at first use), or of the
-  // observed session. Only the owner's requests count as activity.
+  // API requests go to the router of the user's own session (implicit: opened at first use, empty
+  // and unplaced, without any runner), or of the observed session. Only the owner's requests count as activity.
   app.use((req, res, next) => {
     if (!req.path.startsWith('/api/')) return next();
     if (req.observed) req.workspace = req.observed;
     else {
       try { req.workspace = manager.open(req.user.login); }
-      catch (error) { return res.status(503).json({error: error.message}); }
+      catch (error) { return res.status(409).json({error: error.message}); }
       req.workspace.session.touch();
     }
     // The runner of a kept or restored session is offline (a network cut, a restart): the page stays and recovers.

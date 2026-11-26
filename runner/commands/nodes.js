@@ -107,8 +107,6 @@ const commands = {
     return {name: node.hostname};
   },
 
-  'nodes.deleteAll': async ({runner}) => ({removed: await runner.exitAllNodes()}),
-
   'node.delete': async ({runner, emit}, {nodeId}) => {
     await runner.destroyNode(runner.getNode(nodeId));
     emit('nodes-removed', {ids: [nodeId]});

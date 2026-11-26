@@ -5,11 +5,15 @@
 // (server/runner-client.js session()): a request reaches the router of its user's session
 // (req.workspace) and can never name a node of another one. Node routes send one runner
 // command each; the runner answers 404 for a node ID that is not in the session.
+// The session may not be placed on a runner yet (server/session-manager.js): its handle then
+// answers as an empty session. The routes that create nodes (a host, a switch, a load) first
+// place it (`placed`, 503 when no runner is available), and those that may leave it empty (a node
+// removed, a load) release it afterwards (`release`, a no-op while it still has nodes).
 const express = require('express');
 const {isCaptureId, interfaceIndex} = require('../../common/capture');
 const {kindOfName, isExampleName} = require('../examples');
 
-const ROUTE_MODULES = ['settings', 'nodes', 'hosts', 'topology', 'archives', 'examples', 'metrics', 'captures'];
+const ROUTE_MODULES = ['session', 'settings', 'nodes', 'hosts', 'topology', 'archives', 'examples', 'metrics', 'captures'];
 const NODE_ID = /^[hs]-[0-9a-f]{16}$/;
 
 // The users.log event of a request of the owner, or null. Only explicit actions on nodes and
@@ -34,7 +38,7 @@ function userEvent(req) {
   switch (key) {
     case 'POST /api/switches': return {event: 'node-created', target: {nodeId: nodeId(req.body?.id), kind: 'switch'}};
     case 'POST /api/hosts': return {event: 'node-created', target: {nodeId: nodeId(req.body?.id), kind: 'host'}};
-    case 'DELETE /api/nodes': return {event: 'node-deleted', target: {all: true}};
+    case 'POST /api/session/reset': return {event: 'session-reset', target: {}};
     case 'POST /api/nodes/stop-all': return {event: 'node-stopped', target: {all: true}};
     case 'POST /api/nodes/resume-all': return {event: 'node-started', target: {all: true}};
     case 'POST /api/topology': return {event: 'archive-loaded', target: {kind: 'topology'}};
@@ -63,8 +67,10 @@ function auditEntries(req, owner) {
 
 // runner: the session's runner handle. userLog (server/audit.js createUserLog) and audit
 // (admin.log) receive the entries of auditEntries. examplesDir is the --examples directory
-// (none: no example).
-function createSessionRouter({session, runner, userLog = {record() {}}, audit = {record() {}}, examplesDir = null}) {
+// (none: no example). lifecycle: {place(), release(), reset(by)} of this session
+// (server/session-manager.js place, release and reset).
+const NO_LIFECYCLE = {place: async () => {}, release: async () => {}, reset: async () => ({reset: true})};
+function createSessionRouter({session, runner, userLog = {record() {}}, audit = {record() {}}, examplesDir = null, lifecycle = NO_LIFECYCLE}) {
   const router = express.Router();
   router.use((req, res, next) => {
     for (const [log, ...entry] of auditEntries(req, session.owner)) {
@@ -76,16 +82,23 @@ function createSessionRouter({session, runner, userLog = {record() {}}, audit = 
     if (session.archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
     next();
   });
-  // A route that sends one runner command: args(req) builds its arguments; the result is the
-  // JSON response, an error answers with the runner's status or `status`.
-  const handle = (command, args, status = 400, {noStore = false} = {}) => async (req, res) => {
-    try {
-      const result = await runner.request(command, args(req));
-      if (noStore) res.set('Cache-Control', 'no-store');
-      res.json(result);
-    } catch (error) { res.status(error.status || status).json({error: error.message}); }
+  // Middleware of the routes that create nodes: the session is placed on a runner first.
+  const placed = (_req, res, next) => {
+    lifecycle.place().then(() => next(), error => res.status(error.status || 503).json({error: error.message}));
   };
-  const context = {app: router, session, runner, handle, examplesDir};
+  // A route that sends one runner command: args(req) builds its arguments; the result is the
+  // JSON response, an error answers with the runner's status or `status`. With `release`, the
+  // session is released before the answer if the command left it empty.
+  const handle = (command, args, status = 400, {noStore = false, release = false} = {}) => async (req, res) => {
+    let result, failure = null;
+    try { result = await runner.request(command, args(req)); }
+    catch (error) { failure = error; }
+    if (release) await lifecycle.release();
+    if (failure) return res.status(failure.status || status).json({error: failure.message});
+    if (noStore) res.set('Cache-Control', 'no-store');
+    res.json(result);
+  };
+  const context = {app: router, session, runner, handle, placed, lifecycle, examplesDir};
   for (const name of ROUTE_MODULES) require(`./${name}`).register(context);
   return router;
 }

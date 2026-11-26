@@ -278,7 +278,7 @@ async function renderSessionNavigation() {
   select.replaceChildren(...sessions.map(session => {
     const option = document.createElement('option');
     option.value = session.login;
-    option.textContent = `${session.login}${session.active ? '' : ' (idle)'}${session.browsers > 0 ? '' : ' (offline)'}`;
+    option.textContent = `${session.login}${session.active ? '' : session.placed ? ' (idle)' : ' (empty)'}${session.browsers > 0 ? '' : ' (offline)'}`;
     option.selected = session.login === observedLogin;
     return option;
   }));

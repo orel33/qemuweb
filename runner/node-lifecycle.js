@@ -283,22 +283,7 @@ function createLifecycle(ctx) {
     ctx.session.prunePositions();
   }
 
-  async function exitAllNodes() {
-    const removed = [];
-    try {
-      for (const kind of ['host', 'switch']) {
-        for (const node of [...ctx.session.nodes.values()].filter(item => item.kind === kind)) {
-          await destroyNode(node);
-          removed.push(node.id);
-        }
-      }
-      return removed;
-    } finally {
-      if (removed.length) ctx.events.emit('nodes-removed', {ids: removed});
-    }
-  }
-
-  return {start, reboot, reset, stop, destroyNode, exitAllNodes};
+  return {start, reboot, reset, stop, destroyNode};
 }
 
 module.exports = {createLifecycle};

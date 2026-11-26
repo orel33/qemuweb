@@ -3,7 +3,8 @@
 // The server's examples (server/examples.js): the list, the bytes of one file for the browser's
 // review, and the loading of one file from the disk of the server into the session. Loading
 // feeds the file into the same runner commands as an upload (topology.load, archive.import), so
-// every check of those applies. The routes take a bare file name, never a path; none writes.
+// every check of those applies (the session is placed on a runner first, and released again when
+// the load created nothing). The routes take a bare file name, never a path; none writes.
 const {pipeline} = require('stream/promises');
 const {listExamples, openExample, ExampleError} = require('../examples');
 const {importArchive} = require('./archives');
@@ -21,7 +22,7 @@ function booleans(body, names) {
   return options;
 }
 
-function register({app, session, runner, examplesDir}) {
+function register({app, session, runner, examplesDir, placed, lifecycle}) {
   const fail = (res, error) => res.status(error.status || 400).json({error: error.message});
   // An observer without the control lock reads only (the admin holding it acts as the owner).
   const refuseObserver = (req, res) => {
@@ -52,8 +53,14 @@ function register({app, session, runner, examplesDir}) {
     }
   });
 
-  app.post('/api/examples/load', async (req, res) => {
-    if (refuseObserver(req, res)) return;
+  app.post('/api/examples/load', (req, res, next) => (refuseObserver(req, res) ? null : next()), async (req, res, next) => {
+    // A bad name or option answers before the session is placed.
+    try {
+      const example = await openExample(examplesDir, req.body?.name);
+      await example.handle.close();
+      next();
+    } catch (error) { fail(res, error); }
+  }, placed, async (req, res) => {
     let example = null;
     try {
       const body = req.body || {};
@@ -64,17 +71,22 @@ function register({app, session, runner, examplesDir}) {
         const {text, handle} = example;
         example = null;
         await handle.close();
-        res.json(await runner.request('topology.load', {body: {text, ...(body.engine !== undefined ? {engine: body.engine} : {}), ...options}}));
+        const result = await runner.request('topology.load', {body: {text, ...(body.engine !== undefined ? {engine: body.engine} : {}), ...options}});
+        await lifecycle.release();
+        res.json(result);
       } else {
         const options = booleans(body, ['autoStart', 'discardDisks']);
         const query = Object.fromEntries(Object.entries(options).map(([key, value]) => [key, String(value)]));
         const {size, handle} = example;
         example = null;
         const source = handle.createReadStream({start: 0});
-        res.json(await importArchive({session, runner, source, query, contentType: 'application/zip', declaredBytes: String(size)}));
+        const result = await importArchive({session, runner, source, query, contentType: 'application/zip', declaredBytes: String(size)});
+        await lifecycle.release();
+        res.json(result);
       }
     } catch (error) {
       await example?.handle.close().catch(() => {});
+      await lifecycle.release();
       fail(res, error);
     }
   });

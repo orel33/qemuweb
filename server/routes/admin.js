@@ -16,7 +16,8 @@ const {LOGIN_PATTERN, readUsers, createAccount, setPassword, setRole, setDisable
 // counts the session's runner reports (runner/commands/consoles.js session.summary).
 // browsers: the owner's connected browser tabs (server/sockets.js).
 // A session whose runner is offline (a network cut, a restart) is listed with zero counts and runnerOffline: true,
-// so that one lost runner does not hide the other sessions.
+// so that one lost runner does not hide the other sessions. runnerId is the runner the session is placed on,
+// null (placed: false) for a session without any node, which no runner holds (its counts are zero).
 async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0) {
   let counts, runnerOffline = false;
   try { counts = await runner.request('session.summary'); }
@@ -26,7 +27,8 @@ async function sessionSummary({owner, session, runner}, adminLogin, browsers = 0
     counts = {nodes: 0, hosts: 0, switches: 0, runningHosts: 0, runningSwitches: 0, reservedRamMb: 0, cpuPercent: null, active: false};
   }
   return {
-    login: owner, own: owner === adminLogin, browsers, runnerOffline, sessionId: session.id, createdAt: session.createdAt,
+    login: owner, own: owner === adminLogin, browsers, runnerOffline, sessionId: session.id, runnerId: session.runnerId,
+    placed: session.runnerId !== null, createdAt: session.createdAt,
     lastActivity: session.lastActivityAt, nodes: counts.nodes, hosts: counts.hosts, switches: counts.switches,
     runningHosts: counts.runningHosts, runningSwitches: counts.runningSwitches, reservedRamMb: counts.reservedRamMb,
     cpuPercent: counts.cpuPercent, active: counts.active
@@ -48,13 +50,16 @@ function accountErrorStatus(error) {
 //
 // observationRule is the pure decision for one /api request: {status, error} to refuse it,
 // else {observed, control}. method and url (the full path) of the request; login and role of
-// the caller; observe: the X-Observe login (or null); found: the observed login has a session;
-// lockAdmin: the admin holding the lock of that session (or null); ownLockAdmin: the admin
-// holding the lock of the caller's own session (or null). Always refused, even under control:
-// /api/admin (the admin's own API, never through an observation) and Delete session (done from
-// the admin page, whose deletion is audited there).
+// the caller; observe: the X-Observe login (or null); found: the observed login has a session
+// (a workspace, placed on a runner or not: observing never opens one, so a user who has not used
+// QemuWeb since the server started, or whose session was deleted, has none); lockAdmin: the admin
+// holding the lock of that session (or null); ownLockAdmin: the admin holding the lock of the
+// caller's own session (or null). Always refused, even under control: /api/admin (the admin's own
+// API, never through an observation). Under control the admin may also Reset the session.
 const READ_METHODS = ['GET', 'HEAD'];
 const READ_ONLY = 'Read-only observation: this action is not allowed.';
+// Why a login cannot be observed: it has no session (observing never opens one).
+const noSession = login => `${login} has no session: they have not used QemuWeb since the server started, or their session was deleted.`;
 
 function observationRule({method, url, login, role, observe, found, lockAdmin, ownLockAdmin}) {
   const write = !READ_METHODS.includes(method);
@@ -66,8 +71,7 @@ function observationRule({method, url, login, role, observe, found, lockAdmin, o
   if (role !== 'admin') return {status: 403, error: 'Administrator role required to observe a session.'};
   const control = found && lockAdmin === login;
   if (write && (!control || adminApi)) return {status: 403, error: READ_ONLY};
-  if (write && method === 'DELETE' && url === '/api/session') return {status: 403, error: `Delete the session of ${observe} from the admin page.`};
-  if (!found) return {status: 404, error: `No session for ${observe}.`};
+  if (!found) return {status: 404, error: noSession(observe)};
   return {observed: true, control};
 }
 
@@ -128,7 +132,7 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, conn
 
   function workspaceOf(login) {
     const workspace = typeof login === 'string' && LOGIN_PATTERN.test(login) ? manager.get(login) : null;
-    if (!workspace) throw Object.assign(new Error(`No session for ${login}.`), {status: 404});
+    if (!workspace) throw Object.assign(new Error(noSession(login)), {status: 404});
     return workspace;
   }
 
@@ -256,4 +260,4 @@ function createAdminRouter({manager, auth, audit, disconnectUser, browsers, conn
   return router;
 }
 
-module.exports = {createAdminRouter, observationGate, observationRule, adminPage, sessionSummary};
+module.exports = {noSession, createAdminRouter, observationGate, observationRule, adminPage, sessionSummary};

@@ -16,7 +16,7 @@
 // Events: 'online' (entry, hello) on each hello, 'lost' (entry) once the connection closed.
 // An entry has the ID of its record ("local" or "r-xxxxxxxx") and, once lost, stays (state 'lost')
 // until the runner reconnects: add() then replaces it.
-// pickRunner() is the single place where a runner is chosen for a new session.
+// pickRunner() is the single place where a runner is chosen for a session (when it is placed).
 const {EventEmitter} = require('events');
 
 const MAX_LIMIT = 1e6;
@@ -77,8 +77,8 @@ class RunnerRegistry extends EventEmitter {
   // runner already holds. Candidates: online, not paused, with an engine, under their maxSessions.
   // The least loaded wins (sessions / maxSessions, the plain count when there is no limit); a
   // tie goes to the earliest registered. Throws a 503 when there is
-  // none; the reasons go to the server log.
-  pickRunner(_login, sessionsOf = () => 0) {
+  // none; the reasons go to the server log (unless `log` is false: a check, not a placement).
+  pickRunner(_login, sessionsOf = () => 0, {log = true} = {}) {
     const candidates = [];
     const reasons = [];
     for (const entry of this.runners.values()) {
@@ -91,7 +91,7 @@ class RunnerRegistry extends EventEmitter {
       else candidates.push({entry, load: maxSessions ? sessions / maxSessions : sessions});
     }
     if (!candidates.length) {
-      console.warn(`No runner is available${reasons.length ? ` (${reasons.join('; ')})` : ' (none registered)'}.`);
+      if (log) console.warn(`No runner is available${reasons.length ? ` (${reasons.join('; ')})` : ' (none registered)'}.`);
       const starting = [...this.runners.values()].some(entry => entry.state === 'starting');
       throw Object.assign(new Error(starting ? 'The runner is not ready; try again in a moment.' : 'No runner is available.'), {status: 503});
     }

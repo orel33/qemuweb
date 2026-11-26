@@ -107,7 +107,6 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
     startSwitch: vde.startSwitch,
     stopSwitch: vde.stopSwitch,
     destroyNode: lifecycle.destroyNode,
-    exitAllNodes: lifecycle.exitAllNodes,
     // Stops every running host, then every running switch, and keeps the nodes and their
     // disks. A node that is already starting, stopping, rebooting or being deleted is skipped.
     // Returns the IDs of the stopped nodes; throws once everything was tried if a node could
