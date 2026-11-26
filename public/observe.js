@@ -11,7 +11,7 @@ import {panes} from './terminal.js';
 import {applyView, closeLayoutMenu, showStatusError} from './workspace.js';
 import {syncSessionsFromServer} from './nodes.js';
 import {emitOnSession, publishView} from './socket.js';
-import {canWrite as writeAllowed, controlReason, followReason, ownerBanner, showReason, takeControlReason, viewReason} from './disabled-reason.js';
+import {canWrite as writeAllowed, controlReason, followReason, observerBanner, ownerBanner, renderBannerParts, showReason, takeControlReason, viewReason} from './disabled-reason.js';
 
 const STORAGE_KEY = 'qemuweb-observe';
 
@@ -88,15 +88,16 @@ function renderControl() {
     if (mine) follow.checked = true;
     follow.disabled = mine;
     for (const element of [follow, follow.parentElement]) showReason(element, followReason(controlState()));
-    status.textContent = mine ? `You control the session of ${observedLogin}`
-      : control ? `${control.admin} controls this session` : `read-only${following() ? `; the view follows ${observedLogin} (uncheck Follow to change it)` : ''}`;
-    banner.dataset.control = String(mine);
+    const shown = observerBanner(controlState());
+    renderBannerParts(status, shown.parts);
+    status.title = shown.title;
+    banner.dataset.kind = shown.kind;
     renderViewDriver();
     return;
   }
   // The owner's banner: the control while an admin holds it, else the observation.
   const shown = ownerBanner({admin: control?.admin || null, observers});
-  controlBanner.textContent = shown?.text || '';
+  renderBannerParts(controlBanner, shown?.parts);
   controlBanner.title = shown?.title || '';
   controlBanner.dataset.kind = shown?.kind || '';
   controlBanner.hidden = !shown;
@@ -193,7 +194,9 @@ export function observationUnavailable(reason = 'no session') {
     : `${observedLogin} has no session: the user has not used QemuWeb since the server started, or the session was deleted.`;
   document.getElementById('observe-notice-text').textContent = text;
   document.getElementById('observe-notice').hidden = false;
-  document.getElementById('observe-status').textContent = 'no session';
+  const status = document.getElementById('observe-status');
+  renderBannerParts(status, [{login: observedLogin}, ' has no session']);
+  status.title = text;
   const button = document.getElementById('observe-control');
   button.disabled = true;
   button.title = 'No session to control';
@@ -296,7 +299,6 @@ export function initObserve() {
   if (!observing) return;
   document.title = `QemuWeb · observing ${observedLogin}`;
   banner.hidden = false;
-  document.getElementById('observe-user').textContent = observedLogin;
   document.getElementById('observe-select').addEventListener('change', event => goTo(event.target.value));
   document.getElementById('observe-control').addEventListener('click', toggleControl);
   fetch('/auth/me', {cache: 'no-store'}).then(response => (response.ok ? response.json() : null)).then(me => {

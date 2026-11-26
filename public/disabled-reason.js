@@ -41,18 +41,53 @@ export function followReason({holding}) {
   return holding ? 'You hold control: the user follows your view' : '';
 }
 
-// The banner of the owner's page (one line, its explanation in the tooltip), or null when none
-// shows: while an administrator controls the session, that control; else while administrators
-// observe it (the logins, from session-observers), the observation.
+// The observation and control banners: one sentence "<who> is observing | is controlling <whose
+// session>", the same verb forms on both sides, the logins in bold (parts {login}) and nothing
+// else, the long explanation in the tooltip (title). A banner is {kind, parts, text, title}:
+// parts are strings and {login} objects, text is their plain concatenation.
+const banner = (kind, parts, title) => ({kind, parts,
+  text: parts.map(part => (typeof part === 'string' ? part : part.login)).join(''), title});
+
+// The banner of the observer's page: while this admin holds control (kind 'controlling'), while
+// another admin does ('other'), else the read-only observation ('observing'), whose tooltip says
+// whether the view follows the owner.
+export function observerBanner({login, holding, admin, following}) {
+  if (holding) {
+    return banner('controlling', ['You are controlling the session of ', {login}],
+      `Your keyboard, actions and view drive the session of ${login}; the page of ${login} is read-only and follows your view. Release control to give it back.`);
+  }
+  if (admin) {
+    return banner('other', [{login: admin}, ' is controlling the session of ', {login}],
+      `Read-only: ${admin} holds control of the session of ${login}.`);
+  }
+  return banner('observing', ['You are observing the session of ', {login}],
+    `Read-only: you see the consoles and the view of ${login} and cannot type or act. ${following
+      ? `Your view follows the view of ${login}; uncheck Follow to change it.` : 'Follow is unchecked: your view is your own.'}`);
+}
+
+// The banner of the owner's page, or null when none shows: while an administrator controls the
+// session, that control ('control'); else while administrators observe it (the logins, from
+// session-observers), the observation ('observed').
 export function ownerBanner({admin, observers = []}) {
   if (admin) {
-    return {kind: 'control', text: `${admin} controls your session: keyboard, actions and view`,
-      title: `You see the commands and their output; your keyboard and your actions are blocked, and ${admin} controls your view.`};
+    return banner('control', [{login: admin}, ' is controlling your session'],
+      `You see the commands and their output; your keyboard and your actions are blocked, and ${admin} drives your view.`);
   }
   if (!observers.length) return null;
-  const who = observers.length === 1 ? `${observers[0]} is` : observers.length === 2 ? `${observers[0]} and ${observers[1]} are` : `${observers.length} administrators are`;
-  return {kind: 'observed', text: `${who} observing your session`,
-    title: `Read-only observation by ${observers.join(', ')}: they see your consoles and your view, and cannot type or act.`};
+  const who = observers.length === 1 ? [{login: observers[0]}, ' is']
+    : observers.length === 2 ? [{login: observers[0]}, ' and ', {login: observers[1]}, ' are'] : [`${observers.length} administrators are`];
+  return banner('observed', [...who, ' observing your session'],
+    `Read-only observation by ${observers.join(', ')}: they see your consoles and your view, and cannot type or act.`);
+}
+
+// Fills an element with a banner's parts: the logins in <strong>, the rest as text.
+export function renderBannerParts(element, parts = []) {
+  element.replaceChildren(...parts.map(part => {
+    if (typeof part === 'string') return document.createTextNode(part);
+    const strong = document.createElement('strong');
+    strong.textContent = part.login;
+    return strong;
+  }));
 }
 
 // Shows a reason as the tooltip of an element, or puts its normal tooltip back (reason ''). Like the
