@@ -17,7 +17,7 @@ function register({app, handle, placed}) {
   app.post('/api/switches', placed, handle('switch.create', req => {
     const {id, name, autostart} = req.body || {};
     return {id, name, autostart};
-  }));
+  }, 400, {release: true}));
   app.post('/api/nodes/:nodeId/stop', handle('node.stop', node, 500));
   app.post('/api/nodes/:nodeId/reboot', handle('node.reboot', node, 500));
   app.post('/api/nodes/:nodeId/reset', handle('node.reset', node, 500));

@@ -44,12 +44,12 @@ const owner = {user: {login: 'toto', role: 'student'}};
 const controller = {user: {login: 'boss', role: 'admin'}, observed: {}, observedControl: true};
 const settle = () => new Promise(resolve => setTimeout(resolve, 20));
 
-test('a node creation places the session first, and no release runs before the creation ended', async t => {
+test('a node creation places the session first; its release (a failed first node) runs only once the creation ended', async t => {
   const {call, calls, creations} = await serve(t, {who: owner});
   assert.equal((await call('POST', '/api/switches', {id: 's-0000000000000001', name: 'sw1'})).status, 200);
   assert.equal((await call('POST', '/api/hosts', {id: HOST})).status, 200);
   await settle();
-  assert.deepEqual(calls, [['begin'], ['place'], ['runner', 'switch.create', 1], ['end'],
+  assert.deepEqual(calls, [['begin'], ['place'], ['runner', 'switch.create', 1], ['end'], ['release', 0],
     ['begin'], ['place'], ['runner', 'host.create', 1], ['end'], ['release', 0]]);
   assert.equal(creations(), 0);
 });

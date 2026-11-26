@@ -219,3 +219,19 @@ test('the dispatcher refuses unknown commands, sessions and nodes', async t => {
   assert.deepEqual(await session.request('session.delete'), {deleted: true});
   assert.deepEqual(service.hello().sessions, []);
 });
+
+test('UXS02: session.create takes the engine of the session, session.delete {ifEmpty} deletes only an empty session', async t => {
+  const {client, service} = await runnerPair(t);
+  await assert.rejects(client.request('session.create', {owner: 'toto', engine: 'vbox'}, '00000000000000b1'), /VirtualBox is unavailable on this runner/);
+  await assert.rejects(client.request('session.create', {owner: 'toto', engine: 'other'}, '00000000000000b1'), /Invalid session engine/);
+  assert.deepEqual(service.hello().sessions, [], 'a refused creation leaves nothing');
+  await client.request('session.create', {owner: 'toto', engine: 'qemu'}, '00000000000000b1');
+  const session = client.session('00000000000000b1');
+  assert.equal((await session.request('session.settings')).engine, 'qemu');
+  await session.request('switch.create', {id: 's-00000000000000b1', name: 'sw1', autostart: false});
+  assert.deepEqual(await session.request('session.delete', {ifEmpty: true}), {deleted: false}, 'a session with a node stays');
+  assert.deepEqual(await session.request('nodes.ids'), ['s-00000000000000b1']);
+  await session.request('node.delete', {nodeId: 's-00000000000000b1'});
+  assert.deepEqual(await session.request('session.delete', {ifEmpty: true}), {deleted: true});
+  assert.deepEqual(service.hello().sessions, []);
+});
