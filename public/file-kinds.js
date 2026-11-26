@@ -56,22 +56,28 @@ export function archiveDisksPhrase({qemu = 0, vbox = 0} = {}) {
   return `${countPhrase(qemu + vbox, 'working disk')} (${parts})`;
 }
 
-// The orange warning of the Load Session dialog: the previous session is always closed.
-// Empty for an empty session (its slot keeps its height).
+// The orange warning of the Load Session dialog: a load goes only into an empty session, so a session with nodes is
+// reset first (as Reset session does). Empty for an empty session (its slot keeps its height).
 // owner: the login of the session when an administrator holding control loads into another user's session; the
 // warning then names it, even for an empty session.
 export function closeWarning(hosts, switches, owner = null) {
   if (owner) {
     return hosts + switches === 0 ? `This loads into the session of ${owner}.`
-      : `This replaces every node of the session of ${owner} (${countsText(hosts, switches)}): its working disks are discarded.`;
+      : `A load goes into an empty session: the session of ${owner} (${countsText(hosts, switches)}) is reset first, as Reset session does, and its working disks are discarded.`;
   }
-  return hosts + switches === 0 ? '' : `Your current session (${countsText(hosts, switches)}) will be closed and its working disks discarded.`;
+  return hosts + switches === 0 ? '' : `A load goes into an empty session: your session (${countsText(hosts, switches)}) is reset first, as Reset session does, and its working disks are discarded.`;
 }
 
 // The session an action applies to, in a confirmation: "this session", or "the session of <owner>" for an
 // administrator holding control of another user's session.
 export function sessionPhrase(owner = null) {
   return owner ? `the session of ${owner}` : 'this session';
+}
+
+// The confirmation of Reset session. owner: the login of the session when an administrator holding control resets
+// another user's session.
+export function resetSessionText(owner = null) {
+  return `This removes every node of ${owner ? `the session of ${owner}` : 'your session'}: every host and switch stops and is removed, with its working disks, consoles and logs. The session stays, empty.\n\nSave a session ZIP first to keep it.`;
 }
 
 // What the Close step of a load reports once the nodes are removed.

@@ -11,7 +11,7 @@ consoles.
 | --- | --- |
 | Session | A user's workspace: its nodes, its engine (`qemu` or `vbox`), and its runtime directory `<runtime>/sessions/<id>/`. Each user owns exactly one session, with a random ID, recorded as `owner` in `meta.json` next to `session.json`. A session ZIP archive and `session.json` describe it; `meta.json` (owner, creation date) belongs to the live session only and is never exported. |
 | User | A login from `users.json`, or given by the authenticating front end (`X-Remote-User`, a student unless `users.json` says otherwise), or the implicit `local` user when `--no-auth`, with the role `student` or `admin`. An admin owns a session like anyone else and may also supervise, observe and clean up the others. |
-| Observer | An admin's browser tab or socket reading another user's session (`X-Observe` header, Socket.IO `auth.observe`): read-only, until it takes control of the session; it then does what the owner can, except Delete session (CTL01). |
+| Observer | An admin's browser tab or socket reading another user's session (`X-Observe` header, Socket.IO `auth.observe`): read-only, until it takes control of the session; it then does what the owner can, Reset session included (CTL01, UXS02). |
 | Node | An element of a session: a host or a switch. API routes and Socket.IO events use `nodeId`. |
 | Host | A node that is a virtual machine (QEMU or VirtualBox). |
 | Switch | A node that is a VDE switch. |
@@ -50,8 +50,8 @@ consoles.
 - **Users and sessions:** `server/auth/` checks the signed cookie of every request
   and of the Socket.IO handshake (Origin checks are planned for milestone 8).
   `server/session-manager.js` maps the login to its workspace `{session, runner}`,
-  creating it at first use; it survives logouts and closed tabs until the user
-  deletes it or the server stops. Each HTTP request goes to the router of the
+  opening it implicitly at first use (see [Session lifecycle](#session-lifecycle)); it survives logouts and closed tabs until an
+  administrator deletes it or the server stops. Each HTTP request goes to the router of the
   user's own session, whose runner looks a node ID up only there (404 otherwise).
   Per-session events go to the room `session:<id>`, per-node events (`state`,
   `log`, `logs-reset`) to `node:<id>:<nodeId>`, and console output (`serial`,
@@ -62,8 +62,8 @@ consoles.
   admin holds the session's control lock, see [Session control](#session-control); the
   observed workspace taken with `manager.get`, never `open`), the
   `/api/admin` router (first middleware: role `admin`, then 403 on any path
-  for others), `DELETE /api/session`, and the middleware that opens the
-  caller's own session and records its activity. An admin call therefore never
+  for others), and the middleware that opens the
+  caller's own (implicit) session and records its activity. An admin call therefore never
   opens a session for the admin, and an observed session never gets an
   activity mark. An observer socket (`auth.observe`) joins the observed
   session's rooms and `observers:<id>`; `server/sockets.js` refuses its `input`,
@@ -268,8 +268,8 @@ minutes without input, or the session's deletion).
   from the method, the path, the caller, the `X-Observe` login and the holder of each lock:
   - an observer without the lock: `GET`/`HEAD` only (403 otherwise);
   - the admin holding the lock of the observed session: every method (`req.observedControl`),
-    except `DELETE /api/session` (403 "Delete the session of <login> from the admin page.", done
-    from `/admin`, audited as `delete-session`) and `/api/admin`;
+    `POST /api/session/reset` included (UXS02), except `/api/admin`; deleting the session stays
+    with `/admin` (audited as `delete-session`);
   - the owner while an admin holds the lock of their session: every write is 403
     "<admin> controls your session." (reads stay allowed).
 
@@ -280,17 +280,17 @@ minutes without input, or the session's deletion).
   and `clear-console`: the holder's are applied, the owner's dropped silently while controlled,
   an observer without control gets a `node-error`. The terminal size is the driver's.
 - **Audit.** `auditEntries` (`server/routes/index.js`): a request of the holder that is a
-  `users.log` event (nodes, archives, captures) is written to `admin.log` (`{login: owner, ...}`)
+  `users.log` event (nodes, archives, captures, `session-reset`) is written to `admin.log` (`{login: owner, ...}`)
   and to the owner's `users.log` (`{..., by: admin}`); any other write of the holder goes to
   `admin.log` as `controlled-request {login, method, path}`.
-- **Load and Save.** Load goes into the owner's session (same session ID and runner). The rule
-  "only into an empty session" is kept: the dialog removes every node first. Its warning names
-  the owner ("This replaces every node of the session of toto ..."), and so do Stop all and
-  Remove all. The owner's pages get the node events and keep following the admin's view. Save
+- **Load and Save.** Load goes into the owner's session (same session ID). The rule
+  "only into an empty session" is kept: the dialog resets the session first (`POST /api/session/reset`).
+  Its warning names the owner ("... the session of toto (...) is reset first ..."), and so do Stop all and
+  Reset session. The owner's pages get the node events and keep following the admin's view. Save
   downloads the owner's archive to the admin's browser as `qemuweb-session-<owner>.zip`, with
   the same limits and the same archive lock as for the owner. The examples load the same way.
 - **Browser.** `canWrite` and `writeReason` (`public/disabled-reason.js`) are the rules:
-  - the holder's write actions are enabled, except Delete session (class `owner-only`);
+  - the holder's write actions are enabled, Reset session included (there is no owner-only action);
   - the owner's page under control greys them out with "<admin> controls your session";
   - an observer without control keeps "Read-only: you observe the session of <login>".
 
@@ -329,7 +329,8 @@ The server is split into layers with one-way dependencies:
 | `server/sockets.js` | Forwards each runner's events to the rooms of its session, relays console input, and handles observer sockets and console control. |
 | `server/routes/admin-runners.js` | `GET /api/admin/runners`: the runners and their warnings, read-only (the Runners section of `/admin`, `public/admin-runners.js`). |
 | `server/routes/admin.js` | `/admin` page, `/api/admin/*` (sessions with metrics, stop-all, delete, bulk delete, accounts), the `X-Observe` observation gate. |
-| `server/routes/index.js` | Builds the router of one session from the route modules, and `handle(command, args, status)`: a route that sends one runner command. |
+| `server/routes/index.js` | Builds the router of one session from the route modules, and `handle(command, args, status)`: a route that sends one runner command; `placed` (the session is placed before a creation) and `releaseAfter` (released once empty). |
+| `server/routes/session.js` | `POST /api/session/reset` (Reset session): the owner or the admin holding control. |
 | `server/routes/settings.js` | General settings, system catalog and startup CD-ROM capability. |
 | `server/routes/nodes.js` | Node listing, switches, start, stop, Resume all, Stop all, reboot, reset, monitor, rename and deletion. |
 | `server/routes/hosts.js` | Host creation, configuration and startup CD-ROM. |
@@ -337,9 +338,10 @@ The server is split into layers with one-way dependencies:
 | `server/routes/archives.js` | Session ZIP size estimate, export, base image check and import; the ZIP goes between the browser and the runner as a protocol stream (`importArchive` sends any Readable, an upload or an example file). |
 | `server/examples.js`, `server/routes/examples.js` | The server's examples (`--examples`): `GET /api/examples` lists the regular `.topo` and `.zip` files (name, kind, size, description); `POST /api/examples/file` and `POST /api/examples/load` take a bare file name `{name}`, check it against a fresh listing (400 malformed, 404 unlisted), open it without following links, confirm the kind by content, then feed it to the same runner commands as an upload (`archive.import`, `topology.load`). Read only. |
 | `server/routes/metrics.js` | Per-host CPU and memory metrics. |
-| `server/session-manager.js` | Login → `{session, runner}`; creation at first use on `registry.pickRunner`, deletion, the offline restore of `bindings.json` at start, the grace period of a lost runner, dropping its sessions (grace over, revoke, forced loss), resynchronisation on a runner's `hello`. No file access. |
+| `server/session-manager.js` | Login → `{session, runner}`; the implicit session opened at first use, unplaced; placement on `registry.pickRunner` at the first node or load (`place`), release once empty (`release`), Reset (`reset`), deletion, the offline restore of `bindings.json` at start, the grace period of a lost runner, dropping its sessions (grace over, revoke, forced loss), resynchronisation on a runner's `hello`. No file access. |
+| `server/unbound-runner.js` | The client of the sessions placed on no runner: answers their reads as an empty session, keeps their engine choice, sends the catalog reads without a session to the runner they would go to. |
 | `server/offline-runner.js` | The placeholder client behind which a restored session waits for its runner (503, no input, no stream); replaced by the real client at the runner's `hello`. |
-| `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID, last activity (memory only) and archive lock. |
+| `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID (null while unplaced), engine chosen while unplaced, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
 | `server/runner-registry.js` | Runners with their state (`starting`, `online`, `lost`), capabilities, `paused` flag, the display-only `runtimeRoot` and `pid` and client (no `local` or `trusted` flag); `pickRunner(login, sessionsOf)`, the single placement point. |
 | `server/remote-gateway.js` | `/runner/connect`: the WebSocket upgrade of every runner (bearer token and runner ID checked against `runners.json`, 401 / 409; the id `local` only with `--local-runner` and the token of the file, checked against its in-memory hash in constant time), the `ws` duplex stream under a protocol `Connection`, ping/pong (`common/ws-heartbeat.js`). The address proves nothing (a reverse proxy reaches the server from 127.0.0.1 too): the token is the only proof. |
@@ -392,7 +394,7 @@ order. State that several modules reassign lives on the `store` object of
 | Module | Role |
 | --- | --- |
 | `app.js` | Entry point: initializes the other modules. |
-| `account.js` | User name (and display name from the front end), Admin link (admins), Delete session and Log out in the header; authentication-disabled warning. |
+| `account.js` | User name (and display name from the front end), Admin link (admins) and Log out in the header; authentication-disabled warning. |
 | `state.js` | Nodes, shared state, view and general settings in `localStorage`. |
 | `api.js` | HTTP helpers: node URLs, JSON requests, launch preview URL, session-expiry handling on 401 (`session-expiry.js`: login page, or one reload for an identity from the front end), `X-Observe` header in an observation tab. |
 | `socket.js` | Per-pane console sockets and the shared notification socket. |
@@ -661,14 +663,14 @@ stream    either way    {type:'stream', id, op:'end'|'error'|'credit', message?,
 
 ### Commands
 
-Session: `session.create {sessionId, owner, createdAt}` (directory,
-`session.json`, `meta.json`), `session.delete` (destroy every node, remove the
-directory), `session.settings` / `session.setEngine {engine}`,
+Session: `session.create {sessionId, owner, createdAt, engine?}` (directory,
+`session.json`, `meta.json`; the engine asked, else the runner's first), `session.delete {ifEmpty?}` (destroy every node, remove the
+directory; with `ifEmpty` only a session without any node is deleted, else `{deleted: false}`), `session.settings` / `session.setEngine {engine}`,
 `session.summary` (counts, running nodes, reserved RAM and CPU, for `/admin`),
 `runner.shutdown` (every session, used at server stop).
 
 Nodes (args mirror the HTTP bodies and queries): `nodes.list`,
-`nodes.metrics`, `nodes.stopAll`, `nodes.startAll`, `nodes.deleteAll`,
+`nodes.metrics`, `nodes.stopAll`, `nodes.startAll`,
 `node.preview`, `node.start {nodeId, engine?, imageId?}`, `node.stop`,
 `node.reboot`, `node.reset`, `node.monitor {command}`, `node.rename {name}`,
 `node.delete`, `switch.create {id, name, autostart}`, `host.create {...}`,
@@ -684,6 +686,10 @@ stream), `archive.import {stream, query, contentType, declaredBytes}`
 query options, type and declared size; the result is the import response).
 Commands whose HTTP route takes a JSON body receive it as `body`
 (`host.create`, `host.configure`, `session.setEngine`, `topology.*`, ...).
+`catalog.systems`, `topology.preview` and `archive.check` also run **without a session**
+(no `sessionId`, an optional `engine` argument): the control plane asks them for a session not
+placed on any runner yet (see [Session lifecycle](#session-lifecycle)); the runner answers from its
+catalog on an empty draft context and creates nothing on disk.
 
 Traffic capture (see [Traffic capture](#traffic-capture)): `captures.list {nodeId?}`,
 `capture.start {nodeId, interface}`, `capture.stop {nodeId, captureId}`, `capture.delete {nodeId, captureId}`,
@@ -738,14 +744,61 @@ removal (at `session.delete`), `users/` aliases and pruning are the runner's (`r
 
 The session manager binds each session ID to a runner ID. The control plane
 assigns session IDs (the runner never invents one) and chooses the runner in
-one place, `pickRunner(login, sessionsOf)`, called once when a session is created: among the runners
+one place, `pickRunner(login, sessionsOf)`, called when a session is placed (see below): among the runners
 that are online, not paused, have an engine and are under their `maxSessions` (declared in the
 runner file, announced in `hello`), the one with the smallest sessions / `maxSessions` ratio (the plain
 count without a limit); a tie goes to the local runner, then to the earliest registered. With no
-candidate the user gets 503 "No runner is available" and the log gives the reasons. A session stays on its
-runner for life. Resource rules that
+candidate the creation gets 503 "No runner is available" and the log gives the reasons. A placed session stays on its
+runner until it is empty again. Resource rules that
 span sessions (QEMU/KVM next to VirtualBox, metrics, later capacity) are
 evaluated by each runner over its own sessions.
+
+### Session lifecycle
+
+UXS02. A user always has exactly one session, implicit: `SessionManager.open(login)` creates the
+workspace at the user's first request (HTTP or main socket), with a **random** session ID (never
+the login: it protects the adoption of a runner that comes back with an old session, and a
+re-created account) and **no runner**. Its handle lives on the unbound client
+(`server/unbound-runner.js`), which answers the session's reads as an empty session would: nodes,
+IDs, layout, captures, metrics, the `/admin` counts, an empty topology export and archive estimate;
+the general settings from the server (the engine chosen meanwhile, else the default of the runner
+it would go to); the catalog reads (`catalog.systems`, `topology.preview`, `archive.check`) are sent
+**without a session** to the runner `pickRunner` would choose now (nothing is placed; without a
+runner the system list is empty and a preview or a check answers 503). Any other command is 404.
+No 503 at login: the page loads with an empty session whatever the runners.
+
+- **Placement** (`place`). The routes that create nodes (`POST /api/hosts`, `/api/switches`,
+  `/api/topology`, `/api/examples/load`, `/api/session-archive/import`) go through the `placed`
+  middleware: `pickRunner` (503 "No runner is available" when there is none: the only place this
+  error appears), the binding written to `bindings.json`, the runner's client takes the handle over
+  (`RunnerClient.adopt`, the same object as before: routers and sockets keep working), then
+  `session.create {owner, createdAt, engine}`. A failed creation leaves the session unplaced.
+  Concurrent placements share one. `users.log`: `session-placed {sessionId, runnerId}`.
+- **Release** (`release`). When a placed session may have become empty (a node removed, a load
+  that created nothing, failed or not, a restored session that its runner's hello reports without
+  any node), the manager asks the runner `session.delete {ifEmpty: true}`: the runner deletes it
+  (its directory and alias) only if it has no node, atomically. The handle goes back to the unbound
+  client, the binding is removed, the session keeps its ID and its engine; its next node may go to
+  another runner (a personal runner later, PRN01). Creations and release exclude each other: the
+  `placed` middleware counts the creation in flight (`beginCreation`, ended before the route's own
+  release or when the response is over), a release does nothing while one is in flight, and a
+  placement waits for a release that is running.
+- **Reset** (`POST /api/session/reset`, `reset`). The owner, or the administrator holding the
+  control lock: `session.delete` on the runner (every node stops and is removed), then the session
+  is unplaced as above; it stays, empty, with the same ID and the same pages (they refresh on
+  `nodes-changed`), and keeps its engine. Refused during an archive operation (409) and while the
+  runner is offline (503). Audited as `session-reset` (`users.log`, and `admin.log` for the admin in
+  control). It replaces the former Remove all (`DELETE /api/nodes`) and Delete session
+  (`DELETE /api/session`), both removed.
+- **Deletion** stays an administrator's action (`/admin`, `manager.remove`): the workspace is
+  forgotten, its pages get `session-deleted` and reload, and the user's next request opens a new,
+  empty session with a new ID. A session dropped by the loss of its runner goes the same way.
+- **Restart.** Only placed sessions are in `bindings.json` and come back offline at a server start;
+  an unplaced session has nothing to restore: the user's next request opens a new implicit one.
+  The grace period and the adoption concern placed sessions only.
+- **Observation** never opens a session: an administrator observes the workspace a user has (an
+  empty unplaced one shows empty); a login without a workspace (not used since the server
+  started, or deleted) gets the "has no session" notice (`observe-unavailable`, 404 over HTTP).
 
 ### Connection lifecycle
 
@@ -754,8 +807,8 @@ starts or supervises a runner. A runner is a process of its own, started by
 `./scripts/runner.sh` (`runner/main.js --port PORT`): by `./scripts/start.sh`,
 which runs the server and a runner as two commands (development, tests, demo),
 by hand, or as a systemd service. The server only listens; a runner dials in at
-any time, and the server serves browsers without waiting for it. Session
-routes answer 503 until one is online.
+any time, and the server serves browsers without waiting for it. A session
+that is not placed reads as empty without any runner; creating a node answers 503 until one is online.
 
 1. The server (`server/remote-gateway.js`) listens for the upgrade of `/runner/connect`.
    It accepts one connection per runner ID (409 for a second), after checking the

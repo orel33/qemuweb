@@ -201,8 +201,10 @@ Schema 2 of `runners.json` (RUN03b): `local` id, `tokenHash` optional only for `
 #### `bindings.json`
 
 `{"schemaVersion": 1, "sessions": [{"id", "owner", "runnerId", "createdAt"}]}` in the server's runtime directory
-(mode 0600, atomic write-through, removed when no session is bound). The server writes a binding before it asks a
-runner to create the session and removes it when the session is deleted or dropped. At the next server start each binding becomes an
+(mode 0600, atomic write-through, removed when no session is bound). Only **placed** sessions are bound (UXS02): a
+user's implicit session is placed on a runner at its first node or load; the server writes the binding before it asks that
+runner to create the session, and removes it when the session is released (empty again: Reset, last node removed), deleted
+or dropped. An unplaced session is never in the file and is not restored after a restart (the user's next request opens a new, empty one). At the next server start each binding becomes an
 offline session for its owner (`SessionManager.restore`), bound again when its runner reports it: it is the only source of the owner of a session
 taken over after a server restart (the owner a `hello` announces is ignored). A binding whose runner record is forgotten or revoked is dropped at start; a session of a runner that no binding names is deleted on that runner. Read at start as untrusted input: `id` is 16 hex
 characters, `owner` a valid login, `runnerId` is `local` or `r-xxxxxxxx`, `createdAt` an ISO date; an invalid or duplicate
@@ -481,6 +483,7 @@ date, `result` is `"ok"` or `"error: <message>"`.
 | `create-account`, `reset-password`, `remove-account` | `{login, role}`, `{login}`, `{login, session}` | admin API on users |
 | `set-role`, `disable-account`, `enable-account` | `{login, role?}` | admin API on users |
 | `stop-all`, `delete-session` | `{login}` | admin API on a session |
+| `session-reset` | `{login}` | the admin holding control reset that user's session (also in the user's `users.log` with `by`) |
 | `bulk-delete` | `{logins}` | several sessions |
 | `create-runner-token`, `cancel-runner-token` | `{minutes}`, `{id}` | registration tokens |
 | `register-runner` | `{runnerId, name}` | a runner registers (`admin` is the creator of the token) |
@@ -498,8 +501,10 @@ date, `result` is `"ok"` or `"error: <message>"`.
 | `login`, `logout` | `{via}`: `password` or `proxy` (the way in; `logout` of `--no-auth` has none). A `proxy` login is written at the first request of an identity, and again after a pause as long as `--session-hours` | — |
 | `proxy-refused` | `{reason}`: `wrong proxy key`, `invalid login` or `account disabled` (`user` is the login, empty for a wrong key); at most one line every 10 seconds for a wrong key. The key itself is never written | — |
 | `login-failed` | — (`user` is the name typed, printable, at most 64 characters) | — |
-| `session-created`, `session-adopted` | `{sessionId}` | — |
-| `session-deleted` | `{sessionId, by?, reason?}` (`reason`: `runner lost`, `runner offline too long`, `creation failed`) | — |
+| `session-placed` | `{sessionId, runnerId}`: the implicit session placed on a runner (first node or load) | — |
+| `session-adopted` | `{sessionId}` | — |
+| `session-reset` | `{}` or `{by}`: Reset session (by the owner, or the admin holding control) | — |
+| `session-deleted` | `{sessionId, by?, reason?}` (`reason`: `runner lost`, `runner offline too long`) | — |
 | `node-created` | `{nodeId, kind}` (`host` or `switch`; `nodeId` `null` if not a valid ID) | `ok` or `error: HTTP <status>` |
 | `node-started`, `node-stopped`, `node-deleted` | `{nodeId}` or `{all: true}` | same |
 | `archive-loaded`, `archive-saved` | `{kind}`: `session` or `topology`, and `example` (the file name) for a load from the server's examples | same |

@@ -204,7 +204,7 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', asyn
   const session = new Session({runtimeRoot: '/nonexistent', runnerId: 'local', owner: 'toto', createdAt: '2026-01-01T00:00:00.000Z'});
   const runner = {request: async command => { assert.equal(command, 'session.summary'); return counts; }};
   const summary = await sessionSummary({owner: 'toto', session, runner}, 'boss', 2);
-  assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, runnerOffline: false, sessionId: session.id, createdAt: '2026-01-01T00:00:00.000Z',
+  assert.deepEqual(summary, {login: 'toto', own: false, browsers: 2, runnerOffline: false, sessionId: session.id, runnerId: 'local', placed: true, createdAt: '2026-01-01T00:00:00.000Z',
     lastActivity: '2026-01-01T00:00:00.000Z', nodes: 4, hosts: 3, switches: 1, runningHosts: 2, runningSwitches: 1,
     reservedRamMb: 1536, cpuPercent: 12.5, active: true});
   assert.equal((await sessionSummary({owner: 'boss', session, runner}, 'boss')).own, true);
@@ -213,6 +213,12 @@ test('the session summary counts nodes, running VMs, reserved RAM and CPU', asyn
   const offline = {request: async () => { throw Object.assign(new Error('The runner is offline; reconnecting…'), {status: 503}); }};
   const lost = await sessionSummary({owner: 'toto', session, runner: offline}, 'boss');
   assert.deepEqual([lost.runnerOffline, lost.nodes, lost.runningHosts, lost.active, lost.login], [true, 0, 0, false, 'toto']);
+  // UXS02: a session not placed on any runner (no node) is listed with zero counts, placed: false.
+  const {UnboundClient} = require('../../server/unbound-runner');
+  const unplacedSession = new Session({owner: 'titi'});
+  const unbound = new UnboundClient({settings: () => ({}), setEngine: () => ({}), forward: async () => []});
+  const empty = await sessionSummary({owner: 'titi', session: unplacedSession, runner: unbound.session(unplacedSession.id)}, 'boss');
+  assert.deepEqual([empty.placed, empty.runnerId, empty.runnerOffline, empty.nodes, empty.active], [false, null, false, 0, false]);
   await assert.rejects(sessionSummary({owner: 'toto', session, runner: {request: async () => { throw new Error('boom'); }}}, 'boss'), /boom/);
 });
 
@@ -275,19 +281,19 @@ test('the observation rule (CTL01): one driver at a time for the HTTP writes', (
   for (const method of WRITES) assert.equal(rule({method, lockAdmin: 'chef'}).status, 403, `${method}: another admin holds the lock`);
   // The admin holding the lock does what the owner can, reads too (marked control).
   assert.deepEqual(rule({lockAdmin: 'boss'}), {observed: true, control: true});
-  for (const [method, url] of [['POST', '/api/nodes/h-0000000000000001/start'], ['DELETE', '/api/nodes'], ['PUT', '/api/nodes/h-0000000000000001/config'],
+  for (const [method, url] of [['POST', '/api/nodes/h-0000000000000001/start'], ['DELETE', '/api/nodes/h-0000000000000001'], ['PUT', '/api/nodes/h-0000000000000001/config'],
     ['PATCH', '/api/nodes/h-0000000000000001'], ['POST', '/api/session-archive/import'], ['POST', '/api/session-archive/export'],
     ['POST', '/api/examples/load'], ['PUT', '/api/general-settings'], ['POST', '/api/nodes/h-0000000000000001/captures']]) {
     assert.deepEqual(rule({method, url, lockAdmin: 'boss'}), {observed: true, control: true}, `${method} ${url}`);
   }
-  // Even with the lock: never Delete session, never the admin API through an observation.
-  assert.deepEqual(rule({method: 'DELETE', url: '/api/session', lockAdmin: 'boss'}), {status: 403, error: 'Delete the session of toto from the admin page.'});
-  assert.equal(rule({method: 'GET', url: '/api/session', lockAdmin: 'boss'}).control, true);
+  // UXS02: with the lock, Reset session too (the confirmation names the owner); never the admin API through an observation.
+  assert.deepEqual(rule({method: 'POST', url: '/api/session/reset', lockAdmin: 'boss'}), {observed: true, control: true});
+  assert.equal(rule({method: 'POST', url: '/api/session/reset'}).status, 403, 'not without the lock');
   for (const url of ['/api/admin', '/api/admin/sessions/toto/stop']) assert.equal(rule({method: 'POST', url, lockAdmin: 'boss'}).status, 403, url);
   // A student never observes; an unknown login is 404 for a read, 403 for a write.
   assert.equal(rule({role: 'student'}).status, 403);
   assert.equal(rule({role: 'student', lockAdmin: 'boss'}).status, 403);
-  assert.deepEqual(rule({found: false}), {status: 404, error: 'No session for toto.'});
+  assert.deepEqual(rule({found: false}), {status: 404, error: 'toto has no session: they have not used QemuWeb since the server started, or their session was deleted.'});
   assert.equal(rule({found: false, method: 'POST'}).status, 403);
   // The owner (no header, or their own login): free, except every write while an admin controls their session.
   const owner = {login: 'toto', role: 'student', observe: null, found: false};
@@ -295,7 +301,7 @@ test('the observation rule (CTL01): one driver at a time for the HTTP writes', (
   for (const method of WRITES) assert.deepEqual(rule({...owner, method}), {observed: false, control: false}, method);
   assert.deepEqual(rule({...owner, ownLockAdmin: 'boss'}), {observed: false, control: false}, 'reads stay allowed');
   for (const method of WRITES) assert.deepEqual(rule({...owner, method, ownLockAdmin: 'boss'}), {status: 403, error: 'boss controls your session.'}, method);
-  assert.equal(rule({...owner, method: 'DELETE', url: '/api/session', ownLockAdmin: 'boss'}).status, 403, 'Delete session too');
+  assert.equal(rule({...owner, method: 'POST', url: '/api/session/reset', ownLockAdmin: 'boss'}).status, 403, 'Reset session too');
   assert.deepEqual(rule({...owner, observe: 'toto', method: 'POST'}), {observed: false, control: false}, 'observing yourself is your own session');
   // An admin's own admin API is not a session write.
   assert.deepEqual(rule({login: 'chef', observe: null, method: 'POST', url: '/api/admin/users', ownLockAdmin: 'boss'}), {observed: false, control: false});
@@ -381,7 +387,8 @@ test('only explicit node and archive actions of the owner become users.log event
   assert.deepEqual(event('POST', `/api/nodes/${id}/start`), {event: 'node-started', target: {nodeId: id}});
   assert.deepEqual(event('POST', `/api/nodes/${id}/stop`), {event: 'node-stopped', target: {nodeId: id}});
   assert.deepEqual(event('DELETE', `/api/nodes/${id}`), {event: 'node-deleted', target: {nodeId: id}});
-  assert.deepEqual(event('DELETE', '/api/nodes'), {event: 'node-deleted', target: {all: true}});
+  assert.deepEqual(event('POST', '/api/session/reset'), {event: 'session-reset', target: {}});
+  assert.equal(event('DELETE', '/api/nodes'), null, 'no route removes every node any more: Reset session does');
   assert.deepEqual(event('POST', '/api/nodes/stop-all'), {event: 'node-stopped', target: {all: true}});
   assert.deepEqual(event('POST', '/api/nodes/resume-all'), {event: 'node-started', target: {all: true}});
   assert.deepEqual(event('POST', '/api/topology'), {event: 'archive-loaded', target: {kind: 'topology'}});

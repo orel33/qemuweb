@@ -12,6 +12,9 @@
 //   stopCaptureLives()                    ends every live capture view (the control connection closed)
 //   events                                'event' (sessionId, event, payload)
 // Session IDs come from the control plane (session.create); the runner never invents one.
+// A few commands also run without a session (DRAFT_COMMANDS): the control plane asks them for a
+// session that is not placed on any runner yet (server/unbound-runner.js), with the session's
+// engine as argument; they read the system catalog only.
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -20,7 +23,8 @@ const {readCatalog} = require('../common/system-config');
 const {PROTOCOL_VERSION} = require('../common/runner-protocol');
 const {Session, SESSION_ID} = require('./session');
 const {createSessionRunner} = require('./session-runner');
-const {knownImageIdentity} = require('./media/image-hash');
+const {knownImageIdentity, fileSha256Async} = require('./media/image-hash');
+const {createCatalog} = require('./catalog');
 const {configWarnings} = require('./config-warnings');
 const {availableEngines} = require('./preflight');
 const {statusError} = require('./commands/errors');
@@ -34,6 +38,8 @@ const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology',
 // Commands that answer for an unknown node themselves: the launch preview describes host
 // drafts that do not exist yet, and consoles have their own messages.
 const OWN_NODE_CHECK = new Set(['node.preview', 'console.attach', 'console.resize', 'console.clear']);
+// Commands that answer without a session, on the catalog of this runner (see draftContext).
+const DRAFT_COMMANDS = new Set(['catalog.systems', 'topology.preview', 'archive.check']);
 
 // `requireImages`: remote runner, see runner/context.js.
 // `limits`: {maxSessions, memoryBytes, cpus} from the runner file of a remote runner, or null. They
@@ -51,12 +57,20 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     return entry;
   }
 
-  function createSession({sessionId, owner = null, createdAt}) {
+  // The engine a session is created with, or a draft command runs with: the one asked when this
+  // runner has it, else the first engine this runner has (QEMU when it has it).
+  function engineOf(engine) {
+    if (engine === undefined || engine === null) return engines[0];
+    if (!['qemu', 'vbox'].includes(engine)) throw new Error('Invalid session engine.');
+    if (!engines.includes(engine)) throw new Error(`${engine === 'vbox' ? 'VirtualBox' : 'QEMU'} is unavailable on this runner.`);
+    return engine;
+  }
+
+  function createSession({sessionId, owner = null, createdAt, engine}) {
     if (!SESSION_ID.test(sessionId || '')) throw new Error('Invalid session ID.');
     if (sessions.has(sessionId)) throw statusError('Session already exists.', 409);
     if (owner !== null && (typeof owner !== 'string' || !LOGIN_PATTERN.test(owner))) throw new Error('Invalid session owner.');
-    // A new session uses the first engine this runner has (QEMU when it has it).
-    const session = new Session({runtimeRoot, id: sessionId, engine: engines[0], owner,
+    const session = new Session({runtimeRoot, id: sessionId, engine: engineOf(engine), owner,
       ...(typeof createdAt === 'string' ? {createdAt} : {})});
     fs.mkdirSync(path.dirname(session.runtimeDir), {recursive: true});
     fs.mkdirSync(session.runtimeDir);
@@ -71,9 +85,12 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     return {sessionId};
   }
 
-  // Stops and removes every node of the session, then its directory.
-  async function deleteSession(sessionId) {
+  // Stops and removes every node of the session, then its directory. With ifEmpty, only a session
+  // without any node is deleted ({deleted: false} otherwise): the control plane releases an empty
+  // session this way without racing a node being created meanwhile.
+  async function deleteSession(sessionId, {ifEmpty = false} = {}) {
     const {session, runner} = entryOf(sessionId);
+    if (ifEmpty === true && session.nodes.size) return {deleted: false};
     await runner.shutdown();
     if (session.nodes.size) {
       runner.startResourceSampling();
@@ -100,13 +117,26 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     return {ok: true};
   }
 
+  // The context of a draft command: an empty session with the given engine, and the catalog of
+  // this runner. Nothing is created on disk.
+  function draftContext(engine) {
+    const session = {id: null, engine: engineOf(engine), nodes: new Map()};
+    const catalog = createCatalog({session, root, configPath, requireImages, availableEngines: engines});
+    return {session, runner: {...catalog, availableEngines: engines, fileSha256Async,
+      systemOffered: id => !requireImages || catalog.imageInstalled(id)}};
+  }
+
   async function handle(command, sessionId, args = {}, io = null) {
     if (!args || typeof args !== 'object' || Array.isArray(args)) throw new Error('Invalid runner command arguments.');
     if (command === 'session.create') return createSession({...args, sessionId});
-    if (command === 'session.delete') return deleteSession(sessionId);
+    if (command === 'session.delete') return deleteSession(sessionId, args);
     if (command === 'runner.shutdown') return shutdown();
     const handler = Object.hasOwn(COMMANDS, command) && COMMANDS[command];
     if (!handler) throw new Error(`Unknown runner command: ${String(command).slice(0, 64)}.`);
+    if ((sessionId === null || sessionId === undefined) && DRAFT_COMMANDS.has(command)) {
+      const {engine, ...rest} = args;
+      return handler({...draftContext(engine), commands, emit: () => {}, io}, rest);
+    }
     const {session, runner, emit} = entryOf(sessionId);
     // A well-formed node ID that is not in this session is unknown (404).
     if (typeof args.nodeId === 'string' && NODE_ID.test(args.nodeId) && !session.nodes.has(args.nodeId) && !OWN_NODE_CHECK.has(command)) {

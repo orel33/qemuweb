@@ -10,8 +10,8 @@ session; teachers observe it, take control to help, and clean up at the end of t
 
 - **Hosts and switches in the browser**: draw a topology, start and stop machines, open their consoles (up to
   four at once, two serial ports per Debian host), the QEMU monitor and the logs.
-- **Sessions you keep**: one per user, alive while the browser is closed; save or load a session as a ZIP
-  archive, or a topology as a text file.
+- **Sessions you keep**: one per user, there from the login and alive while the browser is closed; save or load a
+  session as a ZIP archive, or a topology as a text file; **Reset session** empties it.
 - **Startup scripts**: each host builds an ISO from its `start.sh` and configures itself at boot.
 - **Teaching tools**: an admin page lists every session, observes a student read-only, takes control of a console
   with an exclusive lock, and deletes sessions in bulk; accounts are managed from the page or `scripts/user.sh`.
@@ -23,7 +23,7 @@ session; teachers observe it, take control to help, and clean up at the end of t
 
 - The **server** (Node.js, Express, Socket.IO) serves the web interface, authenticates users, keeps one session
   per user and relays the consoles. It starts no machine.
-- A **runner** runs the machines of the sessions placed on it: QEMU or VirtualBox, a `vde_switch` per switch,
+- A **runner** runs the machines of the sessions placed on it (a session is placed at its first node, and released once empty): QEMU or VirtualBox, a `vde_switch` per switch,
   serial consoles over Unix sockets. Every runner opens an outbound WebSocket to the server and shows a token: the local
   one reads it from a file that the server writes (`--local-runner`), a remote one has its own and needs no inbound port.
 - The **browser** (ES modules, xterm.js, a network graph) needs no plugin.

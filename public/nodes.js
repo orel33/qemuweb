@@ -2,13 +2,13 @@
 import {generalSettings, machines, store} from './state.js';
 import {jsonRequest, nodeUrl, requestJson} from './api.js';
 import {isConsoleView, panes, selectPaneConsole, syncConsoleScroll} from './terminal.js';
-import {activeMachine, consoleSessions, exitAllButton, renderTabs, restoreSavedView, resumeAllButton, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
+import {activeMachine, consoleSessions, renderTabs, restoreSavedView, resetSessionButton, resumeAllButton, selectMachine, showPage, showStatusError, stopAllButton, updateControls} from './workspace.js';
 import {imageSelect} from './node-dialogs.js';
 import {qemuOptionsPanel, renderQemuOptions, settingsMachine} from './host-settings.js';
 import {generalSettingsError, namingSchemeSelect, showGeneralSettings} from './general-settings.js';
 import {renderGraphic} from './graphic-view.js';
 import {observedLogin, refollow} from './observe.js';
-import {sessionPhrase} from './file-kinds.js';
+import {resetSessionText, sessionPhrase} from './file-kinds.js';
 import {parseStartErrors, showStartFailure} from './start-failure.js';
 import {engineName, bindEngineSelect, unavailableHostsWarning, updateEngineSelect} from './engine-select.js';
 import {refreshSystems} from './systems.js';
@@ -267,15 +267,15 @@ export async function resetActiveMachine() {
   finally { machine.busy = false; updateControls(); }
 }
 
-// Removes every host and switch of the session (the Remove all button, and the Load dialog before a session replaces
-// the current one); throws the server's error message.
-export async function removeAllNodes() {
-  store.exitAllBusy = true; updateControls();
+// Resets the session: every host and switch stops and is removed, the session stays, empty (the Reset session button,
+// and the Load dialog before a load replaces the current nodes); throws the server's error message.
+export async function resetSession() {
+  store.sessionBusy = true; updateControls();
   try {
-    const result = await requestJson('/api/nodes', {method: 'DELETE'}, 'Failed to remove all hosts and switches');
-    for (const id of result.removed) machines.delete(id);
+    await requestJson('/api/session/reset', {method: 'POST'}, 'Cannot reset the session');
+    machines.clear();
     showPage();
-  } finally { store.exitAllBusy = false; updateControls(); }
+  } finally { store.sessionBusy = false; updateControls(); }
 }
 
 // The page follows a change of the session engine (made here or in another tab): the system list,
@@ -340,7 +340,7 @@ export function initNodes() {
   // refresh the UI, and a node that cannot start shows its "Start failed" state.
   resumeAllButton.onclick = async () => {
     if (resumeAllButton.disabled) return;
-    store.exitAllBusy = true; updateControls();
+    store.sessionBusy = true; updateControls();
     try {
       const {startErrors} = await requestJson('/api/nodes/resume-all', {method: 'POST'}, 'Failed to resume all hosts and switches');
       if (startErrors.length) {
@@ -348,21 +348,21 @@ export function initNodes() {
         showStartFailure(parseStartErrors(startErrors));
       }
     } catch (error) { showStatusError(`Cannot resume all hosts and switches: ${error.message}`); }
-    finally { store.exitAllBusy = false; updateControls(); }
+    finally { store.sessionBusy = false; updateControls(); }
   };
   // Stops every host and switch of the session and keeps them; the state events refresh the UI.
   stopAllButton.onclick = async () => {
     if (stopAllButton.disabled) return;
     if (!await confirmAction('Stop all hosts and switches', `Stop every running host and switch of ${sessionPhrase(observedLogin)}?\n\nThe hosts are shut down; their disks and the nodes are kept.`, 'Stop all')) return;
-    store.exitAllBusy = true; updateControls();
+    store.sessionBusy = true; updateControls();
     try { await requestJson('/api/nodes/stop-all', {method: 'POST'}, 'Failed to stop all hosts and switches'); }
     catch (error) { showStatusError(`Cannot stop all hosts and switches: ${error.message}`); }
-    finally { store.exitAllBusy = false; updateControls(); }
+    finally { store.sessionBusy = false; updateControls(); }
   };
-  exitAllButton.onclick = async () => {
-    if (exitAllButton.disabled) return;
-    if (!await confirmAction('Remove all hosts and switches', `This removes every node of ${sessionPhrase(observedLogin)}: remove all hosts and switches?\n\nAll working disks will be deleted and their changes lost.`, 'Remove all')) return;
-    try { await removeAllNodes(); }
-    catch (error) { showStatusError(`Cannot remove all hosts and switches: ${error.message}`); }
+  resetSessionButton.onclick = async () => {
+    if (resetSessionButton.disabled) return;
+    if (!await confirmAction('Reset session', resetSessionText(observedLogin), 'Reset session')) return;
+    try { await resetSession(); }
+    catch (error) { showStatusError(`Cannot reset the session: ${error.message}`); }
   };
 }

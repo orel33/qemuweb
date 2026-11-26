@@ -140,6 +140,7 @@ async function run() {
   const session = recorder(carol, 'carol');
   const console1 = recorder(carol, 'carol console');
   await Promise.all([session.connected, console1.connected]);
+  assert.equal(fs.existsSync(sessionDir), false, 'UXS02: the session is placed on the runner only by its first node');
   const first = await startSwitch(carol, 'sw1');
   assert.equal(emulators(runner.pid).filter(item => item.comm === 'vde_switch').length, 1, 'vde_switch is not in the runner group');
   assert.deepEqual(await select(console1.socket, first), {ok: true});

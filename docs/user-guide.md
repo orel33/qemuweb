@@ -6,17 +6,24 @@ Using QemuWeb from the browser, and managing its accounts and sessions. Installa
 ## Users and sessions
 
 Each user logs in (with a login and a password, or through the authenticating front end, see
-[How to log in](#how-to-log-in)) and always finds the same
-session: its hosts, switches, consoles and logs. The session lives on the
-server, independently of the browser: closing the tab or logging out stops
-nothing, and several tabs of one user share the session. It disappears only
-when the user deletes it (**Delete session**, the red trash button at the end of the bottom-left toolbar) or when the server
-stops, which stops every machine.
+[How to log in](#how-to-log-in)) and always has exactly one session, from the login on: there is
+nothing to create, the session is simply empty at first. It holds the user's hosts, switches,
+consoles and logs. The session lives on the server, independently of the browser: closing the tab
+or logging out stops nothing, and several tabs of one user share the session.
+
+A session runs on a runner (a machine that executes the virtual machines), chosen when the session
+first needs one: when its first host or switch is created, or a topology, an example or a session
+ZIP is loaded. An empty session needs no runner. If no runner is available at that moment, the
+creation or the load answers *No runner is available*; reading the empty session never does.
 
 The bottom-left toolbar also has **Resume all** (start every stopped switch,
 then every stopped host, as when a session is loaded), **Stop all** (stop every
-host and switch; the nodes and their disks are kept) and **Remove all hosts and
-switches**. Both skip a node whose start, stop or reboot is in progress.
+host and switch; the nodes and their disks are kept) and **Reset session**, the red trash
+button at its end: after a confirmation it stops and removes every host and switch, with their
+working disks, consoles and logs; the session stays, empty (it keeps its engine). Resume all and
+Stop all skip a node whose start, stop or reboot is in progress. Reset session is the only
+destructive action of a user; an administrator can also delete a user's session from the admin
+page (the user's next request then finds a new, empty session).
 
 ### How to log in
 
@@ -38,7 +45,7 @@ Apache and the OpenID of the CREMI: the front end does the login and there is **
   reloads once, and Apache then sends the user to the CREMI login. A second 401 within 30 seconds is not followed by another reload: the usual error is shown.
 
 Logging out of the front end (here OpenID) does not delete the QemuWeb session: the machines keep running, and the next
-login finds the same session (**Delete session** is the only way to remove it, apart from an admin).
+login finds the same session (**Reset session** empties it; only an administrator deletes it).
 
 `--auth proxy` means that the identity is given by an authenticating front end (here Apache with mod_auth_openidc; it could be SAML, CAS, LDAP...) through `X-Remote-User`, trusted only with the shared `X-Proxy-Key`; the mode accepts only that identity (no login page, no password). A `disabled` account of `users.json` is refused
 through the front end too, and an account added with `--no-password` that is `disabled` is the way to refuse one student.
@@ -96,12 +103,12 @@ activity (the owner's requests and console input; an admin observing does not
 count). Next to each user, a green dot shows **online** when a browser of that
 user is connected (**online ×n** for several tabs; the tooltip gives the count),
 or **offline**; the admin's own row is online. A session lives on the server
-whether or not its user is connected: it is created at the user's first
-request and kept after logging out or closing the browser. When the runner of a session is offline (a network cut, a restart of the
+whether or not its user is connected: it exists from the user's first
+request (empty, and then listed as **empty**: no node, so no runner holds it) and is kept after logging out or closing the browser. When the runner of a session is offline (a network cut, a restart of the
 runner or of the server), the user's page says "Runner offline, reconnecting…" and requests answer "The runner of your session is offline; it comes back or
 your session is dropped after N seconds": the session is kept for `--runner-grace` seconds (counted from the start after a server restart), is bound
 again with its machines and consoles when the runner returns, and is dropped when the time is over (the next request opens a new, empty
-session). While it waits, a user cannot delete it and gets no second session; the row of an offline session reads **runner offline**
+session). While it waits, a user cannot reset it and gets no second session; the row of an offline session reads **runner offline**
 in **Sessions**. In **Runners**, **Drop sessions** drops the sessions of an offline runner at once (confirmation asked); **Revoke** does too;
 an offline runner row shows the seconds left before its sessions are dropped. From there an admin
 can:
@@ -111,7 +118,10 @@ can:
   write actions greyed out instead of hidden (the tooltip of a greyed-out control says why). A banner of
   distinct colour shows the observed user, previous/next active session, a
   session list, **Follow**, **Take control** and **My session**; **Admin**
-  stays in the header.
+  stays in the header. Any user who has used QemuWeb since the server started can be observed, an empty
+  session included (it shows as empty). Observing never opens a session: a user who has not used QemuWeb
+  since the server started, or whose session was deleted, has none, and the page says so (*toto has no
+  session: ...*) with **Take control** disabled.
   The admin sees the consoles live (what the guest echoes, so not a password
   typed without echo), their history and logs, also when the student is
   offline. With **Follow** on (the default), the view follows what the student
@@ -143,10 +153,11 @@ can:
   of **Follow**, pane views included) and its view, layout and pane view buttons are disabled (the tooltip names the admin).
   The admin in control can also do everything the student can on that session: start, stop,
   reboot, add, clone, connect and remove nodes, change host and switch settings and the engine,
-  **Resume all**, **Stop all**, **Remove all**, **Load Session** (into the student's session:
-  the dialog says "This replaces every node of the session of toto"), **Save Session**
+  **Resume all**, **Stop all**, **Reset session** (the confirmation says "This removes every node of the
+  session of toto"), **Load Session** (into the student's session: the dialog says that the session of
+  toto is reset first), **Save Session**
   (downloaded to the admin's browser as `qemuweb-session-toto.zip`), the examples, captures,
-  **Clear** and the console size. **Delete session** stays with the admin page. Meanwhile the
+  **Clear** and the console size. Deleting the session stays with the admin page. Meanwhile the
   student's actions are greyed out ("boss controls your session") and refused by the server;
   a dialog the student left open when control started stays open, but submitting it is refused.
   Every such action is written to `admin.log`, and to the student's `users.log` as done by
@@ -316,12 +327,13 @@ naming scheme and the console font).
   An error is shown on its step; before the session is closed the dialog says *Nothing was changed*
   and **Back** returns to the options. In particular, when a working disk no longer matches a rebuilt base image
   and **Discard working disks** is off, the load is **refused before anything is closed**: *Check "Discard working disks" and load again.*
-- **Loading always closes the previous session.** When the current session is not
-  empty, the orange warning says *Your current session (4 hosts and 2 switches) will
-  be closed and its working disks discarded.* Nothing is removed when the dialog
+- **A load goes into an empty session.** When the current session is not
+  empty, the orange warning says *A load goes into an empty session: your session (4 hosts
+  and 2 switches) is reset first, as Reset session does, and its working disks are discarded.*
+  Nothing is removed when the dialog
   opens, nor while the file is read and checked (an unreadable or invalid file
-  never destroys the session): the hosts and switches are removed, as **Remove all
-  hosts and switches** does, only when you press **Load**, after the check passed, then the file is
+  never destroys the session): the session is reset, as **Reset session** does, only when
+  you press **Load**, after the check passed, then the file is
   loaded. If the load then fails, the dialog says so and that the session is empty.
   **Cancel** anywhere changes nothing. Use **Save Session** first to keep a copy.
 - The **Examples** are the `.topo` and `.zip` files of the server's `examples/`

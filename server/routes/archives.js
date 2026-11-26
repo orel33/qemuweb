@@ -2,7 +2,8 @@
 
 // Session ZIP archive: size estimate, export, base image check and import. The ZIP travels
 // between the browser and the runner as a protocol stream (runner/commands/archives.js);
-// nothing is written by the control plane.
+// nothing is written by the control plane. An import places the session on a runner first, and
+// releases it again when it created nothing.
 const {pipeline} = require('stream/promises');
 
 // The downloaded file name (the runner's archive.estimate reports the same format name). The
@@ -10,7 +11,7 @@ const {pipeline} = require('stream/promises');
 const ARCHIVE_NAME = 'qemuweb-session.zip';
 const archiveName = (req, owner) => (req.observedControl ? `qemuweb-session-${owner}.zip` : ARCHIVE_NAME);
 
-function register({app, session, runner, handle}) {
+function register({app, session, runner, handle, placed, releaseAfter}) {
   app.get('/api/session-archive/estimate', handle('archive.estimate', req => ({includeDisks: req.query.includeDisks === 'true'}), 400, {noStore: true}));
   app.post('/api/session-archive/check', handle('archive.check', req => ({body: req.body}), 400, {noStore: true}));
 
@@ -31,11 +32,15 @@ function register({app, session, runner, handle}) {
     } finally { session.archiveBusy = false; }
   });
 
-  app.post('/api/session-archive/import', async (req, res) => {
+  app.post('/api/session-archive/import', placed, async (req, res) => {
+    let result, failure = null;
     try {
-      res.json(await importArchive({session, runner, source: req, query: req.query,
-        contentType: req.headers['content-type'], declaredBytes: req.headers['content-length']}));
-    } catch (error) { res.status(error.status || 400).json({error: error.message}); }
+      result = await importArchive({session, runner, source: req, query: req.query,
+        contentType: req.headers['content-type'], declaredBytes: req.headers['content-length']});
+    } catch (error) { failure = error; }
+    await releaseAfter(req);
+    if (failure) res.status(failure.status || 400).json({error: failure.message});
+    else res.json(result);
   });
 }
 

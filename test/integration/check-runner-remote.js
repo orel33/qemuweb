@@ -128,15 +128,17 @@ async function run() {
   await proxy.listen();
   const remoteUrl = `ws://127.0.0.1:${proxy.port}`;
 
-  // 1. The server alone, no runner: a session cannot be placed.
+  // 1. The server alone, no runner: the implicit session reads as empty (UXS02), but it cannot be placed: a node creation answers 503.
   let server = spawnServer({port: serverPort, usersFile: testUsers.file, logDir, runnersFile, standalone: true});
   children.push(server);
   await new QemuWebClient(baseUrl).waitForServer(30000, () => server.exitCode === null);
   assert.match(server.output, /runners\.json absent/, 'the startup check says no runner is registered');
   let boss = await signIn('boss');
   let carol = await signIn('carol');
-  assert.equal((await carol.fetch('/api/nodes')).status, 503);
-  assert.match((await carol.request('/api/nodes').catch(error => error)).message, /No runner is available/);
+  assert.deepEqual(await carol.request('/api/nodes'), [], 'no 503 at login');
+  const noRunner = await carol.fetch('/api/switches', {method: 'POST', body: {id: newSwitchId(), name: 'sw0', autostart: true}});
+  assert.equal(noRunner.status, 503);
+  assert.match((await noRunner.json()).error, /No runner is available/);
   console.log('Remote: server alone, a session cannot be placed (No runner is available)');
 
   // 2. Registration with a one-time token; a second use and a wrong token are refused.
@@ -226,13 +228,15 @@ async function run() {
   assert.match(fs.readFileSync(path.join(logDir, 'users.log'), 'utf8'), /"event":"session-adopted"/);
   console.log('Remote: server restarted: the session was restored offline, then adopted by the runner\'s hello, same switch running');
 
-  // 6. Pause: no new session is placed; resume.
+  // 6. Pause: no new session is placed (its first node is refused); resume.
   await boss.request(`/api/admin/runners/${identity.runnerId}/pause`, {method: 'POST'});
   const dave = await signIn('dave');
-  assert.equal((await dave.fetch('/api/nodes')).status, 503, 'a paused runner takes no new session');
+  assert.deepEqual(await dave.request('/api/nodes'), [], 'dave\'s implicit session reads as empty');
+  const daveSwitch = () => dave.fetch('/api/switches', {method: 'POST', body: {id: newSwitchId(), name: 'davesw', autostart: false}});
+  assert.equal((await daveSwitch()).status, 503, 'a paused runner takes no new session');
   assert.equal((await carol.fetch('/api/nodes')).status, 200, 'running sessions continue');
   await boss.request(`/api/admin/runners/${identity.runnerId}/resume`, {method: 'POST'});
-  assert.equal((await dave.fetch('/api/nodes')).status, 200, 'placed again after resume');
+  assert.equal((await daveSwitch()).status, 200, 'placed again after resume');
   console.log('Remote: pause refuses new sessions, resume accepts them');
 
   // 7. Revoke: the runner is disconnected and stops retrying.

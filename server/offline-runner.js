@@ -22,4 +22,4 @@ class OfflineConnection extends EventEmitter {
 
 function createOfflineClient() { return new RunnerClient(new OfflineConnection()); }
 
-module.exports = {createOfflineClient};
+module.exports = {createOfflineClient, OfflineConnection};

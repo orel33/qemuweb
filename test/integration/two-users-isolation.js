@@ -85,7 +85,7 @@ async function run() {
   await expectStatus(anonymous, '/auth/login', 'POST', 401, {login: 'alice', password: 'wrong'});
   await expectStatus(anonymous, '/auth/login', 'POST', 401, {login: 'nobody', password: 'x'});
   await expectStatus(anonymous, '/api/switches', 'POST', 401, {id: newId('switch'), name: 'anon'});
-  await expectStatus(anonymous, '/api/session', 'DELETE', 401);
+  await expectStatus(anonymous, '/api/session/reset', 'POST', 401);
   const unauthenticatedSocket = io(baseUrl, {reconnection: false, timeout: 5000});
   sockets.push(unauthenticatedSocket);
   const refused = await new Promise(resolve => {
@@ -100,7 +100,7 @@ async function run() {
   const aliceSettings = await alice.request('/api/general-settings');
   const bobSettings = await bob.request('/api/general-settings');
   assert.notEqual(aliceSettings.sessionId, bobSettings.sessionId, 'both users share one session');
-  assert.deepEqual(await alice.request('/auth/me'), {login: 'alice', role: 'student', authMode: 'password'});
+  assert.deepEqual(await alice.request('/auth/me'), {login: 'alice', role: 'student', authMode: 'password', via: 'password'});
   console.log(`Isolation: alice and bob logged in with sessions ${aliceSettings.sessionId} and ${bobSettings.sessionId}`);
 
   // Session-level sockets of both users, plus a bob console on his own switch.
@@ -200,15 +200,16 @@ async function run() {
   assert.deepEqual(mentions(aliceConsole.events, bobIds), [], 'alice\'s console received bob\'s events');
   console.log('Isolation: no event of alice\'s session reached bob, and none of bob\'s reached alice');
 
-  // Bob deletes his own session: alice keeps hers.
-  await bob.request('/api/session', {method: 'DELETE'});
-  await waitFor('session-deleted on bob\'s socket', () => bobSession.events.some(item => item.event === 'session-deleted'));
+  // Bob resets his own session (UXS02): it stays, empty; alice keeps hers.
+  assert.deepEqual(await bob.request('/api/session/reset', {method: 'POST'}), {reset: true});
+  assert.ok(!bobSession.events.some(item => item.event === 'session-deleted'), 'a reset keeps the session');
   assert.ok(!aliceSession.events.some(item => item.event === 'session-deleted'));
   const bobAfter = await bob.request('/api/general-settings');
-  assert.notEqual(bobAfter.sessionId, bobSettings.sessionId);
+  assert.equal(bobAfter.sessionId, bobSettings.sessionId, 'the same session');
   assert.deepEqual(await bob.request('/api/nodes'), []);
   assert.equal((await alice.request('/api/nodes')).length, 2);
-  console.log('Isolation: bob deleted his session; alice\'s nodes are untouched');
+  await expectStatus(bob, '/api/session', 'DELETE', 404);
+  console.log('Isolation: bob reset his session; alice\'s nodes are untouched');
 
   // Logging out stops nothing.
   await alice.signOut();

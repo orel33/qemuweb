@@ -72,18 +72,20 @@ test('the Save checkbox changes the rule, not the line or the button: the disk o
   assert.equal(saveChoice(true, 'toto').fileName, 'network.topo');
 });
 
-test('the orange warning names the session that will be closed; an empty session has none', async () => {
+test('the orange warning says a load goes into an empty session and names the session reset first; an empty session has none', async () => {
   const {closeWarning, closedText} = await load();
-  assert.equal(closeWarning(4, 2), 'Your current session (4 hosts and 2 switches) will be closed and its working disks discarded.');
-  assert.equal(closeWarning(1, 0), 'Your current session (1 host and no switch) will be closed and its working disks discarded.');
-  assert.equal(closeWarning(0, 1), 'Your current session (no host and 1 switch) will be closed and its working disks discarded.');
+  assert.equal(closeWarning(4, 2), 'A load goes into an empty session: your session (4 hosts and 2 switches) is reset first, as Reset session does, and its working disks are discarded.');
+  assert.equal(closeWarning(1, 0), 'A load goes into an empty session: your session (1 host and no switch) is reset first, as Reset session does, and its working disks are discarded.');
+  assert.equal(closeWarning(0, 1), 'A load goes into an empty session: your session (no host and 1 switch) is reset first, as Reset session does, and its working disks are discarded.');
   assert.equal(closeWarning(0, 0), '');
   assert.equal(closedText(2, 1), 'Closed 2 hosts and 1 switch');
 });
 
-test('the admin in control is told whose session a Load, Stop all or Remove all changes', async () => {
-  const {closeWarning, sessionPhrase} = await load();
-  assert.equal(closeWarning(2, 1, 'toto'), 'This replaces every node of the session of toto (2 hosts and 1 switch): its working disks are discarded.');
+test('the admin in control is told whose session a Load, Stop all or Reset session changes', async () => {
+  const {closeWarning, sessionPhrase, resetSessionText} = await load();
+  assert.equal(closeWarning(2, 1, 'toto'), 'A load goes into an empty session: the session of toto (2 hosts and 1 switch) is reset first, as Reset session does, and its working disks are discarded.');
+  assert.match(resetSessionText('toto'), /^This removes every node of the session of toto: /);
+  assert.match(resetSessionText(), /^This removes every node of your session: .*The session stays, empty\./s);
   assert.equal(closeWarning(0, 0, 'toto'), 'This loads into the session of toto.');
   assert.equal(sessionPhrase('toto'), 'the session of toto');
   assert.equal(sessionPhrase(null), 'this session');
@@ -175,9 +177,9 @@ test('the steps of a load and of a save, and the texts of a refusal and of the r
 test('the check happens before the closing: a refusal for stale working disks stops the load first, the session closes once', () => {
   const dialog = moduleSource('load-dialog');
   const steps = moduleSource('load-steps');
-  assert.equal((steps.match(/await removeAllNodes\(\)/g) || []).length, 1, 'one removal, in the shared Close step');
+  assert.equal((steps.match(/await resetSession\(\)/g) || []).length, 1, 'one reset, in the shared Close step');
   assert.equal((dialog.match(/closePreviousSession\(/g) || []).length, 1, 'the dialog closes the session in one place');
-  assert.doesNotMatch(dialog, /removeAllNodes/, 'the dialog never removes nodes itself');
+  assert.doesNotMatch(dialog, /resetSession|removeAllNodes/, 'the dialog never removes nodes itself');
   const refusal = dialog.indexOf('staleDisksRefusal(found.stale)');
   const closing = dialog.indexOf('closePreviousSession(');
   const reading = dialog.indexOf('await inspect(info)');
@@ -298,7 +300,7 @@ test('Escape cancels only when idle, Enter never starts or restarts a load; the 
 test('an observing administrator without control cannot open either dialog: write-action buttons, no other way in, the server refuses', () => {
   const observe = moduleSource('observe');
   // A write-action is blocked whenever controlReason gives a reason (an observer without control, the owner under control).
-  assert.match(observe, /write: !!element\.closest\('\.write-action'\), ownerOnly: !!element\.closest\('\.owner-only'\)\}, controlState\(\)\)/);
+  assert.match(observe, /write: !!element\.closest\('\.write-action'\)\}, controlState\(\)\)/);
   assert.match(observe, /if \(!isDisabled\(event\.target\)\) return;/);
   assert.match(observe, /\['Enter', ' ', 'ArrowUp', 'ArrowDown'\]\.includes\(event\.key\)/, 'keyboard activation is blocked');
   assert.match(css, /body\[data-write-blocked="true"\] \.write-action/);

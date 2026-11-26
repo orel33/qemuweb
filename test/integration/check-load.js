@@ -120,7 +120,7 @@ async function checkTopologies(client, systems) {
     const preview = await client.request('/api/topology/preview', {method: 'POST', body: {text, engine}});
     const links = Object.values(expected.hosts).reduce((count, host) => count + host.switches.length, 0);
     assert.deepEqual(preview, {hosts: Object.keys(expected.hosts).length, switches: expected.switches.length, links}, `${name}: preview counts`);
-    if (!first) await client.request('/api/nodes', {method: 'DELETE'});
+    if (!first) await client.request('/api/session/reset', {method: 'POST'});
     const result = await client.request('/api/topology', {method: 'POST', body: {text, engine, autostart: false}});
     assert.equal(result.created, Object.keys(expected.hosts).length + expected.switches.length, `${name}: created count`);
     assert.deepEqual(result.errors, []);
@@ -235,7 +235,7 @@ async function run() {
 
 async function cleanup() {
   for (const client of clients) {
-    try { await client.request('/api/session', {method: 'DELETE'}); } catch (error) { console.error(`Cleanup ${client.login}: ${error.message}`); }
+    try { await client.request('/api/session/reset', {method: 'POST'}); } catch (error) { console.error(`Cleanup ${client.login}: ${error.message}`); }
   }
   if (!child || child.exitCode !== null) return;
   child.kill('SIGTERM');

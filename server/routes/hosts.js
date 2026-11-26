@@ -1,12 +1,12 @@
 'use strict';
 
 // Host creation, configuration and startup CD-ROM. Each route sends one runner command
-// (runner/commands/hosts.js).
+// (runner/commands/hosts.js). Creating a host places the session on a runner first.
 
-function register({app, handle}) {
+function register({app, handle, placed}) {
   const node = req => ({nodeId: req.params.nodeId});
   const withBody = req => ({nodeId: req.params.nodeId, body: req.body});
-  app.post('/api/hosts', handle('host.create', req => ({body: req.body})));
+  app.post('/api/hosts', placed, handle('host.create', req => ({body: req.body}), 400, {release: true}));
   app.get('/api/nodes/:nodeId/config', handle('host.config', node, 400, {noStore: true}));
   app.put('/api/nodes/:nodeId/config', handle('host.configure', withBody));
   app.get('/api/nodes/:nodeId/guest-media', handle('host.guestMedia', node));

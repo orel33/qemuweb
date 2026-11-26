@@ -192,7 +192,7 @@ async function cleanup(failed) {
   if (!child || child.exitCode !== null) return;
   try {
     if (client?.cookie && sessionId) {
-      await client.request('/api/session', {method: 'DELETE'});
+      await client.request('/api/session/reset', {method: 'POST'});
       await waitFor('session processes to exit', () => sessionProcesses(sessionId).length === 0, 20000);
       assert.equal(fs.existsSync(path.join(runtimeDir, 'sessions', sessionId)), false, `${runtimeDir}/sessions/${sessionId} remains.`);
       if (!failed) console.log('Load start: session deleted, its processes and runtime directory are gone');

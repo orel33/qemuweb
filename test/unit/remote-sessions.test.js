@@ -26,9 +26,11 @@ const until = async condition => {
   assert.ok(condition(), 'condition reached');
 };
 
-// A fake runner client that says hello with the given fields.
+// A fake runner client that says hello with the given fields; it answers every request with {} and
+// takes the handle of a session placed on it.
 function fakeRunner(registry, id, hello = {}, options = {}) {
-  const client = Object.assign(new EventEmitter(), {close() { this.emit('close', null); }});
+  const client = Object.assign(new EventEmitter(), {close() { this.emit('close', null); }, sessions: new Map(),
+    request: async () => ({}), release() {}, adopt(handle) { handle.client = this; this.sessions.set(handle.sessionId, handle); }});
   const entry = registry.add({id, client, ...options});
   client.emit('hello', {engines: ['qemu'], ...hello});
   return {client, entry};
@@ -70,30 +72,26 @@ test('no candidate: 503 "No runner is available" with the reasons in the log', t
   assert.match(warnings.at(-1), /r-00000001: paused; r-00000002: full \(1\/1\)/);
 });
 
-test('the server creates no file for any runner, whatever its hello announces, with or without a grace period', t => {
+test('the server creates no file for any runner, whatever its hello announces, with or without a grace period', async t => {
   quiet(t);
   const runtime = tempDir(t, 'qw-flag-');
   const registry = new RunnerRegistry();
   const manager = new SessionManager({registry, graceSeconds: 0});
   const fake = fakeRunner(registry, 'r-00000001', {runtimeRoot: runtime, sessions: []}, {registeredAt: 1});
   assert.equal(fake.entry.runtimeRoot, runtime, 'kept as display text only');
-  fake.client.session = id => ({sessionId: id, client: fake.client, events: new EventEmitter(), request: async () => ({})});
-  fake.client.release = () => {};
-  manager.open('toto');
+  await manager.place(manager.open('toto'));
+  assert.equal(manager.get('toto').session.runnerId, 'r-00000001');
   assert.deepEqual(fs.readdirSync(runtime), [], 'no alias, no directory');
   fake.client.close();
   assert.equal(manager.get('toto'), null, 'dropped at once without grace');
   // The same with a grace period that expires.
   const slow = new SessionManager({registry: new RunnerRegistry(), graceSeconds: 0.01});
   const other = fakeRunner(slow.registry, 'r-00000002', {runtimeRoot: runtime}, {registeredAt: 1});
-  other.client.session = fake.client.session;
-  other.client.release = () => {};
-  slow.open('titi');
+  await slow.place(slow.open('titi'));
   other.client.close();
-  return new Promise(resolve => setTimeout(resolve, 60)).then(() => {
-    assert.equal(slow.get('titi'), null);
-    assert.deepEqual(fs.readdirSync(runtime), [], 'still nothing after the grace period');
-  });
+  await new Promise(resolve => setTimeout(resolve, 60));
+  assert.equal(slow.get('titi'), null);
+  assert.deepEqual(fs.readdirSync(runtime), [], 'still nothing after the grace period');
 });
 
 // A remote runner service reachable through connections that can be cut and made again.
@@ -122,6 +120,7 @@ test('a network cut keeps the session for the grace period; the runner\'s return
   const far = await remoteRunner(t, registry);
   const first = await far.connect();
   const workspace = manager.open('toto');
+  await manager.place(workspace);
   await workspace.runner.request('switch.create', {id: 's-00000000000000aa', name: 'sw', autostart: false});
   const changes = [];
   manager.on('connectivity', (_workspace, online) => changes.push(online));
@@ -149,7 +148,7 @@ test('a session the runner no longer lists is dropped when it returns', async t 
   const far = await remoteRunner(t, registry);
   const first = await far.connect();
   const workspace = manager.open('toto');
-  await workspace.runner.request('nodes.list');
+  await manager.place(workspace);
   const removed = [];
   manager.on('removed', (_workspace, by, reason) => removed.push([by, reason]));
   first.close();
@@ -166,7 +165,7 @@ test('after the grace period the session is dropped; the runner that returns is 
   const far = await remoteRunner(t, registry);
   const first = await far.connect();
   const workspace = manager.open('toto');
-  await workspace.runner.request('nodes.list');
+  await manager.place(workspace);
   const removed = [];
   manager.on('removed', (_workspace, by, reason) => removed.push([by, reason]));
   first.close();
@@ -220,9 +219,7 @@ test('the local runner has no special rule: with no grace its sessions are dropp
     const registry = new RunnerRegistry();
     const manager = new SessionManager({registry, graceSeconds: grace});
     const fake = fakeRunner(registry, 'local');
-    fake.client.session = id => ({sessionId: id, client: fake.client, events: new EventEmitter(), request: async () => ({})});
-    fake.client.release = () => {};
-    manager.open('toto');
+    await manager.place(manager.open('toto'));
     fake.client.close();
     assert.equal(manager.get('toto') !== null, kept, `grace ${grace}`);
     for (const timer of manager.graceTimers.values()) clearTimeout(timer);
@@ -248,4 +245,23 @@ test('a remote runner offers and accepts only the systems whose image it has', a
   t.after(() => local.shutdown());
   await local.handle('session.create', '00000000000000a2', {owner: 'toto'});
   assert.ok((await local.handle('catalog.systems', '00000000000000a2', {})).length > 0, 'the local runner is unchanged');
+});
+
+test('UXS02: the catalog reads of a session not placed yet run without a session and create nothing on the runner', async t => {
+  const dir = tempDir(t, 'qw-draft-');
+  const runtimeRoot = path.join(dir, 'runtime');
+  const service = createRunnerService({commands, root, runtimeRoot, configPath: path.join(root, 'config.json')});
+  t.after(() => service.shutdown());
+  const systems = await service.handle('catalog.systems', null, {});
+  assert.ok(systems.length > 0);
+  assert.deepEqual(await service.handle('catalog.systems', null, {engine: 'qemu'}), systems);
+  await assert.rejects(service.handle('catalog.systems', null, {engine: 'vbox'}), /VirtualBox is unavailable on this runner/);
+  const text = `SWITCH sw1\nHOST ${systems[0].id} h1 sw1\n`;
+  assert.deepEqual(await service.handle('topology.preview', null, {body: {text}}), {hosts: 1, switches: 1, links: 1});
+  await assert.rejects(service.handle('topology.preview', null, {body: {text, engine: 'vbox'}}), /VirtualBox is unavailable/);
+  assert.deepEqual(await service.handle('archive.check', null, {body: {baseImages: {}}}), {changed: []});
+  await assert.rejects(service.handle('nodes.list', null, {}), error => error.status === 404, 'other commands need a session');
+  await assert.rejects(service.handle('host.create', null, {body: {}}), error => error.status === 404);
+  assert.equal(fs.existsSync(path.join(runtimeRoot, 'sessions')), false, 'no session directory');
+  assert.deepEqual(service.hello().sessions, []);
 });

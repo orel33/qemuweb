@@ -72,7 +72,7 @@ There is one way to start it, in every environment:
 - **`./scripts/server.sh` and `./scripts/runner.sh` by themselves** (two terminals, or the two
   services below): the server opens HTTP at once and prints "No runner connected. Start one
   with ./scripts/runner.sh, or run ./scripts/start.sh for the server and a runner". Until a
-  runner connects, session routes answer 503 ("No runner is available."). `--listen PORT` selects
+  runner connects, the users' sessions read as empty and creating a node or loading a file answers 503 ("No runner is available."). `--listen PORT` selects
   the server's port (default 3002; the runner then needs `--port PORT`). Without `--exit-on-disconnect` the runner keeps its
   machines if the server restarts and reconnects within 2 seconds of the server being back.
 
@@ -110,7 +110,7 @@ server, connected, refused, lost). A refused option ends either program with sta
   that runner (every session) would reserve more than 90 % of the machine's
   RAM, a `# Warning:` line is added to the host's Log. The host still starts.
 - **Server restart with a separate runner (RUN03e):** the runner keeps its machines. At start the server reads its own
-  `bindings.json` (`<runtime>/bindings.json`, mode 0600, written by the server when it opens a session; the owner
+  `bindings.json` (`<runtime>/bindings.json`, mode 0600, written by the server when it places a session on a runner, at its first node or load; the owner
   a runner announces in its `hello` is ignored) and **restores** each binding as a session that is **offline**, for its owner:
   the user logs in again (cookies do not survive a restart) and gets "The runner of your session is offline; it comes back or
   your session is dropped after N seconds." (503), never a new empty session on another runner. When the runner reconnects (2 s
@@ -339,9 +339,10 @@ the runner files. `qwctl.sh start|stop|restart|status|logs` without a target act
 last seen, remote address, engines, CPU and memory, systems, warnings, sessions and limit. It creates registration
 tokens (the command is shown once), **pauses** a runner (drain: no new session, the running ones continue),
 **revokes** it (its sessions are dropped at once), **drops the sessions** of an offline runner without waiting for the grace period (confirmation asked), shows the seconds left before an offline runner's sessions are dropped, and removes an offline revoked one. The same actions apply to every row, the local runner included.
-Every action is in `logs/admin.log`; a token is never logged. A new session goes to the least loaded online runner
-that is not paused and is under its `maxSessions`; when there is none the user gets 503 "No runner is available" and the
-server log gives the reasons.
+Every action is in `logs/admin.log`; a token is never logged. A user's session exists from the login, empty and on no
+runner; it is placed when its first node is created or a file is loaded, on the least loaded online runner
+that is not paused and is under its `maxSessions`, and released when it is empty again; when there is none, that
+creation or load gets 503 "No runner is available" and the server log gives the reasons.
 
 ## Server logs
 
@@ -366,6 +367,7 @@ action appends one line:
 | `observe` | `login`: written when an admin's first console connection to that session opens (one line per admin and session while it stays open). |
 | `control-start`, `control-end` | `login` (control covers the whole session); `control-end` adds `reason` (`released`, `disconnected`: the admin's last page on the session closed, `idle`, `session deleted`). |
 | `stop-all`, `delete-session` | `login`. |
+| `session-reset` | `login`: the admin holding control reset that user's session. |
 | `bulk-delete` | `logins`. |
 | `create-account` | `login`, `role`. |
 | `reset-password`, `disable-account`, `enable-account` | `login`. |
@@ -390,11 +392,12 @@ never written; reading the session list or the logs is not logged.
 | `login`, `logout` | `via`: `password` or `proxy` (the CREMI deployment, with OpenID: see [deploy/cremi/deploy-cremi.md](../deploy/cremi/deploy-cremi.md) . |
 | `proxy-refused` | `reason`: `wrong proxy key`, `invalid login` or `account disabled`. A request that carries a wrong `X-Proxy-Key` is also answered with 403. |
 | `login-failed` | none; `user` is the login name that was tried (control characters removed, at most 64 characters), whether or not the account exists. |
-| `session-created` | `sessionId`. |
+| `session-placed` | `sessionId`, `runnerId`: the user's (implicit) session was placed on a runner, at its first node or load. |
+| `session-reset` | none, or `by` (the admin holding control): **Reset session**, every node removed, the session kept empty. |
 | `session-adopted` | `sessionId`. The server restarted, restored the session offline from `bindings.json`, and the runner that kept its machines reconnected: the session is bound to it again. |
-| `session-deleted` | `sessionId`, `by` (the user, or the admin who deleted it; `null` when the session was dropped), and `reason` when it was dropped: `runner lost` (its runner died) or `creation failed`. |
+| `session-deleted` | `sessionId`, `by` (the admin who deleted it; `null` when the session was dropped), and `reason` when it was dropped: `runner lost` (its runner died) or `runner offline too long`. |
 | `node-created` | `nodeId`, `kind` (`host` or `switch`). |
-| `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Resume all**, **Stop all** and the removal of every node: `all`). |
+| `node-started`, `node-stopped`, `node-deleted` | `nodeId` (**Resume all** and **Stop all**: `all`). |
 | `archive-loaded`, `archive-saved` | `kind`: `session` (ZIP) or `topology`; `example`: the file name when it was loaded from the server's examples. |
 
 Node and archive events come from the user's own explicit requests, with

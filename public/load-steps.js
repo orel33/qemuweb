@@ -2,7 +2,7 @@
 // does: one line per stage (a state icon: spinner, green tick, warning, error; an optional detail). The Close step
 // runs only when the user presses Load, after the file was read and checked (see shouldCloseSession).
 import {machines} from './state.js';
-import {removeAllNodes} from './nodes.js';
+import {resetSession} from './nodes.js';
 import {closedText, nodeCounts, shouldCloseSession} from './file-kinds.js';
 
 const stateText = {pending: 'Pending', running: 'In progress', done: 'Done', warning: 'Warning', error: 'Failed'};
@@ -43,13 +43,13 @@ export function createSteps(list, steps) {
   return {set, reset};
 }
 
-// The Close step: removes every host and switch of the current session (the code of the Remove all button) when there
-// is one, once, at Load. Returns whether something was closed; throws when the removal fails, nothing is loaded then.
+// The Close step: a load goes only into an empty session, so the current one is reset first (the code of the Reset
+// session button) when it has nodes, once, at Load. Returns whether something was closed; throws when the removal fails, nothing is loaded then.
 export async function closePreviousSession(steps, {reviewed}) {
   const counts = nodeCounts(machines.values());
   if (!shouldCloseSession({reviewed, confirmed: true, nodeCount: machines.size})) { steps.set('close', 'done', 'No previous session'); return false; }
   steps.set('close', 'running');
-  try { await removeAllNodes(); }
+  try { await resetSession(); }
   catch (error) { throw new Error(`Cannot close the current session: ${error.message}`); }
   steps.set('close', 'done', closedText(counts.hosts, counts.switches));
   return true;

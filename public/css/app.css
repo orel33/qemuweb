@@ -37,7 +37,7 @@ button { cursor: pointer; }
 #clone-machine { color: #9ee6b4; } #show-general-settings { color: #9fc5ef; }
 .session-file-button { color: #ffc36b; } /* the yellow of the Load Session and Save Session dialog headings */
 #toggle-console-columns { color: #9fc5ef; }
-#exit-all { color: #ff777d; }
+#reset-session { color: #ff777d; }
 #toggle-switch-consoles { color: #9fc5ef; }
 /* Navigation buttons at the top right, before the account: the destination (Admin, or
    My session on /admin) and the view toggle (the view it switches to). Same look as the icon
@@ -419,7 +419,6 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
 .login-card svg { flex: none; width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .login-card button[type="submit"] { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
 .login-card button[type="submit"] svg { color: #7ee2a8; }
-#delete-session { color: #ff9a9a; }
 #logout { color: #ffb86b; }
 .login-card input { width: 100%; box-sizing: border-box; }
 .login-card button[type="submit"] { justify-self: end; min-width: 110px; border-color: #5b7998; background: #203247; color: #cce3ff; font-weight: 700; }
@@ -457,8 +456,8 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
    workspace.js) and is shown disabled while this page may not write (same layout as the user's
    page; observe.js ignores the clicks and the keyboard, sets aria-disabled and shows the reason
    as the tooltip; the mouse must reach the control for it, hence no pointer-events: none).
-   Delete session (owner-only) stays disabled for the admin holding control. */
-body[data-write-blocked="true"] .write-action, body[data-owner-only-blocked="true"] .owner-only { opacity: .45; }
+   The admin holding control may use every one, Reset session included. */
+body[data-write-blocked="true"] .write-action { opacity: .45; }
 [aria-disabled="true"] { cursor: not-allowed !important; }
 /* Admin page (/admin). */
 .admin-page header { gap: 12px; }
