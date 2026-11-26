@@ -67,9 +67,9 @@ function auditEntries(req, owner) {
 
 // runner: the session's runner handle. userLog (server/audit.js createUserLog) and audit
 // (admin.log) receive the entries of auditEntries. examplesDir is the --examples directory
-// (none: no example). lifecycle: {place(), release(), reset(by)} of this session
-// (server/session-manager.js place, release and reset).
-const NO_LIFECYCLE = {place: async () => {}, release: async () => {}, reset: async () => ({reset: true})};
+// (none: no example). lifecycle: {begin(), place(), release(), reset(by)} of this session
+// (server/session-manager.js beginCreation, place, release and reset).
+const NO_LIFECYCLE = {begin: () => () => {}, place: async () => {}, release: async () => {}, reset: async () => ({reset: true})};
 function createSessionRouter({session, runner, userLog = {record() {}}, audit = {record() {}}, examplesDir = null, lifecycle = NO_LIFECYCLE}) {
   const router = express.Router();
   router.use((req, res, next) => {
@@ -82,9 +82,23 @@ function createSessionRouter({session, runner, userLog = {record() {}}, audit = 
     if (session.archiveBusy && !['GET', 'HEAD'].includes(req.method)) return res.status(409).json({error: 'Session archive operation in progress.'});
     next();
   });
-  // Middleware of the routes that create nodes: the session is placed on a runner first.
-  const placed = (_req, res, next) => {
-    lifecycle.place().then(() => next(), error => res.status(error.status || 503).json({error: error.message}));
+  // Middleware of the routes that create nodes: the session is placed on a runner first, and no release
+  // runs until the creation ends (req.endCreation, called before the route's own release, else when
+  // the response is over).
+  const placed = (req, res, next) => {
+    const end = lifecycle.begin();
+    req.endCreation = end;
+    res.once('finish', end);
+    res.once('close', end);
+    lifecycle.place().then(() => next(), error => {
+      end();
+      res.status(error.status || 503).json({error: error.message});
+    });
+  };
+  // The release that follows a command which may have left the session empty.
+  const releaseAfter = async req => {
+    req.endCreation?.();
+    await lifecycle.release();
   };
   // A route that sends one runner command: args(req) builds its arguments; the result is the
   // JSON response, an error answers with the runner's status or `status`. With `release`, the
@@ -93,12 +107,12 @@ function createSessionRouter({session, runner, userLog = {record() {}}, audit = 
     let result, failure = null;
     try { result = await runner.request(command, args(req)); }
     catch (error) { failure = error; }
-    if (release) await lifecycle.release();
+    if (release) await releaseAfter(req);
     if (failure) return res.status(failure.status || status).json({error: failure.message});
     if (noStore) res.set('Cache-Control', 'no-store');
     res.json(result);
   };
-  const context = {app: router, session, runner, handle, placed, lifecycle, examplesDir};
+  const context = {app: router, session, runner, handle, placed, releaseAfter, lifecycle, examplesDir};
   for (const name of ROUTE_MODULES) require(`./${name}`).register(context);
   return router;
 }

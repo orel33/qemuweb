@@ -4,7 +4,7 @@
 // "X-Observe: <login>" (see installAuthRedirect in api.js) and both Socket.IO connections pass
 // it in their auth option. The server allows observers GET requests only and refuses their
 // console input, clearing and resizing, unless they took control of the session: that admin then
-// does what the owner can (except Delete session), and the owner's page is read-only meanwhile.
+// does what the owner can (Reset session included), and the owner's page is read-only meanwhile.
 // The disabled controls below are a convenience, the server refusal is the protection.
 import {machines, store} from './state.js';
 import {panes} from './terminal.js';
@@ -119,10 +119,8 @@ function controlState() {
 function renderViewDriver() {
   const reason = viewDriver();
   document.body.dataset.viewDriven = String(!!reason);
-  // The write actions are greyed out (CSS) while this page may not write, and Delete session
-  // also for the admin holding control.
+  // The write actions are greyed out (CSS) while this page may not write.
   document.body.dataset.writeBlocked = String(!canWrite());
-  document.body.dataset.ownerOnlyBlocked = String(observing);
   if (reason) { closeLayoutMenu(); for (const pane of panes) pane.viewMenu.open = false; }
   markDisabledControls();
 }
@@ -130,7 +128,7 @@ function renderViewDriver() {
 // What this page must not use: the view controls while the view is driven by the other side,
 // and the write actions while this page may not write (their CSS greys them out).
 const isDisabled = element => !!element.closest && !!controlReason({view: !!element.closest('.view-control'),
-  write: !!element.closest('.write-action'), ownerOnly: !!element.closest('.owner-only')}, controlState());
+  write: !!element.closest('.write-action')}, controlState());
 
 // aria-disabled and the reason as the tooltip on those controls (on the summary of a menu: it is
 // what the user points at); also called when controls are created (renderTabs).
@@ -138,7 +136,7 @@ export function markDisabledControls() {
   const state = controlState();
   for (const element of document.querySelectorAll('.view-control, .write-action')) {
     const {classList} = element;
-    const reason = controlReason({view: classList.contains('view-control'), write: classList.contains('write-action'), ownerOnly: classList.contains('owner-only')}, state);
+    const reason = controlReason({view: classList.contains('view-control'), write: classList.contains('write-action')}, state);
     const target = element.querySelector(':scope > summary') || element;
     if (reason) target.setAttribute('aria-disabled', 'true'); else target.removeAttribute('aria-disabled');
     showReason(target, reason);

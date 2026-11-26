@@ -71,7 +71,7 @@ function serve({root, settings}) {
   });
   manager.on('created', (workspace, {restored}) => {
     const {session, runner} = workspace;
-    const lifecycle = {place: () => manager.place(workspace), release: () => manager.release(workspace), reset: by => manager.reset(workspace, by)};
+    const lifecycle = {begin: () => manager.beginCreation(workspace), place: () => manager.place(workspace), release: () => manager.release(workspace), reset: by => manager.reset(workspace, by)};
     workspace.router = createSessionRouter({session, runner, userLog, audit, examplesDir: settings.examplesDir, lifecycle});
     // A session restored from bindings.json is not a new session: users.log hears of it when its runner takes it over (below), or drops it.
     if (restored) console.log(`Session ${session.id} of ${workspace.owner} restored offline (runner ${session.runnerId}).`);

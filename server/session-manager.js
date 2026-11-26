@@ -141,6 +141,19 @@ class SessionManager extends EventEmitter {
     return entry.client.request(command, {...args, ...(engine && entry.capabilities.engines.includes(engine) ? {engine} : {})});
   }
 
+  // A request that creates nodes (a host, a switch, a load) starts: until the returned end() is called
+  // (idempotent), no release runs, so that the creation never reaches a session its runner deleted
+  // as empty meanwhile. The request then awaits place(), which waits for a release already running.
+  beginCreation(workspace) {
+    workspace.creations = (workspace.creations || 0) + 1;
+    let ended = false;
+    return () => {
+      if (ended) return;
+      ended = true;
+      workspace.creations -= 1;
+    };
+  }
+
   // Places an unplaced session on a runner (registry.pickRunner; 503 when there is none) and has the
   // runner create it. Resolves once the session is placed; concurrent calls share one placement, and a
   // placement waits for a release in progress. A failed creation leaves the session unplaced.
@@ -180,9 +193,10 @@ class SessionManager extends EventEmitter {
 
   // Releases a placed session that has no node any more: the runner deletes it only if it is still
   // empty (session.delete {ifEmpty}), then it is unplaced and keeps its engine for the next placement.
-  // Never throws: a session that cannot be released stays placed (logged).
+  // Never throws: a session that cannot be released stays placed (logged). Skipped while a creation is in
+  // flight (beginCreation): the next time the session becomes empty releases it.
   async release(workspace) {
-    if (!this.placed(workspace) || workspace.placing || workspace.releasing || !this.available(workspace)) return;
+    if (!this.placed(workspace) || workspace.creations > 0 || workspace.placing || workspace.releasing || !this.available(workspace)) return;
     workspace.releasing = (async () => {
       try {
         if ((await workspace.runner.request('nodes.ids')).length) return;
@@ -277,7 +291,7 @@ class SessionManager extends EventEmitter {
       if (!client) this.offlineClients.set(binding.runnerId, client = createOfflineClient());
       const session = new Session({runnerId: binding.runnerId, id: binding.id, owner: binding.owner, createdAt: binding.createdAt});
       session.touch(); // The last activity is unknown: it counts from the restore.
-      const workspace = {owner: binding.owner, session, runner: client.session(binding.id), restored: true, placing: null, releasing: null};
+      const workspace = {owner: binding.owner, session, runner: client.session(binding.id), restored: true, placing: null, releasing: null, creations: 0};
       this.workspaces.set(binding.owner, workspace);
       this.emit('created', workspace, {restored: true});
       const known = record(binding.runnerId);
@@ -308,7 +322,7 @@ class SessionManager extends EventEmitter {
     let session;
     do session = new Session({owner: login});
     while (ids.has(session.id));
-    const workspace = {owner: login, session, runner: this.unbound.session(session.id), placing: null, releasing: null};
+    const workspace = {owner: login, session, runner: this.unbound.session(session.id), placing: null, releasing: null, creations: 0};
     this.workspaces.set(login, workspace);
     this.emit('created', workspace, {restored: false});
     return workspace;

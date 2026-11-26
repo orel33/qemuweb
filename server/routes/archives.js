@@ -11,7 +11,7 @@ const {pipeline} = require('stream/promises');
 const ARCHIVE_NAME = 'qemuweb-session.zip';
 const archiveName = (req, owner) => (req.observedControl ? `qemuweb-session-${owner}.zip` : ARCHIVE_NAME);
 
-function register({app, session, runner, handle, placed, lifecycle}) {
+function register({app, session, runner, handle, placed, releaseAfter}) {
   app.get('/api/session-archive/estimate', handle('archive.estimate', req => ({includeDisks: req.query.includeDisks === 'true'}), 400, {noStore: true}));
   app.post('/api/session-archive/check', handle('archive.check', req => ({body: req.body}), 400, {noStore: true}));
 
@@ -38,7 +38,7 @@ function register({app, session, runner, handle, placed, lifecycle}) {
       result = await importArchive({session, runner, source: req, query: req.query,
         contentType: req.headers['content-type'], declaredBytes: req.headers['content-length']});
     } catch (error) { failure = error; }
-    await lifecycle.release();
+    await releaseAfter(req);
     if (failure) res.status(failure.status || 400).json({error: failure.message});
     else res.json(result);
   });

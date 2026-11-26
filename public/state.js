@@ -33,7 +33,7 @@ export const store = {
   namingSchemes: null,
   activeId: null,
   activePaneIndex: 0,
-  exitAllBusy: false,
+  sessionBusy: false,
   // Console layout: 'single', 'columns-2' (side by side), 'rows-2' (stacked) or 'grid-4'.
   layout: savedView?.layout || 'single',
   // Number of console panes of the layout.

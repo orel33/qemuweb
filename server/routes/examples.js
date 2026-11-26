@@ -22,7 +22,7 @@ function booleans(body, names) {
   return options;
 }
 
-function register({app, session, runner, examplesDir, placed, lifecycle}) {
+function register({app, session, runner, examplesDir, placed, releaseAfter}) {
   const fail = (res, error) => res.status(error.status || 400).json({error: error.message});
   // An observer without the control lock reads only (the admin holding it acts as the owner).
   const refuseObserver = (req, res) => {
@@ -72,7 +72,7 @@ function register({app, session, runner, examplesDir, placed, lifecycle}) {
         example = null;
         await handle.close();
         const result = await runner.request('topology.load', {body: {text, ...(body.engine !== undefined ? {engine: body.engine} : {}), ...options}});
-        await lifecycle.release();
+        await releaseAfter(req);
         res.json(result);
       } else {
         const options = booleans(body, ['autoStart', 'discardDisks']);
@@ -81,12 +81,12 @@ function register({app, session, runner, examplesDir, placed, lifecycle}) {
         example = null;
         const source = handle.createReadStream({start: 0});
         const result = await importArchive({session, runner, source, query, contentType: 'application/zip', declaredBytes: String(size)});
-        await lifecycle.release();
+        await releaseAfter(req);
         res.json(result);
       }
     } catch (error) {
       await example?.handle.close().catch(() => {});
-      await lifecycle.release();
+      await releaseAfter(req);
       fail(res, error);
     }
   });
