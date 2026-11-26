@@ -12,8 +12,8 @@ hand). A **Services** tab in Host Settings (roadmap HSV01) comes later.
 | --- | --- | --- |
 | 0 | Measure the current image | **Done** (26 November 2026) |
 | 1 | Disable the optional services, remove what is not needed | **Done** (build scripts) |
-| 2 | Rebuild and measure again | **Done** (26 November 2026, in the task worktree) |
-| 3 | Validation by the user: tests, manual test of the Web interface, merge | To do |
+| 2 | Rebuild and measure again, run four tests | **Done** (26 November 2026, in the task worktree, current Debian cloud image) |
+| 3 | Validation by the user: manual test of the Web interface, merge | To do |
 | - | Services tab in Host Settings (HSV01) | Not part of IMG03 |
 
 Roadmap code of this work: **IMG03** (IMG01 is about `debian13-legacy`).
@@ -43,13 +43,13 @@ the ones below; memory, disk, packages, services and frames were confirmed.
 
 | Measure | Before | After | Gain |
 | --- | --- | --- | --- |
-| Time to login (4 boots) | 8.9 to 9.4 s (mean 9.1 s) | 6.4 to 6.6 s (mean 6.5 s) | **-2.6 s (-29%)** |
-| `systemd-analyze` total | 6.3 to 6.7 s | 3.8 to 4.0 s | -2.5 s (-39%) |
-| of which userspace (kernel about 1.8 s in both) | 4.4 to 4.7 s | 2.0 to 2.2 s | -2.4 s |
-| Memory used at idle | 203 MiB | 167 MiB | -36 MiB (-18%) |
+| Time to login (4 boots) | 9.2 to 9.4 s (mean 9.3 s) | 6.7 to 6.9 s (mean 6.8 s) | **-2.5 s (-27%)** |
+| `systemd-analyze` total | 6.4 to 6.6 s | 4.0 to 4.2 s | -2.4 s (-37%) |
+| of which userspace (kernel about 1.9 s in both) | 4.5 to 4.7 s | 2.1 to 2.3 s | -2.4 s |
+| Memory used at idle (one reading) | 201 MiB | 184 MiB | -17 MiB (-8%) |
 | Used space on `/` | 1019 MiB | 689 MiB | -330 MiB (-32%) |
 | RAW image, space on disk (virtual size 3 GiB) | 1.33 GiB | 0.74 GiB | **-0.59 GiB (-44%)** |
-| VDI image, space on disk | 1.47 GiB | 0.92 GiB | -0.55 GiB (-38%) |
+| VDI image, space on disk | 1.47 GiB | 0.90 GiB | -0.57 GiB (-39%) |
 | Installed packages | 373 (581 MiB) | 357 (549 MiB) | -16 (-32 MiB, with `apache2` and `bind9` added) |
 | Running services | 13 | 10 | -3 |
 | Active timers | 8 | 1 (`systemd-tmpfiles-clean`) | -7 |
@@ -57,14 +57,38 @@ the ones below; memory, disk, packages, services and frames were confirmed.
 | Listening on the network | SSH, LLMNR | nothing (local resolver only) | |
 | Frames sent without any request (90 s) | 21 | **0** | -21 |
 
+"After" is the final image, built from the Debian cloud image downloaded on 26 November 2026 (kernel 6.12.118; the old
+image has 6.12.117). The same day, a first build from an older cloud image (kernel 6.12.115) gave 6.5 and 6.7 s to
+login, no frame, the same disk use, and **167 to 168 MiB** of memory at idle. The memory figure therefore moved by
+about 17 MiB between the two bases; each measurement reads it once, and the cause was not examined.
+
 At the end of the new image's boot `eth0` is `UP` with no address, IPv4 or IPv6: the zero does not come from a link
-that is down. An earlier run of the same measurement the same day gave the same picture (9.2 and 6.7 s to login,
-21 and 0 frames).
+that is down. The old image gave 9.1 to 9.3 s to login and 21 frames in each of its
+three runs of the day.
 
 `--check` on the new image: **11 steps passed out of 11** (DHCP by hand with `dhclient`; `apt-get update`; installing
 `tree`; starting `ssh`, `dnsmasq`, `named`, `apache2` (a page is served), `inetutils-inetd`, `openvpn` and
 `isc-dhcp-server` (with a test subnet on a dummy interface); link-local and autoconfigured IPv6 addresses on `eth0`).
 For `openvpn` and `inetutils-inetd` it only shows that the unit starts: no tunnel and no telnet or FTP session was tried.
+
+## Tests
+
+Run on 26 November 2026 on the final image, one at a time, after the user's approval:
+
+| Command (`./scripts/run-tests.sh ...`) | Result |
+| --- | --- |
+| `unit` | **Passed**: 794 tests, 0 failed, 0 skipped |
+| `check-host-debian13-cloud` | **Passed** on the second run: startup disk script, resource and disk marker at the first boot, after Reboot with edited files, and after Stop/Resume |
+| `check-network-debian13-cloud` | **Passed**: 19 checks out of 19 (consoles, host names, static addresses, ping both ways, `tcpdump` on both hosts) |
+| `check-load-start` | **Passed**: `examples/lan.zip` loaded and started, 1 switch and 4 hosts running, startup disks attached, session deletion cleans up |
+
+The first run of `check-host-debian13-cloud` failed before any host started (`PUT /api/general-settings: VirtualBox is
+unavailable on this server.`). Cause: the task worktree has no `.env.local`, and the system QEMU has no VDE support, so
+the runner disabled QEMU. The three scenarios that start hosts then ran with
+`QEMU_SYSTEM_X86_64=/opt/qemu-11.1.3/bin/qemu-system-x86_64`, the setting of the main checkout. No code was changed.
+(The message names VirtualBox whatever engine is missing: a defect of the server, outside IMG03.)
+
+The measurements and the image build use the system QEMU, as `prepare.sh` does.
 
 ## Initial state
 
@@ -185,22 +209,20 @@ A rebuild changes the identity of the base image: a saved session with working d
 
 ## Disk space after the rebuild
 
-- Removed: 28 packages, 75.8 MiB, among them the old kernel package (34.1 MiB, see the limits below), so 41.7 MiB
+- Removed: 28 packages, 75.8 MiB, among them the old kernel package (34.1 MiB, replaced by a newer one), so 41.7 MiB
   without it: `locales` 15.4, `qemu-utils` 12.2, `libc-l10n` 4.6, `cloud-init` 3.1, `genisoimage` 1.6.
-- Added: 12 packages, 43.2 MiB, among them the new kernel package (34.1 MiB), so about 9 MiB for `apache2`, `bind9` and
-  their libraries.
+- Added: 12 packages, 43.3 MiB, among them the new kernel package (34.1 MiB), so about 9.2 MiB for `apache2`, `bind9`
+  and their libraries. 22 other packages have another version, from the newer base.
 - Most of the gain is the cleaning: the APT lists and caches (about 255 MiB). `/var/lib/apt/lists` is empty in the
   image, and `apt-get update` followed by an installation works.
 
 ## Remaining limits
 
-- **Not tried yet:** a host with a startup disk on the new image (the changed `qemuweb-start` with a medium present),
-  the Web interface, the example labs, and VirtualBox. The integration tests `check-host-debian13-cloud` and
-  `check-network-debian13-cloud` and a manual run of `scripts/demo.sh` cover the first three.
-- **Base cloud image:** the new image was built from the cloud image already in `sources/`, which gives kernel
-  6.12.115; the old image has 6.12.117, so it was built from other or updated packages. APT reported 26 packages with
-  updates that the build does not apply (the build has never run an upgrade). To get a current base, delete
-  `sources/debian13-cloud/` downloads before a build. With `unattended-upgrades` removed, a host never updates itself.
+- **Not tried yet:** a manual test of the Web interface (`scripts/demo.sh`), the example labs other than loading and
+  starting `lan`, and VirtualBox.
+- **Base image:** `prepare.sh` reuses the cloud image already downloaded in `sources/` and never upgrades packages
+  during the build. To get a current base, delete the two files of `sources/debian13-cloud/` before a build. With
+  `unattended-upgrades` removed, a host never updates itself.
 - **SSH host keys** are the same on every host of a base image (as before).
 - **Left as they are**, possible later gains: `grub-common.service` (about 0.2 s), `apparmor` (about 0.2 s),
   `netplan.io` (no configuration left), the kernel command line (about 1.8 s of kernel time).
@@ -215,3 +237,6 @@ A rebuild changes the identity of the base image: a saved session with working d
   `systemd-networkd-wait-online` while the cloud-init configuration exists; third one successful (1 min 52 s). Both
   images measured, `--check` passed (11 of 11; its IPv6 step first failed on a wrong expectation of the script, the
   addresses being there). The old image was only read, with `-snapshot`. No test suite run.
+- **26 November 2026,** with the user's approval: the two downloaded files of the worktree deleted (not those of the main
+  checkout, left unchanged), current Debian cloud image downloaded, image rebuilt with `--force` (successful at once,
+  2 min 34 s), both images measured, `--check` 11 of 11, then the four tests above, all passed.
