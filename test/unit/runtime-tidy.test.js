@@ -11,7 +11,7 @@ const {createRunnerService} = require('../../runner');
 const {userAliasName, linkUserAlias, unlinkUserAlias, pruneUserAliases, pruneRuntime, takeRunnerLock} = require('../../runner/runtime-tidy');
 const {root, commands} = require('./runner-pair');
 
-const ID = n => n.toString(16).padStart(16, '0');
+const ID = n => n.toString(16).padStart(8, '0');
 const DEFINITION = JSON.stringify({schemaVersion: 1, engine: 'qemu', hosts: [], switches: []});
 
 function scratch(t) {

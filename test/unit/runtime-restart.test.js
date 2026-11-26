@@ -48,7 +48,7 @@ test('a partial server directory (a stale record, a half-written token file) sta
   fs.mkdirSync(runtime, {mode: 0o700});
   fs.writeFileSync(path.join(runtime, 'server-3002.pid'), `${deadPid()}\n`);
   // A record of an old version is simply ignored (beta rules: no cleanup of leftovers).
-  fs.writeFileSync(path.join(runtime, 'server-3002.session'), 'regular\n1111111111111111\n');
+  fs.writeFileSync(path.join(runtime, 'server-3002.session'), 'regular\n11111111\n');
   // The token file of an old run that holds no token: the server writes a new one.
   fs.writeFileSync(path.join(runtime, 'local-runner.token'), 'half');
   fs.mkdirSync(path.join(runtime, 'users'));
