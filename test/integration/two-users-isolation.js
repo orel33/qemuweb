@@ -100,7 +100,7 @@ async function run() {
   const aliceSettings = await alice.request('/api/general-settings');
   const bobSettings = await bob.request('/api/general-settings');
   assert.notEqual(aliceSettings.sessionId, bobSettings.sessionId, 'both users share one session');
-  assert.deepEqual(await alice.request('/auth/me'), {login: 'alice', role: 'student', authMode: 'password'});
+  assert.deepEqual(await alice.request('/auth/me'), {login: 'alice', role: 'student', authMode: 'password', via: 'password'});
   console.log(`Isolation: alice and bob logged in with sessions ${aliceSettings.sessionId} and ${bobSettings.sessionId}`);
 
   // Session-level sockets of both users, plus a bob console on his own switch.

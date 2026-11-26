@@ -456,7 +456,7 @@ main[data-floating="true"] .console-pane:not([data-active="true"]) { display: no
    workspace.js) and is shown disabled while this page may not write (same layout as the user's
    page; observe.js ignores the clicks and the keyboard, sets aria-disabled and shows the reason
    as the tooltip; the mouse must reach the control for it, hence no pointer-events: none).
-   Delete session (owner-only) stays disabled for the admin holding control. */
+   The admin holding control may use every one, Reset session included. */
 body[data-write-blocked="true"] .write-action { opacity: .45; }
 [aria-disabled="true"] { cursor: not-allowed !important; }
 /* Admin page (/admin). */
