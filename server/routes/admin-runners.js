@@ -9,6 +9,9 @@
 //   POST   /runners/:id/revoke              invalidates the runner and disconnects it (a revoked runner is refused); its sessions are dropped at once
 //   POST   /runners/:id/drop-sessions       forced loss: drops at once the sessions of a runner that is offline (or revoked), without waiting for the grace period; 409 while it is online
 //   DELETE /runners/:id                     forgets an offline, revoked runner
+//   GET    /runners/:id/status              read-only process view of the runner and its sessions (ADM04): what the runner
+//                                           answers to runner.status, checked by server/runner-status.js; 404 unknown
+//                                           runner, 503 offline or not ready, 504 no answer within statusTimeoutMs (5 s); not audited
 // The rows are the same for every runner, "local" included (its record is created at start by --local-runner): there is no flag that tells them apart. A runner summary: {id, name, state, paused,
 // lastSeen, address, directory, pid, engines, kvm, cpus, memoryBytes, systems, warnings, sessions,
 // maxSessions, graceLeft}; graceLeft is the number of seconds before the sessions of an offline runner are dropped (null when no grace runs); state is online, starting, offline or revoked; directory and pid are what the runner
@@ -17,6 +20,7 @@
 const express = require('express');
 const {LIFETIMES_MINUTES} = require('../runner-registration');
 const {RUNNER_ID} = require('../runner-store');
+const {sanitizeRunnerStatus} = require('../runner-status');
 const {tokenFilePath} = require('../../common/local-token');
 const {DEFAULT_ADDRESS, isLoopbackHostname} = require('../../common/bind');
 const DEFAULT_PORT = 3002;
@@ -65,7 +69,7 @@ const registerCommand = (origin, token) => {
   return `./scripts/runner.sh register --url ${origin} --token ${token}${plainRemote ? ' --insecure' : ''}`;
 };
 
-function createRunnersRouter({manager, store, tokens, audited, port, host, runtime = null, localRunner = false, graceSeconds, trustProxy = false}) {
+function createRunnersRouter({manager, store, tokens, audited, port, host, runtime = null, localRunner = false, graceSeconds, trustProxy = false, statusTimeoutMs = 5000}) {
   const router = express.Router();
   const {registry} = manager;
   const summaryOf = id => runnerSummaries({registry, manager, store}).find(runner => runner.id === id);
@@ -108,6 +112,22 @@ function createRunnersRouter({manager, store, tokens, audited, port, host, runti
       return summaryOf(id);
     });
   }
+  router.get('/:id/status', async (req, res) => {
+    let timer = null;
+    try {
+      const {id} = recordOf(req.params.id);
+      const entry = registry.get(id);
+      if (!entry || entry.state === 'lost') throw status(503, 'Runner offline.');
+      if (entry.state !== 'online') throw status(503, 'The runner is not ready; try again in a moment.');
+      const timeout = new Promise((_resolve, reject) => {
+        timer = setTimeout(() => reject(status(504, 'The runner did not answer in time.')), statusTimeoutMs);
+      });
+      res.json(sanitizeRunnerStatus(await Promise.race([entry.client.request('runner.status'), timeout])));
+    } catch (error) {
+      res.status(error.status || 500).json({error: error.message});
+    } finally { clearTimeout(timer); }
+  });
+
   router.post('/:id/pause', (req, res) => setPaused(req, res, true));
   router.post('/:id/resume', (req, res) => setPaused(req, res, false));
 

@@ -1,9 +1,10 @@
 // Admin page (/admin, administrators only), one tab at a time (admin-tabs.js): every session with its
 // metrics and the actions on sessions (observe, stop all, delete, bulk cleanup), account management,
-// the runners (admin-runners.js), the Socket.IO connections and the WebSocket test (admin-connections.js),
+// the runners (admin-runners.js) and the status of one of them (admin-runner-status.js), the Socket.IO connections and the WebSocket test (admin-connections.js),
 // and the last entries of admin.log and users.log. Only the visible tab refreshes. Every change goes
 // through /api/admin/*, which checks the role and writes logs/admin.log.
 import {createRunnersPanel} from './admin-runners.js';
+import {createRunnerStatusPanel} from './admin-runner-status.js';
 import {createConnectionsPanel} from './admin-connections.js';
 import {createAdminTabs} from './admin-tabs.js';
 import {handleUnauthorized, setIdentityVia} from './session-expiry.js';
@@ -197,7 +198,9 @@ function updateSelection() {
   $('select-all').checked = boxes.length > 0 && boxes.every(box => box.checked);
 }
 
-const refreshRunners = createRunnersPanel({api, cell, confirm: confirmDialog, elements: {body: $('runners-body'), hint: $('runners-hint'), status: $('runners-updated'),
+const updateRunnerStatus = createRunnerStatusPanel({api, elements: {select: $('runner-status-select'), summary: $('runner-status-process'),
+  message: $('runner-status-empty'), body: $('runner-status-body'), totals: $('runner-status-totals')}});
+const refreshRunners = createRunnersPanel({api, cell, confirm: confirmDialog, updateStatus: updateRunnerStatus, elements: {body: $('runners-body'), hint: $('runners-hint'), status: $('runners-updated'),
   pending: $('runners-pending'), lifetime: $('runners-lifetime'), create: $('runners-create-token'), tokenBox: $('runners-token'), error: $('runners-error')}});
 
 const refreshConnections = createConnectionsPanel({api, cell, elements: {body: $('connections-body'), summary: $('connections-summary'), warning: $('connections-warning'),

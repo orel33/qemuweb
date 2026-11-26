@@ -105,7 +105,7 @@ async function run() {
   // (1) Every route under /api/admin answers 403 to a student, even an invented one.
   const adminRoutes = [['GET', '/sessions'], ['POST', '/sessions/delete', {logins: ['bob']}],
     ['POST', '/sessions/bob/stop'], ['DELETE', '/sessions/bob'], ['GET', '/users'], ['POST', '/users', {login: 'x', password: 'x'}],
-    ['POST', '/users/bob/password', {password: 'x'}], ['PATCH', '/users/bob', {disabled: true}], ['GET', '/invented/path'], ['GET', '/logs/admin'], ['GET', '/logs/users/download'], ['DELETE', '/users/bob'],
+    ['POST', '/users/bob/password', {password: 'x'}], ['PATCH', '/users/bob', {disabled: true}], ['GET', '/invented/path'], ['GET', '/logs/admin'], ['GET', '/logs/users/download'], ['DELETE', '/users/bob'], ['GET', '/runners/local/status'],
     ['DELETE', '/invented']];
   for (const [method, route, body] of adminRoutes) await expectStatus(alice, `/api/admin${route}`, method, 403, {body});
   await expectStatus(alice, '/admin', 'GET', 403);
@@ -137,6 +137,20 @@ async function run() {
   sessions = await boss.request('/api/admin/sessions');
   assert.deepEqual(sessions.map(session => [session.login, session.own]), [['alice', false], ['bob', false], ['boss', true]]);
   console.log('Admin: the session list shows every session, the admin\'s own marked');
+
+  // ADM04: the runner's own process view, asked to the local runner (runner.status).
+  const runnerStatus = await boss.request(`/api/admin/runners/${encodeURIComponent(aliceRow.runnerId)}/status`);
+  assert.ok(Number.isInteger(runnerStatus.runner.pid) && runnerStatus.runner.rssBytes > 0, 'the runner process is measured');
+  const aliceStatus = runnerStatus.sessions.find(session => session.sessionId === aliceRow.sessionId);
+  assert.equal(aliceStatus.owner, 'alice');
+  const aliceSwitchStatus = aliceStatus.nodes.find(node => node.id === aliceSwitch);
+  assert.deepEqual([aliceSwitchStatus.kind, aliceSwitchStatus.engine, aliceSwitchStatus.running, aliceSwitchStatus.name], ['switch', 'vde', true, 'alicesw']);
+  assert.ok(sessionProcesses(aliceRow.sessionId).includes(aliceSwitchStatus.pid), 'the pid of its vde_switch');
+  assert.ok(aliceSwitchStatus.rssBytes > 0);
+  assert.ok(runnerStatus.totals.runningSwitches >= 2);
+  assert.ok(!/cmdline|--runtime|\/sessions\//.test(JSON.stringify(runnerStatus)), 'no command line or path');
+  await expectStatus(boss, '/api/admin/runners/r-00000000/status', 'GET', 404);
+  console.log('Admin: the runner status lists the runner process and the nodes of each session');
 
   // (3) Observation: read-only HTTP, then a live, read-only switch console.
   const aliceSettings = await alice.request('/api/general-settings');

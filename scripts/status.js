@@ -17,6 +17,7 @@ const fs = require('fs');
 const path = require('path');
 const {execFileSync} = require('child_process');
 const {parseVBoxHeadless, vboxProcessesOf, runtimeOfProcess, runnerSessionsDir, hostMemoryMb, hostTag, readVirtualBoxMemory} = require('./status-vbox');
+const {parseProcessCpu} = require('../runner/metrics');
 
 const ROOT = path.resolve(__dirname, '..');
 const SESSION_PATH = /(\/[^\s,]*?\/sessions)\/([0-9a-f]{16})(?:\/([hs]-[0-9a-f]{16}))?/;
@@ -140,9 +141,9 @@ function sampleTicks(pids) {
   const ticks = new Map();
   for (const pid of pids) {
     try {
-      const stat = fs.readFileSync(`/proc/${pid}/stat`, 'utf8');
-      const fields = stat.slice(stat.lastIndexOf(')') + 2).split(' ');
-      ticks.set(pid, Number(fields[11]) + Number(fields[12])); // utime + stime
+      // utime + stime, parsed as the runner does (runner/metrics.js, also behind runner.status).
+      const sample = parseProcessCpu(fs.readFileSync(`/proc/${pid}/stat`, 'utf8'));
+      if (sample) ticks.set(pid, sample.ticks);
     } catch (_) { /* The process is gone. */ }
   }
   return {time: Date.now(), ticks};
