@@ -10,8 +10,11 @@ function showError(message) {
   errorBox.hidden = !message;
 }
 
+// The workspace, keeping the link to the About dialog (/#about) the visitor asked for.
+const workspace = () => location.hash === '#about' ? '/#about' : '/';
+
 // Already logged in (or authentication disabled): go straight to the workspace.
-fetch('/auth/me', {cache: 'no-store'}).then(response => { if (response.ok) location.replace('/'); }).catch(() => {});
+fetch('/auth/me', {cache: 'no-store'}).then(response => { if (response.ok) location.replace(workspace()); }).catch(() => {});
 
 form.addEventListener('submit', async event => {
   event.preventDefault();
@@ -23,7 +26,7 @@ form.addEventListener('submit', async event => {
     let body = {};
     try { body = await response.json(); } catch (_) { /* Not JSON: use the generic message. */ }
     if (!response.ok) throw new Error(body.error || 'Login failed.');
-    location.replace('/');
+    location.replace(workspace());
   } catch (error) {
     showError(error.message);
     passwordInput.select();

@@ -27,6 +27,9 @@ page (the user's next request then finds a new, empty session).
 
 ### How to log in
 
+The **ⓘ** button of the header opens **About QemuWeb** (version, license, source code, authors); the address
+`/#about` of the interface opens it directly, after the login when one is needed.
+
 Two modes exist. By default (`--auth password`) a user logs in with a login and a password of `users.json`; this is the mode
 of local tests, of an ad hoc server and of the emergency procedure. At the CREMI, QemuWeb runs with `--auth proxy` behind
 Apache and the OpenID of the CREMI: the front end does the login and there is **no password login at all** (no login page,

@@ -10,7 +10,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 test('the About button is on the main page and on /admin, and both pages initialize it', () => {
   for (const page of ['public/index.html', 'public/admin.html']) assert.match(read(page), /<button id="show-about" [^>]*title="About QemuWeb"[^>]*aria-label="About QemuWeb"/, page);
   for (const script of ['public/app.js', 'public/admin.js']) {
-    assert.match(read(script), /^import \{initAbout\} from '\.\/about\.js';$/m, script);
+    assert.match(read(script), /^import \{initAbout(?:, watchAboutLink)?\} from '\.\/about\.js';$/m, script);
     assert.match(read(script), /^ *initAbout\(\);$/m, script);
   }
 });
@@ -38,4 +38,14 @@ test('the confetti of the logo: every fourth piece is a logo, each one rises the
   }
   assert.match(read('public/about.js'), /if \(stillPlease\(\)\) return;/);
   assert.match(read('public/css/app.css'), /@media \(prefers-reduced-motion: reduce\) \{ \.about-rays/);
+});
+
+test('/#about opens the dialog on the main page only, and the login keeps the link', () => {
+  assert.match(read('public/app.js'), /^watchAboutLink\(\);$/m);
+  assert.doesNotMatch(read('public/admin.js'), /watchAboutLink/);
+  assert.match(read('public/about.js'), /const LINK = '#about';/);
+  assert.match(read('public/about.js'), /history\.replaceState\(null, '', location\.pathname \+ location\.search\)/);
+  const login = read('public/login.js');
+  assert.match(login, /const workspace = \(\) => location\.hash === '#about' \? '\/#about' : '\/';/);
+  assert.equal(login.split('location.replace(workspace())').length - 1, 2);
 });

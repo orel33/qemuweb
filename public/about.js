@@ -7,6 +7,8 @@ const REPOSITORY = 'https://github.com/orel33/qemuweb';
 const AUTHOR = 'aurelien.esnard@u-bordeaux.fr';
 
 const LOGO = '/favicon.svg';
+// The address of the main page that opens the dialog: /#about (login.js keeps it through the login).
+const LINK = '#about';
 const COLORS = ['#5adbd1', '#ffc36b', '#ff6fae', '#9ee6b4', '#9fc5ef', '#c99bff', '#fff27a'];
 
 const MARKUP = `
@@ -79,10 +81,13 @@ function openAbout() {
     document.body.append(dialog);
     dialog.querySelector('.about-logo').addEventListener('click', () => burst(dialog, 60));
     dialog.addEventListener('close', () => {
+      // The link is used up: a reload does not open the dialog again, and the same link works once more.
+      if (location.hash === LINK) history.replaceState(null, '', location.pathname + location.search);
       clearTimeout(secondWave);
       dialog.querySelector('.about-confetti').replaceChildren();
     });
   }
+  if (dialog.open) return;
   dialog.showModal();
   // Two waves, timed on the landing of the logo.
   secondWave = setTimeout(() => {
@@ -93,4 +98,11 @@ function openAbout() {
 
 export function initAbout() {
   document.getElementById('show-about').addEventListener('click', openAbout);
+}
+
+// Main page only (/admin uses the fragment for its tabs): opens the dialog for /#about, at load or later.
+export function watchAboutLink() {
+  const follow = () => { if (location.hash === LINK) openAbout(); };
+  window.addEventListener('hashchange', follow);
+  follow();
 }
