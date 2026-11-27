@@ -4,7 +4,15 @@ QemuWeb is a web platform for **network labs**. Students create Linux machines (
 them with VDE switches and work on their serial consoles, all from a browser. Each student has one persistent
 session; teachers observe it, take control to help, and clean up at the end of the lab.
 
-![QemuWeb: the network graph and the serial consoles of a session](docs/img/screenshot.png)
+![QemuWeb: the network graph and the serial console of a host in the lan example](docs/img/screenshot.png)
+
+## Demo
+
+![Demo: load the lan.zip example, log in on its four hosts, ping, then capture the traffic into a PCAP file](docs/img/demo.gif)
+
+The `lan.zip` example (one switch, four Debian 13 Cloud hosts), from **Load Session** to a saved capture: the four
+serial consoles, a `ping`, the Graphic view with the live addresses, and the capture of the traffic of a host with its
+live view and its PCAP file. The animation is made of screenshots taken at the key steps: waiting times are cut.
 
 ## What it does
 
