@@ -97,7 +97,26 @@ button:disabled { opacity: .45; cursor: default; }
 #qemu-options-panel { box-sizing: border-box; height: min(640px, 85vh); scrollbar-gutter: stable; }
 .qemu-options::backdrop { background: #000a; }
 .create-dialog { width: min(520px, 94vw); }
-.about-body { padding-top: 12px; color: #bdc8d6; overflow-wrap: anywhere; }
+/* About dialog: the logo drops in spinning, then floats in a pulsing neon halo in front of turning rays; its
+   confetti are animated by about.js. */
+.about-form { position: relative; }
+.about-confetti { position: absolute; inset: -18px; z-index: 3; overflow: hidden; pointer-events: none; }
+.about-confetti > * { position: absolute; will-change: transform, opacity; }
+.about-stage { position: relative; display: grid; place-items: center; height: 190px; overflow: hidden; }
+.about-rays { position: absolute; width: 380px; height: 380px; border-radius: 50%; background: repeating-conic-gradient(#5adbd12e 0 9deg, transparent 9deg 24deg); -webkit-mask-image: radial-gradient(circle, #000 18%, transparent 68%); mask-image: radial-gradient(circle, #000 18%, transparent 68%); animation: about-spin 14s linear infinite; }
+.about-logo { position: relative; width: 124px; height: 124px; padding: 6px; border: 0; border-radius: 50%; background: transparent; animation: about-drop .9s cubic-bezier(.2,1.5,.4,1) both, about-float 3.2s ease-in-out .9s infinite; }
+.about-logo img { display: block; border-radius: 50%; animation: about-halo 2.4s ease-in-out infinite; transition: transform .35s cubic-bezier(.2,1.8,.4,1); }
+.about-logo:hover img, .about-logo:focus-visible img { transform: scale(1.12) rotate(-12deg); }
+.about-logo:active img { transform: scale(.9) rotate(8deg); }
+.about-logo:focus-visible { outline: 2px solid #9cc8ff; outline-offset: 2px; }
+.about-name { background: linear-gradient(90deg, #5adbd1, #9fc5ef, #c99bff, #ff6fae, #ffc36b, #5adbd1); background-size: 200% 100%; -webkit-background-clip: text; background-clip: text; color: transparent; font-size: 24px; font-weight: 800; animation: about-shimmer 4s linear infinite; }
+@keyframes about-drop { from { opacity: 0; transform: translateY(-90px) scale(.1) rotate(-720deg); } to { opacity: 1; transform: none; } }
+@keyframes about-float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes about-halo { 0%, 100% { box-shadow: 0 0 18px 2px #5adbd166, 0 0 46px 6px #5da9f033; } 50% { box-shadow: 0 0 30px 8px #5adbd1aa, 0 0 70px 18px #c99bff55; } }
+@keyframes about-spin { to { transform: rotate(360deg); } }
+@keyframes about-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .about-rays, .about-logo, .about-logo img, .about-name { animation: none; transition: none; } .about-logo:hover img, .about-logo:focus-visible img, .about-logo:active img { transform: none; } }
+.about-body { padding-top: 12px; text-align: center; color: #bdc8d6; overflow-wrap: anywhere; }
 .about-body a { color: #9fc5ef; }
 .about-version { color: #8aa6c4; font-size: 14px; font-weight: 400; }
 .create-fields { display: grid; gap: 16px; padding-top: 18px; }

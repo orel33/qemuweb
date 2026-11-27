@@ -26,3 +26,16 @@ test('LICENSE, package.json and the README name the MIT license', () => {
   assert.equal(require('../../package.json').license, 'MIT');
   assert.match(read('README.md'), /\[MIT\]\(LICENSE\)/);
 });
+
+test('the confetti of the logo: every fourth piece is a logo, each one rises then falls, nothing with reduced motion', async () => {
+  const {confettiPieces} = await import('../../public/about.js');
+  const pieces = confettiPieces(40, () => 0.5);
+  assert.equal(pieces.length, 40);
+  assert.equal(pieces.filter(piece => piece.logo).length, 10);
+  for (const piece of confettiPieces(200)) {
+    assert.ok(piece.peak.y < 0 && piece.end.y > 0, 'up, then down');
+    assert.ok(piece.duration >= 1500 && piece.duration <= 2800);
+  }
+  assert.match(read('public/about.js'), /if \(stillPlease\(\)\) return;/);
+  assert.match(read('public/css/app.css'), /@media \(prefers-reduced-motion: reduce\) \{ \.about-rays/);
+});
