@@ -22,7 +22,7 @@ test('the dialog shows the version of package.json, the license, the repository 
 });
 
 test('LICENSE, package.json and the README name the MIT license', () => {
-  assert.match(read('LICENSE'), /^MIT License\n\nCopyright \(c\) 2026 Aurelien Esnard\n/);
+  assert.match(read('LICENSE'), /^MIT License\n\nCopyright \(c\) 2026 Aurelien Esnard <aurelien\.esnard@u-bordeaux\.fr>\n/);
   assert.equal(require('../../package.json').license, 'MIT');
   assert.match(read('README.md'), /\[MIT\]\(LICENSE\)/);
 });
