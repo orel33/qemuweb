@@ -606,3 +606,13 @@ test('ADM03: the Runner column of the Sessions tab: name and ID, "local", "not p
   assert.match(page, /textContent: session\.sessionId/);
   assert.match(page, /sessionRunnerLabel\(session\)/);
 });
+
+test('presence of a user: online only with a connected session page; the admin\'s own row without one says "this page"', async () => {
+  const {presenceLabel} = await import('../../public/admin-sessions.js');
+  assert.deepEqual([presenceLabel(1, false).online, presenceLabel(1, false).text], [true, 'online']);
+  assert.deepEqual([presenceLabel(3, true).online, presenceLabel(3, true).text], [true, 'online ×3']);
+  assert.deepEqual([presenceLabel(0, true).online, presenceLabel(0, true).text], [false, 'this page']);
+  assert.deepEqual([presenceLabel(0, false).online, presenceLabel(0, false).text], [false, 'offline']);
+  const {summaryText} = await import('../../public/admin-connections.js');
+  assert.equal(summaryText({total: 0, websocket: 0, polling: 0}), 'No session page is connected. The Admin page itself uses no WebSocket.');
+});

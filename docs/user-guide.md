@@ -105,9 +105,10 @@ directory `sessions/<id>/`, `status.sh` and the logs), state (**active**: at lea
 **idle**), runner (the runner the session is placed on: its name and ID, for example `salle-12 (r-1a2b3c4d)`,
 **local** for the local runner, **not placed** for a session without any node, which no runner holds), creation date, nodes, running VMs, reserved RAM, CPU and last
 activity (the owner's requests and console input; an admin observing does not
-count). Next to each user, a green dot shows **online** when a browser of that
+count). Next to each user, a green dot shows **online** when a session page of that
 user is connected (**online ×n** for several tabs; the tooltip gives the count),
-or **offline**; the admin's own row is online. A session lives on the server
+or **offline**; the admin's own row says **this page** instead of offline: the Admin page opens no WebSocket and does
+not count. A session lives on the server
 whether or not its user is connected: it exists from the user's first
 request (empty, and then listed as **empty**: no node, so no runner holds it) and is kept after logging out or closing the browser. When the runner of a session is offline (a network cut, a restart of the
 runner or of the server), the user's page says "Runner offline, reconnecting…" and requests answer "The runner of your session is offline; it comes back or
@@ -202,7 +203,8 @@ can:
   connection from your own browser, forced to WebSocket, and shows "WebSocket
   OK" with the average and minimum round trip time, or why it failed; if it
   failed it also tries polling and says whether the interface runs in fallback
-  mode. The test creates no session. The server also writes one line to its
+  mode. The test creates no session. Only session pages are listed: without any, the panel says
+  "No session page is connected. The Admin page itself uses no WebSocket." (machines may be running all the same). The server also writes one line to its
   output when a connection is still on polling 20 seconds after it connected
   (see [docs/deployment.md](deployment.md#websocket-check)).
 - Read the last 200 entries of the two server logs in the **Logs** tab

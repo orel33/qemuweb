@@ -6,14 +6,6 @@ session; teachers observe it, take control to help, and clean up at the end of t
 
 ![QemuWeb: the network graph and the serial console of a host in the lan example](docs/img/screenshot.png)
 
-## Demo
-
-![Demo: load the lan.zip example, log in on its four hosts, ping, then capture the traffic into a PCAP file](docs/img/demo.gif)
-
-The `lan.zip` example (one switch, four Debian 13 Cloud hosts), from **Load Session** to a saved capture: the four
-serial consoles, a `ping`, the Graphic view with the live addresses, and the capture of the traffic of a host with its
-live view and its PCAP file. The animation is made of screenshots taken at the key steps: waiting times are cut.
-
 ## What it does
 
 - **Hosts and switches in the browser**: draw a topology, start and stop machines, open their consoles (up to
@@ -85,6 +77,14 @@ PDF versions are in [docs/pdf/](docs/pdf/).
 
 Version 0.9.9, beta. Until the hardening milestone (quotas, command restrictions, runner jail), give accounts
 only to **trusted users**: any user can run any single-line QEMU monitor command on their own hosts.
+
+## Demo
+
+![Demo: load the lan.zip example, log in on its four hosts, ping, then capture the traffic into a PCAP file](docs/img/demo.gif)
+
+The `lan.zip` example (one switch, four Debian 13 Cloud hosts), from **Load Session** to a saved capture: the four
+serial consoles, a `ping`, the Graphic view with the live addresses, and the capture of the traffic of a host with its
+live view and its PCAP file. The animation is made of screenshots taken at the key steps: waiting times are cut.
 
 ## License
 

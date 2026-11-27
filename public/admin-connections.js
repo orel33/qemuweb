@@ -11,7 +11,7 @@ const CAUSE = 'The reverse proxy must forward Upgrade and Connection (see docs/d
 const plural = (count, word) => `${count} ${word}${count === 1 ? '' : 's'}`;
 
 export function summaryText({total, websocket, polling}) {
-  if (!total) return 'No connection.';
+  if (!total) return 'No session page is connected. The Admin page itself uses no WebSocket.';
   return `${plural(total, 'connection')}: ${websocket} WebSocket, ${polling} polling`;
 }
 

@@ -3,7 +3,7 @@
 // the runners (admin-runners.js) and the status of one of them (admin-runner-status.js), the Socket.IO connections and the WebSocket test (admin-connections.js),
 // and the last entries of admin.log and users.log. Only the visible tab refreshes. Every change goes
 // through /api/admin/*, which checks the role and writes logs/admin.log.
-import {sessionRunnerLabel} from './admin-sessions.js';
+import {sessionRunnerLabel, presenceLabel} from './admin-sessions.js';
 import {createRunnersPanel} from './admin-runners.js';
 import {createRunnerStatusPanel} from './admin-runner-status.js';
 import {createConnectionsPanel} from './admin-connections.js';
@@ -94,18 +94,15 @@ function loginLabel(login, own) {
   return element;
 }
 
-// Sessions table only: a green dot + "online" (×n for several tabs) when the user has a
-// browser connected, plain "offline" otherwise; the tab count is in the tooltip. A session
-// lives on the server whether or not its user is connected. /admin opens no socket, so the
-// admin's own row is online: they are looking at it.
+// Sessions table only: a green dot + "online" when the user has a session page connected (presenceLabel,
+// admin-sessions.js). A session lives on the server whether or not its user is connected.
 function presence(browsers, own) {
-  const online = own || browsers > 0;
+  const {online, text, title} = presenceLabel(browsers, own);
   const element = document.createElement('span');
   element.className = 'presence';
   element.dataset.online = String(online);
-  element.textContent = online ? `online${browsers > 1 ? ` ×${browsers}` : ''}` : 'offline';
-  element.title = own && !browsers ? 'You, on this page'
-    : browsers > 0 ? `${browsers} browser tab${browsers === 1 ? '' : 's'} connected` : 'No browser connected; the session keeps running';
+  element.textContent = text;
+  element.title = title;
   return element;
 }
 
