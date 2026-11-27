@@ -24,7 +24,7 @@ const {EventEmitter} = require('events');
 const {readCatalog} = require('../common/system-config');
 const {PROTOCOL_VERSION} = require('../common/runner-protocol');
 const {Session, SESSION_ID} = require('./session');
-const {createSessionRunner} = require('./session-runner');
+const {createSessionRunner, createDraftPreview} = require('./session-runner');
 const {knownImageIdentity, fileSha256Async} = require('./media/image-hash');
 const {createCatalog} = require('./catalog');
 const {configWarnings} = require('./config-warnings');
@@ -42,7 +42,7 @@ const COMMANDS = Object.assign({}, ...['nodes', 'hosts', 'settings', 'topology',
 // drafts that do not exist yet, and consoles have their own messages.
 const OWN_NODE_CHECK = new Set(['node.preview', 'console.attach', 'console.resize', 'console.clear']);
 // Commands that answer without a session, on the catalog of this runner (see draftContext).
-const DRAFT_COMMANDS = new Set(['catalog.systems', 'topology.preview', 'archive.check']);
+const DRAFT_COMMANDS = new Set(['catalog.systems', 'topology.preview', 'archive.check', 'node.preview']);
 
 // `requireImages`: remote runner, see runner/context.js.
 // `limits`: {maxSessions, memoryBytes, cpus} from the runner file of a remote runner, or null. They
@@ -124,11 +124,15 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
   }
 
   // The context of a draft command: an empty session with the given engine, and the catalog of
-  // this runner. Nothing is created on disk.
-  function draftContext(engine) {
-    const session = {id: null, engine: engineOf(engine), nodes: new Map()};
+  // this runner. Nothing is created on disk. draftSessionId (node.preview only) is the ID of the unplaced
+  // session, so that the preview shows the paths its first host will have.
+  function draftContext(engine, draftSessionId) {
+    const session = draftSessionId === undefined ? {id: null, engine: engineOf(engine), nodes: new Map()}
+      : new Session({runtimeRoot, id: draftSessionId, engine: engineOf(engine)});
     const catalog = createCatalog({session, root, configPath, requireImages, availableEngines: engines});
-    return {session, runner: {...catalog, availableEngines: engines, fileSha256Async,
+    const preview = draftSessionId === undefined ? {}
+      : {previewLaunch: createDraftPreview({session, commands, root, runtimeRoot, configPath, requireImages})};
+    return {session, runner: {...catalog, ...preview, availableEngines: engines, fileSha256Async,
       systemOffered: id => !requireImages || catalog.imageInstalled(id)}};
   }
 
@@ -141,8 +145,9 @@ function createRunnerService({commands, root, runtimeRoot, configPath, limits = 
     const handler = Object.hasOwn(COMMANDS, command) && COMMANDS[command];
     if (!handler) throw new Error(`Unknown runner command: ${String(command).slice(0, 64)}.`);
     if ((sessionId === null || sessionId === undefined) && DRAFT_COMMANDS.has(command)) {
-      const {engine, ...rest} = args;
-      return handler({...draftContext(engine), commands, emit: () => {}, io}, rest);
+      const {engine, draftSessionId, ...rest} = args;
+      if (command === 'node.preview' && draftSessionId === undefined) throw statusError('Unknown session.', 404);
+      return handler({...draftContext(engine, draftSessionId), commands, emit: () => {}, io}, rest);
     }
     const {session, runner, emit} = entryOf(sessionId);
     // A well-formed node ID that is not in this session is unknown (404).

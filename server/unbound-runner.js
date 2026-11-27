@@ -7,7 +7,8 @@
 // the session's reads as an empty session would, without any runner:
 //   - the session's own data (nodes, layout, captures, metrics, counts, exports) is empty;
 //   - its general settings are those the server keeps for it (the engine chosen, see Session.engine);
-//   - the catalog reads (catalog.systems, topology.preview, archive.check) go, without a session,
+//   - the reads that need a runner but no session (catalog.systems, topology.preview, archive.check, and
+//     node.preview, the settings of the Add a new host dialog) go, without a session,
 //     to the runner the session would be placed on (registry.pickRunner, nothing is placed),
 //     with the session's engine: `forward(sessionId, command, args)`, given by the manager.
 // Every other command (a node command, a stream) is refused: the session has no node. Console
@@ -35,7 +36,7 @@ const EMPTY = {
   'nodes.startAll': () => ({started: [], startErrors: []}),
   'session.delete': () => ({deleted: true})
 };
-const FORWARDED = new Set(['catalog.systems', 'topology.preview', 'archive.check']);
+const FORWARDED = new Set(['catalog.systems', 'topology.preview', 'archive.check', 'node.preview']);
 const unknownNode = () => Object.assign(new Error('Unknown host or switch.'), {status: 404});
 
 class UnboundClient extends RunnerClient {

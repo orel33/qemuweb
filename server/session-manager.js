@@ -138,7 +138,8 @@ class SessionManager extends EventEmitter {
       throw error;
     }
     const engine = workspace.session.engine;
-    return entry.client.request(command, {...args, ...(engine && entry.capabilities.engines.includes(engine) ? {engine} : {})});
+    return entry.client.request(command, {...args, ...(engine && entry.capabilities.engines.includes(engine) ? {engine} : {}),
+      ...(command === 'node.preview' ? {draftSessionId: workspace.session.id} : {})});
   }
 
   // A request that creates nodes (a host, a switch, a load) starts: until the returned end() is called

@@ -346,7 +346,7 @@ The server is split into layers with one-way dependencies:
 | `server/examples.js`, `server/routes/examples.js` | The server's examples (`--examples`): `GET /api/examples` lists the regular `.topo` and `.zip` files (name, kind, size, description); `POST /api/examples/file` and `POST /api/examples/load` take a bare file name `{name}`, check it against a fresh listing (400 malformed, 404 unlisted), open it without following links, confirm the kind by content, then feed it to the same runner commands as an upload (`archive.import`, `topology.load`). Read only. |
 | `server/routes/metrics.js` | Per-host CPU and memory metrics. |
 | `server/session-manager.js` | Login → `{session, runner}`; the implicit session opened at first use, unplaced; placement on `registry.pickRunner` at the first node or load (`place`), release once empty (`release`), Reset (`reset`), deletion, the offline restore of `bindings.json` at start, the grace period of a lost runner, dropping its sessions (grace over, revoke, forced loss), resynchronisation on a runner's `hello`. No file access. |
-| `server/unbound-runner.js` | The client of the sessions placed on no runner: answers their reads as an empty session, keeps their engine choice, sends the catalog reads without a session to the runner they would go to. |
+| `server/unbound-runner.js` | The client of the sessions placed on no runner: answers their reads as an empty session, keeps their engine choice, sends the catalog reads and the preview of a first host without a session to the runner they would go to. |
 | `server/offline-runner.js` | The placeholder client behind which a restored session waits for its runner (503, no input, no stream); replaced by the real client at the runner's `hello`. |
 | `server/session.js` | The control plane's record of a session: ID, owner, creation date, runner ID (null while unplaced), engine chosen while unplaced, last activity (memory only) and archive lock. |
 | `server/runner-client.js` | One runner connection: requests and responses, per-session handles (`request`, `input`, `events`, streams), `hello`. |
@@ -721,7 +721,9 @@ Commands whose HTTP route takes a JSON body receive it as `body`
 `catalog.systems`, `topology.preview` and `archive.check` also run **without a session**
 (no `sessionId`, an optional `engine` argument): the control plane asks them for a session not
 placed on any runner yet (see [Session lifecycle](#session-lifecycle)); the runner answers from its
-catalog on an empty draft context and creates nothing on disk.
+catalog on an empty draft context and creates nothing on disk. `node.preview` (the settings of the **Add a new
+host** dialog) runs without a session too, with `draftSessionId`, the ID of that unplaced session: the runner builds
+the launch preview on a session it never saves, with the paths the first host will have.
 
 Traffic capture (see [Traffic capture](#traffic-capture)): `captures.list {nodeId?}`,
 `capture.start {nodeId, interface}`, `capture.stop {nodeId, captureId}`, `capture.delete {nodeId, captureId}`,
@@ -794,7 +796,8 @@ re-created account) and **no runner**. Its handle lives on the unbound client
 (`server/unbound-runner.js`), which answers the session's reads as an empty session would: nodes,
 IDs, layout, captures, metrics, the `/admin` counts, an empty topology export and archive estimate;
 the general settings from the server (the engine chosen meanwhile, else the default of the runner
-it would go to); the catalog reads (`catalog.systems`, `topology.preview`, `archive.check`) are sent
+it would go to); the catalog reads (`catalog.systems`, `topology.preview`, `archive.check`) and the preview of a
+first host (`node.preview`) are sent
 **without a session** to the runner `pickRunner` would choose now (nothing is placed; without a
 runner the system list is empty and a preview or a check answers 503). Any other command is 404.
 No 503 at login: the page loads with an empty session whatever the runners.

@@ -265,3 +265,28 @@ test('UXS02: the catalog reads of a session not placed yet run without a session
   assert.equal(fs.existsSync(path.join(runtimeRoot, 'sessions')), false, 'no session directory');
   assert.deepEqual(service.hello().sessions, []);
 });
+
+test('the settings of a first host (node.preview) of a session not placed yet are read without a session and create nothing', async t => {
+  const dir = tempDir(t, 'qw-preview-');
+  const runtimeRoot = path.join(dir, 'runtime');
+  const service = createRunnerService({commands, root, runtimeRoot, configPath: path.join(root, 'config.json')});
+  t.after(() => service.shutdown());
+  const system = (await service.handle('catalog.systems', null, {}))[0].id;
+  const query = {system, engine: 'qemu', interfaces: '[null]', settings: '{}', startupDiskEnabled: 'false'};
+  const preview = await service.handle('node.preview', null, {nodeId: 'h-000000a1', query, draftSessionId: '000000b1'});
+  assert.equal(preview.launched, false);
+  assert.ok(preview.fields && preview.commands.length > 0);
+  assert.ok(preview.commands.join(' ').includes(path.join('000000b1', 'h-000000a1')), 'the paths of the unplaced session');
+  await assert.rejects(service.handle('node.preview', null, {nodeId: 'h-000000a1', query}), error => error.status === 404, 'no session ID');
+  assert.equal(fs.existsSync(path.join(runtimeRoot, 'sessions')), false, 'no session directory');
+  assert.deepEqual(service.hello().sessions, []);
+});
+
+test('the client of an unplaced session forwards node.preview and still refuses the node commands', async () => {
+  const {UnboundClient} = require('../../server/unbound-runner');
+  const asked = [];
+  const client = new UnboundClient({settings: () => ({}), setEngine: () => ({}), forward: async (sessionId, command) => { asked.push(command); return {ok: true}; }});
+  assert.deepEqual(await client.request('node.preview', {nodeId: 'h-000000a1', query: {}}, '000000b1'), {ok: true});
+  await assert.rejects(client.request('node.start', {nodeId: 'h-000000a1'}, '000000b1'), /Unknown host or switch/);
+  assert.deepEqual(asked, ['node.preview']);
+});

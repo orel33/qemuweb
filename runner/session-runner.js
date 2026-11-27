@@ -209,4 +209,17 @@ function createSessionRunner({session, commands, root, runtimeRoot, configPath, 
   }
 }
 
-module.exports = {createSessionRunner, nodeBusy};
+// The launch preview of the Add a new host dialog for a session that is not placed on any runner yet: only the
+// modules the preview reads, on a session that is never saved. Building them and previewing create nothing on disk.
+function createDraftPreview({session, commands, root, runtimeRoot, configPath, requireImages}) {
+  const ctx = createContext({session, commands, root, runtimeRoot, configPath, requireImages});
+  ctx.catalog = createCatalog(ctx);
+  ctx.runtime = createSessionRuntime(ctx);
+  ctx.disks = createDisks(ctx);
+  ctx.nics = createNics(ctx);
+  ctx.qemu = createQemu(ctx);
+  ctx.vbox = createVirtualBox(ctx);
+  return createLaunchPreview(ctx).previewLaunch;
+}
+
+module.exports = {createSessionRunner, createDraftPreview, nodeBusy};
