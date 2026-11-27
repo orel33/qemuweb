@@ -9,6 +9,7 @@ import {createRunnerStatusPanel} from './admin-runner-status.js';
 import {createConnectionsPanel} from './admin-connections.js';
 import {createAdminTabs} from './admin-tabs.js';
 import {handleUnauthorized, setIdentityVia} from './session-expiry.js';
+import {initAbout} from './about.js';
 import {authNote, createAccountForm, createAccountBody} from './admin-accounts-rules.js';
 
 const $ = id => document.getElementById(id);
@@ -351,6 +352,7 @@ function applyCreateAccountForm() {
 }
 
 function init() {
+  initAbout();
   fetch('/auth/me', {cache: 'no-store'}).then(async response => {
     if (!response.ok) return;
     me = await response.json();

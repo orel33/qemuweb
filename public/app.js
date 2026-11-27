@@ -17,6 +17,7 @@ import {initLoadDialog} from './load-dialog.js';
 import {initSockets} from './socket.js';
 import {initObserve} from './observe.js';
 import {initCaptureDialog} from './capture-dialog.js';
+import {initAbout} from './about.js';
 
 initAccount();
 initTerminals();
@@ -35,3 +36,4 @@ initHostSettings();
 initSockets();
 initObserve();
 initCaptureDialog();
+initAbout();

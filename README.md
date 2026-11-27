@@ -77,3 +77,7 @@ PDF versions are in [docs/pdf/](docs/pdf/).
 
 Version 0.9.9, beta. Until the hardening milestone (quotas, command restrictions, runner jail), give accounts
 only to **trusted users**: any user can run any single-line QEMU monitor command on their own hosts.
+
+## License
+
+[MIT](LICENSE). Designed by Aurelien Esnard, co-authored with Claude and Codex.

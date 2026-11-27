@@ -2,6 +2,7 @@
   "name": "qemuweb",
   "version": "0.9.9",
   "private": true,
+  "license": "MIT",
   "description": "Browser-based host and switch console for QEMU and VirtualBox",
   "scripts": {
     "start": "bash scripts/start.sh",

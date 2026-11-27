@@ -97,6 +97,9 @@ button:disabled { opacity: .45; cursor: default; }
 #qemu-options-panel { box-sizing: border-box; height: min(640px, 85vh); scrollbar-gutter: stable; }
 .qemu-options::backdrop { background: #000a; }
 .create-dialog { width: min(520px, 94vw); }
+.about-body { padding-top: 12px; color: #bdc8d6; overflow-wrap: anywhere; }
+.about-body a { color: #9fc5ef; }
+.about-version { color: #8aa6c4; font-size: 14px; font-weight: 400; }
 .create-fields { display: grid; gap: 16px; padding-top: 18px; }
 .create-field { display: grid; gap: 7px; color: #bdc8d6; font-size: 13px; }
 .create-check { display: flex; align-items: flex-start; gap: 9px; color: #bdc8d6; font-size: 13px; }
