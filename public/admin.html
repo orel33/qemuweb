@@ -40,6 +40,7 @@
     </section>
     <section id="panel-accounts" aria-labelledby="accounts-title">
       <div class="admin-section-head"><h2 id="accounts-title">Accounts</h2></div>
+      <p class="admin-auth-note" id="accounts-auth" hidden><strong id="accounts-auth-title"></strong> (<code id="accounts-auth-option"></code>). <span id="accounts-auth-text"></span></p>
       <div class="admin-toolbar"><button id="show-create-account" class="admin-tool act-green" type="button"><svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" x2="19" y1="8" y2="14"/><line x1="22" x2="16" y1="11" y2="11"/></svg>Create account</button></div>
       <p class="admin-error" id="accounts-error" role="alert" hidden></p>
       <div class="admin-table-wrap">
@@ -132,8 +133,9 @@
       <div class="settings-heading"><h2 id="create-account-title">Create account</h2></div>
       <div class="create-fields">
         <label class="create-field">Login<input id="new-login" required maxlength="64" autocomplete="off" spellcheck="false"></label>
-        <label class="create-field">Password<input id="new-password" type="password" required maxlength="1024" autocomplete="new-password"></label>
-        <label class="create-field"><span><input id="new-no-password" type="checkbox"> No password (recognised through the authenticating front end only)</span></label>
+        <p class="create-hint" id="new-login-hint" hidden>Must match the front-end login exactly. QemuWeb cannot check that it exists.</p>
+        <label class="create-check" id="new-password-choice" hidden><input id="new-also-password" type="checkbox"><span>Also set a password (only used if the server is restarted with <code>--auth password</code>)</span></label>
+        <label class="create-field" id="new-password-field">Password<input id="new-password" type="password" required maxlength="1024" autocomplete="new-password"></label>
         <label class="create-field">Role<select id="new-role"><option value="student">student</option><option value="admin">admin</option></select></label>
       </div>
       <p class="admin-error" id="create-account-error" role="alert" hidden></p>

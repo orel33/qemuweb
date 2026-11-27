@@ -9,6 +9,7 @@ import {createRunnerStatusPanel} from './admin-runner-status.js';
 import {createConnectionsPanel} from './admin-connections.js';
 import {createAdminTabs} from './admin-tabs.js';
 import {handleUnauthorized, setIdentityVia} from './session-expiry.js';
+import {authNote, createAccountForm, createAccountBody} from './admin-accounts-rules.js';
 
 const $ = id => document.getElementById(id);
 const selected = new Set();
@@ -330,6 +331,25 @@ function resetPassword(login) {
   $('password-dialog').showModal();
 }
 
+function showAuthNote() {
+  const note = authNote(me?.authMode);
+  $('accounts-auth').hidden = !note;
+  if (!note) return;
+  $('accounts-auth-title').textContent = note.title;
+  $('accounts-auth-option').textContent = note.option;
+  $('accounts-auth-text').textContent = note.text;
+}
+
+// A hidden password field is disabled too, so that it is neither required nor sent.
+function applyCreateAccountForm() {
+  const form = createAccountForm(me?.authMode, $('new-also-password').checked);
+  $('new-login-hint').hidden = !form.loginHint;
+  $('new-password-choice').hidden = !form.passwordChoice;
+  $('new-password-field').hidden = !form.passwordField;
+  $('new-password').disabled = !form.passwordField;
+  $('new-password').required = form.passwordField;
+}
+
 function init() {
   fetch('/auth/me', {cache: 'no-store'}).then(async response => {
     if (!response.ok) return;
@@ -337,6 +357,7 @@ function init() {
     setIdentityVia(me.via);
     $('account-name').textContent = me.displayName ? `${me.displayName} (${me.login})` : me.login;
     $('auth-off-warning').hidden = me.authMode !== 'off';
+    showAuthNote();
     // An identity given by the authenticating front end logs out there (--logout-url); without that URL there is no button.
     $('logout').hidden = me.authMode === 'off' || (me.via === 'proxy' && !me.logoutUrl);
     if (adminTabs.active() === 'accounts') refreshAccounts();
@@ -353,23 +374,18 @@ function init() {
   $('delete-selected').addEventListener('click', () => deleteSessions([...selected].sort()));
   $('show-create-account').addEventListener('click', () => {
     $('create-account').reset();
-    $('new-password').disabled = false;
-    $('new-password').required = true;
+    applyCreateAccountForm();
     showError('create-account-error', null);
     $('create-account-dialog').showModal();
   });
-  // An account without a password is only recognised through the authenticating front end (users.json has no hash for it).
-  $('new-no-password').addEventListener('change', event => {
-    $('new-password').disabled = event.target.checked;
-    $('new-password').required = !event.target.checked;
-  });
+  $('new-also-password').addEventListener('change', applyCreateAccountForm);
   $('create-account-cancel').addEventListener('click', () => $('create-account-dialog').close());
   $('create-account').addEventListener('submit', async event => {
     event.preventDefault();
     const login = $('new-login').value.trim();
     try {
-      const noPassword = $('new-no-password').checked;
-      await api('/users', {method: 'POST', body: {login, role: $('new-role').value, ...(noPassword ? {noPassword: true} : {password: $('new-password').value})}});
+      const body = createAccountBody(me?.authMode, {login, role: $('new-role').value, password: $('new-password').value, alsoPassword: $('new-also-password').checked});
+      await api('/users', {method: 'POST', body});
       $('create-account').reset();
       $('create-account-dialog').close();
       await refreshAccounts();

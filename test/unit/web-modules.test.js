@@ -26,8 +26,8 @@ test('every named import resolves to an export of a Web UI module', () => {
 });
 
 test('the module list matches public/ and app.js initializes every feature module', () => {
-  // Classic scripts, and login.js, admin.js, admin-runners.js, admin-runner-status.js, admin-connections.js, admin-tabs.js, admin-tabs-rules.js and admin-sessions.js, the modules of the separate login and /admin pages.
-  const classic = new Set(['monitor-terminal.js', 'session-log.js', 'console-hint.js', 'network-node-icons.js', 'topology-graphic.js', 'view-state.js', 'login.js', 'admin.js', 'admin-runners.js', 'admin-runner-status.js', 'admin-connections.js', 'admin-tabs.js', 'admin-tabs-rules.js', 'admin-sessions.js']);
+  // Classic scripts, and login.js, admin.js, admin-runners.js, admin-runner-status.js, admin-connections.js, admin-tabs.js, admin-tabs-rules.js, admin-sessions.js and admin-accounts-rules.js, the modules of the separate login and /admin pages.
+  const classic = new Set(['monitor-terminal.js', 'session-log.js', 'console-hint.js', 'network-node-icons.js', 'topology-graphic.js', 'view-state.js', 'login.js', 'admin.js', 'admin-runners.js', 'admin-runner-status.js', 'admin-connections.js', 'admin-tabs.js', 'admin-tabs-rules.js', 'admin-sessions.js', 'admin-accounts-rules.js']);
   const files = fs.readdirSync(publicDir).filter(file => file.endsWith('.js') && !classic.has(file)).sort();
   assert.deepEqual(files, modules.map(name => `${name}.js`).sort());
   const app = moduleSource('app');

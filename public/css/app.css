@@ -99,6 +99,9 @@ button:disabled { opacity: .45; cursor: default; }
 .create-dialog { width: min(520px, 94vw); }
 .create-fields { display: grid; gap: 16px; padding-top: 18px; }
 .create-field { display: grid; gap: 7px; color: #bdc8d6; font-size: 13px; }
+.create-check { display: flex; align-items: flex-start; gap: 9px; color: #bdc8d6; font-size: 13px; }
+.create-check input { flex: none; margin: 2px 0 0; }
+.create-hint { margin: -10px 0 0; color: #8aa6c4; font-size: 12px; }
 .create-field input, .create-field select { width: 100%; height: var(--control-field); padding: 6px 10px; border: 1px solid #45586d; border-radius: 4px; background: #1a2633; color: #e7edf5; font: 13px system-ui, sans-serif; }
 .create-field select:disabled { opacity: 1; color: #aeb9c6; background: #303942; border-color: #46515d; cursor: default; -webkit-text-fill-color: #aeb9c6; }
 .create-autostart { display: flex; align-items: center; gap: 9px; color: #e7edf5; font-size: 13px; }
@@ -517,6 +520,7 @@ body[data-write-blocked="true"] .write-action { opacity: .45; }
 .presence[data-online="true"]::before { content: ""; width: 8px; height: 8px; border-radius: 50%; background: #3fcf72; }
 .session-state[data-state="active"] { color: #9ee6b4; }
 .session-state[data-state="idle"] { color: #8fa2b8; }
+.admin-auth-note { margin: 0 0 10px; padding: 8px 12px; border: 1px solid #35404c; border-radius: 6px; background: #141c26; color: #bdc8d6; font-size: 13px; }
 .admin-error { color: #ff9a9f; }
 .admin-error[hidden] { display: none; }
 .admin-warning { color: #ffd479; }

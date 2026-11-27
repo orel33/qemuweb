@@ -178,8 +178,11 @@ can:
 - Delete several sessions at once (select them, then **Delete selected**,
   confirmed on the listed sessions). The admin's own session cannot be
   selected.
-- Manage accounts: **Create account** (login, password, role; the option **No password**
-  creates an account that is recognised through the front end only), reset a
+- Manage accounts. A note at the top of the tab names the authentication mode of the server and what it means for
+  a login that is not listed. **Create account** (login, role, password) follows the mode: with `--auth password` the
+  password is required; with `--auth proxy` the account is created without one (recognised through the front end only,
+  with the login the front end gives, which QemuWeb cannot check), unless **Also set a password** is ticked, for an
+  account that must still work if the server is restarted with `--auth password`. Reset a
   password (not offered for an account without password), change the role, disable or enable, and **Remove** an account:
   it disappears from `users.json`, its pages are logged out at once and its
   session, if any, is deleted with its machines. An admin cannot disable,
